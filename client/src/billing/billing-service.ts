@@ -7,6 +7,7 @@ import type {
 } from './billing-types';
 import { isNativePlatform, getPlatform } from './platform';
 import { webBillingProvider } from './billing-web';
+import { Preferences } from '@capacitor/preferences';
 
 class BillingService {
   private provider: BillingProvider | null = null;
@@ -58,7 +59,7 @@ class BillingService {
         if (this.provider) {
           await this.provider.configure({
             apiKey,
-            appUserID: appUserID || this.generateAnonymousUserId(),
+            appUserID: appUserID || await this.generateAnonymousUserId(),
             observerMode: false,
           });
         }
@@ -80,14 +81,15 @@ class BillingService {
     }
   }
 
-  private generateAnonymousUserId(): string {
-    let userId = localStorage.getItem('billing_anonymous_user_id');
-    
-    if (!userId) {
-      userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('billing_anonymous_user_id', userId);
+  private async generateAnonymousUserId(): Promise<string> {
+    const { value } = await Preferences.get({ key: 'billing_anonymous_user_id' });
+
+    if (value) {
+      return value;
     }
-    
+
+    const userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await Preferences.set({ key: 'billing_anonymous_user_id', value: userId });
     return userId;
   }
 
