@@ -1,0 +1,321 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { PricingService, LicenseInfo } from '@/lib/pricing';
+import { vaultStorage } from '@/lib/storage';
+import { billingService } from '@/billing/billing-service';
+import { isNativePlatform } from '@/billing/platform';
+import { ENTITLEMENT_IDS } from '@/billing/billing-types';
+
+interface LicenseContextType {
+  license: LicenseInfo;
+  isLoading: boolean;
+  upgradeLicense: (tier: 'pro' | 'lifetime', billingCycle: 'monthly' | 'yearly' | 'lifetime') => Promise<void>;
+  startTrial: () => Promise<boolean>;
+  checkFeatureAccess: (feature: string) => boolean;
+  checkLimit: (section: string, currentCount: number) => boolean;
+  refreshLicense: () => Promise<void>;
+  syncEntitlements: () => Promise<void>;
+  isTrialExpired: () => boolean;
+}
+
+const LicenseContext = createContext<LicenseContextType | undefined>(undefined);
+
+export function LicenseProvider({ children }: { children: React.ReactNode }) {
+  const [license, setLicense] = useState<LicenseInfo>(PricingService.getDefaultLicense());
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Centralized helper to persist license while always preserving trialUsed flag
+  const persistLicense = async (newLicense: LicenseInfo): Promise<void> => {
+    const storedLicense = await vaultStorage.getPersistentData('license');
+    const trialUsed = storedLicense?.trialUsed || newLicense.trialUsed || false;
+    const licenseToSave = { ...newLicense, trialUsed };
+    await vaultStorage.savePersistentData('license', licenseToSave);
+    setLicense(licenseToSave);
+  };
+
+  useEffect(() => {
+    loadLicense();
+    
+    if (isNativePlatform()) {
+      syncEntitlements();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+
+    let appStateListener: any;
+
+    const setupAppStateListener = async () => {
+      try {
+        const { App } = await import('@capacitor/app');
+        
+        appStateListener = await App.addListener('appStateChange', (state) => {
+          if (state.isActive) {
+            console.log('App resumed, syncing entitlements...');
+            syncEntitlements();
+          }
+        });
+      } catch (error) {
+        console.error('Failed to setup app state listener:', error);
+      }
+    };
+
+    setupAppStateListener();
+
+    return () => {
+      if (appStateListener) {
+        appStateListener.remove();
+      }
+    };
+  }, []);
+
+  const loadLicense = async () => {
+    try {
+      setIsLoading(true);
+      
+      const storedLicense = await vaultStorage.getPersistentData('license');
+      
+      if (storedLicense) {
+        const parsedLicense: LicenseInfo = {
+          ...storedLicense,
+          startDate: new Date(storedLicense.startDate),
+          endDate: storedLicense.endDate ? new Date(storedLicense.endDate) : undefined,
+          trialEndsAt: storedLicense.trialEndsAt ? new Date(storedLicense.trialEndsAt) : undefined,
+        };
+        
+        // Check if trial has expired
+        if (parsedLicense.status === 'trial' && parsedLicense.trialEndsAt) {
+          if (new Date() > parsedLicense.trialEndsAt) {
+            // Trial expired - revert to free license but preserve trialUsed flag
+            console.log('Trial expired, reverting to free license');
+            const freeLicense = PricingService.getDefaultLicense();
+            freeLicense.trialActive = false;
+            freeLicense.trialUsed = true; // Explicitly mark trial as used
+            await persistLicense(freeLicense);
+            return;
+          }
+        }
+        
+        // Ensure trialUsed is always included in the license state
+        const licenseWithTrialUsed = {
+          ...parsedLicense,
+          trialUsed: storedLicense?.trialUsed || parsedLicense.trialUsed || false,
+        };
+        setLicense(licenseWithTrialUsed);
+      } else {
+        // First time - no stored license, use default (trialUsed=false is ok for fresh install)
+        const defaultLicense = PricingService.getDefaultLicense();
+        await persistLicense(defaultLicense);
+      }
+    } catch (error) {
+      console.error('Failed to load license:', error);
+      // Don't overwrite stored license on error - just set state to default
+      setLicense(PricingService.getDefaultLicense());
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startTrial = async (): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      // Check if user already had a trial
+      const storedLicense = await vaultStorage.getPersistentData('license');
+      if (storedLicense?.trialUsed) {
+        console.log('Trial already used');
+        return false;
+      }
+      
+      const trialLicense = PricingService.getTrialLicense();
+      trialLicense.trialUsed = true; // Mark trial as used
+      
+      // Use persistLicense to save (will preserve trialUsed)
+      await persistLicense(trialLicense);
+      
+      const { NotificationService } = await import('@/lib/notifications');
+      if (NotificationService.createTrialStarted) {
+        await NotificationService.createTrialStarted('current-user');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to start trial:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isTrialExpired = (): boolean => {
+    if (license.status !== 'trial' || !license.trialEndsAt) {
+      return false;
+    }
+    return new Date() > license.trialEndsAt;
+  };
+
+  const upgradeLicense = async (tier: 'pro' | 'lifetime', billingCycle: 'monthly' | 'yearly' | 'lifetime') => {
+    try {
+      setIsLoading(true);
+      
+      const newLicense: LicenseInfo = {
+        tier,
+        status: 'active',
+        startDate: new Date(),
+        billingCycle,
+        features: tier === 'pro' 
+          ? ['passwords', 'subscriptions', 'notes', 'expenses', 'reminders', 'bank_statements', 'investments', 'documents', 'scanner', 'cloud_backup', 'advanced_analytics']
+          : ['passwords', 'subscriptions', 'notes', 'expenses', 'reminders', 'bank_statements', 'investments', 'documents', 'scanner', 'cloud_backup', 'advanced_analytics', 'priority_support'],
+        limits: {
+          passwords: -1,
+          subscriptions: -1,
+          notes: -1,
+          expenses: -1,
+          reminders: -1,
+          bankStatements: -1,
+          investments: -1,
+          vaults: 5,
+          documents: -1,
+        },
+        trialActive: false,
+      };
+
+      // persistLicense automatically preserves trialUsed flag
+      await persistLicense(newLicense);
+      
+      // Create notification for successful upgrade
+      const { NotificationService } = await import('@/lib/notifications');
+      await NotificationService.createPlanUpgrade('current-user', tier);
+      
+    } catch (error) {
+      console.error('Failed to upgrade license:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkFeatureAccess = (feature: string): boolean => {
+    return PricingService.checkFeatureAccess(license, feature);
+  };
+
+  const checkLimit = (section: string, currentCount: number): boolean => {
+    return PricingService.checkLimit(license, section, currentCount);
+  };
+
+  const refreshLicense = async () => {
+    await loadLicense();
+  };
+
+  const syncEntitlements = async () => {
+    if (!isNativePlatform()) {
+      console.log('Entitlement sync skipped: not on native platform');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      await billingService.initialize();
+      const customerInfo = await billingService.getCustomerInfo();
+      
+      const lifetimeEntitlement = customerInfo.entitlements[ENTITLEMENT_IDS.LIFETIME];
+      const proEntitlement = customerInfo.entitlements[ENTITLEMENT_IDS.PRO];
+      
+      let newLicense: LicenseInfo;
+      
+      if (lifetimeEntitlement?.isActive) {
+        newLicense = {
+          tier: 'lifetime',
+          status: 'active',
+          startDate: lifetimeEntitlement.originalPurchaseDate 
+            ? new Date(lifetimeEntitlement.originalPurchaseDate)
+            : new Date(),
+          billingCycle: 'lifetime',
+          features: ['passwords', 'subscriptions', 'notes', 'expenses', 'reminders', 'bank_statements', 'investments', 'documents', 'scanner', 'cloud_backup', 'advanced_analytics', 'priority_support'],
+          limits: {
+            passwords: -1,
+            subscriptions: -1,
+            notes: -1,
+            expenses: -1,
+            reminders: -1,
+            bankStatements: -1,
+            investments: -1,
+            vaults: 5,
+            documents: -1,
+          },
+          trialActive: false,
+          lastVerifiedAt: new Date().toISOString(),
+        };
+      } else if (proEntitlement?.isActive) {
+        const billingCycle = customerInfo.activeSubscriptions.some(id => id.includes('yearly') || id.includes('annual'))
+          ? 'yearly' as const
+          : 'monthly' as const;
+        
+        newLicense = {
+          tier: 'pro',
+          status: proEntitlement.willRenew ? 'active' : 'cancelled',
+          startDate: proEntitlement.originalPurchaseDate 
+            ? new Date(proEntitlement.originalPurchaseDate)
+            : new Date(),
+          endDate: proEntitlement.expirationDate 
+            ? new Date(proEntitlement.expirationDate)
+            : undefined,
+          billingCycle,
+          features: ['passwords', 'subscriptions', 'notes', 'expenses', 'reminders', 'bank_statements', 'investments', 'documents', 'scanner', 'cloud_backup', 'advanced_analytics'],
+          limits: {
+            passwords: -1,
+            subscriptions: -1,
+            notes: -1,
+            expenses: -1,
+            reminders: -1,
+            bankStatements: -1,
+            investments: -1,
+            vaults: 5,
+            documents: -1,
+          },
+          trialActive: false,
+          lastVerifiedAt: new Date().toISOString(),
+        };
+      } else {
+        newLicense = PricingService.getDefaultLicense();
+        newLicense.lastVerifiedAt = new Date().toISOString();
+      }
+      
+      // persistLicense automatically preserves trialUsed flag
+      await persistLicense(newLicense);
+      
+      console.log('Entitlements synced successfully:', newLicense.tier);
+    } catch (error) {
+      console.error('Failed to sync entitlements:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const value: LicenseContextType = {
+    license,
+    isLoading,
+    upgradeLicense,
+    startTrial,
+    checkFeatureAccess,
+    checkLimit,
+    refreshLicense,
+    syncEntitlements,
+    isTrialExpired,
+  };
+
+  return (
+    <LicenseContext.Provider value={value}>
+      {children}
+    </LicenseContext.Provider>
+  );
+}
+
+export function useLicense() {
+  const context = useContext(LicenseContext);
+  if (context === undefined) {
+    throw new Error('useLicense must be used within a LicenseProvider');
+  }
+  return context;
+}

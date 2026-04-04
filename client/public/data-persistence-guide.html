@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Persistence Guide - Secure Vault</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #1e40af;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        .alert {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .alert.success {
+            background: #d1fae5;
+            border-color: #10b981;
+        }
+        .alert.info {
+            background: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .alert.warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+        .code {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .step {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #1e40af;
+        }
+        ul, ol {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .button {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            margin: 10px 5px;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background: #2563eb;
+        }
+        .button.secondary {
+            background: #6b7280;
+        }
+        .button.secondary:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Data Persistence Guide</h1>
+        
+        <div class="alert info">
+            <strong>📱 Browser-Specific Storage:</strong> Your vault data is stored locally in each browser's IndexedDB. This means data doesn't automatically sync between different browsers - this is by design for maximum privacy and security.
+        </div>
+
+        <h2>🚨 Issue: Data Not Syncing Across Browsers</h2>
+        
+        <div class="alert warning">
+            <strong>Expected Behavior:</strong> Each browser maintains its own separate encrypted vault database. This is a feature, not a bug!
+        </div>
+
+        <h3>Why This Happens:</h3>
+        <ul>
+            <li>🌐 <strong>Chrome</strong> has its own IndexedDB</li>
+            <li>🔥 <strong>Firefox</strong> has its own IndexedDB</li>
+            <li>🍎 <strong>Safari</strong> has its own IndexedDB</li>
+            <li>📱 <strong>Mobile browsers</strong> each have separate databases</li>
+        </ul>
+
+        <h2>✅ Solution: Export/Import Between Browsers</h2>
+
+        <div class="step">
+            <h3>Step 1: Export from Current Browser</h3>
+            <ol>
+                <li>Open your vault in the current browser</li>
+                <li>Click the <span class="highlight">"Import / Export"</span> button</li>
+                <li>Go to the <span class="highlight">"Export"</span> tab</li>
+                <li>Click <span class="highlight">"Export All Data"</span></li>
+                <li>Download the JSON file to your computer</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Import to New Browser</h3>
+            <ol>
+                <li>Open vault in the new browser</li>
+                <li>Click the <span class="highlight">"Import / Export"</span> button</li>
+                <li>Go to the <span class="highlight">"Import"</span> tab</li>
+                <li>Select the downloaded JSON file</li>
+                <li>Click <span class="highlight">"Import Vault"</span></li>
+            </ol>
+        </div>
+
+        <h2>🔧 Issue: Subscriptions Not Loading After Import</h2>
+        
+        <div class="alert success">
+            <strong>✅ FIXED!</strong> The subscription import issue has been resolved. The test data generator now uses the correct schema.
+        </div>
+
+        <h3>What Was Wrong:</h3>
+        <ul>
+            <li>❌ Used <code>price</code> instead of <code>cost</code></li>
+            <li>❌ Used <code>status</code> instead of <code>isActive</code></li>
+            <li>❌ Missing required fields: <code>plan</code>, <code>reminderDays</code></li>
+        </ul>
+
+        <h3>What's Fixed:</h3>
+        <ul>
+            <li>✅ Correct field names matching vault schema</li>
+            <li>✅ All required fields included</li>
+            <li>✅ Proper data types and formats</li>
+        </ul>
+
+        <h2>🚀 Quick Actions</h2>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="/test-data-generator.html" class="button">Generate New Test Data</a>
+            <a href="/comprehensive-realistic-data.json" class="button secondary" download>Download Fixed Data</a>
+        </div>
+
+        <h2>📊 Correct Subscription Schema</h2>
+        
+        <div class="code">
+{
+  "id": "sub_1",
+  "name": "Netflix",
+  "plan": "Standard",
+  "cost": 15.99,
+  "currency": "USD",
+  "billingCycle": "monthly",
+  "nextBillingDate": "2024-02-15T00:00:00.000Z",
+  "reminderDays": 7,
+  "category": "Streaming",
+  "notes": "Subscription for Netflix",
+  "isActive": true,
+  "createdAt": "2024-01-15T00:00:00.000Z",
+  "updatedAt": "2024-01-15T00:00:00.000Z"
+}
+        </div>
+
+        <h2>🔒 Security Benefits</h2>
+        
+        <div class="alert success">
+            <strong>Privacy First:</strong> Browser-specific storage means your data never leaves your device and isn't transmitted over the network. Each browser acts as a separate, encrypted vault.
+        </div>
+
+        <ul>
+            <li>🔐 <strong>Local Encryption:</strong> Data encrypted with AES-256</li>
+            <li>🏠 <strong>Offline First:</strong> Works without internet connection</li>
+            <li>🚫 <strong>No Network:</strong> Data never transmitted</li>
+            <li>👤 <strong>Per-Browser:</strong> Maximum privacy isolation</li>
+        </ul>
+
+        <h2>💡 Best Practices</h2>
+
+        <div class="step">
+            <h3>For Development/Testing</h3>
+            <ul>
+                <li>Use the <span class="highlight">Test Data Generator</span> for consistent data</li>
+                <li>Export/Import for sharing test data between team members</li>
+                <li>Use the same master password across all test environments</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>For Production Use</h3>
+            <ul>
+                <li>Choose one primary browser for your vault</li>
+                <li>Export regularly as backup</li>
+                <li>Document your master password securely</li>
+                <li>Consider browser-specific workflows</li>
+            </ul>
+        </div>
+
+        <div class="alert info">
+            <strong>Remember:</strong> This is a local-first, privacy-focused vault. Data persistence across browsers requires manual export/import, which is by design for maximum security and privacy.
+        </div>
+    </div>
+</body>
+</html>

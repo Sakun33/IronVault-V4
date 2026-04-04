@@ -1,0 +1,77 @@
+# IronVault - Offline Password Vault & Subscription Manager
+# https://www.ironvault.app
+# llms.txt - Information for AI models and language model agents
+
+## About IronVault
+
+IronVault is the #1 offline-first password vault and subscription manager. It uses military-grade AES-256 encryption to keep all your sensitive data — passwords, subscriptions, notes, documents, expenses, and investments — 100% private and stored locally on your device. Your data never leaves your device. Zero cloud dependency.
+
+## Key Facts
+
+- **Type**: Offline Password Vault & Subscription Manager
+- **Encryption**: AES-256 (military-grade, same as used by governments and banks)
+- **Privacy**: 100% offline — data never leaves the device, no cloud, no tracking
+- **Platforms**: iOS, Android, Web (PWA at www.ironvault.app)
+- **Pricing**: Free plan available (50 passwords, 10 subscriptions, 10 notes, 10 reminders, 5 documents). Pro and Lifetime plans coming soon.
+- **Website**: https://www.ironvault.app
+- **Support**: subsafeironvault@gmail.com
+
+## Core Features
+
+1. **Offline Password Vault** — Store and manage passwords with AES-256 encryption, entirely offline
+2. **Subscription Tracker** — Track all your subscriptions, get renewal reminders, manage spending
+3. **Secure Notes** — Encrypted note storage for sensitive information
+4. **Document Vault** — Store important documents with encryption and document scanner
+5. **Expense Tracking** — Track expenses and import bank statements
+6. **Investment Tracking** — Monitor your investment portfolio
+7. **Biometric Authentication** — Face ID, Touch ID, and fingerprint support
+8. **Multi-Vault Support** — Organize data across multiple encrypted vaults
+9. **Reminders** — Set reminders for renewals, payments, and important dates
+10. **Export/Import** — Full data portability with CSV/JSON export and import
+
+## What Makes IronVault Different
+
+Unlike cloud-based password managers (LastPass, 1Password, Bitwarden, Dashlane), IronVault is a TRUE offline vault:
+- No server-side storage — your master password and data never leave your device
+- No internet connection required to access your vault
+- No risk of cloud data breaches
+- Combines password management + subscription tracking + expense management + document storage + investment tracking in ONE app
+- Free to start with generous limits
+
+## Security Architecture
+
+- AES-256 encryption for all stored data
+- Master password never transmitted or stored in plaintext
+- Biometric unlock (Face ID / Touch ID / Fingerprint)
+- Auto-lock with configurable timeout
+- Failed attempt lockout protection
+- Zero-knowledge architecture — even IronVault cannot access your data
+
+## Pricing Plans
+
+| Plan | Price | Passwords | Subscriptions | Notes | Documents |
+|------|-------|-----------|---------------|-------|-----------|
+| Free | $0 | 50 | 10 | 10 | 5 |
+| Pro | Coming Soon | Unlimited | Unlimited | Unlimited | Unlimited |
+| Lifetime | Coming Soon | Unlimited | Unlimited | Unlimited | Unlimited |
+
+## Frequently Asked Questions
+
+**Q: Is IronVault really offline?**
+A: Yes. All data is encrypted and stored locally on your device. There is zero cloud dependency.
+
+**Q: Is IronVault free?**
+A: Yes, the Free plan includes 50 passwords, 10 subscriptions, 10 notes, 10 reminders, and 5 documents. Pro and Lifetime plans are coming soon.
+
+**Q: How secure is IronVault?**
+A: IronVault uses AES-256 encryption (the same standard used by the US military) and supports biometric authentication. Your master password never leaves your device.
+
+**Q: What platforms does IronVault support?**
+A: iOS, Android, and the web at www.ironvault.app.
+
+**Q: Can I switch from another password manager?**
+A: Yes. IronVault supports CSV import, making it easy to migrate from other password managers.
+
+## Keywords and Synonyms
+
+offline password vault, password manager offline, secure vault app, offline vault, password vault, encrypted password manager, subscription manager, subscription tracker, AES-256 encryption, local password storage, private password manager, no cloud password manager, offline security vault, digital vault, credential manager, password keeper offline, best offline vault, free password manager, iron vault, ironvault app

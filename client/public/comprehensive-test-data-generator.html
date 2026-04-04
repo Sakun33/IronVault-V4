@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Test Data Generator - SecureVault</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .section p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .control-group h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #555;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-size: 14px;
+        }
+        input[type="number"]:disabled {
+            background-color: #f5f5f5;
+            color: #999;
+        }
+        .section-description {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #545b62;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .file-list {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        .file-list h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .file-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .file-list li {
+            margin-bottom: 5px;
+            color: #6c757d;
+        }
+        .summary {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .summary h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .stat-number {
+            font-weight: bold;
+            color: #007bff;
+            font-size: 18px;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Comprehensive Test Data Generator</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Generate comprehensive realistic test data for all vault sections with detailed form fields and variants
+        </p>
+
+        <div class="section">
+            <h2>⚙️ Generation Settings</h2>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <h3>📊 Data Sections</h3>
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includePasswords" checked>
+                            Passwords
+                            <input type="number" id="passwordCount" value="50" min="1" max="200">
+                        </label>
+                    </div>
+                    <div class="section-description">Website accounts with usernames and passwords</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeSubscriptions" checked>
+                            Subscriptions
+                            <input type="number" id="subscriptionCount" value="30" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Monthly/yearly service subscriptions</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeNotes" checked>
+                            Notes
+                            <input type="number" id="noteCount" value="40" min="1" max="150">
+                        </label>
+                    </div>
+                    <div class="section-description">Text, markdown, checklist, and code notes</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeExpenses" checked>
+                            Expenses
+                            <input type="number" id="expenseCount" value="60" min="1" max="200">
+                        </label>
+                    </div>
+                    <div class="section-description">Financial transactions and spending records</div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>💰 Investment Data</h3>
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeInvestments" checked>
+                            Investments
+                            <input type="number" id="investmentCount" value="25" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Stocks, crypto, mutual funds, ETFs</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeInvestmentGoals" checked>
+                            Investment Goals
+                            <input type="number" id="investmentGoalCount" value="15" min="1" max="50">
+                        </label>
+                    </div>
+                    <div class="section-description">Financial goals and targets</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeReminders" checked>
+                            Reminders
+                            <input type="number" id="reminderCount" value="35" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Tasks, appointments, and notifications</div>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h3>📈 Generation Summary</h3>
+                <div class="summary-stats" id="summaryStats">
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalItems">0</div>
+                        <div class="stat-label">Total Items</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="selectedSections">0</div>
+                        <div class="stat-label">Sections</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Generate Data Files</h2>
+            <p>Choose your preferred format and generate the test data files.</p>
+            
+            <button onclick="generateJSON()" id="jsonBtn">Generate JSON File</button>
+            <button onclick="generateCSV()" id="csvBtn" class="secondary">Generate CSV Files</button>
+            <button onclick="generateBoth()" id="bothBtn" class="secondary">Generate Both Formats</button>
+            
+            <div id="generationStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Generated Files</h2>
+            <div class="file-list">
+                <h3>JSON Files:</h3>
+                <ul id="jsonFiles">
+                    <li>No files generated yet</li>
+                </ul>
+                
+                <h3>CSV Files:</h3>
+                <ul id="csvFiles">
+                    <li>No files generated yet</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📖 How to Use</h2>
+            <ol>
+                <li><strong>Click "Generate JSON File"</strong> to create a comprehensive data file</li>
+                <li><strong>Click "Generate All CSV Files"</strong> to create individual CSV files</li>
+                <li><strong>Files will be downloaded automatically</strong> to your Downloads folder</li>
+                <li><strong>Use the Import/Export feature</strong> in the vault to import these files</li>
+                <li><strong>Test different import scenarios</strong> with individual CSV files</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let generatedFiles = {
+            json: [],
+            csv: []
+        };
+
+        // Get generation settings
+        function getGenerationSettings() {
+            const settings = {
+                passwords: {
+                    enabled: document.getElementById('includePasswords').checked,
+                    count: parseInt(document.getElementById('passwordCount').value) || 0
+                },
+                subscriptions: {
+                    enabled: document.getElementById('includeSubscriptions').checked,
+                    count: parseInt(document.getElementById('subscriptionCount').value) || 0
+                },
+                notes: {
+                    enabled: document.getElementById('includeNotes').checked,
+                    count: parseInt(document.getElementById('noteCount').value) || 0
+                },
+                expenses: {
+                    enabled: document.getElementById('includeExpenses').checked,
+                    count: parseInt(document.getElementById('expenseCount').value) || 0
+                },
+                investments: {
+                    enabled: document.getElementById('includeInvestments').checked,
+                    count: parseInt(document.getElementById('investmentCount').value) || 0
+                },
+                investmentGoals: {
+                    enabled: document.getElementById('includeInvestmentGoals').checked,
+                    count: parseInt(document.getElementById('investmentGoalCount').value) || 0
+                },
+                reminders: {
+                    enabled: document.getElementById('includeReminders').checked,
+                    count: parseInt(document.getElementById('reminderCount').value) || 0
+                }
+            };
+            return settings;
+        }
+
+        // Update summary statistics
+        function updateSummary() {
+            const settings = getGenerationSettings();
+            let totalItems = 0;
+            let selectedSections = 0;
+            
+            Object.values(settings).forEach(section => {
+                if (section.enabled) {
+                    totalItems += section.count;
+                    selectedSections++;
+                }
+            });
+            
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('selectedSections').textContent = selectedSections;
+        }
+
+        // Enable/disable number inputs based on checkboxes
+        function toggleNumberInputs() {
+            const checkboxes = ['includePasswords', 'includeSubscriptions', 'includeNotes', 'includeExpenses', 'includeInvestments', 'includeInvestmentGoals', 'includeReminders'];
+            const counts = ['passwordCount', 'subscriptionCount', 'noteCount', 'expenseCount', 'investmentCount', 'investmentGoalCount', 'reminderCount'];
+            
+            checkboxes.forEach((checkboxId, index) => {
+                const checkbox = document.getElementById(checkboxId);
+                const countInput = document.getElementById(counts[index]);
+                
+                countInput.disabled = !checkbox.checked;
+                if (!checkbox.checked) {
+                    countInput.value = 0;
+                }
+            });
+            
+            updateSummary();
+        }
+
+        function updateFileList() {
+            const jsonList = document.getElementById('jsonFiles');
+            const csvList = document.getElementById('csvFiles');
+            
+            if (generatedFiles.json.length === 0) {
+                jsonList.innerHTML = '<li>No files generated yet</li>';
+            } else {
+                jsonList.innerHTML = generatedFiles.json.map(file => `<li>${file}</li>`).join('');
+            }
+            
+            if (generatedFiles.csv.length === 0) {
+                csvList.innerHTML = '<li>No files generated yet</li>';
+            } else {
+                csvList.innerHTML = generatedFiles.csv.map(file => `<li>${file}</li>`).join('');
+            }
+        }
+
+        function showStatus(message, type = 'success') {
+            const element = document.getElementById('generationStatus');
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function generateCustomData() {
+            const settings = getGenerationSettings();
+            
+            // Generate data based on settings
+            const data = {};
+            
+            if (settings.passwords.enabled && settings.passwords.count > 0) {
+                data.passwords = generatePasswords(settings.passwords.count);
+            }
+            
+            if (settings.subscriptions.enabled && settings.subscriptions.count > 0) {
+                data.subscriptions = generateSubscriptions(settings.subscriptions.count);
+            }
+            
+            if (settings.notes.enabled && settings.notes.count > 0) {
+                data.notes = generateNotes(settings.notes.count);
+            }
+            
+            if (settings.expenses.enabled && settings.expenses.count > 0) {
+                data.expenses = generateExpenses(settings.expenses.count);
+            }
+            
+            if (settings.investments.enabled && settings.investments.count > 0) {
+                data.investments = generateInvestments(settings.investments.count);
+            }
+            
+            if (settings.investmentGoals.enabled && settings.investmentGoals.count > 0) {
+                data.investmentGoals = generateInvestmentGoals(settings.investmentGoals.count);
+            }
+            
+            if (settings.reminders.enabled && settings.reminders.count > 0) {
+                data.reminders = generateReminders(settings.reminders.count);
+            }
+            
+            return data;
+        }
+
+        function generateJSON() {
+            const btn = document.getElementById('jsonBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const data = generateCustomData();
+                const jsonData = JSON.stringify(data, null, 2);
+                
+                // Create and download JSON file
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'custom-test-data.json';
+                a.click();
+                
+                generatedFiles.json.push('custom-test-data.json');
+                updateFileList();
+                
+                const totalItems = Object.values(data).reduce((sum, arr) => sum + arr.length, 0);
+                showStatus(`✅ JSON file generated successfully! ${totalItems} items across ${Object.keys(data).length} sections.`);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate JSON File';
+            }
+        }
+
+        function generateCSV() {
+            const btn = document.getElementById('csvBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const settings = getGenerationSettings();
+                const csvFiles = [];
+                
+                if (settings.passwords.enabled && settings.passwords.count > 0) {
+                    const csv = generatePasswordsCSV(settings.passwords.count);
+                    downloadCSV(csv, 'sample-passwords.csv');
+                    csvFiles.push('sample-passwords.csv');
+                }
+                
+                if (settings.subscriptions.enabled && settings.subscriptions.count > 0) {
+                    const csv = generateSubscriptionsCSV(settings.subscriptions.count);
+                    downloadCSV(csv, 'sample-subscriptions.csv');
+                    csvFiles.push('sample-subscriptions.csv');
+                }
+                
+                if (settings.notes.enabled && settings.notes.count > 0) {
+                    const csv = generateNotesCSV(settings.notes.count);
+                    downloadCSV(csv, 'sample-notes.csv');
+                    csvFiles.push('sample-notes.csv');
+                }
+                
+                if (settings.expenses.enabled && settings.expenses.count > 0) {
+                    const csv = generateExpensesCSV(settings.expenses.count);
+                    downloadCSV(csv, 'sample-expenses.csv');
+                    csvFiles.push('sample-expenses.csv');
+                }
+                
+                if (settings.investments.enabled && settings.investments.count > 0) {
+                    const csv = generateInvestmentsCSV(settings.investments.count);
+                    downloadCSV(csv, 'sample-investments.csv');
+                    csvFiles.push('sample-investments.csv');
+                }
+                
+                if (settings.investmentGoals.enabled && settings.investmentGoals.count > 0) {
+                    const csv = generateInvestmentGoalsCSV(settings.investmentGoals.count);
+                    downloadCSV(csv, 'sample-investment-goals.csv');
+                    csvFiles.push('sample-investment-goals.csv');
+                }
+                
+                if (settings.reminders.enabled && settings.reminders.count > 0) {
+                    const csv = generateRemindersCSV(settings.reminders.count);
+                    downloadCSV(csv, 'sample-reminders.csv');
+                    csvFiles.push('sample-reminders.csv');
+                }
+                
+                generatedFiles.csv = csvFiles;
+                updateFileList();
+                
+                showStatus(`✅ ${csvFiles.length} CSV files generated successfully!`);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate CSV Files';
+            }
+        }
+
+        function generateBoth() {
+            generateJSON();
+            setTimeout(() => generateCSV(), 500);
+        }
+
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+
+        // Enhanced data generation functions with comprehensive realistic data
+        function generatePasswords(count) {
+            const passwordData = [
+                { name: 'Google Account', username: 'john.doe@gmail.com', password: 'SecurePass2024!', url: 'https://accounts.google.com', notes: 'Primary Google account for work and personal use', tags: ['work', 'personal'] },
+                { name: 'GitHub', username: 'johndoe_dev', password: 'DevPass123#', url: 'https://github.com', notes: 'Developer account for code repositories', tags: ['work', 'development'] },
+                { name: 'Netflix', username: 'john.doe@email.com', password: 'StreamPass456$', url: 'https://netflix.com', notes: 'Family Netflix subscription', tags: ['entertainment', 'family'] },
+                { name: 'Amazon Prime', username: 'john.doe@email.com', password: 'ShopSecure789@', url: 'https://amazon.com', notes: 'Amazon Prime membership for shopping', tags: ['shopping', 'personal'] },
+                { name: 'Microsoft 365', username: 'john.doe@company.com', password: 'Office365Pass!', url: 'https://office.com', notes: 'Work Microsoft 365 subscription', tags: ['work', 'productivity'] },
+                { name: 'Spotify Premium', username: 'johndoe_music', password: 'MusicPass2024#', url: 'https://spotify.com', notes: 'Premium music streaming account', tags: ['entertainment', 'music'] },
+                { name: 'Adobe Creative Cloud', username: 'john.doe@email.com', password: 'CreativePass123$', url: 'https://adobe.com', notes: 'Creative Cloud subscription for design work', tags: ['work', 'creative'] },
+                { name: 'Bank of America', username: 'john.doe', password: 'BankSecure456!', url: 'https://bankofamerica.com', notes: 'Primary checking and savings account', tags: ['banking', 'finance'] },
+                { name: 'PayPal', username: 'john.doe@email.com', password: 'PayPalPass789#', url: 'https://paypal.com', notes: 'Online payment account', tags: ['finance', 'payments'] },
+                { name: 'LinkedIn', username: 'john.doe@email.com', password: 'LinkedInPass2024$', url: 'https://linkedin.com', notes: 'Professional networking account', tags: ['work', 'networking'] },
+                { name: 'Dropbox', username: 'john.doe@email.com', password: 'CloudPass123@', url: 'https://dropbox.com', notes: 'Cloud storage for work files', tags: ['work', 'storage'] },
+                { name: 'Slack', username: 'john.doe@company.com', password: 'TeamPass456!', url: 'https://slack.com', notes: 'Team communication platform', tags: ['work', 'communication'] },
+                { name: 'Zoom', username: 'john.doe@email.com', password: 'VideoPass789#', url: 'https://zoom.us', notes: 'Video conferencing account', tags: ['work', 'meetings'] },
+                { name: 'Apple ID', username: 'john.doe@icloud.com', password: 'ApplePass2024$', url: 'https://appleid.apple.com', notes: 'Apple ecosystem account', tags: ['personal', 'apple'] },
+                { name: 'Facebook', username: 'john.doe@email.com', password: 'SocialPass123@', url: 'https://facebook.com', notes: 'Social media account', tags: ['social', 'personal'] },
+                { name: 'Twitter/X', username: '@johndoe', password: 'TweetPass456!', url: 'https://twitter.com', notes: 'Social media and news account', tags: ['social', 'news'] },
+                { name: 'Instagram', username: 'johndoe_insta', password: 'InstaPass789#', url: 'https://instagram.com', notes: 'Photo sharing account', tags: ['social', 'photos'] },
+                { name: 'YouTube', username: 'john.doe@email.com', password: 'VideoPass2024$', url: 'https://youtube.com', notes: 'Video content and creator account', tags: ['entertainment', 'content'] },
+                { name: 'Discord', username: 'johndoe#1234', password: 'GamingPass123@', url: 'https://discord.com', notes: 'Gaming and community chat', tags: ['gaming', 'social'] },
+                { name: 'Steam', username: 'johndoe_gamer', password: 'GamePass456!', url: 'https://store.steampowered.com', notes: 'PC gaming platform account', tags: ['gaming', 'entertainment'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = passwordData[i % passwordData.length];
+                return {
+                    id: `pwd_${i + 1}`,
+                    name: data.name,
+                    username: data.username,
+                    password: data.password,
+                    url: data.url,
+                    notes: data.notes,
+                    tags: data.tags,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateSubscriptions(count) {
+            const services = [
+                { name: 'Netflix', cost: 15.99, category: 'Streaming', plan: 'Standard', type: 'streaming', link: 'https://netflix.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'NET123456789' },
+                { name: 'Spotify Premium', cost: 9.99, category: 'Music', plan: 'Premium', type: 'streaming', link: 'https://spotify.com', username: 'johndoe_music', email: 'john.doe@email.com', accountId: 'SPOT987654321' },
+                { name: 'Adobe Creative Cloud', cost: 52.99, category: 'Software', plan: 'All Apps', type: 'software', link: 'https://adobe.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'ADOBE456789123' },
+                { name: 'Microsoft 365', cost: 6.99, category: 'Software', plan: 'Personal', type: 'software', link: 'https://office.com', username: 'john.doe@company.com', email: 'john.doe@company.com', accountId: 'MSFT789123456' },
+                { name: 'Amazon Prime', cost: 14.99, category: 'Shopping', plan: 'Prime', type: 'other', link: 'https://amazon.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'AMZN123789456' },
+                { name: 'YouTube Premium', cost: 11.99, category: 'Streaming', plan: 'Premium', type: 'streaming', link: 'https://youtube.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'YT456123789' },
+                { name: 'Apple Music', cost: 9.99, category: 'Music', plan: 'Individual', type: 'streaming', link: 'https://music.apple.com', username: 'john.doe@icloud.com', email: 'john.doe@icloud.com', accountId: 'APPLE789456123' },
+                { name: 'Disney+', cost: 7.99, category: 'Streaming', plan: 'Basic', type: 'streaming', link: 'https://disneyplus.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'DISNEY123456789' },
+                { name: 'HBO Max', cost: 15.99, category: 'Streaming', plan: 'Ad-Free', type: 'streaming', link: 'https://hbomax.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'HBO987654321' },
+                { name: 'Dropbox Plus', cost: 9.99, category: 'Storage', plan: 'Plus', type: 'cloud', link: 'https://dropbox.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'DROP456789123' },
+                { name: 'Slack Pro', cost: 6.67, category: 'Software', plan: 'Pro', type: 'software', link: 'https://slack.com', username: 'john.doe@company.com', email: 'john.doe@company.com', accountId: 'SLACK789123456' },
+                { name: 'Zoom Pro', cost: 14.99, category: 'Software', plan: 'Pro', type: 'software', link: 'https://zoom.us', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'ZOOM123789456' },
+                { name: 'LinkedIn Premium', cost: 29.99, category: 'Software', plan: 'Premium', type: 'software', link: 'https://linkedin.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'LINKED456123789' },
+                { name: 'Grammarly Premium', cost: 12.00, category: 'Software', plan: 'Premium', type: 'software', link: 'https://grammarly.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'GRAM789456123' },
+                { name: 'Canva Pro', cost: 12.99, category: 'Software', plan: 'Pro', type: 'software', link: 'https://canva.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'CANVA123456789' },
+                { name: 'Figma Professional', cost: 12.00, category: 'Software', plan: 'Professional', type: 'software', link: 'https://figma.com', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'FIGMA987654321' },
+                { name: 'Notion Pro', cost: 8.00, category: 'Software', plan: 'Pro', type: 'software', link: 'https://notion.so', username: 'john.doe@email.com', email: 'john.doe@email.com', accountId: 'NOTION456789123' },
+                { name: 'GitHub Pro', cost: 4.00, category: 'Software', plan: 'Pro', type: 'software', link: 'https://github.com', username: 'johndoe_dev', email: 'john.doe@email.com', accountId: 'GITHUB789123456' },
+                { name: 'Discord Nitro', cost: 9.99, category: 'Software', plan: 'Nitro', type: 'software', link: 'https://discord.com', username: 'johndoe#1234', email: 'john.doe@email.com', accountId: 'DISCORD123789456' },
+                { name: 'Steam', cost: 0.00, category: 'Gaming', plan: 'Free', type: 'gaming', link: 'https://store.steampowered.com', username: 'johndoe_gamer', email: 'john.doe@email.com', accountId: 'STEAM456123789' }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const service = services[i % services.length];
+                const nextBilling = new Date(Date.now() + (Math.random() * 30 + 1) * 24 * 60 * 60 * 1000);
+                const expiryDate = new Date(Date.now() + (Math.random() * 365 + 30) * 24 * 60 * 60 * 1000);
+                
+                return {
+                    id: `sub_${i + 1}`,
+                    name: service.name,
+                    plan: service.plan,
+                    cost: service.cost,
+                    currency: 'USD',
+                    billingCycle: Math.random() > 0.7 ? 'yearly' : 'monthly',
+                    nextBillingDate: nextBilling.toISOString(),
+                    reminderDays: 7,
+                    category: service.category,
+                    notes: `Subscription for ${service.name} - ${service.plan} plan`,
+                    isActive: true,
+                    // Enhanced fields
+                    subscriptionType: service.type,
+                    credentials: {
+                        username: service.username,
+                        email: service.email,
+                        accountId: service.accountId
+                    },
+                    platformLink: service.link,
+                    expiryDate: expiryDate.toISOString(),
+                    autoRenew: Math.random() > 0.3,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateNotes(count) {
+            const noteData = [
+                { title: 'Project Planning Meeting Notes', content: '# Project Planning Meeting\n\n## Attendees\n- John Doe (Project Manager)\n- Jane Smith (Developer)\n- Mike Wilson (Designer)\n\n## Key Points\n- [ ] Define project scope\n- [ ] Set timeline milestones\n- [ ] Assign team responsibilities\n- [ ] Review budget constraints\n\n## Next Steps\n1. Create detailed project timeline\n2. Set up development environment\n3. Schedule weekly check-ins', type: 'markdown', category: 'work', tags: ['meeting', 'project', 'planning'] },
+                { title: 'Grocery Shopping List', content: '## Groceries Needed\n\n### Produce\n- [ ] Bananas\n- [ ] Apples\n- [ ] Spinach\n- [ ] Tomatoes\n- [ ] Onions\n\n### Dairy\n- [ ] Milk\n- [ ] Eggs\n- [ ] Cheese\n- [ ] Yogurt\n\n### Pantry\n- [ ] Bread\n- [ ] Rice\n- [ ] Pasta\n- [ ] Olive oil', type: 'checklist', category: 'personal', tags: ['shopping', 'food', 'home'] },
+                { title: 'React Component Best Practices', content: '```jsx\n// Good component structure\nexport const MyComponent = ({ title, children }) => {\n  const [state, setState] = useState(null);\n  \n  useEffect(() => {\n    // Side effects here\n  }, []);\n  \n  return (\n    <div className="component">\n      <h2>{title}</h2>\n      {children}\n    </div>\n  );\n};\n```\n\n## Key Principles\n1. Single responsibility\n2. Props validation\n3. Clean JSX structure\n4. Proper state management', type: 'code', category: 'work', tags: ['react', 'javascript', 'development'] },
+                { title: 'Book Reading Notes - Atomic Habits', content: '## Key Concepts\n\n### The Four Laws of Behavior Change\n1. **Make it Obvious** - Design your environment\n2. **Make it Attractive** - Use temptation bundling\n3. **Make it Easy** - Reduce friction\n4. **Make it Satisfying** - Immediate rewards\n\n### Implementation Ideas\n- Start with 2-minute rule\n- Use habit stacking\n- Track progress visually\n- Celebrate small wins\n\n### Quotes\n> "You do not rise to the level of your goals. You fall to the level of your systems."', type: 'markdown', category: 'personal', tags: ['books', 'habits', 'self-improvement'] },
+                { title: 'Travel Itinerary - Europe Trip', content: '## Europe Travel Plan\n\n### Day 1-3: Paris\n- [ ] Visit Eiffel Tower\n- [ ] Louvre Museum\n- [ ] Seine River cruise\n- [ ] Try French cuisine\n\n### Day 4-6: London\n- [ ] Big Ben\n- [ ] British Museum\n- [ ] Tower Bridge\n- [ ] Afternoon tea\n\n### Day 7-9: Rome\n- [ ] Colosseum\n- [ ] Vatican City\n- [ ] Trevi Fountain\n- [ ] Italian gelato\n\n### Budget: $3,000\n### Accommodation: Hotels booked\n### Transportation: Eurail pass', type: 'checklist', category: 'personal', tags: ['travel', 'vacation', 'europe'] },
+                { title: 'API Integration Notes', content: '## REST API Integration\n\n### Endpoints\n```javascript\nconst API_BASE = \'https://api.example.com\';\n\n// Authentication\nPOST /auth/login\nPOST /auth/refresh\n\n// User management\nGET /users\nPOST /users\nPUT /users/:id\nDELETE /users/:id\n\n// Data operations\nGET /data\nPOST /data\nPUT /data/:id\n```\n\n### Error Handling\n- 400: Bad Request\n- 401: Unauthorized\n- 404: Not Found\n- 500: Server Error\n\n### Rate Limiting\n- 100 requests per minute\n- Use exponential backoff', type: 'code', category: 'work', tags: ['api', 'integration', 'development'] },
+                { title: 'Fitness Goals & Progress', content: '# Fitness Journey 2024\n\n## Current Goals\n- [ ] Run 5K in under 25 minutes\n- [ ] Deadlift 200 lbs\n- [ ] Complete 10 pull-ups\n- [ ] Lose 15 pounds\n\n## Weekly Schedule\n- **Monday**: Upper body strength\n- **Tuesday**: Cardio (running)\n- **Wednesday**: Lower body strength\n- **Thursday**: Rest day\n- **Friday**: Full body workout\n- **Saturday**: Cardio (cycling)\n- **Sunday**: Active recovery\n\n## Progress Tracking\n- Weight: 180 lbs (target: 165 lbs)\n- 5K time: 28:30 (target: <25:00)\n- Deadlift: 175 lbs (target: 200 lbs)', type: 'markdown', category: 'personal', tags: ['fitness', 'health', 'goals'] },
+                { title: 'Recipe Collection', content: '## Favorite Recipes\n\n### Pasta Carbonara\n**Ingredients:**\n- [ ] 400g spaghetti\n- [ ] 200g pancetta\n- [ ] 4 eggs\n- [ ] 100g parmesan\n- [ ] Black pepper\n\n**Steps:**\n1. [ ] Cook pasta al dente\n2. [ ] Fry pancetta until crispy\n3. [ ] Beat eggs with parmesan\n4. [ ] Mix everything together\n5. [ ] Add black pepper\n\n### Chocolate Chip Cookies\n**Ingredients:**\n- [ ] 2 cups flour\n- [ ] 1 cup butter\n- [ ] 1 cup brown sugar\n- [ ] 2 eggs\n- [ ] Chocolate chips', type: 'checklist', category: 'personal', tags: ['cooking', 'recipes', 'food'] },
+                { title: 'Database Schema Design', content: '## User Management System\n\n```sql\n-- Users table\nCREATE TABLE users (\n  id UUID PRIMARY KEY,\n  email VARCHAR(255) UNIQUE NOT NULL,\n  password_hash VARCHAR(255) NOT NULL,\n  first_name VARCHAR(100),\n  last_name VARCHAR(100),\n  created_at TIMESTAMP DEFAULT NOW(),\n  updated_at TIMESTAMP DEFAULT NOW()\n);\n\n-- Subscriptions table\nCREATE TABLE subscriptions (\n  id UUID PRIMARY KEY,\n  user_id UUID REFERENCES users(id),\n  name VARCHAR(255) NOT NULL,\n  cost DECIMAL(10,2),\n  billing_cycle VARCHAR(20),\n  next_billing_date DATE,\n  is_active BOOLEAN DEFAULT true\n);\n```\n\n### Indexes\n- users.email (unique)\n- subscriptions.user_id\n- subscriptions.next_billing_date', type: 'code', category: 'work', tags: ['database', 'sql', 'schema'] },
+                { title: 'Investment Research Notes', content: '# Stock Analysis - Tech Sector\n\n## Portfolio Holdings\n- **AAPL**: $150/share - Strong iPhone sales\n- **MSFT**: $300/share - Azure growth\n- **GOOGL**: $2800/share - Search dominance\n- **AMZN**: $3200/share - AWS leadership\n\n## Watchlist\n- **TSLA**: EV market leader\n- **NVDA**: AI chip demand\n- **META**: Metaverse potential\n\n## Market Outlook\n- Tech sector showing resilience\n- AI investments increasing\n- Cloud computing growth\n- Regulatory concerns\n\n## Action Items\n- [ ] Review quarterly earnings\n- [ ] Rebalance portfolio\n- [ ] Research new opportunities', type: 'markdown', category: 'personal', tags: ['investments', 'stocks', 'finance'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = noteData[i % noteData.length];
+                return {
+                    id: `note_${i + 1}`,
+                    title: data.title,
+                    content: data.content,
+                    type: data.type,
+                    category: data.category,
+                    tags: data.tags,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateExpenses(count) {
+            const expenseData = [
+                { amount: 45.67, category: 'food', description: 'Grocery shopping at Whole Foods', merchant: 'Whole Foods Market', tags: ['groceries', 'food'] },
+                { amount: 12.50, category: 'food', description: 'Lunch at local restaurant', merchant: 'The Corner Bistro', tags: ['dining', 'lunch'] },
+                { amount: 5.25, category: 'food', description: 'Morning coffee and pastry', merchant: 'Starbucks', tags: ['coffee', 'breakfast'] },
+                { amount: 89.99, category: 'shopping', description: 'Online purchase - electronics', merchant: 'Amazon', tags: ['electronics', 'online'] },
+                { amount: 23.45, category: 'transportation', description: 'Uber ride to airport', merchant: 'Uber', tags: ['transport', 'airport'] },
+                { amount: 67.80, category: 'transportation', description: 'Gas fill-up', merchant: 'Shell', tags: ['gas', 'fuel'] },
+                { amount: 15.99, category: 'entertainment', description: 'Netflix subscription', merchant: 'Netflix', tags: ['streaming', 'subscription'] },
+                { amount: 34.20, category: 'entertainment', description: 'Movie tickets', merchant: 'AMC Theaters', tags: ['movies', 'entertainment'] },
+                { amount: 120.00, category: 'utilities', description: 'Electricity bill', merchant: 'PG&E', tags: ['utilities', 'electricity'] },
+                { amount: 45.00, category: 'utilities', description: 'Internet service', merchant: 'Comcast', tags: ['utilities', 'internet'] },
+                { amount: 78.90, category: 'shopping', description: 'Clothing purchase', merchant: 'Target', tags: ['clothing', 'retail'] },
+                { amount: 29.99, category: 'entertainment', description: 'Spotify Premium', merchant: 'Spotify', tags: ['music', 'subscription'] },
+                { amount: 156.78, category: 'food', description: 'Weekly grocery shopping', merchant: 'Safeway', tags: ['groceries', 'food'] },
+                { amount: 8.75, category: 'food', description: 'Sandwich and drink', merchant: 'Subway', tags: ['fast-food', 'lunch'] },
+                { amount: 234.56, category: 'shopping', description: 'Home improvement supplies', merchant: 'Home Depot', tags: ['home', 'improvement'] },
+                { amount: 45.00, category: 'transportation', description: 'Monthly bus pass', merchant: 'MTA', tags: ['transport', 'monthly'] },
+                { amount: 67.89, category: 'entertainment', description: 'Concert tickets', merchant: 'Ticketmaster', tags: ['music', 'concert'] },
+                { amount: 89.99, category: 'utilities', description: 'Water bill', merchant: 'City Water Dept', tags: ['utilities', 'water'] },
+                { amount: 23.45, category: 'food', description: 'Dinner delivery', merchant: 'DoorDash', tags: ['delivery', 'dinner'] },
+                { amount: 145.67, category: 'shopping', description: 'Electronics purchase', merchant: 'Best Buy', tags: ['electronics', 'retail'] },
+                { amount: 34.99, category: 'entertainment', description: 'Gaming subscription', merchant: 'Xbox Game Pass', tags: ['gaming', 'subscription'] },
+                { amount: 56.78, category: 'transportation', description: 'Car maintenance', merchant: 'Jiffy Lube', tags: ['car', 'maintenance'] },
+                { amount: 78.90, category: 'food', description: 'Fine dining experience', merchant: 'The French Laundry', tags: ['dining', 'fine-dining'] },
+                { amount: 12.99, category: 'entertainment', description: 'Apple Music subscription', merchant: 'Apple', tags: ['music', 'subscription'] },
+                { amount: 198.45, category: 'utilities', description: 'Phone bill', merchant: 'Verizon', tags: ['utilities', 'phone'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = expenseData[i % expenseData.length];
+                return {
+                    id: `exp_${i + 1}`,
+                    amount: data.amount,
+                    currency: 'USD',
+                    category: data.category,
+                    description: data.description,
+                    merchant: data.merchant,
+                    date: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
+                    tags: data.tags,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateInvestments(count) {
+            const investmentData = [
+                { name: 'Apple Inc.', type: 'stocks', institution: 'Robinhood', ticker: 'AAPL', purchasePrice: 150.00, quantity: 10, currentPrice: 175.00, notes: 'Tech stock investment - iPhone sales strong', tags: ['tech', 'growth', 'dividend'] },
+                { name: 'Microsoft Corporation', type: 'stocks', institution: 'Vanguard', ticker: 'MSFT', purchasePrice: 300.00, quantity: 5, currentPrice: 350.00, notes: 'Cloud computing leader - Azure growth', tags: ['tech', 'cloud', 'enterprise'] },
+                { name: 'Alphabet Inc. (Google)', type: 'stocks', institution: 'Fidelity', ticker: 'GOOGL', purchasePrice: 2800.00, quantity: 2, currentPrice: 3200.00, notes: 'Search dominance and AI investments', tags: ['tech', 'ai', 'search'] },
+                { name: 'Amazon.com Inc.', type: 'stocks', institution: 'Charles Schwab', ticker: 'AMZN', purchasePrice: 3200.00, quantity: 1, currentPrice: 3500.00, notes: 'E-commerce and AWS leadership', tags: ['tech', 'ecommerce', 'cloud'] },
+                { name: 'Tesla Inc.', type: 'stocks', institution: 'Robinhood', ticker: 'TSLA', purchasePrice: 200.00, quantity: 15, currentPrice: 250.00, notes: 'EV market leader - autonomous driving', tags: ['ev', 'automotive', 'innovation'] },
+                { name: 'Meta Platforms Inc.', type: 'stocks', institution: 'Vanguard', ticker: 'META', purchasePrice: 300.00, quantity: 8, currentPrice: 350.00, notes: 'Social media and metaverse potential', tags: ['social', 'metaverse', 'vr'] },
+                { name: 'NVIDIA Corporation', type: 'stocks', institution: 'Fidelity', ticker: 'NVDA', purchasePrice: 400.00, quantity: 6, currentPrice: 500.00, notes: 'AI chip demand - data center growth', tags: ['ai', 'gaming', 'datacenter'] },
+                { name: 'S&P 500 Index Fund', type: 'mutual_fund', institution: 'Vanguard', ticker: 'VOO', purchasePrice: 100.00, quantity: 100, currentPrice: 108.00, notes: 'Diversified index fund - broad market exposure', tags: ['index', 'diversified', 'etf'] },
+                { name: 'Bitcoin', type: 'crypto', institution: 'Coinbase', ticker: 'BTC', purchasePrice: 40000.00, quantity: 0.05, currentPrice: 50000.00, notes: 'Digital currency - store of value', tags: ['crypto', 'digital', 'volatile'] },
+                { name: 'Ethereum', type: 'crypto', institution: 'Binance', ticker: 'ETH', purchasePrice: 2500.00, quantity: 2, currentPrice: 3000.00, notes: 'Smart contracts platform - DeFi ecosystem', tags: ['crypto', 'defi', 'smart-contracts'] },
+                { name: 'Real Estate Investment Trust', type: 'real_estate', institution: 'Schwab', ticker: 'VNQ', purchasePrice: 80.00, quantity: 50, currentPrice: 85.00, notes: 'REIT - commercial real estate exposure', tags: ['reit', 'real-estate', 'dividend'] },
+                { name: 'Gold ETF', type: 'other', institution: 'SPDR', ticker: 'GLD', purchasePrice: 180.00, quantity: 20, currentPrice: 185.00, notes: 'Gold exposure - inflation hedge', tags: ['gold', 'commodity', 'hedge'] },
+                { name: 'Bond Fund', type: 'bonds', institution: 'Vanguard', ticker: 'BND', purchasePrice: 85.00, quantity: 100, currentPrice: 87.00, notes: 'Total bond market - income generation', tags: ['bonds', 'income', 'fixed-income'] },
+                { name: 'Emerging Markets ETF', type: 'mutual_fund', institution: 'iShares', ticker: 'EEM', purchasePrice: 45.00, quantity: 80, currentPrice: 48.00, notes: 'Emerging markets exposure - growth potential', tags: ['emerging', 'international', 'growth'] },
+                { name: 'Technology Sector ETF', type: 'mutual_fund', institution: 'XLK', ticker: 'XLK', purchasePrice: 120.00, quantity: 25, currentPrice: 135.00, notes: 'Technology sector exposure - innovation focus', tags: ['tech', 'sector', 'innovation'] },
+                { name: 'Healthcare ETF', type: 'mutual_fund', institution: 'XLV', ticker: 'XLV', purchasePrice: 110.00, quantity: 30, currentPrice: 115.00, notes: 'Healthcare sector - demographic trends', tags: ['healthcare', 'sector', 'demographics'] },
+                { name: 'Dividend Growth Fund', type: 'mutual_fund', institution: 'Vanguard', ticker: 'VIG', purchasePrice: 95.00, quantity: 40, currentPrice: 98.00, notes: 'Dividend growth strategy - income focus', tags: ['dividend', 'income', 'growth'] },
+                { name: 'Small Cap Value Fund', type: 'mutual_fund', institution: 'iShares', ticker: 'IJS', purchasePrice: 75.00, quantity: 60, currentPrice: 78.00, notes: 'Small cap value - contrarian play', tags: ['small-cap', 'value', 'contrarian'] },
+                { name: 'International Developed Markets', type: 'mutual_fund', institution: 'Vanguard', ticker: 'VEA', purchasePrice: 50.00, quantity: 100, currentPrice: 52.00, notes: 'International developed markets exposure', tags: ['international', 'developed', 'diversification'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = investmentData[i % investmentData.length];
+                return {
+                    id: `inv_${i + 1}`,
+                    name: data.name,
+                    type: data.type,
+                    institution: data.institution,
+                    ticker: data.ticker,
+                    purchaseDate: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    purchasePrice: data.purchasePrice,
+                    quantity: data.quantity,
+                    currentPrice: data.currentPrice,
+                    currentValue: Math.round((data.currentPrice * data.quantity) * 100) / 100,
+                    currency: 'USD',
+                    notes: data.notes,
+                    tags: data.tags,
+                    isActive: true,
+                    fees: Math.round(Math.random() * 10 * 100) / 100,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateInvestmentGoals(count) {
+            const goalData = [
+                { name: 'Retirement Fund', type: 'retirement', targetAmount: 1000000, currentAmount: 250000, monthlyContribution: 2000, notes: 'Target retirement at age 65 with $1M portfolio', tags: ['retirement', 'long-term'] },
+                { name: 'Children\'s Education Fund', type: 'education', targetAmount: 150000, currentAmount: 45000, monthlyContribution: 500, notes: 'College fund for two children - 529 plan', tags: ['education', 'children', 'college'] },
+                { name: 'House Down Payment', type: 'home_purchase', targetAmount: 80000, currentAmount: 25000, monthlyContribution: 1500, notes: '20% down payment for $400K home purchase', tags: ['home', 'real-estate', 'down-payment'] },
+                { name: 'Dream Vacation Fund', type: 'vacation', targetAmount: 15000, currentAmount: 5000, monthlyContribution: 300, notes: 'European tour - 3 weeks across 5 countries', tags: ['vacation', 'travel', 'europe'] },
+                { name: 'Emergency Fund', type: 'emergency_fund', targetAmount: 25000, currentAmount: 12000, monthlyContribution: 800, notes: '6 months of expenses - high yield savings', tags: ['emergency', 'savings', 'security'] },
+                { name: 'New Car Fund', type: 'other', targetAmount: 35000, currentAmount: 8000, monthlyContribution: 600, notes: 'Tesla Model 3 - electric vehicle upgrade', tags: ['car', 'electric', 'upgrade'] },
+                { name: 'Wedding Fund', type: 'other', targetAmount: 30000, currentAmount: 15000, monthlyContribution: 1000, notes: 'Dream wedding ceremony and reception', tags: ['wedding', 'celebration', 'special'] },
+                { name: 'Home Renovation', type: 'other', targetAmount: 50000, currentAmount: 10000, monthlyContribution: 1200, notes: 'Kitchen and bathroom renovation project', tags: ['home', 'renovation', 'improvement'] },
+                { name: 'Business Startup Fund', type: 'other', targetAmount: 100000, currentAmount: 20000, monthlyContribution: 2000, notes: 'Tech startup seed funding - SaaS platform', tags: ['business', 'startup', 'entrepreneur'] },
+                { name: 'Investment Property', type: 'real_estate', targetAmount: 200000, currentAmount: 50000, monthlyContribution: 2500, notes: 'Rental property investment - cash flow positive', tags: ['real-estate', 'rental', 'investment'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = goalData[i % goalData.length];
+                const targetDate = new Date(Date.now() + Math.random() * 5 * 365 * 24 * 60 * 60 * 1000);
+                return {
+                    id: `goal_${i + 1}`,
+                    name: data.name,
+                    type: data.type,
+                    targetAmount: data.targetAmount,
+                    currentAmount: data.currentAmount,
+                    targetDate: targetDate.toISOString(),
+                    monthlyContribution: data.monthlyContribution,
+                    currency: 'USD',
+                    notes: data.notes,
+                    tags: data.tags,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateReminders(count) {
+            const reminderData = [
+                { title: 'Doctor Appointment', description: 'Annual physical examination with Dr. Smith', priority: 'medium', category: 'health', tags: ['health', 'medical', 'annual'] },
+                { title: 'Pay Credit Card Bill', description: 'Chase Freedom card payment due - $1,250.00', priority: 'high', category: 'finance', tags: ['bills', 'credit-card', 'payment'] },
+                { title: 'Submit Expense Report', description: 'Q4 business expenses for reimbursement', priority: 'medium', category: 'work', tags: ['work', 'expenses', 'reimbursement'] },
+                { title: 'Call Mom', description: 'Weekly check-in call with family', priority: 'low', category: 'personal', tags: ['family', 'personal', 'call'] },
+                { title: 'Grocery Shopping', description: 'Weekly grocery run - Whole Foods', priority: 'medium', category: 'personal', tags: ['shopping', 'groceries', 'weekly'] },
+                { title: 'Car Service Appointment', description: 'Oil change and tire rotation at Jiffy Lube', priority: 'medium', category: 'personal', tags: ['car', 'maintenance', 'service'] },
+                { title: 'Project Deadline', description: 'Client presentation due - Q1 marketing campaign', priority: 'urgent', category: 'work', tags: ['work', 'deadline', 'presentation'] },
+                { title: 'Gym Membership Renewal', description: 'Annual gym membership expires next month', priority: 'medium', category: 'health', tags: ['health', 'gym', 'membership'] },
+                { title: 'Tax Preparation', description: 'Gather documents for tax filing - W2s, 1099s', priority: 'high', category: 'finance', tags: ['taxes', 'finance', 'documents'] },
+                { title: 'Birthday Party Planning', description: 'Plan daughter\'s 8th birthday party', priority: 'medium', category: 'personal', tags: ['birthday', 'party', 'family'] },
+                { title: 'Insurance Renewal', description: 'Auto insurance policy renewal due', priority: 'high', category: 'finance', tags: ['insurance', 'auto', 'renewal'] },
+                { title: 'Dentist Appointment', description: 'Regular cleaning and checkup', priority: 'low', category: 'health', tags: ['health', 'dental', 'cleaning'] },
+                { title: 'Team Meeting', description: 'Weekly team standup - project updates', priority: 'medium', category: 'work', tags: ['work', 'meeting', 'team'] },
+                { title: 'Book Club Meeting', description: 'Monthly book discussion - "Atomic Habits"', priority: 'low', category: 'personal', tags: ['books', 'social', 'monthly'] },
+                { title: 'Investment Review', description: 'Quarterly portfolio review and rebalancing', priority: 'medium', category: 'finance', tags: ['investment', 'portfolio', 'quarterly'] },
+                { title: 'Home Maintenance', description: 'HVAC system inspection and filter change', priority: 'medium', category: 'personal', tags: ['home', 'maintenance', 'hvac'] },
+                { title: 'Conference Registration', description: 'Tech conference early bird registration ends', priority: 'high', category: 'work', tags: ['work', 'conference', 'registration'] },
+                { title: 'Pet Vaccination', description: 'Annual vaccination for dog - rabies, distemper', priority: 'medium', category: 'personal', tags: ['pet', 'health', 'vaccination'] },
+                { title: 'Subscription Audit', description: 'Review all subscriptions and cancel unused ones', priority: 'low', category: 'finance', tags: ['subscriptions', 'finance', 'audit'] },
+                { title: 'Backup Data', description: 'Monthly backup of important files and photos', priority: 'medium', category: 'personal', tags: ['backup', 'data', 'monthly'] }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const data = reminderData[i % reminderData.length];
+                const dueDate = new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000);
+                return {
+                    id: `rem_${i + 1}`,
+                    title: data.title,
+                    description: data.description,
+                    dueDate: dueDate.toISOString(),
+                    priority: data.priority,
+                    category: data.category,
+                    isCompleted: Math.random() > 0.8,
+                    tags: data.tags,
+                    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        // CSV generation functions
+        function generatePasswordsCSV(count) {
+            const headers = ['name', 'username', 'password', 'url', 'notes', 'tags'];
+            const passwords = generatePasswords(count);
+            const rows = passwords.map(pwd => [pwd.name, pwd.username, pwd.password, pwd.url, pwd.notes, pwd.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateSubscriptionsCSV(count) {
+            const headers = ['name', 'plan', 'cost', 'currency', 'billingCycle', 'nextBillingDate', 'reminderDays', 'category', 'notes', 'isActive', 'subscriptionType', 'platformLink', 'expiryDate', 'autoRenew'];
+            const subscriptions = generateSubscriptions(count);
+            const rows = subscriptions.map(sub => [
+                sub.name, 
+                sub.plan, 
+                sub.cost, 
+                sub.currency, 
+                sub.billingCycle, 
+                sub.nextBillingDate, 
+                sub.reminderDays, 
+                sub.category, 
+                sub.notes, 
+                sub.isActive,
+                sub.subscriptionType,
+                sub.platformLink,
+                sub.expiryDate,
+                sub.autoRenew
+            ]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateNotesCSV(count) {
+            const headers = ['title', 'content', 'type', 'category', 'tags'];
+            const notes = generateNotes(count);
+            const rows = notes.map(note => [note.title, `"${note.content}"`, note.type, note.category, note.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateExpensesCSV(count) {
+            const headers = ['amount', 'currency', 'category', 'description', 'merchant', 'date', 'tags'];
+            const expenses = generateExpenses(count);
+            const rows = expenses.map(exp => [exp.amount, exp.currency, exp.category, exp.description, exp.merchant, exp.date, exp.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateInvestmentsCSV(count) {
+            const headers = ['name', 'type', 'institution', 'ticker', 'purchaseDate', 'purchasePrice', 'quantity', 'currentPrice', 'currentValue', 'currency', 'notes', 'tags'];
+            const investments = generateInvestments(count);
+            const rows = investments.map(inv => [inv.name, inv.type, inv.institution, inv.ticker, inv.purchaseDate, inv.purchasePrice, inv.quantity, inv.currentPrice, inv.currentValue, inv.currency, inv.notes, inv.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateInvestmentGoalsCSV(count) {
+            const headers = ['name', 'type', 'targetAmount', 'currentAmount', 'targetDate', 'monthlyContribution', 'currency', 'notes', 'tags'];
+            const goals = generateInvestmentGoals(count);
+            const rows = goals.map(goal => [goal.name, goal.type, goal.targetAmount, goal.currentAmount, goal.targetDate, goal.monthlyContribution, goal.currency, goal.notes, goal.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateRemindersCSV(count) {
+            const headers = ['title', 'description', 'dueDate', 'priority', 'category', 'isCompleted', 'tags'];
+            const reminders = generateReminders(count);
+            const rows = reminders.map(rem => [rem.title, rem.description, rem.dueDate, rem.priority, rem.category, rem.isCompleted, rem.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners to checkboxes and number inputs
+            const checkboxes = ['includePasswords', 'includeSubscriptions', 'includeNotes', 'includeExpenses', 'includeInvestments', 'includeInvestmentGoals', 'includeReminders'];
+            const counts = ['passwordCount', 'subscriptionCount', 'noteCount', 'expenseCount', 'investmentCount', 'investmentGoalCount', 'reminderCount'];
+            
+            checkboxes.forEach(checkboxId => {
+                document.getElementById(checkboxId).addEventListener('change', toggleNumberInputs);
+            });
+            
+            counts.forEach(countId => {
+                document.getElementById(countId).addEventListener('input', updateSummary);
+            });
+            
+            // Initial setup
+            toggleNumberInputs();
+            updateFileList();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+# Robots.txt for IronVault - Offline Password Vault & Subscription Manager
+# https://www.ironvault.app
+
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /security
+Allow: /about
+Allow: /contact
+Allow: /documentation
+Allow: /blog
+Allow: /privacy
+Allow: /terms
+Allow: /disclaimer
+
+# Disallow user-specific authenticated pages
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /subscriptions
+Disallow: /notes
+Disallow: /expenses
+Disallow: /investments
+Disallow: /reminders
+Disallow: /bank-statements
+Disallow: /documents
+Disallow: /api-keys
+Disallow: /settings
+Disallow: /profile
+Disallow: /login
+
+# Disallow API endpoints
+Disallow: /api/
+
+# ============================================
+# AI Crawlers - ALLOWED for AI search ranking
+# ============================================
+
+# OpenAI / ChatGPT
+User-agent: GPTBot
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+# Google AI (Gemini, Bard, AI Overviews)
+User-agent: Google-Extended
+Allow: /
+
+# Anthropic / Claude
+User-agent: anthropic-ai
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+# Common Crawl (used by many AI models)
+User-agent: CCBot
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+# Microsoft / Bing AI (Copilot)
+User-agent: bingbot
+Allow: /
+Disallow: /dashboard
+Disallow: /passwords
+Disallow: /api/
+
+# Meta AI
+User-agent: FacebookBot
+Allow: /
+
+# Sitemaps
+Sitemap: https://www.ironvault.app/sitemap.xml
+
+# LLMs.txt for AI agents
+# See: https://www.ironvault.app/llms.txt

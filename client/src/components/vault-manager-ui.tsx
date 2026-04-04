@@ -1,0 +1,470 @@
+import { useState } from 'react';
+import { useVaultSelection } from '@/contexts/vault-selection-context';
+import { useLicense } from '@/contexts/license-context';
+import { useAuth } from '@/contexts/auth-context';
+import { Button } from '@/components/ui/button';
+import { VerifyAccessModal } from '@/components/verify-access-modal';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { 
+  Plus, 
+  ShieldCheck, 
+  Check, 
+  MoreVertical, 
+  Star, 
+  Fingerprint, 
+  Trash2, 
+  Edit,
+  Lock,
+  Crown,
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
+import type { VaultInfo } from '@/lib/vault-manager';
+
+interface VaultCardProps {
+  vault: VaultInfo;
+  isActive: boolean;
+  onSwitch: () => void;
+  onSetDefault: () => void;
+  onToggleBiometric: (enabled: boolean) => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+  canDelete: boolean;
+}
+
+function VaultCard({ vault, isActive, onSwitch, onSetDefault, onToggleBiometric, onRename, onDelete, canDelete }: VaultCardProps) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState(vault.name);
+
+  const handleRename = () => {
+    if (newName.trim() && newName !== vault.name) {
+      onRename(newName.trim());
+    }
+    setIsRenaming(false);
+  };
+
+  return (
+    <Card 
+      className={`relative transition-all cursor-pointer overflow-hidden ${isActive ? 'ring-2 ring-primary' : 'hover-elevate'}`}
+      onClick={() => !isActive && onSwitch()}
+      data-testid={`card-vault-${vault.id}`}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div 
+              className="w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: vault.iconColor + '20' }}
+            >
+              <ShieldCheck className="w-5 h-5" style={{ color: vault.iconColor }} />
+            </div>
+            <div className="min-w-0 flex-1">
+              {isRenaming ? (
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onBlur={handleRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRename();
+                    if (e.key === 'Escape') setIsRenaming(false);
+                  }}
+                  className="h-7"
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid="input-vault-rename"
+                />
+              ) : (
+                <CardTitle className="text-base truncate">{vault.name}</CardTitle>
+              )}
+              <CardDescription className="text-xs truncate">
+                Created {formatDistanceToNow(vault.createdAt, { addSuffix: true })}
+              </CardDescription>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {vault.isDefault && (
+              <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                <Star className="w-3 h-3 mr-1" />
+                Default
+              </Badge>
+            )}
+            {vault.biometricEnabled && (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                <Fingerprint className="w-3 h-3 mr-1" />
+                Biometric
+              </Badge>
+            )}
+            
+            <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`button-vault-menu-${vault.id}`}
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
+                data-testid="menu-item-rename"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              {!vault.isDefault && (
+                <DropdownMenuItem 
+                  onClick={(e) => { e.stopPropagation(); onSetDefault(); }}
+                  data-testid="menu-item-set-default"
+                >
+                  <Star className="w-4 h-4 mr-2" />
+                  Set as Default
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              {canDelete && !vault.isDefault && (
+                <DropdownMenuItem 
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="text-destructive"
+                  data-testid="menu-item-delete"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="pt-0">
+        <div 
+          className="flex items-center justify-between"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Fingerprint className="w-4 h-4" />
+            <span>Biometric Unlock</span>
+          </div>
+          <Switch
+            checked={vault.biometricEnabled}
+            onCheckedChange={onToggleBiometric}
+            data-testid={`switch-biometric-${vault.id}`}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function VaultManagerUI() {
+  const { 
+    vaults, 
+    activeVault, 
+    isLoading, 
+    canCreateVault, 
+    maxVaults,
+    createVault, 
+    switchVault, 
+    updateVault, 
+    deleteVault, 
+    setDefaultVault, 
+    toggleBiometric 
+  } = useVaultSelection();
+  const { license } = useLicense();
+  const { toast } = useToast();
+  
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newVaultName, setNewVaultName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [deleteVaultId, setDeleteVaultId] = useState<string | null>(null);
+  const [pendingBiometricVaultId, setPendingBiometricVaultId] = useState<string | null>(null);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+
+  const isPaidUser = license.tier === 'pro' || license.tier === 'lifetime' || license.status === 'trial';
+
+  const handleCreateVault = async () => {
+    if (!newVaultName.trim()) {
+      toast({
+        title: 'Name Required',
+        description: 'Please enter a name for your new vault.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      await createVault(newVaultName.trim());
+      toast({
+        title: 'Vault Created',
+        description: `"${newVaultName.trim()}" has been created successfully.`,
+      });
+      setNewVaultName('');
+      setIsCreateOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Failed to Create Vault',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteVault = async () => {
+    if (!deleteVaultId) return;
+    
+    try {
+      await deleteVault(deleteVaultId);
+      toast({
+        title: 'Vault Deleted',
+        description: 'The vault has been permanently deleted.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Delete Vault',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteVaultId(null);
+    }
+  };
+
+  const handleRename = async (vaultId: string, name: string) => {
+    try {
+      await updateVault(vaultId, { name });
+      toast({
+        title: 'Vault Renamed',
+        description: `Vault has been renamed to "${name}".`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Rename Vault',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleToggleBiometric = async (vaultId: string, enabled: boolean) => {
+    if (enabled) {
+      // When enabling biometric, require verification first
+      setPendingBiometricVaultId(vaultId);
+      setShowVerifyModal(true);
+    } else {
+      // When disabling, just disable directly
+      try {
+        await toggleBiometric(vaultId, false);
+        toast({
+          title: 'Biometric Disabled',
+          description: 'Biometric unlock has been disabled for this vault.',
+        });
+      } catch (error) {
+        toast({
+          title: 'Failed to Update Settings',
+          description: error instanceof Error ? error.message : 'An error occurred',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleVerifiedBiometricEnable = async () => {
+    if (!pendingBiometricVaultId) return;
+    
+    try {
+      await toggleBiometric(pendingBiometricVaultId, true);
+      toast({
+        title: 'Biometric Enabled',
+        description: 'You can now unlock this vault with your fingerprint or face.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Update Settings',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setPendingBiometricVaultId(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-pulse text-muted-foreground">Loading vaults...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Your Vaults</h2>
+          <p className="text-sm text-muted-foreground">
+            {vaults.length} of {maxVaults} vault{maxVaults !== 1 ? 's' : ''} used
+          </p>
+        </div>
+        
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              disabled={!canCreateVault}
+              data-testid="button-create-vault"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Vault
+              {!canCreateVault && !isPaidUser && (
+                <Crown className="w-4 h-4 ml-2 text-yellow-500" />
+              )}
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Vault</DialogTitle>
+              <DialogDescription>
+                Create a separate vault to organize your passwords and sensitive data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="vault-name">Vault Name</Label>
+                <Input
+                  id="vault-name"
+                  value={newVaultName}
+                  onChange={(e) => setNewVaultName(e.target.value)}
+                  placeholder="e.g., Work, Personal, Family"
+                  data-testid="input-new-vault-name"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsCreateOpen(false)}
+                data-testid="button-cancel-create"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateVault}
+                disabled={isCreating || !newVaultName.trim()}
+                data-testid="button-confirm-create"
+              >
+                {isCreating ? 'Creating...' : 'Create Vault'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {!isPaidUser && vaults.length >= 1 && (
+        <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Crown className="w-5 h-5 text-primary" />
+              <div>
+                <p className="font-medium">Unlock More Vaults</p>
+                <p className="text-sm text-muted-foreground">
+                  Upgrade to Pro to create up to 5 separate vaults
+                </p>
+              </div>
+            </div>
+            <Button variant="default" size="sm" data-testid="button-upgrade-vaults">
+              Upgrade
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {vaults.map((vault) => (
+          <VaultCard
+            key={vault.id}
+            vault={vault}
+            isActive={activeVault?.id === vault.id}
+            onSwitch={() => switchVault(vault.id)}
+            onSetDefault={() => setDefaultVault(vault.id)}
+            onToggleBiometric={(enabled) => handleToggleBiometric(vault.id, enabled)}
+            onRename={(name) => handleRename(vault.id, name)}
+            onDelete={() => setDeleteVaultId(vault.id)}
+            canDelete={vaults.length > 1}
+          />
+        ))}
+      </div>
+
+      <AlertDialog open={!!deleteVaultId} onOpenChange={(open) => !open && setDeleteVaultId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vault</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this vault? This action cannot be undone.
+              All passwords, notes, and other data in this vault will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteVault}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              Delete Vault
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Verification modal for enabling biometric */}
+      <VerifyAccessModal
+        open={showVerifyModal}
+        onOpenChange={(open) => {
+          setShowVerifyModal(open);
+          if (!open) setPendingBiometricVaultId(null);
+        }}
+        onVerified={handleVerifiedBiometricEnable}
+        title="Verify Identity"
+        description="Please verify your identity to enable biometric unlock for this vault."
+      />
+    </div>
+  );
+}

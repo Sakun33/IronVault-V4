@@ -1,0 +1,325 @@
+/* Mobile Foundation - Viewport, Safe Areas, and Layout Rules */
+
+/* ============================================
+   1. SAFE AREA VARIABLES
+   ============================================ */
+:root {
+  /* Safe area insets for iOS notch/Dynamic Island and Android navigation */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  
+  /* Layout constants */
+  --header-height: 56px;
+  --bottom-tabs-height: 64px;
+  --min-touch-target: 44px;
+  
+  /* Typography scale */
+  --text-title-lg: 28px;
+  --text-title: 24px;
+  --text-title-sm: 20px;
+  --text-body-lg: 16px;
+  --text-body: 14px;
+  --text-caption: 12px;
+  
+  /* Spacing scale (8px base) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  
+  /* Border radius scale */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Shadow scale */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================
+   2. GLOBAL LAYOUT RULES
+   ============================================ */
+
+/* Use 100dvh (dynamic viewport height) instead of 100vh for mobile */
+html {
+  height: 100%;
+  height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Prevent horizontal overflow globally */
+* {
+  box-sizing: border-box;
+}
+
+/* ============================================
+   3. SAFE AREA UTILITIES
+   ============================================ */
+
+/* Apply safe area padding to elements that need it */
+.safe-top {
+  padding-top: var(--safe-top);
+}
+
+.safe-right {
+  padding-right: var(--safe-right);
+}
+
+.safe-bottom {
+  padding-bottom: var(--safe-bottom);
+}
+
+.safe-left {
+  padding-left: var(--safe-left);
+}
+
+.safe-all {
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+/* Header with safe area */
+.header-safe {
+  padding-top: calc(var(--safe-top) + var(--space-md));
+}
+
+/* Bottom tabs with safe area */
+.bottom-safe {
+  padding-bottom: calc(var(--safe-bottom) + var(--space-md));
+}
+
+/* ============================================
+   4. TYPOGRAPHY UTILITIES
+   ============================================ */
+
+.text-title-lg {
+  font-size: var(--text-title-lg);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.text-title {
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.text-title-sm {
+  font-size: var(--text-title-sm);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.text-body-lg {
+  font-size: var(--text-body-lg);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-body {
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-caption {
+  font-size: var(--text-caption);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* ============================================
+   5. MOBILE TOUCH TARGETS
+   ============================================ */
+
+/* Ensure all interactive elements meet minimum touch target */
+button,
+a,
+[role="button"],
+[role="link"],
+input[type="checkbox"],
+input[type="radio"],
+.clickable {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+}
+
+/* Button sizing */
+.btn-lg {
+  min-height: 48px;
+  padding: 12px 24px;
+  font-size: var(--text-body-lg);
+}
+
+.btn-md {
+  min-height: 44px;
+  padding: 10px 20px;
+  font-size: var(--text-body);
+}
+
+.btn-sm {
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: var(--text-body);
+}
+
+/* ============================================
+   6. SCROLL CONTAINERS
+   ============================================ */
+
+.scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Hide scrollbar but keep functionality */
+.scroll-container-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-container-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================
+   7. KEYBOARD HANDLING
+   ============================================ */
+
+/* When keyboard is open, ensure focused inputs scroll into view */
+input:focus,
+textarea:focus,
+select:focus {
+  scroll-margin-bottom: 200px;
+}
+
+/* Prevent zoom on input focus (iOS) */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
+
+/* ============================================
+   8. MODAL/DIALOG CONSTRAINTS
+   ============================================ */
+
+/* Ensure modals never exceed viewport */
+.modal-constraint {
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+  max-width: calc(100vw - 32px);
+}
+
+/* ============================================
+   9. ACCESSIBILITY
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================
+   10. iOS AUTOFILL FIX - CRITICAL
+   ============================================ */
+
+/* Completely prevent iOS from painting inputs yellow on autofill */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+  box-shadow: inset 0 0 0 1000px var(--background) !important;
+  background-color: var(--background) !important;
+  caret-color: var(--foreground) !important;
+}
+
+/* Dark mode autofill fix */
+@media (prefers-color-scheme: dark) {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    box-shadow: inset 0 0 0 1000px hsl(224, 71%, 8%) !important;
+    background-color: hsl(224, 71%, 8%) !important;
+    -webkit-text-fill-color: hsl(213, 31%, 91%) !important;
+  }
+}
+
+/* ============================================
+   11. PREVENT TEXT SELECTION ON BUTTONS
+   ============================================ */
+
+button,
+[role="button"],
+.clickable {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* ============================================
+   12. SAFE GRADIENTS (if needed)
+   ============================================ */
+
+.gradient-bg-light {
+  background: linear-gradient(135deg, var(--background) 0%, var(--muted) 100%);
+}
+
+.gradient-bg-dark {
+  background: linear-gradient(135deg, var(--background) 0%, hsl(224, 71%, 8%) 100%);
+}

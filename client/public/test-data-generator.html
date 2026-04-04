@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Data Generator - Secure Vault</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .section p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .control-group h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #555;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-size: 14px;
+        }
+        input[type="number"]:disabled {
+            background-color: #f5f5f5;
+            color: #999;
+        }
+        .section-description {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #545b62;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .file-list {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        .file-list h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .file-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .file-list li {
+            margin-bottom: 5px;
+            color: #6c757d;
+        }
+        .summary {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .summary h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .stat-number {
+            font-weight: bold;
+            color: #007bff;
+            font-size: 18px;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Advanced Test Data Generator</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Generate customizable realistic test data for vault sections (except bank and documents)
+        </p>
+
+        <div class="section">
+            <h2>⚙️ Generation Settings</h2>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <h3>📊 Data Sections</h3>
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includePasswords" checked>
+                            Passwords
+                            <input type="number" id="passwordCount" value="50" min="1" max="200">
+                        </label>
+                    </div>
+                    <div class="section-description">Website accounts with usernames and passwords</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeSubscriptions" checked>
+                            Subscriptions
+                            <input type="number" id="subscriptionCount" value="30" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Monthly/yearly service subscriptions</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeNotes" checked>
+                            Notes
+                            <input type="number" id="noteCount" value="40" min="1" max="150">
+                        </label>
+                    </div>
+                    <div class="section-description">Text, markdown, checklist, and code notes</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeExpenses" checked>
+                            Expenses
+                            <input type="number" id="expenseCount" value="60" min="1" max="200">
+                        </label>
+                    </div>
+                    <div class="section-description">Financial transactions and spending records</div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>💰 Investment Data</h3>
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeInvestments" checked>
+                            Investments
+                            <input type="number" id="investmentCount" value="25" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Stocks, crypto, mutual funds, ETFs</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeInvestmentGoals" checked>
+                            Investment Goals
+                            <input type="number" id="investmentGoalCount" value="15" min="1" max="50">
+                        </label>
+                    </div>
+                    <div class="section-description">Financial goals and targets</div>
+                    
+                    <div class="control-row">
+                        <label>
+                            <input type="checkbox" id="includeReminders" checked>
+                            Reminders
+                            <input type="number" id="reminderCount" value="35" min="1" max="100">
+                        </label>
+                    </div>
+                    <div class="section-description">Tasks, appointments, and notifications</div>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h3>📈 Generation Summary</h3>
+                <div class="summary-stats" id="summaryStats">
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalItems">0</div>
+                        <div class="stat-label">Total Items</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="selectedSections">0</div>
+                        <div class="stat-label">Sections</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Generate Data Files</h2>
+            <p>Choose your preferred format and generate the test data files.</p>
+            
+            <button onclick="generateJSON()" id="jsonBtn">Generate JSON File</button>
+            <button onclick="generateCSV()" id="csvBtn" class="secondary">Generate CSV Files</button>
+            <button onclick="generateBoth()" id="bothBtn" class="secondary">Generate Both Formats</button>
+            
+            <div id="generationStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Generated Files</h2>
+            <div class="file-list">
+                <h3>JSON Files:</h3>
+                <ul id="jsonFiles">
+                    <li>No files generated yet</li>
+                </ul>
+                
+                <h3>CSV Files:</h3>
+                <ul id="csvFiles">
+                    <li>No files generated yet</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📖 How to Use</h2>
+            <ol>
+                <li><strong>Click "Generate JSON File"</strong> to create a comprehensive data file</li>
+                <li><strong>Click "Generate All CSV Files"</strong> to create individual CSV files</li>
+                <li><strong>Files will be downloaded automatically</strong> to your Downloads folder</li>
+                <li><strong>Use the Import/Export feature</strong> in the vault to import these files</li>
+                <li><strong>Test different import scenarios</strong> with individual CSV files</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let generatedFiles = {
+            json: [],
+            csv: []
+        };
+
+        // Get generation settings
+        function getGenerationSettings() {
+            const settings = {
+                passwords: {
+                    enabled: document.getElementById('includePasswords').checked,
+                    count: parseInt(document.getElementById('passwordCount').value) || 0
+                },
+                subscriptions: {
+                    enabled: document.getElementById('includeSubscriptions').checked,
+                    count: parseInt(document.getElementById('subscriptionCount').value) || 0
+                },
+                notes: {
+                    enabled: document.getElementById('includeNotes').checked,
+                    count: parseInt(document.getElementById('noteCount').value) || 0
+                },
+                expenses: {
+                    enabled: document.getElementById('includeExpenses').checked,
+                    count: parseInt(document.getElementById('expenseCount').value) || 0
+                },
+                investments: {
+                    enabled: document.getElementById('includeInvestments').checked,
+                    count: parseInt(document.getElementById('investmentCount').value) || 0
+                },
+                investmentGoals: {
+                    enabled: document.getElementById('includeInvestmentGoals').checked,
+                    count: parseInt(document.getElementById('investmentGoalCount').value) || 0
+                },
+                reminders: {
+                    enabled: document.getElementById('includeReminders').checked,
+                    count: parseInt(document.getElementById('reminderCount').value) || 0
+                }
+            };
+            return settings;
+        }
+
+        // Update summary statistics
+        function updateSummary() {
+            const settings = getGenerationSettings();
+            let totalItems = 0;
+            let selectedSections = 0;
+            
+            Object.values(settings).forEach(section => {
+                if (section.enabled) {
+                    totalItems += section.count;
+                    selectedSections++;
+                }
+            });
+            
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('selectedSections').textContent = selectedSections;
+        }
+
+        // Enable/disable number inputs based on checkboxes
+        function toggleNumberInputs() {
+            const checkboxes = ['includePasswords', 'includeSubscriptions', 'includeNotes', 'includeExpenses', 'includeInvestments', 'includeInvestmentGoals', 'includeReminders'];
+            const counts = ['passwordCount', 'subscriptionCount', 'noteCount', 'expenseCount', 'investmentCount', 'investmentGoalCount', 'reminderCount'];
+            
+            checkboxes.forEach((checkboxId, index) => {
+                const checkbox = document.getElementById(checkboxId);
+                const countInput = document.getElementById(counts[index]);
+                
+                countInput.disabled = !checkbox.checked;
+                if (!checkbox.checked) {
+                    countInput.value = 0;
+                }
+            });
+            
+            updateSummary();
+        }
+
+        function updateFileList() {
+            const jsonList = document.getElementById('jsonFiles');
+            const csvList = document.getElementById('csvFiles');
+            
+            if (generatedFiles.json.length === 0) {
+                jsonList.innerHTML = '<li>No files generated yet</li>';
+            } else {
+                jsonList.innerHTML = generatedFiles.json.map(file => `<li>${file}</li>`).join('');
+            }
+            
+            if (generatedFiles.csv.length === 0) {
+                csvList.innerHTML = '<li>No files generated yet</li>';
+            } else {
+                csvList.innerHTML = generatedFiles.csv.map(file => `<li>${file}</li>`).join('');
+            }
+        }
+
+        function showStatus(message, type = 'success') {
+            const element = document.getElementById('generationStatus');
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function generateCustomData() {
+            const settings = getGenerationSettings();
+            
+            // Generate data based on settings
+            const data = {};
+            
+            if (settings.passwords.enabled && settings.passwords.count > 0) {
+                data.passwords = generatePasswords(settings.passwords.count);
+            }
+            
+            if (settings.subscriptions.enabled && settings.subscriptions.count > 0) {
+                data.subscriptions = generateSubscriptions(settings.subscriptions.count);
+            }
+            
+            if (settings.notes.enabled && settings.notes.count > 0) {
+                data.notes = generateNotes(settings.notes.count);
+            }
+            
+            if (settings.expenses.enabled && settings.expenses.count > 0) {
+                data.expenses = generateExpenses(settings.expenses.count);
+            }
+            
+            if (settings.investments.enabled && settings.investments.count > 0) {
+                data.investments = generateInvestments(settings.investments.count);
+            }
+            
+            if (settings.investmentGoals.enabled && settings.investmentGoals.count > 0) {
+                data.investmentGoals = generateInvestmentGoals(settings.investmentGoals.count);
+            }
+            
+            if (settings.reminders.enabled && settings.reminders.count > 0) {
+                data.reminders = generateReminders(settings.reminders.count);
+            }
+            
+            return data;
+        }
+
+        function generateJSON() {
+            const btn = document.getElementById('jsonBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const data = generateCustomData();
+                const jsonData = JSON.stringify(data, null, 2);
+                
+                // Create and download JSON file
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'custom-test-data.json';
+                a.click();
+                
+                generatedFiles.json.push('custom-test-data.json');
+                updateFileList();
+                
+                const totalItems = Object.values(data).reduce((sum, arr) => sum + arr.length, 0);
+                showStatus(`✅ JSON file generated successfully! ${totalItems} items across ${Object.keys(data).length} sections.`);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate JSON File';
+            }
+        }
+
+        function generateCSV() {
+            const btn = document.getElementById('csvBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const settings = getGenerationSettings();
+                const csvFiles = [];
+                
+                if (settings.passwords.enabled && settings.passwords.count > 0) {
+                    const csv = generatePasswordsCSV(settings.passwords.count);
+                    downloadCSV(csv, 'sample-passwords.csv');
+                    csvFiles.push('sample-passwords.csv');
+                }
+                
+                if (settings.subscriptions.enabled && settings.subscriptions.count > 0) {
+                    const csv = generateSubscriptionsCSV(settings.subscriptions.count);
+                    downloadCSV(csv, 'sample-subscriptions.csv');
+                    csvFiles.push('sample-subscriptions.csv');
+                }
+                
+                if (settings.notes.enabled && settings.notes.count > 0) {
+                    const csv = generateNotesCSV(settings.notes.count);
+                    downloadCSV(csv, 'sample-notes.csv');
+                    csvFiles.push('sample-notes.csv');
+                }
+                
+                if (settings.expenses.enabled && settings.expenses.count > 0) {
+                    const csv = generateExpensesCSV(settings.expenses.count);
+                    downloadCSV(csv, 'sample-expenses.csv');
+                    csvFiles.push('sample-expenses.csv');
+                }
+                
+                if (settings.investments.enabled && settings.investments.count > 0) {
+                    const csv = generateInvestmentsCSV(settings.investments.count);
+                    downloadCSV(csv, 'sample-investments.csv');
+                    csvFiles.push('sample-investments.csv');
+                }
+                
+                if (settings.investmentGoals.enabled && settings.investmentGoals.count > 0) {
+                    const csv = generateInvestmentGoalsCSV(settings.investmentGoals.count);
+                    downloadCSV(csv, 'sample-investment-goals.csv');
+                    csvFiles.push('sample-investment-goals.csv');
+                }
+                
+                if (settings.reminders.enabled && settings.reminders.count > 0) {
+                    const csv = generateRemindersCSV(settings.reminders.count);
+                    downloadCSV(csv, 'sample-reminders.csv');
+                    csvFiles.push('sample-reminders.csv');
+                }
+                
+                generatedFiles.csv = csvFiles;
+                updateFileList();
+                
+                showStatus(`✅ ${csvFiles.length} CSV files generated successfully!`);
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate CSV Files';
+            }
+        }
+
+        function generateBoth() {
+            generateJSON();
+            setTimeout(() => generateCSV(), 500);
+        }
+
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+
+        // Data generation functions (simplified versions)
+        function generatePasswords(count) {
+            const websites = ['google.com', 'facebook.com', 'github.com', 'amazon.com', 'netflix.com', 'microsoft.com', 'apple.com', 'dropbox.com'];
+            const usernames = ['john.doe', 'jane.smith', 'mike.wilson', 'sarah.johnson', 'david.brown'];
+            const passwords = ['MySecure123!', 'Password2024#', 'SecurePass456$', 'MyVault789@', 'StrongPass123%'];
+            
+            return Array.from({ length: count }, (_, i) => ({
+                id: `pwd_${i + 1}`,
+                name: websites[i % websites.length],
+                username: usernames[i % usernames.length],
+                password: passwords[i % passwords.length],
+                url: `https://${websites[i % websites.length]}`,
+                notes: `Account for ${websites[i % websites.length]}`,
+                tags: ['work', 'personal', 'social'][i % 3],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        function generateSubscriptions(count) {
+            const services = [
+                { name: 'Netflix', cost: 15.99, category: 'Streaming', plan: 'Standard' },
+                { name: 'Spotify Premium', cost: 9.99, category: 'Music', plan: 'Premium' },
+                { name: 'Adobe Creative Cloud', cost: 52.99, category: 'Software', plan: 'All Apps' },
+                { name: 'Microsoft 365', cost: 6.99, category: 'Software', plan: 'Personal' },
+                { name: 'Amazon Prime', cost: 14.99, category: 'Shopping', plan: 'Prime' },
+                { name: 'YouTube Premium', cost: 11.99, category: 'Streaming', plan: 'Premium' },
+                { name: 'Apple Music', cost: 9.99, category: 'Music', plan: 'Individual' },
+                { name: 'Disney+', cost: 7.99, category: 'Streaming', plan: 'Basic' },
+                { name: 'HBO Max', cost: 15.99, category: 'Streaming', plan: 'Ad-Free' },
+                { name: 'Dropbox Plus', cost: 9.99, category: 'Storage', plan: 'Plus' }
+            ];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const service = services[i % services.length];
+                return {
+                    id: `sub_${i + 1}`,
+                    name: service.name,
+                    plan: service.plan,
+                    cost: service.cost,
+                    currency: 'USD',
+                    billingCycle: 'monthly',
+                    nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    reminderDays: 7,
+                    category: service.category,
+                    notes: `Subscription for ${service.name}`,
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateNotes(count) {
+            const noteTypes = ['text', 'markdown', 'checklist', 'code'];
+            const categories = ['work', 'personal', 'ideas', 'meetings'];
+            
+            return Array.from({ length: count }, (_, i) => ({
+                id: `note_${i + 1}`,
+                title: `Note ${i + 1}`,
+                content: `This is note content ${i + 1} with some details and information.`,
+                type: noteTypes[i % noteTypes.length],
+                category: categories[i % categories.length],
+                tags: ['note'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        function generateExpenses(count) {
+            const categories = ['food', 'transportation', 'entertainment', 'shopping', 'utilities'];
+            const merchants = ['Walmart', 'Amazon', 'Starbucks', 'Uber', 'Shell', 'Netflix'];
+            
+            return Array.from({ length: count }, (_, i) => ({
+                id: `exp_${i + 1}`,
+                amount: Math.round((Math.random() * 100 + 10) * 100) / 100,
+                currency: 'USD',
+                category: categories[i % categories.length],
+                description: `Expense ${i + 1}`,
+                merchant: merchants[i % merchants.length],
+                date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+                tags: ['expense'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        function generateInvestments(count) {
+            const symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA'];
+            const institutions = ['Robinhood', 'Vanguard', 'Fidelity', 'Charles Schwab'];
+            
+            return Array.from({ length: count }, (_, i) => {
+                const symbol = symbols[i % symbols.length];
+                const price = Math.round((Math.random() * 500 + 50) * 100) / 100;
+                const quantity = Math.round((Math.random() * 10 + 1) * 100) / 100;
+                const currentPrice = Math.round((price * (0.9 + Math.random() * 0.2)) * 100) / 100;
+                
+                return {
+                    id: `inv_${i + 1}`,
+                    name: `${symbol} Stock`,
+                    type: 'stocks',
+                    institution: institutions[i % institutions.length],
+                    ticker: symbol,
+                    purchaseDate: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    purchasePrice: price,
+                    quantity: quantity,
+                    currentPrice: currentPrice,
+                    currentValue: Math.round((currentPrice * quantity) * 100) / 100,
+                    currency: 'USD',
+                    notes: `Investment in ${symbol}`,
+                    tags: ['investment'],
+                    isActive: true,
+                    fees: 0,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            });
+        }
+
+        function generateInvestmentGoals(count) {
+            const goalTypes = ['retirement', 'education', 'home_purchase', 'vacation', 'emergency_fund'];
+            const goalNames = ['Retirement Fund', 'Children\'s Education', 'House Down Payment', 'Dream Vacation', 'Emergency Fund'];
+            
+            return Array.from({ length: count }, (_, i) => ({
+                id: `goal_${i + 1}`,
+                name: goalNames[i % goalNames.length],
+                type: goalTypes[i % goalTypes.length],
+                targetAmount: Math.round((Math.random() * 100000 + 10000) * 100) / 100,
+                currentAmount: Math.round((Math.random() * 50000) * 100) / 100,
+                targetDate: new Date(Date.now() + Math.random() * 5 * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                monthlyContribution: Math.round((Math.random() * 1000 + 100) * 100) / 100,
+                currency: 'USD',
+                notes: `Goal for ${goalNames[i % goalNames.length]}`,
+                tags: ['goal'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        function generateReminders(count) {
+            const priorities = ['low', 'medium', 'high', 'urgent'];
+            const categories = ['personal', 'work', 'health', 'finance'];
+            const titles = ['Doctor Appointment', 'Pay Credit Card Bill', 'Submit Expense Report', 'Call Mom', 'Grocery Shopping'];
+            
+            return Array.from({ length: count }, (_, i) => ({
+                id: `rem_${i + 1}`,
+                title: titles[i % titles.length],
+                description: `Description for reminder ${i + 1}`,
+                dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+                priority: priorities[i % priorities.length],
+                category: categories[i % categories.length],
+                isCompleted: false,
+                tags: ['reminder'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }));
+        }
+
+        // CSV generation functions
+        function generatePasswordsCSV(count) {
+            const headers = ['name', 'username', 'password', 'url', 'notes', 'tags'];
+            const passwords = generatePasswords(count);
+            const rows = passwords.map(pwd => [pwd.name, pwd.username, pwd.password, pwd.url, pwd.notes, pwd.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateSubscriptionsCSV(count) {
+            const headers = ['name', 'plan', 'cost', 'currency', 'billingCycle', 'nextBillingDate', 'reminderDays', 'category', 'notes', 'isActive'];
+            const subscriptions = generateSubscriptions(count);
+            const rows = subscriptions.map(sub => [
+                sub.name, 
+                sub.plan, 
+                sub.cost, 
+                sub.currency, 
+                sub.billingCycle, 
+                sub.nextBillingDate, 
+                sub.reminderDays, 
+                sub.category, 
+                sub.notes, 
+                sub.isActive
+            ]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateNotesCSV(count) {
+            const headers = ['title', 'content', 'type', 'category', 'tags'];
+            const notes = generateNotes(count);
+            const rows = notes.map(note => [note.title, `"${note.content}"`, note.type, note.category, note.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateExpensesCSV(count) {
+            const headers = ['amount', 'currency', 'category', 'description', 'merchant', 'date', 'tags'];
+            const expenses = generateExpenses(count);
+            const rows = expenses.map(exp => [exp.amount, exp.currency, exp.category, exp.description, exp.merchant, exp.date, exp.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateInvestmentsCSV(count) {
+            const headers = ['name', 'type', 'institution', 'ticker', 'purchaseDate', 'purchasePrice', 'quantity', 'currentPrice', 'currentValue', 'currency', 'notes', 'tags'];
+            const investments = generateInvestments(count);
+            const rows = investments.map(inv => [inv.name, inv.type, inv.institution, inv.ticker, inv.purchaseDate, inv.purchasePrice, inv.quantity, inv.currentPrice, inv.currentValue, inv.currency, inv.notes, inv.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateInvestmentGoalsCSV(count) {
+            const headers = ['name', 'type', 'targetAmount', 'currentAmount', 'targetDate', 'monthlyContribution', 'currency', 'notes', 'tags'];
+            const goals = generateInvestmentGoals(count);
+            const rows = goals.map(goal => [goal.name, goal.type, goal.targetAmount, goal.currentAmount, goal.targetDate, goal.monthlyContribution, goal.currency, goal.notes, goal.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function generateRemindersCSV(count) {
+            const headers = ['title', 'description', 'dueDate', 'priority', 'category', 'isCompleted', 'tags'];
+            const reminders = generateReminders(count);
+            const rows = reminders.map(rem => [rem.title, rem.description, rem.dueDate, rem.priority, rem.category, rem.isCompleted, rem.tags.join(',')]);
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners to checkboxes and number inputs
+            const checkboxes = ['includePasswords', 'includeSubscriptions', 'includeNotes', 'includeExpenses', 'includeInvestments', 'includeInvestmentGoals', 'includeReminders'];
+            const counts = ['passwordCount', 'subscriptionCount', 'noteCount', 'expenseCount', 'investmentCount', 'investmentGoalCount', 'reminderCount'];
+            
+            checkboxes.forEach(checkboxId => {
+                document.getElementById(checkboxId).addEventListener('change', toggleNumberInputs);
+            });
+            
+            counts.forEach(countId => {
+                document.getElementById(countId).addEventListener('input', updateSummary);
+            });
+            
+            // Initial setup
+            toggleNumberInputs();
+            updateFileList();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+/* Mobile-First Safe Areas and Native UX */
+
+:root {
+  /* Safe area insets - iOS notch, Android navigation */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  
+  /* Minimum touch target size (iOS HIG & Material Design) */
+  --min-touch-target: 44px;
+}
+
+/* Safe area padding for body - ensure content clears dynamic island */
+body {
+  padding-top: max(var(--sat), 44px);
+  padding-right: var(--sar);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+}
+
+/* Ensure root container respects safe areas */
+#root {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+/* Fix iOS Safari viewport height issues */
+html {
+  height: -webkit-fill-available;
+}
+
+/* Bottom navigation safe area */
+.bottom-nav,
+.fixed-bottom,
+[data-mobile-bottom] {
+  padding-bottom: calc(var(--sab) + 0.5rem);
+}
+
+/* Header safe area */
+.header,
+.fixed-top,
+[data-mobile-top] {
+  padding-top: calc(var(--sat) + 0.5rem);
+}
+
+/* Touch targets - minimum 44px */
+button,
+a,
+input[type="checkbox"],
+input[type="radio"],
+.clickable,
+[role="button"] {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+}
+
+/* Buttons should be easy to tap */
+.btn,
+button:not(.icon-only) {
+  min-height: var(--min-touch-target);
+  padding: 0.75rem 1.5rem;
+}
+
+/* Icon-only buttons still need proper touch target */
+.icon-only,
+button.icon-only {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* List items should be easy to tap */
+.list-item,
+[role="listitem"] {
+  min-height: var(--min-touch-target);
+  padding: 0.75rem 1rem;
+}
+
+/* Keyboard handling - prevent input being hidden */
+input:focus,
+textarea:focus,
+select:focus {
+  scroll-margin-bottom: 200px;
+}
+
+/* Mobile-specific modals/dialogs */
+@media (max-width: 768px) {
+  .modal,
+  .dialog,
+  [role="dialog"] {
+    padding-bottom: calc(var(--sab) + 1rem);
+  }
+  
+  /* Full-screen modals on mobile */
+  .modal-fullscreen-mobile {
+    position: fixed;
+    top: var(--sat);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: calc(100vh - var(--sat));
+  }
+}
+
+/* Prevent overscroll bounce on iOS */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Better tap highlighting */
+* {
+  -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
+}
+
+/* Disable user select on buttons/clickable elements */
+button,
+.clickable,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Forms should be mobile-friendly */
+input,
+textarea,
+select {
+  font-size: 16px; /* Prevent iOS zoom on focus */
+  padding: 0.75rem;
+}
+
+/* Accessibility - focus states must be visible */
+*:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Native-like scrolling on iOS */
+.scroll-container,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Bottom sheet style for mobile */
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: hsl(var(--background));
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  padding: 1.5rem;
+  padding-bottom: calc(var(--sab) + 1.5rem);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+/* Thumb-friendly bottom navigation */
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.5rem;
+  padding-bottom: calc(var(--sab) + 0.5rem);
+  z-index: 50;
+}
+
+.mobile-bottom-nav button,
+.mobile-bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  min-height: var(--min-touch-target);
+  gap: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  transition: color 0.2s;
+}
+
+.mobile-bottom-nav button.active,
+.mobile-bottom-nav a.active {
+  color: hsl(var(--primary));
+}
+
+/* Floating action button (FAB) */
+.fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(var(--sab) + 1rem);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 40;
+}
+
+/* Keyboard spacer - dynamically adjusted via JS */
+.keyboard-spacer {
+  height: 0;
+  transition: height 0.3s ease;
+}

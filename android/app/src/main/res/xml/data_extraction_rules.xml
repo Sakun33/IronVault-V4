@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Data Extraction Rules for IronVault
+    Android 12+ (API 31+) requires this file when android:dataExtractionRules is specified.
+    
+    For a vault/password manager app, we disable ALL backup and device transfer
+    to protect sensitive user data.
+-->
+<data-extraction-rules>
+    <!-- Disable cloud backup completely -->
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    
+    <!-- Disable device-to-device transfer completely -->
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

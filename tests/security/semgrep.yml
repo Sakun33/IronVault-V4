@@ -1,0 +1,35 @@
+rules:
+  - id: crypto-weak-random
+    patterns:
+      - pattern: Math.random()
+    message: Use crypto.getRandomValues() for cryptographic randomness
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: eval-usage
+    patterns:
+      - pattern: eval(...)
+    message: Avoid eval() - use safe alternatives
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: innerhtml-usage
+    patterns:
+      - pattern: $ELEMENT.innerHTML = ...
+    message: Use textContent or safe DOM methods instead of innerHTML
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: hardcoded-secrets
+    patterns:
+      - pattern: (password|secret|key|token) = ["'].*["']
+    message: Avoid hardcoded secrets in code
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: pbkdf2-iterations
+    patterns:
+      - pattern: pbkdf2(..., ..., ..., ..., ...)
+    message: Ensure PBKDF2 uses sufficient iterations (>= 100,000)
+    languages: [javascript, typescript]
+    severity: WARNING

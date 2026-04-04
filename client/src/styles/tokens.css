@@ -1,0 +1,383 @@
+/* SubSafe Design Tokens */
+/* Based on /docs/BRAND_GUIDE.md */
+
+:root {
+  /* ========================================
+     COLOR SYSTEM - LIGHT MODE
+     ======================================== */
+  
+  /* Primary Brand */
+  --primary: 79 70 229; /* #4F46E5 - Indigo 600 */
+  --primary-hover: 67 56 202; /* #4338CA - Indigo 700 */
+  --primary-subtle: 238 242 255; /* #EEF2FF - Indigo 50 */
+  --primary-foreground: 255 255 255; /* White text on primary */
+  
+  /* Backgrounds & Surfaces */
+  --background: 255 255 255; /* #FFFFFF */
+  --surface: 249 250 251; /* #F9FAFB - Gray 50 */
+  --surface-elevated: 255 255 255; /* #FFFFFF */
+  --card: 255 255 255;
+  --card-foreground: 17 24 39; /* Gray 900 */
+  
+  /* Borders */
+  --border: 229 231 235; /* #E5E7EB - Gray 200 */
+  --input: 229 231 235; /* Same as border for consistency */
+  
+  /* Text */
+  --foreground: 17 24 39; /* #111827 - Gray 900 */
+  --muted: 249 250 251; /* #F9FAFB - Gray 50 */
+  --muted-foreground: 107 114 128; /* #6B7280 - Gray 500 */
+  --accent: 249 250 251; /* #F9FAFB - Gray 50 */
+  --accent-foreground: 17 24 39; /* Gray 900 */
+  --popover: 255 255 255;
+  --popover-foreground: 17 24 39;
+  
+  /* Status Colors */
+  --success: 16 185 129; /* #10B981 - Emerald 500 */
+  --success-foreground: 255 255 255;
+  --warning: 245 158 11; /* #F59E0B - Amber 500 */
+  --warning-foreground: 255 255 255;
+  --destructive: 239 68 68; /* #EF4444 - Red 500 */
+  --destructive-foreground: 255 255 255;
+  --info: 59 130 246; /* #3B82F6 - Blue 500 */
+  --info-foreground: 255 255 255;
+  
+  /* Semantic (shadcn/ui compatibility) */
+  --ring: 79 70 229; /* Same as primary */
+  --radius: 0.75rem; /* 12px default */
+}
+
+.dark {
+  /* ========================================
+     COLOR SYSTEM - DARK MODE
+     ======================================== */
+  
+  /* Primary Brand */
+  --primary: 99 102 241; /* #6366F1 - Indigo 500 */
+  --primary-hover: 129 140 248; /* #818CF8 - Indigo 400 */
+  --primary-subtle: 49 46 129; /* #312E81 - Indigo 950 */
+  --primary-foreground: 255 255 255;
+  
+  /* Backgrounds & Surfaces (Intentionally dark, not pure black) */
+  --background: 15 15 35; /* #0F0F23 - Custom dark blue-black */
+  --surface: 26 26 46; /* #1A1A2E - Elevated from background */
+  --surface-elevated: 37 37 62; /* #25253E - Even more elevated */
+  --card: 26 26 46;
+  --card-foreground: 249 250 251; /* Off-white */
+  
+  /* Borders (More visible in dark mode) */
+  --border: 55 65 81; /* #374151 - Gray 700 */
+  --input: 55 65 81;
+  
+  /* Text (Off-white, not pure white) */
+  --foreground: 249 250 251; /* #F9FAFB - Gray 50 */
+  --muted: 26 26 46; /* Same as surface */
+  --muted-foreground: 156 163 175; /* #9CA3AF - Gray 400 */
+  --accent: 37 37 62; /* Surface elevated */
+  --accent-foreground: 249 250 251;
+  --popover: 37 37 62;
+  --popover-foreground: 249 250 251;
+  
+  /* Status Colors (Adjusted for dark mode readability) */
+  --success: 52 211 153; /* #34D399 - Emerald 400 */
+  --success-foreground: 17 24 39; /* Dark text on bright green */
+  --warning: 251 191 36; /* #FBBF24 - Amber 400 */
+  --warning-foreground: 17 24 39;
+  --destructive: 248 113 113; /* #F87171 - Red 400 */
+  --destructive-foreground: 255 255 255;
+  --info: 96 165 250; /* #60A5FA - Blue 400 */
+  --info-foreground: 17 24 39;
+  
+  /* Semantic */
+  --ring: 99 102 241; /* Primary */
+}
+
+/* ========================================
+   TYPOGRAPHY SCALE
+   ======================================== */
+
+.text-display {
+  font-size: 2.25rem; /* 36px */
+  line-height: 2.5rem; /* 40px */
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.text-title-lg {
+  font-size: 1.875rem; /* 30px */
+  line-height: 2.25rem; /* 36px */
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.text-title {
+  font-size: 1.5rem; /* 24px */
+  line-height: 2rem; /* 32px */
+  font-weight: 600;
+}
+
+.text-heading {
+  font-size: 1.25rem; /* 20px */
+  line-height: 1.75rem; /* 28px */
+  font-weight: 600;
+}
+
+.text-body-lg {
+  font-size: 1.125rem; /* 18px */
+  line-height: 1.75rem; /* 28px */
+  font-weight: 400;
+}
+
+.text-body {
+  font-size: 1rem; /* 16px */
+  line-height: 1.5rem; /* 24px */
+  font-weight: 400;
+}
+
+.text-body-sm {
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem; /* 20px */
+  font-weight: 400;
+}
+
+.text-caption {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem; /* 16px */
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ========================================
+   SPACING UTILITIES (4px base)
+   ======================================== */
+
+.space-xs { margin: 0.25rem; }
+.space-sm { margin: 0.5rem; }
+.space-md { margin: 0.75rem; }
+.space-lg { margin: 1rem; }
+.space-xl { margin: 1.5rem; }
+.space-2xl { margin: 2rem; }
+.space-3xl { margin: 3rem; }
+
+.gap-xs { gap: 0.25rem; }
+.gap-sm { gap: 0.5rem; }
+.gap-md { gap: 0.75rem; }
+.gap-lg { gap: 1rem; }
+.gap-xl { gap: 1.5rem; }
+.gap-2xl { gap: 2rem; }
+.gap-3xl { gap: 3rem; }
+
+/* ========================================
+   BORDER RADIUS
+   ======================================== */
+
+.radius-sm { border-radius: 0.5rem; } /* 8px */
+.radius-md { border-radius: 0.75rem; } /* 12px */
+.radius-lg { border-radius: 1rem; } /* 16px */
+.radius-xl { border-radius: 1.25rem; } /* 20px */
+.radius-2xl { border-radius: 1.5rem; } /* 24px */
+.radius-full { border-radius: 9999px; }
+
+/* ========================================
+   SHADOWS & ELEVATION
+   ======================================== */
+
+.shadow-brand-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-brand {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-brand-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-brand-lg {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-brand-xl {
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+}
+
+/* Dark mode shadows (lighter, more visible) */
+.dark .shadow-brand-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dark .shadow-brand {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dark .shadow-brand-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.dark .shadow-brand-lg {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.3), 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.dark .shadow-brand-xl {
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.3), 0 10px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================
+   ANIMATION TIMING
+   ======================================== */
+
+.transition-quick {
+  transition-duration: 150ms;
+}
+
+.transition-standard {
+  transition-duration: 250ms;
+}
+
+.transition-slow {
+  transition-duration: 350ms;
+}
+
+.ease-enter {
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+
+.ease-exit {
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+
+.ease-interactive {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Surface elevation levels */
+.surface-base {
+  background-color: rgb(var(--surface));
+}
+
+.surface-elevated {
+  background-color: rgb(var(--surface-elevated));
+}
+
+/* Status backgrounds */
+.bg-success-subtle {
+  background-color: rgba(var(--success), 0.1);
+  color: rgb(var(--success));
+}
+
+.bg-warning-subtle {
+  background-color: rgba(var(--warning), 0.1);
+  color: rgb(var(--warning));
+}
+
+.bg-destructive-subtle {
+  background-color: rgba(var(--destructive), 0.1);
+  color: rgb(var(--destructive));
+}
+
+.bg-info-subtle {
+  background-color: rgba(var(--info), 0.1);
+  color: rgb(var(--info));
+}
+
+/* Text utilities */
+.text-subtle {
+  color: rgb(var(--muted-foreground));
+}
+
+/* Focus ring (accessibility) */
+.focus-ring {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Backdrop blur for modals/sheets */
+.backdrop-brand {
+  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.dark .backdrop-brand {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* ========================================
+   COMPONENT-SPECIFIC OVERRIDES
+   ======================================== */
+
+/* Ensure buttons use semantic tokens */
+.btn-primary {
+  background-color: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+}
+
+.btn-primary:hover {
+  background-color: rgb(var(--primary-hover));
+}
+
+.btn-destructive {
+  background-color: rgb(var(--destructive));
+  color: rgb(var(--destructive-foreground));
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: rgb(var(--foreground));
+}
+
+.btn-ghost:hover {
+  background-color: rgb(var(--accent));
+}
+
+/* Form inputs */
+.input-field {
+  background-color: rgb(var(--surface));
+  border: 1px solid rgb(var(--border));
+  color: rgb(var(--foreground));
+  border-radius: var(--radius);
+  font-size: 1rem; /* 16px minimum for mobile */
+}
+
+.input-field:focus {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.dark .input-field {
+  background-color: rgb(var(--surface-elevated));
+}
+
+/* Cards */
+.card-brand {
+  background-color: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+  border-radius: 1rem; /* lg */
+  padding: 1rem;
+}
+
+/* Toasts */
+.toast-success {
+  background-color: rgb(var(--success));
+  color: rgb(var(--success-foreground));
+}
+
+.toast-error {
+  background-color: rgb(var(--destructive));
+  color: rgb(var(--destructive-foreground));
+}
+
+.toast-info {
+  background-color: rgb(var(--info));
+  color: rgb(var(--info-foreground));
+}
+
+.toast-warning {
+  background-color: rgb(var(--warning));
+  color: rgb(var(--warning-foreground));
+}

@@ -1,0 +1,102 @@
+/* iOS-Specific Fixes for Dynamic Island and Transparency Issues */
+
+/* Disable all backdrop filters and transparency effects */
+* {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Ensure all backgrounds are fully opaque */
+body,
+#root,
+main,
+.page,
+[data-page],
+[role="main"] {
+  opacity: 1 !important;
+  background-color: var(--background) !important;
+}
+
+/* Let mobile-foundation.css handle safe areas - don't override excessively */
+/* Only fix specific problem areas */
+
+/* Modal sheets - solid backgrounds */
+[data-radix-dialog-content],
+[role="dialog"],
+.modal,
+.sheet,
+.bottom-sheet {
+  background-color: var(--background) !important;
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Search bars and input containers */
+.search-container,
+[data-search],
+input[type="search"] {
+  background-color: var(--card) !important;
+  opacity: 1 !important;
+}
+
+/* Grid items and cards - force opacity */
+.grid > *,
+.card,
+[class*="card"],
+.item,
+[class*="item"] {
+  background-color: var(--card) !important;
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Remove overly aggressive text overrides - let semantic tokens work */
+/* Only fix specific problem areas, not all text */
+
+/* Login page - minimal padding, let flexbox centering work */
+.login-page,
+[data-testid="login-page"],
+.auth-page {
+  padding-top: env(safe-area-inset-top) !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+
+/* Ensure buttons are visible */
+button {
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Fix text inputs - solid backgrounds but allow proper color inheritance */
+input,
+textarea,
+select {
+  background-color: var(--background) !important;
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Section headers */
+.section-header,
+[data-section-header] {
+  background-color: var(--background) !important;
+  opacity: 1 !important;
+  padding-top: 1rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Navigation bars */
+.nav,
+.navbar,
+.tab-bar,
+[role="navigation"] {
+  background-color: var(--background) !important;
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  padding-top: max(env(safe-area-inset-top), 10px) !important;
+}

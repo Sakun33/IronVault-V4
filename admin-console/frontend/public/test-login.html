@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Console Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Admin Console API Test</h1>
+    
+    <div class="test">
+        <h2>Step 1: Test Direct Backend</h2>
+        <button onclick="testDirect()">Test http://localhost:3001/api/auth/login</button>
+        <pre id="result1">Click button to test...</pre>
+    </div>
+    
+    <div class="test">
+        <h2>Step 2: Test Via Proxy</h2>
+        <button onclick="testProxy()">Test /api/auth/login (through Vite proxy)</button>
+        <pre id="result2">Click button to test...</pre>
+    </div>
+    
+    <div class="test">
+        <h2>Step 3: Test With Form Data</h2>
+        <input type="text" id="testUsername" value="admin" placeholder="Username">
+        <input type="password" id="testPassword" value="password" placeholder="Password">
+        <button onclick="testFormData()">Test Login</button>
+        <pre id="result3">Enter credentials and click button...</pre>
+    </div>
+
+    <script>
+        async function testDirect() {
+            const resultEl = document.getElementById('result1');
+            resultEl.textContent = 'Testing...';
+            resultEl.parentElement.className = 'test';
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'password' })
+                });
+                
+                const data = await response.json();
+                resultEl.textContent = `Status: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                resultEl.parentElement.className = response.ok ? 'test success' : 'test error';
+            } catch (error) {
+                resultEl.textContent = `Error: ${error.message}`;
+                resultEl.parentElement.className = 'test error';
+            }
+        }
+        
+        async function testProxy() {
+            const resultEl = document.getElementById('result2');
+            resultEl.textContent = 'Testing...';
+            resultEl.parentElement.className = 'test';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'password' })
+                });
+                
+                const data = await response.json();
+                resultEl.textContent = `Status: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                resultEl.parentElement.className = response.ok ? 'test success' : 'test error';
+                
+                if (response.ok) {
+                    console.log('✅ Login successful! Token:', data.token);
+                    localStorage.setItem('admin_token', data.token);
+                    resultEl.textContent += '\n\n✅ Token saved to localStorage!';
+                }
+            } catch (error) {
+                resultEl.textContent = `Error: ${error.message}`;
+                resultEl.parentElement.className = 'test error';
+            }
+        }
+        
+        async function testFormData() {
+            const resultEl = document.getElementById('result3');
+            const username = document.getElementById('testUsername').value;
+            const password = document.getElementById('testPassword').value;
+            
+            resultEl.textContent = 'Testing with form data...';
+            resultEl.parentElement.className = 'test';
+            
+            try {
+                console.log('Sending:', { username, password });
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                resultEl.textContent = `Status: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                resultEl.parentElement.className = response.ok ? 'test success' : 'test error';
+                
+                if (response.ok) {
+                    setTimeout(() => {
+                        if (confirm('Login successful! Redirect to admin console?')) {
+                            window.location.href = '/';
+                        }
+                    }, 1000);
+                }
+            } catch (error) {
+                resultEl.textContent = `Error: ${error.message}`;
+                resultEl.parentElement.className = 'test error';
+            }
+        }
+    </script>
+</body>
+</html>
+

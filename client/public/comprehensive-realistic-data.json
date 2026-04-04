@@ -1,0 +1,738 @@
+{
+  "passwords": [
+    {
+      "id": "pwd-gmail",
+      "name": "Gmail Account",
+      "url": "https://gmail.com",
+      "username": "john.doe@gmail.com",
+      "password": "SecurePass123!",
+      "notes": "Primary email account for work and personal use",
+      "tags": [
+        "email",
+        "google",
+        "primary"
+      ],
+      "isFavorite": true,
+      "lastModified": "2024-01-15T00:00:00.000Z",
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-bank-america",
+      "name": "Bank of America",
+      "url": "https://bankofamerica.com",
+      "username": "j.doe@email.com",
+      "password": "BankSecure#2024",
+      "notes": "Primary checking and savings account",
+      "tags": [
+        "banking",
+        "financial",
+        "primary"
+      ],
+      "isFavorite": true,
+      "lastModified": "2024-01-20T00:00:00.000Z",
+      "createdAt": "2024-01-20T00:00:00.000Z",
+      "updatedAt": "2024-01-20T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-netflix",
+      "name": "Netflix Premium",
+      "url": "https://netflix.com",
+      "username": "john.doe@gmail.com",
+      "password": "StreamPass789#",
+      "notes": "Family streaming subscription with 4K support",
+      "tags": [
+        "entertainment",
+        "streaming",
+        "family"
+      ],
+      "isFavorite": false,
+      "lastModified": "2024-02-01T00:00:00.000Z",
+      "createdAt": "2024-02-01T00:00:00.000Z",
+      "updatedAt": "2024-02-01T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-spotify",
+      "name": "Spotify Premium",
+      "url": "https://spotify.com",
+      "username": "john.doe.music@gmail.com",
+      "password": "MusicLover2024!",
+      "notes": "Ad-free music streaming service",
+      "tags": [
+        "music",
+        "streaming",
+        "entertainment"
+      ],
+      "isFavorite": false,
+      "lastModified": "2024-02-05T00:00:00.000Z",
+      "createdAt": "2024-02-05T00:00:00.000Z",
+      "updatedAt": "2024-02-05T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-github",
+      "name": "GitHub",
+      "url": "https://github.com",
+      "username": "john-doe-dev",
+      "password": "GitSecureDev@1",
+      "notes": "Development repositories and project management",
+      "tags": [
+        "development",
+        "code",
+        "git"
+      ],
+      "isFavorite": true,
+      "lastModified": "2024-01-10T00:00:00.000Z",
+      "createdAt": "2024-01-10T00:00:00.000Z",
+      "updatedAt": "2024-01-10T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-amazon",
+      "name": "Amazon Prime",
+      "url": "https://amazon.com",
+      "username": "john.doe@gmail.com",
+      "password": "PrimeShopping#2024",
+      "notes": "Amazon Prime membership for shopping and streaming",
+      "tags": [
+        "shopping",
+        "entertainment",
+        "prime"
+      ],
+      "isFavorite": false,
+      "lastModified": "2024-02-10T00:00:00.000Z",
+      "createdAt": "2024-02-10T00:00:00.000Z",
+      "updatedAt": "2024-02-10T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-linkedin",
+      "name": "LinkedIn",
+      "url": "https://linkedin.com",
+      "username": "john.doe.pro@gmail.com",
+      "password": "LinkedInPro#2024",
+      "notes": "Professional networking and career development",
+      "tags": [
+        "social",
+        "career",
+        "professional"
+      ],
+      "isFavorite": false,
+      "lastModified": "2024-01-25T00:00:00.000Z",
+      "createdAt": "2024-01-25T00:00:00.000Z",
+      "updatedAt": "2024-01-25T00:00:00.000Z"
+    },
+    {
+      "id": "pwd-adobe",
+      "name": "Adobe Creative Cloud",
+      "url": "https://adobe.com",
+      "username": "john.doe@design.com",
+      "password": "DesignSuite#2024",
+      "notes": "Creative software suite for design work",
+      "tags": [
+        "design",
+        "software",
+        "creative"
+      ],
+      "isFavorite": false,
+      "lastModified": "2024-02-15T00:00:00.000Z",
+      "createdAt": "2024-02-15T00:00:00.000Z",
+      "updatedAt": "2024-02-15T00:00:00.000Z"
+    }
+  ],
+  "subscriptions": [
+    {
+      "id": "sub-netflix",
+      "name": "Netflix Premium",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2024-04-15T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Entertainment",
+      "notes": "Family plan with 4K streaming and multiple screens",
+      "isActive": true,
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "sub-spotify",
+      "name": "Spotify Premium",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2024-04-10T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Music",
+      "notes": "Ad-free music streaming with offline downloads",
+      "isActive": true,
+      "createdAt": "2024-01-10T00:00:00.000Z",
+      "updatedAt": "2024-01-10T00:00:00.000Z"
+    },
+    {
+      "id": "sub-adobe",
+      "name": "Adobe Creative Cloud",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2024-04-01T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "notes": "All apps plan including Photoshop, Illustrator, Premiere Pro",
+      "isActive": true,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "sub-amazon",
+      "name": "Amazon Prime",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2024-04-05T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Shopping",
+      "notes": "Prime membership with free shipping and Prime Video",
+      "isActive": true,
+      "createdAt": "2024-01-05T00:00:00.000Z",
+      "updatedAt": "2024-01-05T00:00:00.000Z"
+    },
+    {
+      "id": "sub-microsoft",
+      "name": "Microsoft 365 Family",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2024-04-20T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "notes": "Office apps and 1TB OneDrive cloud storage",
+      "isActive": true,
+      "createdAt": "2024-01-20T00:00:00.000Z",
+      "updatedAt": "2024-01-20T00:00:00.000Z"
+    },
+    {
+      "id": "sub-dropbox",
+      "name": "Dropbox Plus",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "yearly",
+      "nextBillingDate": "2025-03-01T00:00:00.000Z",
+      "reminderDays": 7,
+      "category": "Cloud Storage",
+      "notes": "2TB cloud storage with file synchronization",
+      "isActive": true,
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "note-investment",
+      "title": "Investment Strategy 2024",
+      "content": "# Investment Strategy for 2024\n\n## Goals\n- Maximize retirement contributions\n- Diversify portfolio across asset classes\n- Maintain emergency fund\n- Achieve 10% annual returns\n\n## Asset Allocation\n- 60% Stocks (US and International)\n- 25% Bonds\n- 10% Real Estate\n- 5% Cryptocurrency\n\n## Key Principles\n1. **Dollar-cost averaging** for regular investments\n2. **Rebalancing** quarterly\n3. **Tax-loss harvesting** when appropriate\n4. **Long-term focus** - avoid market timing\n\n*Review quarterly and adjust based on market conditions*",
+      "notebook": "Financial Planning",
+      "tags": [
+        "investment",
+        "strategy",
+        "2024",
+        "retirement"
+      ],
+      "isPinned": true,
+      "noteType": "rich",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "note-security",
+      "title": "Password Security Checklist",
+      "content": "### Password Security Checklist\n\n- [x] Use unique passwords for each service\n- [x] Use a password manager (SecureVault!)\n- [ ] Enable Two-Factor Authentication (2FA) everywhere possible\n- [ ] Change critical passwords every 6-12 months\n- [ ] Avoid public Wi-Fi for sensitive transactions\n- [ ] Regular security audits\n- [ ] Monitor for data breaches\n\n### Best Practices\n- Minimum 12 characters\n- Mix of letters, numbers, symbols\n- No personal information\n- Different password for each account",
+      "notebook": "Security",
+      "tags": [
+        "security",
+        "checklist",
+        "passwords",
+        "2fa"
+      ],
+      "isPinned": true,
+      "noteType": "rich",
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "note-budget",
+      "title": "Monthly Budget Template",
+      "content": "## Monthly Budget - March 2024\n\n### Income\n- Salary: $7,500\n- Freelance: $800\n- Investment Returns: $200\n- **Total Income: $8,500**\n\n### Fixed Expenses\n- Rent: $2,000\n- Utilities: $200\n- Insurance: $150\n- **Total Fixed: $2,350**\n\n### Variable Expenses\n- Groceries: $600\n- Transportation: $400\n- Subscriptions: $120\n- Entertainment: $300\n- **Total Variable: $1,420**\n\n### Savings Goals\n- Emergency Fund: $1,000\n- Retirement: $2,000\n- House Fund: $1,500\n- Vacation Fund: $500\n- **Total Savings: $5,000**\n\n### Summary\n- Total Expenses: $3,770\n- Total Savings: $5,000\n- **Remaining: -$270**\n\n*Need to reduce variable expenses by $270*",
+      "notebook": "Finance",
+      "tags": [
+        "budget",
+        "monthly",
+        "expenses",
+        "savings"
+      ],
+      "isPinned": false,
+      "noteType": "rich",
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    },
+    {
+      "id": "note-travel",
+      "title": "Europe Trip Planning",
+      "content": "# Europe Trip Planning - Summer 2024\n\n## Destinations\n1. **Paris, France** (5 days)\n   - Eiffel Tower, Louvre, Notre-Dame\n   - Budget: $1,500\n\n2. **Rome, Italy** (4 days)\n   - Colosseum, Vatican, Trevi Fountain\n   - Budget: $1,200\n\n3. **Barcelona, Spain** (3 days)\n   - Sagrada Familia, Park Güell, Gothic Quarter\n   - Budget: $900\n\n## Total Budget: $4,800\n- Flights: $1,200\n- Hotels: $1,800\n- Food: $800\n- Activities: $600\n- Transportation: $400\n\n## Preparation Checklist\n- [ ] Book flights\n- [ ] Reserve hotels\n- [ ] Get travel insurance\n- [ ] Apply for visas if needed\n- [ ] Plan daily itineraries\n- [ ] Learn basic phrases\n\n*Trip dates: June 15-27, 2024*",
+      "notebook": "Travel",
+      "tags": [
+        "travel",
+        "europe",
+        "planning",
+        "vacation"
+      ],
+      "isPinned": false,
+      "noteType": "rich",
+      "createdAt": "2024-02-20T00:00:00.000Z",
+      "updatedAt": "2024-02-20T00:00:00.000Z"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "exp-groceries",
+      "description": "Whole Foods - Weekly Groceries",
+      "amount": 125.5,
+      "category": "Food & Dining",
+      "date": "2024-03-01T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "groceries",
+        "food",
+        "weekly"
+      ],
+      "isRecurring": true,
+      "recurringFrequency": "weekly",
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    },
+    {
+      "id": "exp-gas",
+      "description": "Shell Gas Station",
+      "amount": 45,
+      "category": "Transportation",
+      "date": "2024-03-02T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "gas",
+        "fuel",
+        "car"
+      ],
+      "isRecurring": false,
+      "createdAt": "2024-03-02T00:00:00.000Z",
+      "updatedAt": "2024-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "exp-coffee",
+      "description": "Starbucks - Morning Coffee",
+      "amount": 5.75,
+      "category": "Food & Dining",
+      "date": "2024-03-03T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "coffee",
+        "beverage",
+        "morning"
+      ],
+      "isRecurring": false,
+      "createdAt": "2024-03-03T00:00:00.000Z",
+      "updatedAt": "2024-03-03T00:00:00.000Z"
+    },
+    {
+      "id": "exp-electric",
+      "description": "Con Edison - Electric Bill",
+      "amount": 85.2,
+      "category": "Utilities",
+      "date": "2024-03-05T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "electricity",
+        "utilities",
+        "monthly"
+      ],
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "createdAt": "2024-03-05T00:00:00.000Z",
+      "updatedAt": "2024-03-05T00:00:00.000Z"
+    },
+    {
+      "id": "exp-restaurant",
+      "description": "Italian Restaurant - Date Night",
+      "amount": 75,
+      "category": "Food & Dining",
+      "date": "2024-03-06T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "restaurant",
+        "dining",
+        "date"
+      ],
+      "isRecurring": false,
+      "createdAt": "2024-03-06T00:00:00.000Z",
+      "updatedAt": "2024-03-06T00:00:00.000Z"
+    },
+    {
+      "id": "exp-gym",
+      "description": "Planet Fitness - Monthly Membership",
+      "amount": 24.99,
+      "category": "Health & Fitness",
+      "date": "2024-03-01T00:00:00.000Z",
+      "currency": "USD",
+      "tags": [
+        "gym",
+        "fitness",
+        "membership"
+      ],
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    }
+  ],
+  "investments": [
+    {
+      "id": "inv-aapl",
+      "name": "Apple Inc. (AAPL)",
+      "type": "stocks",
+      "amount": 5000,
+      "currentValue": 5500,
+      "purchaseDate": "2024-01-15T00:00:00.000Z",
+      "currency": "USD",
+      "notes": "Tech stock - long term hold, strong fundamentals",
+      "performance": {
+        "dailyChange": 2.5,
+        "totalReturn": 10,
+        "annualizedReturn": 12.5
+      },
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "inv-sp500",
+      "name": "S&P 500 Index Fund (VOO)",
+      "type": "mutual_funds",
+      "amount": 10000,
+      "currentValue": 10800,
+      "purchaseDate": "2023-06-01T00:00:00.000Z",
+      "currency": "USD",
+      "notes": "Diversified index fund tracking S&P 500",
+      "performance": {
+        "dailyChange": 1.2,
+        "totalReturn": 8,
+        "annualizedReturn": 9.5
+      },
+      "createdAt": "2023-06-01T00:00:00.000Z",
+      "updatedAt": "2023-06-01T00:00:00.000Z"
+    },
+    {
+      "id": "inv-btc",
+      "name": "Bitcoin (BTC)",
+      "type": "crypto",
+      "amount": 2000,
+      "currentValue": 2500,
+      "purchaseDate": "2024-02-01T00:00:00.000Z",
+      "currency": "USD",
+      "notes": "Cryptocurrency investment - high risk, high reward",
+      "performance": {
+        "dailyChange": 5.8,
+        "totalReturn": 25,
+        "annualizedReturn": 30
+      },
+      "createdAt": "2024-02-01T00:00:00.000Z",
+      "updatedAt": "2024-02-01T00:00:00.000Z"
+    },
+    {
+      "id": "inv-tsla",
+      "name": "Tesla Inc. (TSLA)",
+      "type": "stocks",
+      "amount": 3000,
+      "currentValue": 2800,
+      "purchaseDate": "2024-04-10T00:00:00.000Z",
+      "currency": "USD",
+      "notes": "Electric vehicle manufacturer - volatile stock",
+      "performance": {
+        "dailyChange": -1.5,
+        "totalReturn": -6.67,
+        "annualizedReturn": -8
+      },
+      "createdAt": "2024-04-10T00:00:00.000Z",
+      "updatedAt": "2024-04-10T00:00:00.000Z"
+    },
+    {
+      "id": "inv-bond-fund",
+      "name": "Vanguard Total Bond Market Index Fund",
+      "type": "bonds",
+      "amount": 7000,
+      "currentValue": 7100,
+      "purchaseDate": "2023-03-01T00:00:00.000Z",
+      "currency": "USD",
+      "notes": "Low-risk bond fund for portfolio stability",
+      "performance": {
+        "dailyChange": 0.1,
+        "totalReturn": 1.43,
+        "annualizedReturn": 1.7
+      },
+      "createdAt": "2023-03-01T00:00:00.000Z",
+      "updatedAt": "2023-03-01T00:00:00.000Z"
+    }
+  ],
+  "investmentGoals": [
+    {
+      "id": "goal-retirement",
+      "name": "Retirement Fund",
+      "category": "retirement",
+      "targetAmount": 1000000,
+      "currentAmount": 150000,
+      "targetDate": "2045-12-31T00:00:00.000Z",
+      "currency": "USD",
+      "priority": "high",
+      "monthlyContribution": 2000,
+      "notes": "Target: $1M by age 65 for comfortable retirement",
+      "isAchieved": false,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "goal-house",
+      "name": "House Down Payment",
+      "category": "home_purchase",
+      "targetAmount": 100000,
+      "currentAmount": 30000,
+      "targetDate": "2028-06-01T00:00:00.000Z",
+      "currency": "USD",
+      "priority": "high",
+      "monthlyContribution": 1500,
+      "notes": "Saving for first home down payment",
+      "isAchieved": false,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "goal-emergency",
+      "name": "Emergency Fund",
+      "category": "emergency_fund",
+      "targetAmount": 50000,
+      "currentAmount": 45000,
+      "targetDate": "2025-01-01T00:00:00.000Z",
+      "currency": "USD",
+      "priority": "medium",
+      "monthlyContribution": 1000,
+      "notes": "6 months of living expenses for emergencies",
+      "isAchieved": false,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "goal-vacation",
+      "name": "Europe Vacation",
+      "category": "vacation",
+      "targetAmount": 15000,
+      "currentAmount": 12000,
+      "targetDate": "2024-09-01T00:00:00.000Z",
+      "currency": "USD",
+      "priority": "low",
+      "monthlyContribution": 500,
+      "notes": "Summer trip to Europe",
+      "isAchieved": false,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "goal-education",
+      "name": "Children Education Fund",
+      "category": "education",
+      "targetAmount": 200000,
+      "currentAmount": 25000,
+      "targetDate": "2040-09-01T00:00:00.000Z",
+      "currency": "USD",
+      "priority": "medium",
+      "monthlyContribution": 800,
+      "notes": "College fund for future children",
+      "isAchieved": false,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "bankTransactions": [
+    {
+      "id": "bt-salary",
+      "date": "2024-03-01T00:00:00.000Z",
+      "description": "Salary Deposit - Tech Corp",
+      "amount": 7500,
+      "type": "credit",
+      "category": "income",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    },
+    {
+      "id": "bt-rent",
+      "date": "2024-03-01T00:00:00.000Z",
+      "description": "Rent Payment",
+      "amount": -2000,
+      "type": "debit",
+      "category": "housing",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-01T00:00:00.000Z",
+      "updatedAt": "2024-03-01T00:00:00.000Z"
+    },
+    {
+      "id": "bt-groceries",
+      "date": "2024-03-02T00:00:00.000Z",
+      "description": "Whole Foods Market",
+      "amount": -125.5,
+      "type": "debit",
+      "category": "groceries",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-02T00:00:00.000Z",
+      "updatedAt": "2024-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "bt-gas",
+      "date": "2024-03-03T00:00:00.000Z",
+      "description": "Shell Gas Station",
+      "amount": -45,
+      "type": "debit",
+      "category": "transportation",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-03T00:00:00.000Z",
+      "updatedAt": "2024-03-03T00:00:00.000Z"
+    },
+    {
+      "id": "bt-electric",
+      "date": "2024-03-05T00:00:00.000Z",
+      "description": "Con Edison Electric",
+      "amount": -85.2,
+      "type": "debit",
+      "category": "utilities",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-05T00:00:00.000Z",
+      "updatedAt": "2024-03-05T00:00:00.000Z"
+    },
+    {
+      "id": "bt-restaurant",
+      "date": "2024-03-06T00:00:00.000Z",
+      "description": "Bella Vista Italian Restaurant",
+      "amount": -75,
+      "type": "debit",
+      "category": "dining",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-06T00:00:00.000Z",
+      "updatedAt": "2024-03-06T00:00:00.000Z"
+    },
+    {
+      "id": "bt-freelance",
+      "date": "2024-03-10T00:00:00.000Z",
+      "description": "Freelance Web Development",
+      "amount": 800,
+      "type": "credit",
+      "category": "income",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-10T00:00:00.000Z",
+      "updatedAt": "2024-03-10T00:00:00.000Z"
+    },
+    {
+      "id": "bt-gym",
+      "date": "2024-03-15T00:00:00.000Z",
+      "description": "Planet Fitness Membership",
+      "amount": -24.99,
+      "type": "debit",
+      "category": "healthcare",
+      "currency": "USD",
+      "accountId": "checking-1",
+      "createdAt": "2024-03-15T00:00:00.000Z",
+      "updatedAt": "2024-03-15T00:00:00.000Z"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "reminder-taxes",
+      "title": "File Tax Returns",
+      "description": "Complete and file 2023 tax returns before April 15th",
+      "dueDate": "2024-04-15T00:00:00.000Z",
+      "priority": "high",
+      "isCompleted": false,
+      "tags": [
+        "taxes",
+        "deadline",
+        "financial"
+      ],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "reminder-insurance",
+      "title": "Renew Car Insurance",
+      "description": "Review and renew car insurance policy",
+      "dueDate": "2024-04-20T00:00:00.000Z",
+      "priority": "medium",
+      "isCompleted": false,
+      "tags": [
+        "insurance",
+        "car",
+        "renewal"
+      ],
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "reminder-dentist",
+      "title": "Dental Checkup",
+      "description": "Schedule and attend routine dental cleaning",
+      "dueDate": "2024-04-25T00:00:00.000Z",
+      "priority": "medium",
+      "isCompleted": false,
+      "tags": [
+        "health",
+        "dental",
+        "checkup"
+      ],
+      "createdAt": "2024-02-01T00:00:00.000Z",
+      "updatedAt": "2024-02-01T00:00:00.000Z"
+    },
+    {
+      "id": "reminder-birthday",
+      "title": "Mom's Birthday",
+      "description": "Buy gift and card for mom's birthday",
+      "dueDate": "2024-05-10T00:00:00.000Z",
+      "priority": "high",
+      "isCompleted": false,
+      "tags": [
+        "birthday",
+        "family",
+        "gift"
+      ],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "reminder-vacation",
+      "title": "Book Europe Trip",
+      "description": "Finalize hotel bookings for Europe vacation",
+      "dueDate": "2024-03-20T00:00:00.000Z",
+      "priority": "medium",
+      "isCompleted": false,
+      "tags": [
+        "travel",
+        "vacation",
+        "booking"
+      ],
+      "createdAt": "2024-02-20T00:00:00.000Z",
+      "updatedAt": "2024-02-20T00:00:00.000Z"
+    }
+  ]
+}
