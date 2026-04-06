@@ -270,28 +270,28 @@ test.describe.serial('IronVault Full Sweep', () => {
         page.locator('[role="dialog"]').filter({ hasText: /add new password/i }).first()
       ).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.getByTestId('input-site-name')
-        .or(page.locator('input[placeholder*="name" i], input[placeholder*="service" i]').first());
-      await nameInput.fill('TestSite-Sweep');
+      // Scope all form inputs to the open dialog to avoid matching background elements
+      const dialog = page.locator('[role="dialog"]').filter({ hasText: /add new password/i }).first();
+      await dialog.getByTestId('input-site-name').fill('TestSite-Sweep');
 
-      const urlInput = page.getByTestId('input-site-url')
-        .or(page.locator('input[placeholder*="url" i]').first());
+      const urlInput = dialog.getByTestId('input-site-url')
+        .or(dialog.locator('input[placeholder*="url" i]').first());
       if (await urlInput.isVisible({ timeout: 2000 }).catch(() => false))
         await urlInput.fill('https://testsite.example.com');
 
-      const userInput = page.getByTestId('input-username')
-        .or(page.locator('input[placeholder*="username" i], input[placeholder*="email" i]').first());
+      const userInput = dialog.getByTestId('input-username')
+        .or(dialog.locator('input[placeholder*="username" i], input[placeholder*="email" i]').first());
       if (await userInput.isVisible({ timeout: 2000 }).catch(() => false))
         await userInput.fill(EMAIL);
 
-      const pwInput = page.getByTestId('input-password')
-        .or(page.locator('input[placeholder*="password" i]').first());
+      const pwInput = dialog.getByTestId('input-password')
+        .or(dialog.locator('input[placeholder*="password" i]').first());
       if (await pwInput.isVisible({ timeout: 2000 }).catch(() => false))
         await pwInput.fill('Sweep@Test1234');
 
-      const saveBtn = page.getByTestId('save-password-button')
-        .or(page.locator('button:has-text("Save"), button[type="submit"]').first());
-      await saveBtn.click();
+      const saveBtn = dialog.getByTestId('save-password-button')
+        .or(dialog.locator('button:has-text("Save"), button[type="submit"]').first());
+      await saveBtn.first().click();
       await expect(page.locator('text=TestSite-Sweep').first()).toBeVisible({ timeout: 10000 });
     });
 
@@ -322,12 +322,12 @@ test.describe.serial('IronVault Full Sweep', () => {
         .or(page.locator('button[aria-label*="edit" i]').first());
       if (await editBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await editBtn.click();
-        const nameInput = page.getByTestId('input-site-name')
-          .or(page.locator('input[placeholder*="name" i]').first());
-        await nameInput.fill('TestSite-Sweep-Edited');
-        const saveBtn = page.getByTestId('save-password-button')
-          .or(page.locator('button:has-text("Save")').first());
-        await saveBtn.click();
+        const editDialog = page.locator('[role="dialog"]').first();
+        await editDialog.waitFor({ timeout: 5000 });
+        await editDialog.getByTestId('input-site-name').fill('TestSite-Sweep-Edited');
+        const saveBtn = editDialog.getByTestId('save-password-button')
+          .or(editDialog.locator('button:has-text("Save")').first());
+        await saveBtn.first().click();
         await expect(page.locator('text=TestSite-Sweep-Edited').first()).toBeVisible({ timeout: 8000 });
       }
     });
