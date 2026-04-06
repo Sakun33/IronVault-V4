@@ -696,7 +696,7 @@ export default function Profile() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: crmUserId,
+          email: userProfile.email,
           subject: ticketData.title || 'Support Request',
           description: ticketData.description || '',
           priority: ticketData.priority || 'medium',

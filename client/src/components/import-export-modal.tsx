@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, Upload, FileText, Shield, Database, FileSpreadsheet, HelpCircle, ExternalLink, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
+import { format } from 'date-fns';
+import { isNativeApp } from '@/native/platform';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,17 +47,30 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
     setIsExporting(true);
     try {
       const encryptedData = await exportVault(exportPassword);
-      
-      // Create and download the file
-      const blob = new Blob([encryptedData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `securevault-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `ironvault-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
+
+      if (isNativeApp()) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+        await Filesystem.writeFile({
+          path: filename,
+          data: encryptedData,
+          directory: Directory.Cache,
+          encoding: 'utf8' as any,
+        });
+        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+        await Share.share({ title: 'IronVault Backup', url: uri, dialogTitle: 'Save Backup' });
+      } else {
+        const blob = new Blob([encryptedData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
       
       toast({
         title: "Export Complete",

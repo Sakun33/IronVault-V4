@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { useVaultSelection } from '@/contexts/vault-selection-context';
 import { useLicense } from '@/contexts/license-context';
 import { useAuth } from '@/contexts/auth-context';
@@ -36,17 +37,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Plus, 
-  ShieldCheck, 
-  Check, 
-  MoreVertical, 
-  Star, 
-  Fingerprint, 
-  Trash2, 
+import {
+  Plus,
+  ShieldCheck,
+  Check,
+  MoreVertical,
+  Star,
+  Fingerprint,
+  Trash2,
   Edit,
   Lock,
   Crown,
+  ExternalLink,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -56,6 +58,7 @@ interface VaultCardProps {
   vault: VaultInfo;
   isActive: boolean;
   onSwitch: () => void;
+  onOpen: () => void;
   onSetDefault: () => void;
   onToggleBiometric: (enabled: boolean) => void;
   onRename: (name: string) => void;
@@ -63,7 +66,7 @@ interface VaultCardProps {
   canDelete: boolean;
 }
 
-function VaultCard({ vault, isActive, onSwitch, onSetDefault, onToggleBiometric, onRename, onDelete, canDelete }: VaultCardProps) {
+function VaultCard({ vault, isActive, onSwitch, onOpen, onSetDefault, onToggleBiometric, onRename, onDelete, canDelete }: VaultCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(vault.name);
 
@@ -139,7 +142,16 @@ function VaultCard({ vault, isActive, onSwitch, onSetDefault, onToggleBiometric,
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem 
+              {!isActive && (
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); onOpen(); }}
+                  data-testid="menu-item-open"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open Vault
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
                 onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
                 data-testid="menu-item-rename"
               >
@@ -193,22 +205,23 @@ function VaultCard({ vault, isActive, onSwitch, onSetDefault, onToggleBiometric,
 }
 
 export function VaultManagerUI() {
-  const { 
-    vaults, 
-    activeVault, 
-    isLoading, 
-    canCreateVault, 
+  const {
+    vaults,
+    activeVault,
+    isLoading,
+    canCreateVault,
     maxVaults,
-    createVault, 
-    switchVault, 
-    updateVault, 
-    deleteVault, 
-    setDefaultVault, 
-    toggleBiometric 
+    createVault,
+    switchVault,
+    updateVault,
+    deleteVault,
+    setDefaultVault,
+    toggleBiometric
   } = useVaultSelection();
   const { license } = useLicense();
   const { toast } = useToast();
-  
+  const [, setLocation] = useLocation();
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newVaultName, setNewVaultName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -265,6 +278,20 @@ export function VaultManagerUI() {
       });
     } finally {
       setDeleteVaultId(null);
+    }
+  };
+
+  const handleOpenVault = async (vaultId: string) => {
+    try {
+      await switchVault(vaultId);
+      // Full reload so vault context reinitializes with the new vault's data
+      window.location.href = '/dashboard';
+    } catch (error) {
+      toast({
+        title: 'Failed to Open Vault',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -423,6 +450,7 @@ export function VaultManagerUI() {
             vault={vault}
             isActive={activeVault?.id === vault.id}
             onSwitch={() => switchVault(vault.id)}
+            onOpen={() => handleOpenVault(vault.id)}
             onSetDefault={() => setDefaultVault(vault.id)}
             onToggleBiometric={(enabled) => handleToggleBiometric(vault.id, enabled)}
             onRename={(name) => handleRename(vault.id, name)}

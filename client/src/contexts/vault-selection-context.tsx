@@ -57,8 +57,8 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   }, [loadVaults]);
 
   const createVault = async (name: string): Promise<VaultInfo> => {
-    if (!canCreateVault) {
-      throw new Error(`Maximum of ${maxVaults} vault(s) allowed for your plan`);
+    if (!vaultManager.canCreateVault(isPaidUser)) {
+      throw new Error(`Maximum of ${vaultManager.getMaxVaults(isPaidUser)} vault(s) allowed for your plan`);
     }
     
     const newVault = await vaultManager.createVault(name);

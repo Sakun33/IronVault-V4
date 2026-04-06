@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { format } from 'date-fns';
 import { vaultManager } from '@/lib/vault-manager';
 
 export interface LogEntry {
@@ -72,7 +73,7 @@ export function LoggingProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `securevault-logs-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `ironvault-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

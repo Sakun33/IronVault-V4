@@ -53,7 +53,7 @@ export default function Reminders() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    dueDate: new Date().toISOString().split('T')[0],
+    dueDate: format(new Date(), 'yyyy-MM-dd'),
     dueTime: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     category: 'Personal',
@@ -261,7 +261,7 @@ export default function Reminders() {
     setFormData({
       title: '',
       description: '',
-      dueDate: new Date().toISOString().split('T')[0],
+      dueDate: format(new Date(), 'yyyy-MM-dd'),
       dueTime: '',
       priority: 'medium',
       category: 'Personal',
