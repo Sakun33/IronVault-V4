@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type CrmUser, type InsertCrmUser, type Entitlement, type InsertEntitlement, type BillingEvent, type InsertBillingEvent, crmUsers, entitlements, billingEvents } from "../shared/schema";
 import { randomUUID } from "crypto";
-import { drizzle } from "drizzle-orm/postgres-js";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {
@@ -25,20 +25,29 @@ export interface IStorage {
 
 // Database storage using Drizzle
 export class DatabaseStorage implements IStorage {
-  private db: ReturnType<typeof drizzle>;
+  private db!: PostgresJsDatabase;
   private users: Map<string, User>;
+  private ready: Promise<void>;
 
   constructor() {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is required for database storage");
     }
 
-    // Dynamic require to avoid importing postgres when DATABASE_URL isn't set
-    // (top-level import would crash on Vercel if the module isn't bundled)
-    const pg = require("postgres") as typeof import("postgres").default;
-    const client = pg(process.env.DATABASE_URL);
-    this.db = drizzle(client);
     this.users = new Map(); // In-memory for legacy user table
+    // Lazy-import postgres and drizzle to avoid bundling issues on Vercel
+    this.ready = this.init();
+  }
+
+  private async init() {
+    const pg = (await import("postgres")).default;
+    const { drizzle } = await import("drizzle-orm/postgres-js");
+    const client = pg(process.env.DATABASE_URL!);
+    this.db = drizzle(client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -60,16 +69,19 @@ export class DatabaseStorage implements IStorage {
 
   // CRM User operations
   async getCrmUser(id: string): Promise<CrmUser | undefined> {
+    await this.ensureReady();
     const result = await this.db.select().from(crmUsers).where(eq(crmUsers.id, id)).limit(1);
     return result[0];
   }
 
   async getCrmUserByEmail(email: string): Promise<CrmUser | undefined> {
+    await this.ensureReady();
     const result = await this.db.select().from(crmUsers).where(eq(crmUsers.email, email.toLowerCase())).limit(1);
     return result[0];
   }
 
   async createCrmUser(data: InsertCrmUser): Promise<CrmUser> {
+    await this.ensureReady();
     const result = await this.db.insert(crmUsers).values({
       ...data,
       email: data.email.toLowerCase(),
@@ -78,6 +90,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCrmUser(id: string, data: Partial<InsertCrmUser>): Promise<CrmUser | undefined> {
+    await this.ensureReady();
     const result = await this.db.update(crmUsers)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(crmUsers.id, id))
@@ -87,16 +100,19 @@ export class DatabaseStorage implements IStorage {
 
   // Entitlement operations
   async getEntitlement(userId: string): Promise<Entitlement | undefined> {
+    await this.ensureReady();
     const result = await this.db.select().from(entitlements).where(eq(entitlements.userId, userId)).limit(1);
     return result[0];
   }
 
   async createEntitlement(data: InsertEntitlement): Promise<Entitlement> {
+    await this.ensureReady();
     const result = await this.db.insert(entitlements).values(data).returning();
     return result[0];
   }
 
   async updateEntitlement(userId: string, data: Partial<InsertEntitlement>): Promise<Entitlement | undefined> {
+    await this.ensureReady();
     const result = await this.db.update(entitlements)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(entitlements.userId, userId))
@@ -106,6 +122,7 @@ export class DatabaseStorage implements IStorage {
 
   // Billing event operations
   async logBillingEvent(data: InsertBillingEvent): Promise<BillingEvent> {
+    await this.ensureReady();
     const insertData = {
       eventType: data.eventType,
       platform: data.platform,
