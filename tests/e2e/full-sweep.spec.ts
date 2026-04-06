@@ -613,7 +613,8 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('7.3 Pro badge visible', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/profile');
-      await expect(page.locator('text=/Free|Pro|IronVault/i').first()).toBeVisible({ timeout: 8000 });
+      // "Free Plan" / "Pro Plan" h3 on the plan tab — avoids matching hidden sidebar brand name
+      await expect(page.locator('h3:has-text("Plan"), text=/Free Plan|Pro Plan/i').first()).toBeVisible({ timeout: 8000 });
     });
 
     test('7.4 2FA setup flow', async ({ page }) => {
