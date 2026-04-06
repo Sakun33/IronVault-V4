@@ -132,6 +132,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+        ALTER TABLE ticket_replies ADD COLUMN IF NOT EXISTS author_type TEXT DEFAULT 'admin';
+        ALTER TABLE ticket_replies ADD COLUMN IF NOT EXISTS author_id TEXT DEFAULT 'admin';
       `);
       return res.json({ success: true, message: "Schema ready" });
     } catch (err: any) {
