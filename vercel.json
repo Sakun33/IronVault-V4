@@ -1,17 +1,31 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist/public",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": null,
-  "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 30,
-      "includeFiles": "server/**/*.ts,shared/**/*.ts"
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["server/**", "shared/**"],
+        "maxLambdaSize": "50mb"
+      }
+    },
+    {
+      "src": "api/debug.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "buildCommand": "npm run build",
+        "outputDirectory": "dist/public"
+      }
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.ts" },
-    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "routes": [
+    { "src": "/api/debug", "dest": "/api/debug.ts" },
+    { "src": "/api/(.*)", "dest": "/api/index.ts" },
+    { "src": "/(.*)", "dest": "/dist/public/$1" }
   ]
 }
