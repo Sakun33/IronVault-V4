@@ -1,4 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import express from 'express';
+import { registerRoutes } from '../server/routes';
+import { storage } from '../server/storage';
 
 let app: any = null;
 let initError: Error | null = null;
@@ -8,9 +11,6 @@ async function getApp() {
   if (initError) throw initError;
 
   try {
-    const express = (await import('express')).default;
-    const { registerRoutes } = await import('../server/routes');
-
     app = express();
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
