@@ -150,13 +150,17 @@ async function unlockVault(page: Page) {
 async function navigate(page: Page, route: string) {
   await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});
-  // Give auth-context time to restore session from sessionStorage
-  // If app shows login page, re-unlock (fallback for when sessionStorage is unavailable)
-  const isOnLogin = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 3000 }).catch(() => false);
+  // Wait for initializeAuth() to finish (it restores session from sessionStorage)
+  // The loading screen disappears once isLoading=false
+  await page.locator('text=Loading IronVault...').waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+  // If session restore failed and login page appeared, re-unlock WITHOUT redirecting away from target
+  const isOnLogin = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 2000 }).catch(() => false);
   if (isOnLogin) {
     await page.getByTestId('input-unlock-password').fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').click();
+    // login.tsx calls setLocation('/') — navigate to intended route after that
     await page.waitForLoadState('networkidle').catch(() => {});
+    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'networkidle' });
   }
 }
 
