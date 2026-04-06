@@ -1871,11 +1871,22 @@ export default function Profile() {
               return false;
             }}
             onGenerateBackupCodes={async () => {
-              const codes = Array.from({ length: 8 }, () => 
-                Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
-                Math.random().toString(36).substring(2, 6).toUpperCase()
-              );
-              localStorage.setItem('ironvault_2fa_backup_codes', JSON.stringify(codes));
+              const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+              const codes = Array.from({ length: 10 }, () => {
+                const bytes = new Uint8Array(8);
+                crypto.getRandomValues(bytes);
+                const half1 = Array.from(bytes.slice(0, 4)).map(b => alphabet[b % alphabet.length]).join('');
+                const half2 = Array.from(bytes.slice(4, 8)).map(b => alphabet[b % alphabet.length]).join('');
+                return `${half1}-${half2}`;
+              });
+              // Store hashed codes (SHA-256 hex) to prevent plaintext exposure
+              const hashedCodes = await Promise.all(codes.map(async (code) => {
+                const encoded = new TextEncoder().encode(code.replace('-', ''));
+                const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+              }));
+              localStorage.setItem('ironvault_2fa_backup_codes_hash', JSON.stringify(hashedCodes));
+              localStorage.setItem('ironvault_2fa_backup_codes_used', JSON.stringify([]));
               return codes;
             }}
           />

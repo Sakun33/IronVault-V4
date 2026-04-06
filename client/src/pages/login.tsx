@@ -43,7 +43,9 @@ export default function Login() {
   const [vaultCount, setVaultCount] = useState({ current: 0, max: 1 });
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  
+  const [showBackupCodeEntry, setShowBackupCodeEntry] = useState(false);
+  const [backupCode, setBackupCode] = useState('');
+
   // Lockout state
   const [lockoutState, setLockoutState] = useState<LockoutState>({ isLocked: false, remainingMs: 0, failedAttempts: 0 });
   const [lockoutDisplay, setLockoutDisplay] = useState('');
@@ -475,6 +477,55 @@ export default function Login() {
     }
   };
 
+  const handleBackupCodeLogin = async () => {
+    const normalised = backupCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (normalised.length !== 8) {
+      toast({ title: "Invalid Code", description: "Enter a valid 8-character backup code", variant: "destructive" });
+      return;
+    }
+    // Hash the entered code and compare against stored hashes
+    const encoded = new TextEncoder().encode(normalised);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    const enteredHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const storedHashes: string[] = JSON.parse(localStorage.getItem('ironvault_2fa_backup_codes_hash') || '[]');
+    const usedHashes: string[] = JSON.parse(localStorage.getItem('ironvault_2fa_backup_codes_used') || '[]');
+
+    const matchIndex = storedHashes.findIndex(h => h === enteredHash);
+    if (matchIndex === -1 || usedHashes.includes(enteredHash)) {
+      toast({ title: "Invalid Code", description: "Code not recognised or already used", variant: "destructive" });
+      return;
+    }
+
+    // Mark code as used
+    usedHashes.push(enteredHash);
+    localStorage.setItem('ironvault_2fa_backup_codes_used', JSON.stringify(usedHashes));
+
+    // Proceed with the stored master password unlock
+    if (!masterPassword) {
+      toast({ title: "Enter Password", description: "Enter your master password first, then use the backup code", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await vaultManager.tryUnlockAnyVault(masterPassword);
+      if (result.success && result.vaultId) {
+        vaultManager.setActiveVaultId(result.vaultId);
+        await vaultStorage.switchToVault(result.vaultId);
+        const success = await login(masterPassword);
+        if (success) {
+          await vaultManager.resetFailedAttempts();
+          toast({ title: "Vault Unlocked", description: "Backup code accepted (one-time use)" });
+          setLocation('/');
+        }
+      } else {
+        toast({ title: "Wrong Password", description: "Master password is incorrect", variant: "destructive" });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResetComplete = () => {
     // Clear activity logs when resetting vault
     clearLogs();
@@ -732,6 +783,44 @@ export default function Login() {
               </Button>
             </form>
 
+            {!isCreatingVault && vaultExists && localStorage.getItem('ironvault_2fa_enabled') === 'true' && (
+              <div className="mt-4 pt-4 border-t border-border">
+                {!showBackupCodeEntry ? (
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowBackupCodeEntry(true)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      Use backup code instead
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="backup-code" className="text-sm">Backup Code</Label>
+                    <Input
+                      id="backup-code"
+                      placeholder="XXXX-XXXX"
+                      value={backupCode}
+                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                      className="font-mono tracking-widest text-center"
+                      maxLength={9}
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowBackupCodeEntry(false)}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" className="flex-1" onClick={handleBackupCodeLogin} disabled={isLoading}>
+                        Verify
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {!isCreatingVault && (
               <>
                 {/* Reset Vault Option - Show when vault exists OR when there's lockout state to clear */}
@@ -780,7 +869,7 @@ export default function Login() {
                           Biometric unlock not enabled
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Login and go to Profile → Vaults to enable
+                          Login and go to Profile → Security Settings to enable
                         </p>
                       </div>
                     )}

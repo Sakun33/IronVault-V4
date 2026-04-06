@@ -158,7 +158,7 @@ const EnhancedMarkdown = ({ content }: { content: string }) => {
 export default function Notes() {
   const { notes, addNote, updateNote, deleteNote, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
-  const { getLimit } = useSubscription();
+  const { getLimit, isPro } = useSubscription();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [viewingNote, setViewingNote] = useState<NoteEntry | null>(null);
@@ -717,7 +717,12 @@ export default function Notes() {
             Organize your thoughts with encrypted notes
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {!isPro && (
+            <span className="text-xs text-muted-foreground">
+              {notes.length}/{getLimit('notes')}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -727,23 +732,28 @@ export default function Notes() {
             <LayoutTemplate className="w-4 h-4 mr-1" />
             Templates
           </Button>
-          <Button size="sm" onClick={() => {
-            if (notes.length >= getLimit('notes')) {
-              toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('notes')} notes. Upgrade to Pro for unlimited.`, variant: "destructive" });
-              return;
-            }
-            setFormData({
-              title: '',
-              content: '',
-              notebook: 'personal',
-              tags: [],
-              isPinned: false,
-              noteType: 'rich',
-            });
-            setShowAddModal(true);
-          }} data-testid="button-add-note">
+          <Button
+            size="sm"
+            disabled={!isPro && notes.length >= getLimit('notes')}
+            onClick={() => {
+              if (!isPro && notes.length >= getLimit('notes')) {
+                toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('notes')} notes. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                return;
+              }
+              setFormData({
+                title: '',
+                content: '',
+                notebook: 'personal',
+                tags: [],
+                isPinned: false,
+                noteType: 'rich',
+              });
+              setShowAddModal(true);
+            }}
+            data-testid="button-add-note"
+          >
             <Plus className="w-4 h-4 mr-1" />
-            Add
+            {!isPro && notes.length >= getLimit('notes') ? 'Upgrade to Add' : 'Add'}
           </Button>
         </div>
       </div>

@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 export default function Passwords() {
   const { passwords, deletePassword, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
-  const { getLimit } = useSubscription();
+  const { getLimit, isPro } = useSubscription();
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPassword, setEditingPassword] = useState<any>(null);
@@ -188,7 +188,12 @@ export default function Passwords() {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Password Vault</h1>
             <p className="text-muted-foreground text-sm">Manage your passwords securely with end-to-end encryption</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {!isPro && (
+              <span className="text-xs text-muted-foreground">
+                {passwords.length}/{getLimit('passwords')}
+              </span>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -200,7 +205,7 @@ export default function Passwords() {
             </Button>
             <Button
               onClick={() => {
-                if (passwords.length >= getLimit('passwords')) {
+                if (!isPro && passwords.length >= getLimit('passwords')) {
                   toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
                   return;
                 }
@@ -209,10 +214,11 @@ export default function Passwords() {
               }}
               size="sm"
               className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
+              disabled={!isPro && passwords.length >= getLimit('passwords')}
               data-testid="add-password-button"
             >
               <Plus className="w-4 h-4 mr-1" />
-              Add
+              {!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade to Add' : 'Add'}
             </Button>
           </div>
         </div>
@@ -360,12 +366,13 @@ export default function Passwords() {
               <p className="text-muted-foreground mb-6">Get started by adding your first password entry</p>
               <Button
                 onClick={() => {
-                  if (passwords.length >= getLimit('passwords')) {
+                  if (!isPro && passwords.length >= getLimit('passwords')) {
                     toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
                     return;
                   }
                   setShowAddModal(true);
                 }}
+                disabled={!isPro && passwords.length >= getLimit('passwords')}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 py-3"
               >
                 <Plus className="w-4 h-4 mr-2" />

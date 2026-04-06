@@ -10,7 +10,7 @@ import { CurrencyProvider } from "@/contexts/currency-context";
 import { LoggingProvider } from "@/contexts/logging-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
-import { VaultSelectionProvider } from "@/contexts/vault-selection-context";
+import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
@@ -42,7 +42,7 @@ import QAPage from "@/pages/qa";
 import VaultsPage from "@/pages/vaults";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -64,7 +64,8 @@ import { Footer } from "@/components/footer";
 function MainLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const { searchQuery, setSearchQuery, stats } = useVault();
-  const { getLimit } = useSubscription();
+  const { getLimit, isPro } = useSubscription();
+  const { vaults, activeVault, switchVault } = useVaultSelection();
   const [, setLocation] = useLocation();
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
@@ -72,6 +73,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
+  const [showVaultSwitcher, setShowVaultSwitcher] = useState(false);
   // Search removed from mobile header - individual pages have their own search
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
@@ -113,21 +115,21 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary' },
-    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600' },
-    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary' },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600' },
-    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600' },
-    { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600' },
-    { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600' },
-    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600' },
-    { id: 'investments', label: 'Investment / Goals', icon: TrendingUp, count: null, color: 'text-emerald-600' },
-    { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600' },
-    { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600' },
-    { id: 'profile', label: 'Profile', icon: User, count: null, color: 'text-primary' },
-    { id: 'logging', label: 'Activity Logs', icon: FileText, count: null, color: 'text-muted-foreground' },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon, count: null, color: 'text-muted-foreground' },
-    { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary' },
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary', requiresPro: false },
+    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600', requiresPro: false },
+    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: isPro ? null : `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary', requiresPro: false },
+    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600', requiresPro: true },
+    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: isPro ? null : `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600', requiresPro: false },
+    { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600', requiresPro: true },
+    { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600', requiresPro: false },
+    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
+    { id: 'investments', label: 'Investment / Goals', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
+    { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600', requiresPro: true },
+    { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true },
+    { id: 'profile', label: 'Profile', icon: User, count: null, color: 'text-primary', requiresPro: false },
+    { id: 'logging', label: 'Activity Logs', icon: FileText, count: null, color: 'text-muted-foreground', requiresPro: false },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon, count: null, color: 'text-muted-foreground', requiresPro: false },
+    { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary', requiresPro: false },
   ];
 
   // Core sections for bottom navigation (only 4 most used)
@@ -174,13 +176,50 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <button 
+            <button
               onClick={() => setLocation('/')}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
               <AppLogo size={28} />
               <span className="text-base font-bold tracking-tight text-foreground">IronVault</span>
             </button>
+            {/* Mobile vault switcher chip */}
+            {vaults.length > 1 && (
+              <div className="relative">
+                <button
+                  className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40"
+                  onClick={() => setShowVaultSwitcher(v => !v)}
+                >
+                  <span className="max-w-[70px] truncate">{activeVault?.name || 'Vault'}</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {showVaultSwitcher && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowVaultSwitcher(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
+                      {vaults.map(vault => (
+                        <button
+                          key={vault.id}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                          onClick={async () => {
+                            setShowVaultSwitcher(false);
+                            if (vault.id !== activeVault?.id) {
+                              await switchVault(vault.id);
+                              window.location.href = '/';
+                            }
+                          }}
+                        >
+                          <span className="truncate">{vault.name}</span>
+                          {vault.id === activeVault?.id && (
+                            <span className="ml-auto text-[10px] text-primary">Active</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
@@ -208,6 +247,47 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold tracking-tight text-foreground">IronVault</h1>
             </div>
+            {/* Vault Switcher */}
+            {vaults.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1.5 rounded-xl text-sm h-8 px-3 border-border/60 bg-muted/40"
+                  onClick={() => setShowVaultSwitcher(v => !v)}
+                >
+                  <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="max-w-[120px] truncate">{activeVault?.name || 'Default Vault'}</span>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                </Button>
+                {showVaultSwitcher && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowVaultSwitcher(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 min-w-[180px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
+                      {vaults.map(vault => (
+                        <button
+                          key={vault.id}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                          onClick={async () => {
+                            setShowVaultSwitcher(false);
+                            if (vault.id !== activeVault?.id) {
+                              await switchVault(vault.id);
+                              window.location.href = '/';
+                            }
+                          }}
+                        >
+                          <Database className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{vault.name}</span>
+                          {vault.id === activeVault?.id && (
+                            <span className="ml-auto text-[10px] text-primary font-semibold">Active</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -386,7 +466,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
-                  {'limitLabel' in item && item.limitLabel !== null ? (
+                  {item.requiresPro && !isPro ? (
+                    <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                      Pro
+                    </span>
+                  ) : 'limitLabel' in item && item.limitLabel !== null ? (
                     <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                       {item.limitLabel}
                     </span>

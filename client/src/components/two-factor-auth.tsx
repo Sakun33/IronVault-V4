@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,8 @@ export function TwoFactorAuth({
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [setupStep, setSetupStep] = useState<'intro' | 'verify' | 'complete'>('intro');
-  
+  const [savedCodesConfirmed, setSavedCodesConfirmed] = useState(false);
+
   // Generate a mock secret key for demo purposes
   const secretKey = 'JBSWY3DPEHPK3PXP';
   
@@ -365,22 +366,36 @@ export function TwoFactorAuth({
                 </div>
               </div>
               
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => copyToClipboard(backupCodes.join('\n'))}
                 className="w-full"
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy All Codes
               </Button>
-              
-              <Button 
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={savedCodesConfirmed}
+                  onChange={(e) => setSavedCodesConfirmed(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="text-sm text-muted-foreground">
+                  I've saved these backup codes in a safe place
+                </span>
+              </label>
+
+              <Button
                 onClick={() => {
                   setShowSetupModal(false);
                   setVerificationCode('');
                   setSetupStep('intro');
+                  setSavedCodesConfirmed(false);
                 }}
                 className="w-full"
+                disabled={!savedCodesConfirmed}
               >
                 Done
               </Button>
