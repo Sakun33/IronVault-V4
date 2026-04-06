@@ -108,5 +108,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── /api/crm/vaults/sync ────────────────────────────────────────────────────
+  if (path === "/api/crm/vaults/sync" && req.method === "POST") {
+    const { userId, email, vaultCount } = req.body || {};
+    if (!userId && !email) return res.status(400).json({ error: "userId or email required" });
+    try {
+      const col = userId ? "id" : "email";
+      const val = userId || email;
+      await db.query(
+        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE ${col} = $1`,
+        [val]
+      );
+      return res.json({ success: true, vaultCount: vaultCount || 0, synced: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── /api/crm/tickets ────────────────────────────────────────────────────────
+  if (path === "/api/crm/tickets" && req.method === "POST") {
+    const { email, subject, description, priority } = req.body || {};
+    if (!email || !subject) return res.status(400).json({ error: "email and subject required" });
+    // Stub: acknowledge ticket creation (no tickets table yet)
+    return res.json({
+      success: true,
+      ticket: {
+        id: `ticket-${Date.now()}`,
+        email,
+        subject,
+        description: description || "",
+        priority: priority || "normal",
+        status: "open",
+        created_at: new Date().toISOString(),
+      },
+    });
+  }
+
   return res.status(404).json({ error: "endpoint not found", path });
 }
