@@ -160,13 +160,19 @@ async function navigate(page: Page, route: string) {
     // Wait until we land on Dashboard
     await page.locator('h1:has-text("Dashboard")').first().waitFor({ timeout: 15000 });
 
-    // If the target is not '/', use client-side navigation (no full reload → no session loss)
+    // If the target is not '/', click the sidebar link (proper wouter client-side nav)
     if (route && route !== '/') {
-      await page.evaluate((r) => {
-        window.history.pushState({}, '', r);
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }, route);
-      await page.waitForTimeout(1000);
+      const sidebarLink = page.locator(`a[href="${route}"]`).first();
+      if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await sidebarLink.click();
+      } else {
+        // Fallback: evaluate-based navigation for routes not in sidebar
+        await page.evaluate((r) => {
+          window.history.pushState({}, '', r);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }, route);
+      }
+      await page.waitForTimeout(600);
     }
   }
 }
@@ -257,15 +263,9 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('3.1 add password entry', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/passwords');
-      // Use testid first; fall back to "Add Your First Password" empty-state button
-      const addBtn = page.getByTestId('add-password-button');
-      const firstPwBtn = page.locator('button:has-text("Add Your First Password")');
-      if (await addBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
-        await addBtn.click();
-      } else {
-        await firstPwBtn.waitFor({ timeout: 6000 });
-        await firstPwBtn.click();
-      }
+      // Wait for Passwords page to be ready, then click Add
+      await page.getByTestId('add-password-button').waitFor({ timeout: 10000 });
+      await page.getByTestId('add-password-button').click();
       await expect(
         page.locator('[role="dialog"]').filter({ hasText: /add new password/i }).first()
       ).toBeVisible({ timeout: 10000 });
