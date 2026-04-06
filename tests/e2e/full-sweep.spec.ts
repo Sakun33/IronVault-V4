@@ -353,9 +353,10 @@ test.describe.serial('IronVault Full Sweep', () => {
       if (await genBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await genBtn.click();
       } else {
-        const addBtn2 = page.getByTestId('add-password-button');
-        if (await addBtn2.isVisible({ timeout: 3000 }).catch(() => false)) await addBtn2.click();
-        else await page.locator('button:has-text("Add Your First Password")').first().click();
+        // Wait for page to be fully loaded, then click Add
+        const addBtn2 = page.getByTestId('add-password-button').first();
+        await addBtn2.waitFor({ timeout: 10000 });
+        await addBtn2.click();
         await page.waitForTimeout(500);
         const inModalGenBtn = page.locator('button:has-text("Generate")').first();
         if (await inModalGenBtn.isVisible({ timeout: 3000 }).catch(() => false)) await inModalGenBtn.click();
