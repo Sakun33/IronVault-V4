@@ -132,8 +132,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
-        ALTER TABLE ticket_replies ADD COLUMN IF NOT EXISTS author_type TEXT DEFAULT 'admin';
-        ALTER TABLE ticket_replies ADD COLUMN IF NOT EXISTS author_id TEXT DEFAULT 'admin';
+        DROP TABLE IF EXISTS ticket_replies;
+        CREATE TABLE IF NOT EXISTS ticket_replies (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+          author_type TEXT DEFAULT 'admin',
+          author_id TEXT DEFAULT 'admin',
+          message TEXT NOT NULL,
+          is_internal BOOLEAN DEFAULT false,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_ticket_replies_ticket_id ON ticket_replies(ticket_id);
       `);
       return res.json({ success: true, message: "Schema ready" });
     } catch (err: any) {
