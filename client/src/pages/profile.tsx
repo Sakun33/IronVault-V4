@@ -202,7 +202,10 @@ export default function Profile() {
   const [backupFileContent, setBackupFileContent] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [lastExportDate, setLastExportDate] = useState<Date | null>(null);
-  const [lastBackupDate, setLastBackupDate] = useState<Date | null>(null);
+  const [lastBackupDate, setLastBackupDate] = useState<Date | null>(() => {
+    const stored = localStorage.getItem('ironvault-last-backup-date');
+    return stored ? new Date(stored) : null;
+  });
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -448,7 +451,9 @@ export default function Profile() {
     try {
       const result = await vaultBackupService.exportBackup(backupPassword);
       if (result.success) {
-        setLastBackupDate(new Date());
+        const backupNow = new Date();
+        setLastBackupDate(backupNow);
+        localStorage.setItem('ironvault-last-backup-date', backupNow.toISOString());
         setShowBackupDialog(false);
         setBackupPassword('');
         setConfirmBackupPassword('');

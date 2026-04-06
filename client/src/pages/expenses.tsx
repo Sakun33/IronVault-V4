@@ -465,7 +465,7 @@ export default function Expenses() {
   const formatCurrencyLocal = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
     }).format(amount);
   };
 
@@ -477,7 +477,7 @@ export default function Expenses() {
         setFormData({
           title: '',
           amount: '',
-          currency: 'USD',
+          currency: currency,
           category: '',
           date: new Date().toISOString().split('T')[0],
           notes: '',
