@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'http';
 import express from 'express';
 import { registerRoutes } from '../server/routes';
 
@@ -22,7 +22,7 @@ async function getApp() {
   return app;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const expressApp = await getApp();
-  expressApp(req, res);
+  expressApp(req as any, res as any);
 }
