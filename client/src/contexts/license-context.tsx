@@ -1,19 +1,22 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { PricingService, LicenseInfo } from '@/lib/pricing';
 import { vaultStorage } from '@/lib/storage';
 import { billingService } from '@/billing/billing-service';
 import { isNativePlatform } from '@/billing/platform';
 import { ENTITLEMENT_IDS } from '@/billing/billing-types';
+import { getEntitlementStatus } from '@/lib/customer-registration';
 
 interface LicenseContextType {
   license: LicenseInfo;
   isLoading: boolean;
   upgradeLicense: (tier: 'pro' | 'lifetime', billingCycle: 'monthly' | 'yearly' | 'lifetime') => Promise<void>;
+  changePlan: (tier: 'free' | 'pro' | 'family' | 'lifetime') => Promise<void>;
   startTrial: () => Promise<boolean>;
   checkFeatureAccess: (feature: string) => boolean;
   checkLimit: (section: string, currentCount: number) => boolean;
   refreshLicense: () => Promise<void>;
   syncEntitlements: () => Promise<void>;
+  syncFromServer: () => Promise<void>;
   isTrialExpired: () => boolean;
 }
 
@@ -32,9 +35,14 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     setLicense(licenseToSave);
   };
 
+  const hasSyncedFromServer = useRef(false);
+
   useEffect(() => {
-    loadLicense();
-    
+    loadLicense().then(() => {
+      // After loading local license, sync from server to pick up admin changes
+      syncFromServer();
+    });
+
     if (isNativePlatform()) {
       syncEntitlements();
     }
@@ -116,6 +124,33 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const syncFromServer = async () => {
+    if (hasSyncedFromServer.current) return;
+    hasSyncedFromServer.current = true;
+
+    try {
+      const entitlement = await getEntitlementStatus();
+      if (!entitlement?.plan) return;
+
+      const serverPlan = entitlement.plan.toLowerCase() as 'free' | 'pro' | 'premium' | 'lifetime' | 'family';
+      // Normalize: server may store "premium" meaning "pro"
+      const normalizedPlan: 'free' | 'pro' | 'family' | 'lifetime' =
+        serverPlan === 'premium' ? 'pro' : (serverPlan as 'free' | 'pro' | 'family' | 'lifetime');
+
+      // Read current stored license to compare
+      const storedLicense = await vaultStorage.getPersistentData('license');
+      const currentTier = storedLicense?.tier || 'free';
+
+      if (normalizedPlan !== currentTier) {
+        console.log(`Server entitlement sync: ${currentTier} → ${normalizedPlan}`);
+        await changePlan(normalizedPlan);
+      }
+    } catch (e) {
+      // Silently fail — offline or no CRM registration is OK
+      console.log('Server entitlement sync skipped:', e);
+    }
+  };
+
   const startTrial = async (): Promise<boolean> => {
     try {
       setIsLoading(true);
@@ -189,6 +224,48 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       
     } catch (error) {
       console.error('Failed to upgrade license:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const changePlan = async (tier: 'free' | 'pro' | 'family' | 'lifetime') => {
+    try {
+      setIsLoading(true);
+
+      if (tier === 'free') {
+        const freeLicense = PricingService.getDefaultLicense();
+        await persistLicense(freeLicense);
+        return;
+      }
+
+      const paidFeatures = ['passwords', 'subscriptions', 'notes', 'expenses', 'reminders', 'bank_statements', 'investments', 'documents', 'scanner', 'cloud_backup', 'advanced_analytics'];
+      const familyExtra = ['priority_support', 'shared_vaults', 'family_dashboard'];
+
+      const newLicense: LicenseInfo = {
+        tier,
+        status: 'active',
+        startDate: new Date(),
+        billingCycle: tier === 'lifetime' ? 'lifetime' : 'monthly',
+        features: tier === 'family' ? [...paidFeatures, ...familyExtra] : tier === 'lifetime' ? [...paidFeatures, 'priority_support'] : paidFeatures,
+        limits: {
+          passwords: -1,
+          subscriptions: -1,
+          notes: -1,
+          expenses: -1,
+          reminders: -1,
+          bankStatements: -1,
+          investments: -1,
+          vaults: tier === 'family' ? 10 : 5,
+          documents: -1,
+        },
+        trialActive: false,
+      };
+
+      await persistLicense(newLicense);
+    } catch (error) {
+      console.error('Failed to change plan:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -297,11 +374,13 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     license,
     isLoading,
     upgradeLicense,
+    changePlan,
     startTrial,
     checkFeatureAccess,
     checkLimit,
     refreshLicense,
     syncEntitlements,
+    syncFromServer,
     isTrialExpired,
   };
 

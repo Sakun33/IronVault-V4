@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Filter, MoreVertical, RefreshCw, Mail, Calendar, Eye, ChevronLeft, ChevronRight, X, Download } from 'lucide-react';
+import { Search, Filter, MoreVertical, RefreshCw, Mail, Calendar, Eye, ChevronLeft, ChevronRight, X, Download, UserPlus } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
 interface Customer {
@@ -36,6 +38,7 @@ interface CustomersResponse {
 
 export default function CustomersPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
   const [search, setSearch] = useState(urlSearch);
@@ -43,6 +46,11 @@ export default function CustomersPage() {
   const [planFilter, setPlanFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '', email: '', phone: '', region: 'US', plan_name: 'Free', status: 'active',
+  });
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     if (urlSearch) setSearch(urlSearch);
@@ -71,6 +79,32 @@ export default function CustomersPage() {
 
   const customers = data?.customers || [];
   const pagination = data?.pagination || { page: 1, limit: 50, total: 0, pages: 0 };
+
+  const createMutation = useMutation({
+    mutationFn: async (form: typeof createForm) => {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+        },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create customer');
+      }
+      return res.json();
+    },
+    onSuccess: (newCustomer) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setShowCreateDialog(false);
+      setCreateForm({ name: '', email: '', phone: '', region: 'US', plan_name: 'Free', status: 'active' });
+      setCreateError('');
+      navigate(`/customers/${newCustomer.id}`);
+    },
+    onError: (err: Error) => setCreateError(err.message),
+  });
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { className: string; label: string }> = {
@@ -156,8 +190,82 @@ export default function CustomersPage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          <Button onClick={() => { setCreateError(''); setShowCreateDialog(true); }} size="default" className="shadow-sm hover:shadow-md transition-all">
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Customer
+          </Button>
         </div>
       </div>
+
+      {/* Create Customer Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Customer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="c-name">Name *</Label>
+                <Input id="c-name" placeholder="Jane Doe" value={createForm.name}
+                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-email">Email *</Label>
+                <Input id="c-email" type="email" placeholder="jane@example.com" value={createForm.email}
+                  onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-phone">Phone</Label>
+                <Input id="c-phone" placeholder="+1 555 0100" value={createForm.phone}
+                  onChange={e => setCreateForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="c-region">Region</Label>
+                <Input id="c-region" placeholder="US" value={createForm.region}
+                  onChange={e => setCreateForm(f => ({ ...f, region: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subscription Plan</Label>
+                <Select value={createForm.plan_name} onValueChange={v => setCreateForm(f => ({ ...f, plan_name: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Free">Free</SelectItem>
+                    <SelectItem value="Pro Monthly">Pro Monthly</SelectItem>
+                    <SelectItem value="Pro Yearly">Pro Yearly</SelectItem>
+                    <SelectItem value="Lifetime">Lifetime</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={createForm.status} onValueChange={v => setCreateForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button
+              disabled={createMutation.isPending || !createForm.name || !createForm.email}
+              onClick={() => createMutation.mutate(createForm)}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Customer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters Card */}
       <Card className="border shadow-sm">

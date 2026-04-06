@@ -111,16 +111,6 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check if locked out
-    if (lockoutState.isLocked) {
-      toast({
-        title: "Account Locked",
-        description: `Too many failed attempts. Try again in ${lockoutDisplay}`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
     if (!masterPassword) {
       toast({
         title: "Error",
@@ -172,34 +162,16 @@ export default function Login() {
           });
         }
       } else {
-        // No vault matched - record failed attempt
-        const triggeredLockout = await vaultManager.recordFailedAttempt();
-        await updateLockoutState();
-        
-        const attempts = lockoutState.failedAttempts + 1;
-        
-        if (triggeredLockout) {
-          toast({
-            title: "Account Locked",
-            description: "Too many failed attempts. Account locked for 1 hour.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Authentication Failed",
-            description: `Incorrect password (attempt ${Math.min(attempts, MAX_FAILED_ATTEMPTS)}/${MAX_FAILED_ATTEMPTS})`,
-            variant: "destructive",
-          });
-        }
+        // No vault matched
+        toast({
+          title: "Authentication Failed",
+          description: "Incorrect password. Please try again.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('🔐 Login error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      
-      // Check if error is due to lockout
-      if (errorMessage.includes('locked')) {
-        await updateLockoutState();
-      }
       
       toast({
         title: "Login Error",
@@ -258,9 +230,9 @@ export default function Login() {
       return;
     }
 
-    // Check vault limit
+    // Check vault limit (always allow the first vault)
     const count = vaultManager.getVaultCount();
-    if (count.current >= count.max) {
+    if (count.current > 0 && count.current >= count.max) {
       toast({
         title: "Vault Limit Reached",
         description: `You can only have ${count.max} vault(s). Upgrade to Premium for up to 5 vaults.`,
@@ -572,7 +544,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-start sm:justify-center gradient-mesh px-4 py-6 sm:py-8 overflow-y-auto" data-testid="login-page">
+    <div className="w-full min-h-screen flex flex-col items-center justify-start gradient-mesh px-4 py-8 pb-12" data-testid="login-page">
       {/* Customer Info Dialog (First Vault) */}
       <CustomerInfoDialog
         open={showCustomerInfoDialog}
@@ -665,27 +637,6 @@ export default function Login() {
           </Alert>
         )}
 
-        {/* Lockout Warning */}
-        {lockoutState.isLocked && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>Account locked due to too many failed attempts. Try again in <strong>{lockoutDisplay}</strong></span>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Failed Attempts Warning */}
-        {!lockoutState.isLocked && lockoutState.failedAttempts > 0 && (
-          <Alert className="mb-4 border-yellow-500/30 bg-yellow-500/5">
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-sm text-foreground">
-              Failed attempts: {lockoutState.failedAttempts}/{MAX_FAILED_ATTEMPTS}. Account will be locked for 1 hour after {MAX_FAILED_ATTEMPTS} failed attempts.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Login/Create Vault Form */}
         <Card className="shadow-xl border-border/50 backdrop-blur-sm bg-card/90">
           <CardContent className="pt-6">
@@ -702,7 +653,7 @@ export default function Login() {
                     placeholder={isCreatingVault ? 'Create a strong master password' : 'Enter your master password'}
                     value={masterPassword}
                     onChange={(e) => setMasterPassword(e.target.value)}
-                    disabled={lockoutState.isLocked || isLoading}
+                    disabled={isLoading}
                     data-testid={isCreatingVault ? "input-create-password" : "input-unlock-password"}
                   />
                   <Button
@@ -774,17 +725,17 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || lockoutState.isLocked}
+                disabled={isLoading}
                 data-testid={isCreatingVault ? "button-create-vault" : "button-unlock-vault"}
               >
-                {lockoutState.isLocked ? `Locked (${lockoutDisplay})` : (isLoading ? 'Processing...' : (isCreatingVault ? 'Create Vault' : 'Unlock Vault'))}
+                {isLoading ? 'Processing...' : (isCreatingVault ? 'Create Vault' : 'Unlock Vault')}
               </Button>
             </form>
 
             {!isCreatingVault && (
               <>
                 {/* Reset Vault Option - Show when vault exists OR when there's lockout state to clear */}
-                {(vaultExists || vaultCount.current > 0 || lockoutState.failedAttempts > 0 || lockoutState.isLocked) && (
+                {(vaultExists || vaultCount.current > 0) && (
                   <div className="mt-4 pt-4 border-t border-border">
                     <div className="text-center">
                       <p className="text-sm text-muted-foreground mb-2">

@@ -8,7 +8,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { DocumentMeta, StorageMode, MAX_FILE_SIZE_IDB } from './types';
 
-const DB_NAME = 'subsafe_documents';
+const DB_NAME = 'ironvault_documents';
 const DB_VERSION = 1;
 const STORE_META = 'document_meta';
 const STORE_BLOBS = 'document_blobs';

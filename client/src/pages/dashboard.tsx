@@ -310,8 +310,29 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Onboarding CTA for new users */}
+        {stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && (
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 flex flex-col md:flex-row items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h3 className="font-semibold text-foreground mb-1">Welcome to IronVault!</h3>
+              <p className="text-sm text-muted-foreground">Your vault is ready. Start by adding a password, tracking a subscription, or creating a note.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Link href="/passwords">
+                <Button size="sm" className="rounded-xl">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Password
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
           <StatCard 
             icon={Lock} 
             label="Total Passwords" 
@@ -341,7 +362,7 @@ export default function Dashboard() {
         {/* Quick Access Sections */}
         <div>
           <h2 className="text-lg font-semibold text-foreground mb-4">Quick Access</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/passwords">
               <SectionCard 
                 icon={Lock} 

@@ -51,8 +51,8 @@ export interface AppSettings {
 // Constants
 const VAULT_INDEX_DB_NAME = 'IronVault-Index';
 const VAULT_INDEX_VERSION = 1;
-const LOCKOUT_DURATION_MS = 60 * 60 * 1000; // 1 hour
-const MAX_FAILED_ATTEMPTS = 3;
+const LOCKOUT_DURATION_MS = 0; // Lockout disabled
+const MAX_FAILED_ATTEMPTS = Infinity; // Lockout disabled
 const PASSWORD_VERIFICATION_STRING = 'IRONVAULT_PASSWORD_VERIFICATION_V1';
 
 export class VaultIndex {
@@ -388,20 +388,8 @@ export class VaultIndex {
    * Returns true if lockout was triggered
    */
   async recordFailedAttempt(): Promise<boolean> {
-    const state = await this.getSecurityState();
-    
-    state.failedAttempts++;
-    state.lastFailedAt = Date.now();
-
-    console.warn(`⚠️ Failed attempt ${state.failedAttempts}/${MAX_FAILED_ATTEMPTS}`);
-
-    if (state.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-      state.lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
-      console.error('🔒 Account locked for 1 hour due to too many failed attempts');
-    }
-
-    await this.saveSecurityState(state);
-    return state.failedAttempts >= MAX_FAILED_ATTEMPTS;
+    // Lockout disabled - never trigger lockout
+    return false;
   }
 
   /**
@@ -420,29 +408,16 @@ export class VaultIndex {
    * Check if currently locked out
    */
   async isLockedOut(): Promise<boolean> {
-    const state = await this.getSecurityState();
-    
-    if (!state.lockoutUntil) return false;
-    
-    if (Date.now() >= state.lockoutUntil) {
-      // Lockout expired, reset
-      await this.resetFailedAttempts();
-      return false;
-    }
-    
-    return true;
+    // Lockout disabled
+    return false;
   }
 
   /**
    * Get remaining lockout time in milliseconds
    */
   async getLockoutTimeRemaining(): Promise<number> {
-    const state = await this.getSecurityState();
-    
-    if (!state.lockoutUntil) return 0;
-    
-    const remaining = state.lockoutUntil - Date.now();
-    return Math.max(0, remaining);
+    // Lockout disabled
+    return 0;
   }
 
   /**

@@ -485,6 +485,36 @@ app.put('/api/customers/:id', authenticateToken, (req, res) => {
   }
 });
 
+// Create customer
+app.post('/api/customers', authenticateToken, (req, res) => {
+  try {
+    const { name, email, phone, region, plan_name, status } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+    const newCustomer: Customer = {
+      id: customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 1,
+      name,
+      email,
+      phone: phone || '',
+      region: region || 'US',
+      plan_name: plan_name || 'Free',
+      status: status || 'active',
+      created_at: new Date().toISOString(),
+      last_active: new Date().toISOString(),
+      total_spent: 0,
+      vault_created: false,
+      source: 'admin',
+    };
+    customers.push(newCustomer);
+    saveData();
+    res.status(201).json(newCustomer);
+  } catch (error) {
+    console.error('Create customer error:', error);
+    res.status(500).json({ error: 'Failed to create customer' });
+  }
+});
+
 // ====================================
 // PLANS ENDPOINTS
 // ====================================

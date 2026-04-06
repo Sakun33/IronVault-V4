@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,6 +20,7 @@ import { format } from 'date-fns';
 export default function Passwords() {
   const { passwords, deletePassword, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
+  const { getLimit } = useSubscription();
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPassword, setEditingPassword] = useState<any>(null);
@@ -198,6 +200,10 @@ export default function Passwords() {
             </Button>
             <Button
               onClick={() => {
+                if (passwords.length >= getLimit('passwords')) {
+                  toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                  return;
+                }
                 setEditingPassword(null);
                 setShowAddModal(true);
               }}
@@ -353,7 +359,13 @@ export default function Passwords() {
               <h3 className="text-lg font-semibold text-foreground mb-2">No passwords yet</h3>
               <p className="text-muted-foreground mb-6">Get started by adding your first password entry</p>
               <Button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => {
+                  if (passwords.length >= getLimit('passwords')) {
+                    toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                    return;
+                  }
+                  setShowAddModal(true);
+                }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 py-3"
               >
                 <Plus className="w-4 h-4 mr-2" />

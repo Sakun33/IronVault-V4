@@ -1,4 +1,4 @@
-package com.subsafe.app;
+package com.ironvault.app;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

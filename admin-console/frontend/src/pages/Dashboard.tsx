@@ -127,7 +127,7 @@ export default function Dashboard() {
     if (!analytics?.planStats) return [];
     
     const planStats = analytics.planStats;
-    const total = Object.values(planStats).reduce((sum: number, count: any) => sum + (Number(count) || 0), 0 as number);
+    const total: number = Object.values(planStats).reduce((sum: number, count: any) => sum + (Number(count) || 0), 0) as number;
     
     if (total === 0) return [];
     

@@ -1,4 +1,4 @@
-package com.subsafe.app;
+package com.ironvault.app;
 
 import android.view.WindowManager;
 import com.getcapacitor.Plugin;

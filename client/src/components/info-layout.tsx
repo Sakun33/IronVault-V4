@@ -39,7 +39,6 @@ export function InfoLayout({ children, title }: InfoLayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Badge className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5">BETA</Badge>
               {isUnlocked ? (
                 <Link href="/">
                   <Button variant="ghost" size="icon" className="h-8 w-8">

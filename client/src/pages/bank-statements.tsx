@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +40,9 @@ import {
 } from '@shared/schema';
 
 export default function BankStatements() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('bankStatements')) return <UpgradeGate feature="Bank Statements" />;
+
   const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV } = useVault();
   const { formatCurrency } = useCurrency();
   const { addLog } = useLogging();

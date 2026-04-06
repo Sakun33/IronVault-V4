@@ -43,7 +43,7 @@ export interface SubscriptionPlan {
 }
 
 export interface LicenseInfo {
-  tier: 'free' | 'pro' | 'monthly' | 'yearly' | 'lifetime';
+  tier: 'free' | 'pro' | 'family' | 'monthly' | 'yearly' | 'lifetime';
   status: 'active' | 'expired' | 'cancelled' | 'trial';
   startDate: Date;
   endDate?: Date;

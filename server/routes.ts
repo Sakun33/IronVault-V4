@@ -446,6 +446,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: update user's entitlement/plan by email
+  app.post("/api/crm/admin/set-plan", async (req, res) => {
+    try {
+      const { email, plan } = req.body;
+      if (!email || !plan) {
+        return res.status(400).json({ success: false, message: "email and plan required" });
+      }
+
+      const validPlans = ["free", "pro", "premium", "lifetime", "family"];
+      if (!validPlans.includes(plan.toLowerCase())) {
+        return res.status(400).json({ success: false, message: `Invalid plan. Must be one of: ${validPlans.join(", ")}` });
+      }
+
+      const crmUser = await storage.getCrmUserByEmail(email);
+      if (!crmUser) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      const existing = await storage.getEntitlement(crmUser.id);
+      if (existing) {
+        await storage.updateEntitlement(crmUser.id, {
+          plan: plan.toLowerCase(),
+          status: "active",
+        });
+      } else {
+        await storage.createEntitlement({
+          userId: crmUser.id,
+          plan: plan.toLowerCase(),
+          status: "active",
+          trialActive: false,
+        });
+      }
+
+      const updated = await storage.getEntitlement(crmUser.id);
+      res.json({
+        success: true,
+        message: `Plan updated to ${plan} for ${email}`,
+        entitlement: {
+          plan: updated?.plan,
+          status: updated?.status,
+        },
+      });
+    } catch (error) {
+      console.error("Admin set-plan error:", error);
+      res.status(500).json({ success: false, message: "Failed to update plan" });
+    }
+  });
+
   // Update user's last active time
   app.post("/api/crm/heartbeat", async (req, res) => {
     try {

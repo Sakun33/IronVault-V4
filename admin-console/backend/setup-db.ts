@@ -168,7 +168,7 @@ async function setupDatabase() {
       INSERT INTO admins (username, email, password_hash, role, is_active)
       VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (username) DO UPDATE SET password_hash = $3
-    `, ['admin', 'admin@subsafe.app', passwordHash, 'super_admin', true]);
+    `, ['admin', 'admin@ironvault.app', passwordHash, 'super_admin', true]);
     console.log('✅ Admin user created (username: admin, password: admin123)');
 
     // Insert plans

@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +20,9 @@ import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { format, addDays, differenceInCalendarDays } from 'date-fns';
 
 export default function Subscriptions() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('subscriptions')) return <UpgradeGate feature="Subscription Tracker" />;
+
   const { subscriptions, deleteSubscription, searchQuery, setSearchQuery, stats } = useVault();
   const { formatCurrency, currency } = useCurrency();
   const { toast } = useToast();

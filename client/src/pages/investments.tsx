@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +50,9 @@ import { AddInvestmentModal } from '@/components/add-investment-modal';
 import { EditInvestmentModal } from '@/components/edit-investment-modal';
 
 export default function Investments() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('investments')) return <UpgradeGate feature="Investments" />;
+
   const [, setLocation] = useLocation();
   const vaultContext = useVault();
   const currencyContext = useCurrency();

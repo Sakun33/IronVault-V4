@@ -85,6 +85,7 @@ import { PricingService, PricingTier, LicenseInfo } from '@/lib/pricing';
 import { PricingUpgrade } from '@/components/pricing-upgrade';
 import { checkBiometricCapabilities, enableBiometricUnlock, disableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore } from '@/native/biometrics';
 import { useAuth } from '@/contexts/auth-context';
+import { useLicense } from '@/contexts/license-context';
 import { useLocation } from 'wouter';
 import { CryptoService } from '@/lib/crypto';
 import { VaultManagementSection } from '@/components/vault-management-section';
@@ -161,6 +162,7 @@ export default function Profile() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<string>('fingerprint');
   const { masterPassword } = useAuth();
+  const { changePlan } = useLicense();
   const [, setLocation] = useLocation();
   
   // 2FA persistent state
@@ -594,6 +596,11 @@ export default function Profile() {
               cp.subscription = planName;
               localStorage.setItem('customerProfile', JSON.stringify(cp));
             } catch (_) {}
+          }
+          // Sync to license context so feature gates update immediately
+          const normalized = planName === 'premium' ? 'pro' : planName;
+          if (['free', 'pro', 'family', 'lifetime'].includes(normalized)) {
+            changePlan(normalized as 'free' | 'pro' | 'family' | 'lifetime').catch(() => {});
           }
         }
       })

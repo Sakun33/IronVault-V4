@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Mail, User, Sparkles, Phone, Globe, Crown, Zap, Infinity, Shield, Clock, Bell } from 'lucide-react';
+import { Mail, User, Sparkles, Phone, Globe, Crown, Zap, Infinity, Shield } from 'lucide-react';
 
 const COUNTRIES = [
   { code: 'US', name: 'United States', phoneCode: '+1' },
@@ -40,32 +40,26 @@ const SUBSCRIPTION_PLANS = [
     color: 'text-green-600',
     bgColor: 'bg-green-50 dark:bg-green-950',
     borderColor: 'border-green-200 dark:border-green-700',
-    trial: false,
-    available: true,
   },
   {
     id: 'pro',
     name: 'Pro',
     description: 'Unlimited storage with monthly or yearly billing',
-    price: 'Coming Soon',
+    price: '₹149/mo',
     icon: Crown,
     color: 'text-blue-400',
     bgColor: 'bg-blue-50/50 dark:bg-blue-950/30',
     borderColor: 'border-blue-100 dark:border-blue-900',
-    trial: false,
-    available: false,
   },
   {
     id: 'lifetime',
     name: 'Lifetime',
     description: 'One-time payment, lifetime access',
-    price: 'Coming Soon',
+    price: '₹9,999',
     icon: Infinity,
     color: 'text-amber-400',
     bgColor: 'bg-amber-50/50 dark:bg-amber-950/30',
     borderColor: 'border-amber-100 dark:border-amber-900',
-    trial: false,
-    available: false,
   },
 ];
 
@@ -251,30 +245,25 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
             <div className="grid grid-cols-1 gap-2">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const Icon = plan.icon;
-                const isSelected = plan.id === 'free';
-                const isAvailable = plan.available;
+                const isSelected = selectedPlan === plan.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={plan.id}
+                    onClick={() => setSelectedPlan(plan.id)}
                     className={`relative p-3 rounded-lg border-2 transition-all text-left ${
                       isSelected
                         ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-2 ring-green-500`
-                        : `${plan.borderColor} ${plan.bgColor} opacity-60`
+                        : `${plan.borderColor} ${plan.bgColor} hover:opacity-90`
                     }`}
                   >
-                    {!isAvailable && (
-                      <div className="absolute -top-2 right-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Coming Soon
-                      </div>
-                    )}
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-lg ${plan.bgColor}`}>
                         <Icon className={`w-5 h-5 ${plan.color}`} />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h4 className={`font-semibold text-sm ${!isAvailable ? 'text-muted-foreground' : ''}`}>{plan.name}</h4>
+                          <h4 className="font-semibold text-sm">{plan.name}</h4>
                           <span className={`text-sm font-bold ${plan.color}`}>{plan.price}</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
@@ -282,13 +271,13 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
                           <div className="mt-1.5 flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-green-600" />
                             <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                              Active plan
+                              Selected
                             </span>
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

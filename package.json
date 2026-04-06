@@ -10,7 +10,7 @@
     "admin-console/backend"
   ],
   "scripts": {
-    "dev": "node server/index.ts",
+    "dev": "tsx server/index.ts",
     "build": "vite build",
     "build:prod": "NODE_ENV=production vite build",
     "preview": "vite preview",

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { useVault } from '@/contexts/vault-context';
 import { useCurrency } from '@/contexts/currency-context';
 import { ExpenseEntry, EXPENSE_CATEGORIES } from '@shared/schema';
@@ -46,6 +48,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#f97316', '#6b7280'];
 
 export default function Expenses() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('expenses')) return <UpgradeGate feature="Expense Tracking" />;
   const { expenses, addExpense, updateExpense, deleteExpense, searchQuery, setSearchQuery } = useVault();
   const { formatCurrency, currency, currencies } = useCurrency();
   const { toast } = useToast();

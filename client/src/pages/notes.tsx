@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
 import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
@@ -157,6 +158,7 @@ const EnhancedMarkdown = ({ content }: { content: string }) => {
 export default function Notes() {
   const { notes, addNote, updateNote, deleteNote, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
+  const { getLimit } = useSubscription();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [viewingNote, setViewingNote] = useState<NoteEntry | null>(null);
@@ -726,6 +728,10 @@ export default function Notes() {
             Templates
           </Button>
           <Button size="sm" onClick={() => {
+            if (notes.length >= getLimit('notes')) {
+              toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('notes')} notes. Upgrade to Pro for unlimited.`, variant: "destructive" });
+              return;
+            }
             setFormData({
               title: '',
               content: '',

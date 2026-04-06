@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -151,6 +153,9 @@ const GOAL_TEMPLATES = [
 ];
 
 export default function Goals() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('investments')) return <UpgradeGate feature="Goals & Investments" />;
+
   const [, setLocation] = useLocation();
   
   // Goal Templates - Expanded with more options

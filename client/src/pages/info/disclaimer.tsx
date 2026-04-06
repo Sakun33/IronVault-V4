@@ -42,19 +42,18 @@ export default function DisclaimerPage() {
           </CardContent>
         </Card>
 
-        {/* Beta Software Disclaimer */}
+        {/* Software Disclaimer */}
         <Card>
           <CardHeader>
-            <CardTitle>Beta Software Disclaimer</CardTitle>
+            <CardTitle>Software Disclaimer</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-muted-foreground">
-              IronVault is currently in BETA testing phase. This means:
+              As with any software, users should be aware that:
             </p>
             <ul className="space-y-2 text-sm text-muted-foreground ml-4">
-              <li>• The software may contain bugs, errors, or other problems</li>
-              <li>• Features may be incomplete, unstable, or subject to change</li>
-              <li>• There may be unexpected behavior or data loss</li>
+              <li>• The software may contain bugs or errors that are actively being fixed</li>
+              <li>• Features may be added, improved, or changed in future updates</li>
               <li>• The Service may be modified or discontinued at any time</li>
               <li>• Regular backups of your data are strongly recommended</li>
             </ul>

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useLicense } from '@/contexts/license-context';
 import { useToast } from '@/hooks/use-toast';
-import { Crown, Shield, RotateCcw, ExternalLink, AlertCircle, RefreshCcw, Check, Clock, Bell } from 'lucide-react';
+import { Crown, Shield, RotateCcw, ExternalLink, AlertCircle, RefreshCcw, Check, Clock } from 'lucide-react';
 import { useBillingPackages, usePurchase } from '@/billing/useBilling';
 import { isNativePlatform, getStoreName, getPlatform } from '@/billing/platform';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -26,7 +26,7 @@ type PaywallState = 'loading' | 'error' | 'ready' | 'purchasing' | 'entitled';
 type PlanTier = 'pro' | 'lifetime';
 
 export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
-  const { license, syncEntitlements } = useLicense();
+  const { license, syncEntitlements, changePlan } = useLicense();
   const { toast } = useToast();
   const [billingCycle, setBillingCycle] = useState<ProCycle>('yearly');
   const [selectedTier, setSelectedTier] = useState<PlanTier>('pro');
@@ -293,22 +293,40 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
             </div>
           )}
 
-          {/* Web Platform Notice - Coming Soon */}
+          {/* Web Platform — Local Plan Activation */}
           {!isNative && !hasProEntitlement && (
-            <div className="text-center space-y-4 py-4">
-              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-                <Bell className="w-10 h-10 text-primary" />
+            <div className="space-y-4 py-4">
+              <p className="text-center text-muted-foreground text-sm">
+                Select a plan to activate it. Stripe/RevenueCat billing coming soon.
+              </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col items-center gap-2 border-primary"
+                  onClick={async () => {
+                    await changePlan('pro');
+                    toast({ title: 'Upgraded to Pro!', description: 'All Pro features unlocked.' });
+                    onClose();
+                  }}
+                >
+                  <Crown className="w-6 h-6 text-primary" />
+                  <span className="font-semibold">Activate Pro</span>
+                  <span className="text-xs text-muted-foreground">Unlimited everything</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col items-center gap-2 border-purple-500"
+                  onClick={async () => {
+                    await changePlan('lifetime');
+                    toast({ title: 'Lifetime Access Activated!', description: 'All features unlocked forever.' });
+                    onClose();
+                  }}
+                >
+                  <Shield className="w-6 h-6 text-purple-500" />
+                  <span className="font-semibold">Activate Lifetime</span>
+                  <span className="text-xs text-muted-foreground">Pay once, use forever</span>
+                </Button>
               </div>
-              <h3 className="text-xl font-bold text-foreground">Paid Plans Coming Soon!</h3>
-              <p className="text-muted-foreground">
-                Pro and Lifetime plans are coming soon. For now, enjoy the <strong>Free plan</strong> with 50 passwords, 10 subscriptions, 10 notes, 10 reminders, and 5 documents.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Stay tuned — we'll notify you when premium plans are available!
-              </p>
-              <Button onClick={onClose} className="w-full rounded-xl py-3 mt-2">
-                Got it!
-              </Button>
             </div>
           )}
 

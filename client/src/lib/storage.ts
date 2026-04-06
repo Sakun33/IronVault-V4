@@ -178,11 +178,8 @@ export class VaultStorage {
   }
 
   isLockedOut(): boolean {
-    if (this.failedAttempts < this.maxFailedAttempts) return false;
-    const timeSinceLastAttempt = Date.now() - this.lastFailedAttempt;
-    // 1 hour lockout instead of 5 minutes
-    const oneHour = 60 * 60 * 1000;
-    return timeSinceLastAttempt < oneHour;
+    // Lockout disabled
+    return false;
   }
 
   getLockoutTimeRemaining(): number {
@@ -317,13 +314,6 @@ export class VaultStorage {
   // Unlock vault with master password
   async unlockVault(masterPassword: string): Promise<boolean> {
     if (!this.db) throw new Error('Database not initialized');
-
-    // Check if locked out due to failed attempts
-    if (this.isLockedOut()) {
-      const remainingTime = this.getLockoutTimeRemaining();
-      const minutes = Math.ceil(remainingTime / (60 * 1000));
-      throw new Error(`Account locked due to too many failed attempts. Please wait ${minutes} minutes before trying again.`);
-    }
 
     try {
       const metadata = await this.getMetadata();

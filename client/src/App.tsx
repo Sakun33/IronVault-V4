@@ -1,4 +1,5 @@
 import { Switch, Route, Link, useLocation } from "wouter";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,6 +11,7 @@ import { LoggingProvider } from "@/contexts/logging-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider } from "@/contexts/vault-selection-context";
+import { useSubscription } from "@/hooks/use-subscription";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -35,11 +37,12 @@ import PrivacyPage from "@/pages/info/privacy";
 import TermsPage from "@/pages/info/terms";
 import DisclaimerPage from "@/pages/info/disclaimer";
 import PricingPage from "@/pages/info/pricing";
+import UpgradePage from "@/pages/pricing";
 import QAPage from "@/pages/qa";
 import VaultsPage from "@/pages/vaults";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -61,6 +64,7 @@ import { Footer } from "@/components/footer";
 function MainLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const { searchQuery, setSearchQuery, stats } = useVault();
+  const { getLimit } = useSubscription();
   const [, setLocation] = useLocation();
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
@@ -109,11 +113,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, color: 'text-primary' },
-    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, color: 'text-violet-600' },
-    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, color: 'text-primary' },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, color: 'text-purple-600' },
-    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, color: 'text-orange-600' },
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary' },
+    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600' },
+    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary' },
+    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600' },
+    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600' },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600' },
     { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600' },
     { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600' },
@@ -123,6 +127,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'profile', label: 'Profile', icon: User, count: null, color: 'text-primary' },
     { id: 'logging', label: 'Activity Logs', icon: FileText, count: null, color: 'text-muted-foreground' },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, count: null, color: 'text-muted-foreground' },
+    { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary' },
   ];
 
   // Core sections for bottom navigation (only 4 most used)
@@ -156,7 +161,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden w-full max-w-full">
+    <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
       {/* Mobile Header - Glassmorphism */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5 overflow-hidden">
         <div className="flex items-center justify-between max-w-full h-11">
@@ -196,13 +201,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       <div className="lg:hidden h-[calc(env(safe-area-inset-top)+44px)]" />
 
       {/* Desktop Header - Glassmorphism */}
-      <header className="hidden lg:block bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
+      <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <AppLogo size={36} />
             <div className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold tracking-tight text-foreground">IronVault</h1>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded-full uppercase tracking-wider">Beta</span>
             </div>
           </div>
 
@@ -254,8 +258,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   <SettingsIcon className="w-5 h-5" />
                 </Button>
               }
-              onSettingsChanged={(kdfConfig) => {
-                console.log('Security settings updated:', kdfConfig);
+              onSettingsChanged={(_kdfConfig) => {
               }}
             />
 
@@ -372,8 +375,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex min-h-[calc(100dvh-65px)]">
-        <nav className="w-60 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 space-y-1 overflow-y-auto">
+      <div className="hidden lg:flex flex-1 overflow-hidden">
+        <nav className="w-60 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 space-y-1 overflow-y-auto h-full">
           <div className="space-y-0.5">
             {navItems.map((item) => (
               <Link key={item.id} href={item.id === 'dashboard' ? '/' : `/${item.id}`}>
@@ -383,7 +386,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
-                  {item.count !== null && (
+                  {'limitLabel' in item && item.limitLabel !== null ? (
+                    <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                      {item.limitLabel}
+                    </span>
+                  ) : item.count !== null && (
                     <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                       {item.count > 99 ? '99+' : item.count}
                     </span>
@@ -395,8 +402,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 gradient-mesh flex flex-col">
-          <div className="p-6 flex-1 min-w-0 overflow-x-hidden animate-fade-in">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
+          <div className="p-6 flex-1 min-w-0 animate-fade-in">
             <AnalyticsIntegration>
               {children}
             </AnalyticsIntegration>
@@ -406,7 +413,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Main Content — no footer on mobile (BottomTabs replace it) */}
-      <main className="lg:hidden w-full max-w-full gradient-mesh flex flex-col overflow-x-hidden">
+      <main className="lg:hidden flex-1 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
         <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden animate-fade-in">
           <AnalyticsIntegration>
             {children}
@@ -559,6 +566,11 @@ function Router() {
       <Route path="/disclaimer" component={DisclaimerPage} />
       <Route path="/cookies" component={PrivacyPage} />
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/upgrade" component={() => (
+        <MainLayout>
+          <UpgradePage />
+        </MainLayout>
+      )} />
       <Route path="/roadmap" component={AboutPage} />
       <Route path="/blog" component={AboutPage} />
       <Route path="/api" component={AboutPage} />
@@ -578,8 +590,8 @@ function App() {
     }
   }, []);
 
-  try {
-    return (
+  return (
+    <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ThemeProvider>
@@ -603,11 +615,8 @@ function App() {
           </ThemeProvider>
         </TooltipProvider>
       </QueryClientProvider>
-    );
-  } catch (error) {
-    console.error('Error rendering App component:', error);
-    return <div>Error loading app: {String(error)}</div>;
-  }
+    </ErrorBoundary>
+  );
 }
 
 export default App;

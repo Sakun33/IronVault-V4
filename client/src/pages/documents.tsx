@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -223,6 +225,9 @@ const mockDocuments: Document[] = [
 ];
 
 export default function Documents() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('documents')) return <UpgradeGate feature="Documents Vault" />;
+
   const { stats } = useVault();
   const { toast } = useToast();
   const { masterPassword } = useAuth();

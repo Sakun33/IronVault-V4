@@ -15,7 +15,6 @@ export default function AboutPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-4xl font-bold text-foreground">IronVault</h1>
-              <span className="px-3 py-1 text-sm font-bold bg-primary text-primary-foreground rounded-full">BETA</span>
             </div>
           </div>
         </div>
@@ -114,8 +113,8 @@ export default function AboutPage() {
           </p>
           <p className="text-muted-foreground">
             Development began in early 2024, with a clear vision: create a password manager that stores everything locally, 
-            uses state-of-the-art encryption, and gives users complete control over their data. Today, IronVault is in BETA, 
-            continuously evolving based on user feedback and emerging security best practices.
+            uses state-of-the-art encryption, and gives users complete control over their data. IronVault continues
+            to evolve based on user feedback and emerging security best practices.
           </p>
         </CardContent>
       </Card>
@@ -193,7 +192,7 @@ export default function AboutPage() {
               <div className="text-sm text-muted-foreground">Privacy Focused</div>
             </div>
             <div className="text-center p-4 bg-muted rounded-lg">
-              <div className="text-3xl font-bold text-primary mb-1">BETA</div>
+              <div className="text-3xl font-bold text-primary mb-1">v1.0</div>
               <div className="text-sm text-muted-foreground">Active Development</div>
             </div>
           </div>

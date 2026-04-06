@@ -10,13 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Settings, 
-  Shield, 
-  Bell, 
-  Database, 
-  Download, 
-  Upload, 
+import {
+  Settings,
+  Shield,
+  Bell,
+  Database,
+  Download,
+  Upload,
   LifeBuoy,
   BarChart3,
   Cloud,
@@ -28,12 +28,18 @@ import {
   AlertTriangle,
   CheckCircle,
   Info,
-  RefreshCw
+  RefreshCw,
+  Palette,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import SupportTicketSubmission from '@/components/support-ticket-submission';
 import { useAnalytics } from '@/components/analytics-integration';
 import { vaultBackupService } from '@/lib/vault-backup';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from '@/contexts/theme-context';
+import ThemeSelector from '@/components/theme-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function SettingsPage() {
@@ -52,6 +58,7 @@ export default function SettingsPage() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const { getAnalyticsSummary, getSupportTicketStats, isAnalyticsEnabled } = useAnalytics();
 
   // Load sync settings
@@ -244,6 +251,43 @@ export default function SettingsPage() {
           Manage your IronVault preferences and privacy settings
         </p>
       </div>
+
+      {/* Theme */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Palette className="w-5 h-5" />
+            Theme
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <ThemeSelector />
+
+          <Separator />
+
+          <div>
+            <Label className="text-sm font-medium mb-3 block">Appearance</Label>
+            <div className="flex gap-2">
+              {([
+                { value: 'light' as const, icon: Sun, label: 'Light' },
+                { value: 'dark' as const, icon: Moon, label: 'Dark' },
+                { value: 'system' as const, icon: Monitor, label: 'System' },
+              ] as const).map(({ value, icon: Icon, label }) => (
+                <Button
+                  key={value}
+                  variant={theme === value ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={() => setTheme(value)}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Privacy & Analytics */}
       <Card>

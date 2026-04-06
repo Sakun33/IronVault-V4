@@ -166,19 +166,15 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* BETA Notice */}
+        {/* Pricing Note */}
         <Card className="bg-primary/10 border-primary/30">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
               <Shield className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
-                  Currently in BETA - Free for All Users
+                  Simple, Transparent Pricing
                 </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  IronVault is currently in BETA testing. All features, including Pro and Enterprise features, 
-                  are available for free during the BETA period. Pricing will be introduced once we exit BETA.
-                </p>
                 <p className="text-xs text-muted-foreground italic">
                   * Prices shown are estimates and will be converted to your local currency at market exchange rates when payment is processed.
                 </p>
@@ -254,7 +250,7 @@ export default function PricingPage() {
                     className={`w-full mb-6 ${colors.button} text-primary-foreground`}
                     size="lg"
                   >
-                    {plan.name === "Enterprise" ? "Contact Sales" : plan.name === "Pro" ? "Coming Soon" : "Get Started Free"}
+                    {plan.name === "Enterprise" ? "Contact Sales" : plan.name === "Pro" ? "Upgrade to Pro" : "Get Started Free"}
                   </Button>
                   
                   <div className="space-y-3">
@@ -288,8 +284,7 @@ export default function PricingPage() {
                 When will pricing take effect?
               </h4>
               <p className="text-sm text-muted-foreground">
-                IronVault is currently in BETA, and all features are free. We'll announce pricing details well in 
-                advance before exiting BETA. Early adopters will receive special pricing benefits.
+                Pricing details are displayed in the app before any purchase. Early adopters receive special pricing benefits.
               </p>
             </div>
 

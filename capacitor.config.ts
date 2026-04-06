@@ -18,7 +18,7 @@ const config: CapacitorConfig = {
   },
   server: isDev ? {
     url: process.env.CAPACITOR_SERVER_URL,
-    cleartext: false,
+    cleartext: true,
     iosScheme: 'capacitor',
     androidScheme: 'https',
   } : {

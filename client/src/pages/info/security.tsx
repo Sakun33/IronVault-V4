@@ -356,7 +356,7 @@ export default function SecurityPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-foreground">
-              IronVault is currently in BETA and undergoing continuous security review. We follow industry best practices 
+              IronVault undergoes continuous security review. We follow industry best practices
               and standards to ensure your data remains secure.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -369,8 +369,8 @@ export default function SecurityPage() {
                 <div className="text-xs text-muted-foreground">Encryption Standards</div>
               </div>
               <div className="p-4 bg-muted rounded-lg text-center">
-                <div className="text-xl font-bold text-foreground mb-1">BETA</div>
-                <div className="text-xs text-muted-foreground">Active Testing</div>
+                <div className="text-xl font-bold text-foreground mb-1">GDPR</div>
+                <div className="text-xs text-muted-foreground">Privacy Compliant</div>
               </div>
             </div>
           </CardContent>

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeGate } from '@/components/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -48,6 +50,9 @@ interface APIKey {
 }
 
 export default function APIKeys() {
+  const { isFeatureAvailable } = useSubscription();
+  if (!isFeatureAvailable('apiKeys')) return <UpgradeGate feature="API Key Manager" />;
+
   const { toast } = useToast();
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -80,7 +85,7 @@ export default function APIKeys() {
 
   // Load API keys from localStorage (encrypted in production)
   useEffect(() => {
-    const stored = localStorage.getItem('subsafe_api_keys');
+    const stored = localStorage.getItem('ironvault_api_keys');
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -98,7 +103,7 @@ export default function APIKeys() {
 
   // Save API keys to localStorage
   const saveKeys = (keys: APIKey[]) => {
-    localStorage.setItem('subsafe_api_keys', JSON.stringify(keys));
+    localStorage.setItem('ironvault_api_keys', JSON.stringify(keys));
     setApiKeys(keys);
   };
 

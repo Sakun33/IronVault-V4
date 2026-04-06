@@ -41,7 +41,7 @@ import { exportDocumentAsZip, exportMultipleDocumentsAsZip, ExportResult } from 
 let sessionKey: CryptoKey | null = null;
 let sessionSalt: Uint8Array | null = null;
 
-const VAULT_KEY_STORAGE = 'subsafe_doc_vault_key';
+const VAULT_KEY_STORAGE = 'ironvault_doc_vault_key';
 
 export async function initializeVault(masterPassword?: string): Promise<void> {
   if (masterPassword) {

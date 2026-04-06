@@ -1,4 +1,4 @@
-// Seed data for SubSafe app - 15 users with comprehensive vault data
+// Seed data for IronVault app - 15 users with comprehensive vault data
 
 export interface SeedUser {
   email: string;
