@@ -1,8 +1,7 @@
-import { type User, type InsertUser, type CrmUser, type InsertCrmUser, type Entitlement, type InsertEntitlement, type BillingEvent, type InsertBillingEvent, crmUsers, entitlements, billingEvents } from "@shared/schema";
+import { type User, type InsertUser, type CrmUser, type InsertCrmUser, type Entitlement, type InsertEntitlement, type BillingEvent, type InsertBillingEvent, crmUsers, entitlements, billingEvents } from "../shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
-import postgres from "postgres";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -33,8 +32,11 @@ export class DatabaseStorage implements IStorage {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is required for database storage");
     }
-    
-    const client = postgres(process.env.DATABASE_URL);
+
+    // Dynamic require to avoid importing postgres when DATABASE_URL isn't set
+    // (top-level import would crash on Vercel if the module isn't bundled)
+    const pg = require("postgres") as typeof import("postgres").default;
+    const client = pg(process.env.DATABASE_URL);
     this.db = drizzle(client);
     this.users = new Map(); // In-memory for legacy user table
   }
