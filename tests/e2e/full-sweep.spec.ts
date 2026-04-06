@@ -418,27 +418,31 @@ test.describe.serial('IronVault Full Sweep', () => {
       if (await contentArea.isVisible({ timeout: 3000 }).catch(() => false))
         await contentArea.fill('This is an automated sweep note.');
 
-      await page.locator('button:has-text("Save"), button[type="submit"]').first().click();
+      // Save button has testid "button-save-note" and text "Add Note" (not "Save")
+      await page.getByTestId('button-save-note').first().click();
       await expect(page.locator('text=Sweep Test Note').first()).toBeVisible({ timeout: 10000 });
     });
 
     test('4.2 pin note', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/notes');
-      const pinBtn = page.locator('button[aria-label*="pin" i]').first();
+      // Pin buttons have testid "button-pin-{id}"
+      const pinBtn = page.locator('[data-testid^="button-pin-"]').first();
       if (await pinBtn.isVisible({ timeout: 4000 }).catch(() => false)) await pinBtn.click();
     });
 
     test('4.3 edit note', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/notes');
-      const editBtn = page.locator('button[aria-label*="edit" i]').first();
+      // Edit buttons have testid "button-edit-{id}"
+      const editBtn = page.locator('[data-testid^="button-edit-"]').first();
       if (await editBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
         await editBtn.click();
         const titleInput = page.locator('input[placeholder*="title" i]').first();
         if (await titleInput.isVisible({ timeout: 3000 }).catch(() => false)) {
           await titleInput.fill('Sweep Test Note Edited');
-          await page.locator('button:has-text("Save")').first().click();
+          // Save button text is "Update Note" when editing
+          await page.getByTestId('button-save-note').first().click();
           await expect(page.locator('text=Sweep Test Note Edited').first()).toBeVisible({ timeout: 5000 });
         }
       }
@@ -453,7 +457,8 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('4.5 delete note', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/notes');
-      const deleteBtn = page.locator('button[aria-label*="delete" i]').first();
+      // Delete buttons have testid "button-delete-{id}"
+      const deleteBtn = page.locator('[data-testid^="button-delete-"]').first();
       if (await deleteBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
         page.on('dialog', d => d.accept());
         await deleteBtn.click();
@@ -467,27 +472,30 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('5.1 add reminder with local-tz date', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/reminders');
-      await page.locator('button:has-text("Add"), button:has-text("New")').first().click();
+      // Add button is icon-only; use testid
+      await page.getByTestId('button-add-reminder').first().click();
 
-      const titleInput = page.locator('input[placeholder*="title" i], input[placeholder*="reminder" i]').first();
-      if (await titleInput.isVisible({ timeout: 5000 }).catch(() => false))
-        await titleInput.fill('Sweep Reminder');
+      const titleInput = page.getByTestId('input-title').first();
+      await titleInput.waitFor({ timeout: 5000 });
+      await titleInput.fill('Sweep Reminder');
 
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const dateStr = tomorrow.toISOString().split('T')[0];
-      const dateInput = page.locator('input[type="date"]').first();
+      const dateInput = page.getByTestId('input-due-date').first();
       if (await dateInput.isVisible({ timeout: 3000 }).catch(() => false))
         await dateInput.fill(dateStr);
 
-      await page.locator('button:has-text("Save"), button[type="submit"]').first().click();
+      // Save button has type="submit" and testid="button-save"
+      await page.getByTestId('button-save').first().click();
       await expect(page.locator('text=Sweep Reminder').first()).toBeVisible({ timeout: 10000 });
     });
 
     test('5.2 mark reminder complete', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/reminders');
-      const checkBtn = page.locator('input[type="checkbox"], button[aria-label*="complete" i]').first();
+      // Complete buttons have testid "button-complete-{id}"
+      const checkBtn = page.locator('[data-testid^="button-complete-"]').first();
       if (await checkBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await checkBtn.click();
         await page.waitForTimeout(500);
@@ -513,7 +521,8 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('5.5 delete reminder', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/reminders');
-      const deleteBtn = page.locator('button[aria-label*="delete" i]').first();
+      // Delete buttons have testid "button-delete-{id}"
+      const deleteBtn = page.locator('[data-testid^="button-delete-"]').first();
       if (await deleteBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
         page.on('dialog', d => d.accept());
         await deleteBtn.click();
