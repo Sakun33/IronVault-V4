@@ -917,20 +917,21 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.getByTestId('tab-csv-import').click();
 
       const fileInput = page.locator('input[type="file"]').first();
-      if (await fileInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await fileInput.setInputFiles(tmpCsv);
-        // Select generic parser
-        const parserSelect = page.locator('[role="combobox"]').first();
-        if (await parserSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await parserSelect.click();
-          const genericOpt = page.locator('[role="option"]:has-text("Generic")').first();
-          if (await genericOpt.isVisible({ timeout: 2000 }).catch(() => false)) await genericOpt.click();
-        }
-        await page.locator('button:has-text("Import"), button[type="submit"]').first().click();
-        await expect(
-          page.locator('text=/import.*complete|imported.*password|success/i').first()
-        ).toBeVisible({ timeout: 12000 });
+      if (!(await fileInput.isVisible({ timeout: 5000 }).catch(() => false))) { fs.unlinkSync(tmpCsv); return; }
+      await fileInput.setInputFiles(tmpCsv);
+      // Wait for any dialog backdrop animation to complete
+      await page.waitForTimeout(600);
+      // Select generic parser — skip on backdrop interference
+      const parserSelect = page.locator('[role="combobox"]').first();
+      if (await parserSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await parserSelect.click({ force: true });
+        const genericOpt = page.locator('[role="option"]:has-text("Generic")').first();
+        if (await genericOpt.isVisible({ timeout: 2000 }).catch(() => false)) await genericOpt.click();
       }
+      await page.locator('button:has-text("Import"), button[type="submit"]').first().click({ force: true });
+      await expect(
+        page.locator('text=/import.*complete|imported.*password|success/i').first()
+      ).toBeVisible({ timeout: 12000 });
       fs.unlinkSync(tmpCsv);
     });
   });
