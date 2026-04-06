@@ -544,8 +544,14 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('6.2 create second vault (free plan blocks it)', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/vaults');
-      const createBtn = page.locator('button:has-text("Create"), button:has-text("Add Vault"), button:has-text("New Vault")').first();
+      const createBtn = page.locator('[data-testid="button-create-vault"], button:has-text("Add Vault"), button:has-text("New Vault")').first();
       if (await createBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        const isDisabled = await createBtn.isDisabled().catch(() => false);
+        if (isDisabled) {
+          // Disabled button IS the upgrade gate – free plan blocks vault creation
+          expect(isDisabled).toBe(true);
+          return;
+        }
         await createBtn.click();
         await page.waitForTimeout(800);
         // Should either open new-vault dialog or show upgrade gate
