@@ -992,26 +992,31 @@ test.describe.serial('IronVault Full Sweep', () => {
   });
 
   // ── 11. PRICING ───────────────────────────────────────────────────────────
+  // Pricing page is behind auth (Router returns Login when not unlocked)
   test.describe('11 · Pricing', () => {
     test('11.1 pricing page loads', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pricing`, { waitUntil: 'networkidle' });
+      await unlockVault(page);
+      await navigate(page, '/pricing');
       await expect(page.locator('text=/pricing|plan/i').first()).toBeVisible({ timeout: 12000 });
     });
 
     test('11.2 ZERO "Coming Soon" labels on pricing page', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pricing`, { waitUntil: 'networkidle' });
+      await unlockVault(page);
+      await navigate(page, '/pricing');
       const count = await page.locator('text=/coming soon/i').count();
       expect(count).toBe(0);
     });
 
     test('11.3 Free and Pro plan cards visible', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pricing`, { waitUntil: 'networkidle' });
+      await unlockVault(page);
+      await navigate(page, '/pricing');
       await expect(page.locator('text=/free/i').first()).toBeVisible({ timeout: 8000 });
       await expect(page.locator('text=/pro/i').first()).toBeVisible({ timeout: 8000 });
     });
 
     test('11.4 Upgrade CTA button present', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pricing`, { waitUntil: 'networkidle' });
+      await unlockVault(page);
+      await navigate(page, '/pricing');
       await expect(
         page.locator('button:has-text("Upgrade"), a:has-text("Upgrade"), button:has-text("Get Pro")').first()
       ).toBeVisible({ timeout: 8000 });
