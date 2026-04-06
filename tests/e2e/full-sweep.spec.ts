@@ -264,8 +264,8 @@ test.describe.serial('IronVault Full Sweep', () => {
       await unlockVault(page);
       await navigate(page, '/passwords');
       // Wait for Passwords page to be ready, then click Add
-      await page.getByTestId('add-password-button').waitFor({ timeout: 10000 });
-      await page.getByTestId('add-password-button').click();
+      await page.getByTestId('add-password-button').first().waitFor({ timeout: 10000 });
+      await page.getByTestId('add-password-button').first().click();
       await expect(
         page.locator('[role="dialog"]').filter({ hasText: /add new password/i }).first()
       ).toBeVisible({ timeout: 10000 });
