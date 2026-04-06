@@ -6,10 +6,10 @@
 
 | Service | URL | Status |
 |---------|-----|--------|
-| Main App (Web) | https://www.ironvault.app | Pending domain transfer |
+| Main App (Web) | https://www.ironvault.app | Live |
 | Main App (Vercel) | https://ironvault-steel.vercel.app | Live |
-| API Health | https://ironvault-steel.vercel.app/api/health | Live |
-| Admin Console | TBD (separate deployment) | Pending |
+| API Health | https://www.ironvault.app/api/health | Live |
+| Admin Console | TBD (separate deployment needed) | Pending |
 
 ## Local Development URLs
 
@@ -62,8 +62,7 @@
 | Project | ironvault |
 | Team | saket-sumans-projects-1f5ede07 |
 | Deploy URL | https://ironvault-steel.vercel.app |
-| Custom Domain | https://www.ironvault.app (pending transfer) |
-| Old Project | iron-vault-v4 (needs domain removed) |
+| Custom Domain | https://www.ironvault.app |
 
 ## Android App
 
