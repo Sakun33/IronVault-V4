@@ -125,23 +125,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // ── /api/crm/tickets ────────────────────────────────────────────────────────
+  // ── POST /api/crm/tickets ────────────────────────────────────────────────────
   if (path === "/api/crm/tickets" && req.method === "POST") {
     const { email, subject, description, priority } = req.body || {};
     if (!email || !subject) return res.status(400).json({ error: "email and subject required" });
-    // Stub: acknowledge ticket creation (no tickets table yet)
-    return res.json({
-      success: true,
-      ticket: {
-        id: `ticket-${Date.now()}`,
-        email,
-        subject,
-        description: description || "",
-        priority: priority || "normal",
-        status: "open",
-        created_at: new Date().toISOString(),
-      },
-    });
+    try {
+      // Look up customer_id (optional — ticket can exist without a customer row)
+      const { rows: cRows } = await db.query(
+        `SELECT id FROM customers WHERE email = $1 LIMIT 1`, [email]
+      );
+      const customerId = cRows[0]?.id || null;
+      const { rows } = await db.query(
+        `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [customerId, email, subject, description || null, priority || "normal"]
+      );
+      return res.json({ success: true, ticket: rows[0] });
+    } catch (err: any) {
+      console.error("ticket create error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/crm/tickets/:email ──────────────────────────────────────────────
+  if (path.startsWith("/api/crm/tickets/") && req.method === "GET") {
+    const email = decodeURIComponent(path.replace("/api/crm/tickets/", ""));
+    if (!email) return res.status(400).json({ error: "email required" });
+    try {
+      const { rows } = await db.query(
+        `SELECT * FROM tickets WHERE customer_email = $1 ORDER BY created_at DESC`, [email]
+      );
+      return res.json({ tickets: rows, total: rows.length });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   return res.status(404).json({ error: "endpoint not found", path });
