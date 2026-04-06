@@ -50,7 +50,9 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 // importantly only setup vite in development and after
 // setting up all the other routes so the catch-all route
 // doesn't interfere with the other routes
-if (app.get("env") === "development") {
+if (process.env.VERCEL === '1') {
+  // On Vercel, static files are served by the CDN — skip serveStatic
+} else if (app.get("env") === "development") {
   await setupVite(app, server);
 } else {
   serveStatic(app);
