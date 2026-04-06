@@ -1,0 +1,15 @@
+node_modules
+.git
+ios
+android
+dist
+dist-ssr
+build
+*.keystore
+*.jks
+*.xcarchive
+*.ipa
+.env*
+admin-console/node_modules
+admin-console/backend/node_modules
+admin-console/frontend/node_modules

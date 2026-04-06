@@ -476,6 +476,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           plan: plan.toLowerCase(),
           status: "active",
           trialActive: false,
+          willRenew: true,
+          adminOverride: false,
         });
       }
 
