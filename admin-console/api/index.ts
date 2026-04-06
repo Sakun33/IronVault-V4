@@ -292,18 +292,107 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (method === "DELETE") return res.json({ success: true });
   }
 
-  // ── /api/tickets ────────────────────────────────────────────────────────────
+  // ── GET/POST /api/tickets ───────────────────────────────────────────────────
   if (path === "/api/tickets") {
-    if (method === "GET")  return res.json({ tickets: [], total: 0 });
-    if (method === "POST") return res.json({ success: true, ticket: { id: 1, ...req.body, status: "open" } });
+    if (method === "GET") {
+      try {
+        const { rows } = await db.query(
+          `SELECT t.*, c.full_name AS customer_name
+           FROM tickets t
+           LEFT JOIN customers c ON t.customer_id = c.id
+           ORDER BY t.created_at DESC`
+        );
+        return res.json({ tickets: rows, total: rows.length });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+    if (method === "POST") {
+      const { customer_email, subject, description, priority } = req.body || {};
+      if (!customer_email || !subject) return res.status(400).json({ error: "customer_email and subject required" });
+      try {
+        const { rows: cRows } = await db.query(`SELECT id FROM customers WHERE email=$1 LIMIT 1`, [customer_email]);
+        const customerId = cRows[0]?.id || null;
+        const { rows } = await db.query(
+          `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [customerId, customer_email, subject, description || null, priority || "normal"]
+        );
+        return res.json({ success: true, ticket: rows[0] });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
   }
-  if (path.match(/^\/api\/tickets\/[^/]+$/)) {
-    if (method === "GET")  return res.status(404).json({ error: "Ticket not found" });
-    if (method === "PUT")  return res.json({ success: true, ...req.body });
-    if (method === "POST") return res.json({ success: true }); // close / reply
+
+  // ── GET/PUT/DELETE /api/tickets/:id ─────────────────────────────────────────
+  const ticketIdMatch = path.match(/^\/api\/tickets\/([^/]+)$/);
+  if (ticketIdMatch) {
+    const tid = ticketIdMatch[1];
+    if (method === "GET") {
+      try {
+        const { rows: tRows } = await db.query(
+          `SELECT t.*, c.full_name AS customer_name FROM tickets t LEFT JOIN customers c ON t.customer_id=c.id WHERE t.id=$1`, [tid]
+        );
+        if (!tRows[0]) return res.status(404).json({ error: "Ticket not found" });
+        const { rows: rRows } = await db.query(
+          `SELECT * FROM ticket_replies WHERE ticket_id=$1 ORDER BY created_at ASC`, [tid]
+        );
+        return res.json({ ...tRows[0], replies: rRows });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+    if (method === "PUT") {
+      const { status, priority, assigned_to } = req.body || {};
+      const updates: string[] = [];
+      const values: any[] = [];
+      let i = 1;
+      if (status      !== undefined) { updates.push(`status=$${i++}`);      values.push(status); }
+      if (priority    !== undefined) { updates.push(`priority=$${i++}`);    values.push(priority); }
+      if (assigned_to !== undefined) { updates.push(`assigned_to=$${i++}`); values.push(assigned_to); }
+      if (status === "resolved") { updates.push(`resolved_at=NOW()`); }
+      updates.push(`updated_at=NOW()`);
+      values.push(tid);
+      try {
+        const { rows } = await db.query(
+          `UPDATE tickets SET ${updates.join(",")} WHERE id=$${i} RETURNING *`, values
+        );
+        if (!rows[0]) return res.status(404).json({ error: "Ticket not found" });
+        return res.json(rows[0]);
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+    if (method === "DELETE") {
+      try {
+        const { rowCount } = await db.query(`DELETE FROM tickets WHERE id=$1`, [tid]);
+        if (!rowCount) return res.status(404).json({ error: "Ticket not found" });
+        return res.json({ success: true });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
   }
-  if (path.match(/^\/api\/tickets\/[^/]+\/(close|reply)$/)) {
-    return res.json({ success: true });
+
+  // ── POST /api/tickets/:id/reply ─────────────────────────────────────────────
+  const ticketReplyMatch = path.match(/^\/api\/tickets\/([^/]+)\/reply$/);
+  if (ticketReplyMatch && method === "POST") {
+    const tid = ticketReplyMatch[1];
+    const { message, is_internal } = req.body || {};
+    if (!message) return res.status(400).json({ error: "message required" });
+    try {
+      const { rows } = await db.query(
+        `INSERT INTO ticket_replies (ticket_id, author_type, author_id, message, is_internal)
+         VALUES ($1,'admin','admin',$2,$3) RETURNING *`,
+        [tid, message, is_internal || false]
+      );
+      await db.query(`UPDATE tickets SET updated_at=NOW() WHERE id=$1`, [tid]);
+      return res.json({ success: true, reply: rows[0] });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── POST /api/tickets/:id/close ─────────────────────────────────────────────
+  const ticketCloseMatch = path.match(/^\/api\/tickets\/([^/]+)\/close$/);
+  if (ticketCloseMatch && method === "POST") {
+    const tid = ticketCloseMatch[1];
+    try {
+      const { rows } = await db.query(
+        `UPDATE tickets SET status='closed', resolved_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`, [tid]
+      );
+      if (!rows[0]) return res.status(404).json({ error: "Ticket not found" });
+      return res.json({ success: true, ticket: rows[0] });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
   // ── GET /api/audit-log / /api/admin-logs ────────────────────────────────────
@@ -330,10 +419,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/dashboard/stats ────────────────────────────────────────────────
   if (path === "/api/dashboard/stats" && method === "GET") {
     try {
-      const { rows } = await db.query(
+      const { rows: cRows } = await db.query(
         `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE plan_type='trial') AS trials FROM customers`
       );
-      return res.json({ totalCustomers: parseInt(rows[0].total, 10), activeTrials: parseInt(rows[0].trials, 10), mrr: 0, openTickets: 0 });
+      const { rows: tRows } = await db.query(
+        `SELECT COUNT(*) AS open_tickets FROM tickets WHERE status='open'`
+      );
+      return res.json({
+        totalCustomers: parseInt(cRows[0].total, 10),
+        activeTrials: parseInt(cRows[0].trials, 10),
+        mrr: 0,
+        openTickets: parseInt(tRows[0].open_tickets, 10),
+      });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
