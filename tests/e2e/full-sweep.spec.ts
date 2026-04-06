@@ -246,10 +246,18 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('3.1 add password entry', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/passwords');
-      await page.locator('button:has-text("Add")').first().click();
+      // Use testid first; fall back to "Add Your First Password" empty-state button
+      const addBtn = page.getByTestId('add-password-button');
+      const firstPwBtn = page.locator('button:has-text("Add Your First Password")');
+      if (await addBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
+        await addBtn.click();
+      } else {
+        await firstPwBtn.waitFor({ timeout: 6000 });
+        await firstPwBtn.click();
+      }
       await expect(
-        page.locator('text=/add password|new password/i').first()
-      ).toBeVisible({ timeout: 8000 });
+        page.locator('[role="dialog"]').filter({ hasText: /add new password/i }).first()
+      ).toBeVisible({ timeout: 10000 });
 
       const nameInput = page.getByTestId('input-site-name')
         .or(page.locator('input[placeholder*="name" i], input[placeholder*="service" i]').first());
@@ -334,7 +342,9 @@ test.describe.serial('IronVault Full Sweep', () => {
       if (await genBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await genBtn.click();
       } else {
-        await page.locator('button:has-text("Add")').first().click();
+        const addBtn2 = page.getByTestId('add-password-button');
+        if (await addBtn2.isVisible({ timeout: 3000 }).catch(() => false)) await addBtn2.click();
+        else await page.locator('button:has-text("Add Your First Password")').first().click();
         await page.waitForTimeout(500);
         const inModalGenBtn = page.locator('button:has-text("Generate")').first();
         if (await inModalGenBtn.isVisible({ timeout: 3000 }).catch(() => false)) await inModalGenBtn.click();
