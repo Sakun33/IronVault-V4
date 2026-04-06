@@ -1,13 +1,17 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { Pool } from "pg";
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
+let pool: Pool | null = null;
 
-function getSupabase() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { persistSession: false },
-  });
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+    });
+  }
+  return pool;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -24,45 +28,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: "ok",
       timestamp: new Date().toISOString(),
       env: "vercel",
-      supabase: !!SUPABASE_URL,
+      db: !!process.env.DATABASE_URL,
     });
   }
 
-  // Guard: require Supabase config for all other routes
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    return res.status(503).json({ error: "Supabase not configured" });
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: "DATABASE_URL not configured" });
   }
 
-  const supabase = getSupabase();
+  const db = getPool();
 
   // ── /api/crm/register ───────────────────────────────────────────────────────
   if (path === "/api/crm/register" && req.method === "POST") {
     const { email, fullName, country, platform, appVersion, planType } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
 
-    const { data, error } = await supabase
-      .from("customers")
-      .upsert(
-        {
-          email,
-          full_name: fullName || null,
-          country: country || null,
-          platform: platform || null,
-          app_version: appVersion || null,
-          plan_type: planType || "free",
-          status: "active",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "email", ignoreDuplicates: false }
-      )
-      .select()
-      .single();
-
-    if (error) {
-      console.error("register error:", error);
-      return res.status(500).json({ error: error.message });
+    try {
+      const { rows } = await db.query(
+        `INSERT INTO customers (email, full_name, country, platform, app_version, plan_type, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'active')
+         ON CONFLICT (email) DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           country = EXCLUDED.country,
+           platform = EXCLUDED.platform,
+           app_version = EXCLUDED.app_version,
+           updated_at = NOW()
+         RETURNING id, email, plan_type`,
+        [email, fullName || null, country || null, platform || null, appVersion || null, planType || "free"]
+      );
+      const row = rows[0];
+      return res.json({ success: true, message: "Registration received", email, plan: row.plan_type, id: row.id });
+    } catch (err: any) {
+      console.error("register error:", err.message);
+      return res.status(500).json({ error: err.message });
     }
-    return res.json({ success: true, message: "Registration received", email, plan: data.plan_type, id: data.id });
   }
 
   // ── /api/crm/entitlement/:userId ────────────────────────────────────────────
@@ -70,26 +69,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = path.replace("/api/crm/entitlement/", "");
     if (!userId) return res.status(400).json({ error: "userId required" });
 
-    // Try by UUID id first, then by email
-    let query = supabase.from("customers").select("id,email,plan_type,status,created_at");
-    const isUuid = /^[0-9a-f-]{36}$/i.test(userId);
-    if (isUuid) {
-      query = query.eq("id", userId);
-    } else {
-      query = query.eq("email", userId);
+    try {
+      const isUuid = /^[0-9a-f-]{36}$/i.test(userId);
+      const col = isUuid ? "id" : "email";
+      const { rows } = await db.query(
+        `SELECT id, email, plan_type, status FROM customers WHERE ${col} = $1 LIMIT 1`,
+        [userId]
+      );
+      if (!rows[0]) return res.json({ plan: "free", status: "active", trial_active: false });
+      const row = rows[0];
+      return res.json({
+        plan: row.plan_type,
+        status: row.status,
+        trial_active: row.plan_type === "trial",
+        id: row.id,
+        email: row.email,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
     }
-
-    const { data, error } = await query.single();
-    if (error || !data) {
-      return res.json({ plan: "free", status: "active", trial_active: false });
-    }
-    return res.json({
-      plan: data.plan_type,
-      status: data.status,
-      trial_active: data.plan_type === "trial",
-      id: data.id,
-      email: data.email,
-    });
   }
 
   // ── /api/crm/heartbeat ──────────────────────────────────────────────────────
@@ -97,14 +95,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { email, userId } = req.body || {};
     if (!email && !userId) return res.status(400).json({ error: "email or userId required" });
 
-    const filter = email ? { email } : { id: userId };
-    const { error } = await supabase
-      .from("customers")
-      .update({ last_active: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .match(filter);
-
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ success: true });
+    try {
+      const col = email ? "email" : "id";
+      const val = email || userId;
+      await db.query(
+        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE ${col} = $1`,
+        [val]
+      );
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   return res.status(404).json({ error: "endpoint not found", path });
