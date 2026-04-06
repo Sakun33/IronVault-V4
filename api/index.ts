@@ -1,44 +1,37 @@
-import type { IncomingMessage, ServerResponse } from 'http';
+// Vercel Serverless Function - Express API handler
+// Uses static imports so @vercel/ncc can trace dependencies
 import express from 'express';
+import { createServer } from 'http';
+import { storage } from '../server/storage';
 import { registerRoutes } from '../server/routes';
+import * as schema from '../shared/schema';
 
-let app: any = null;
-let initError: Error | null = null;
+// Force ncc to include these files by referencing them
+void storage;
+void schema;
 
-async function getApp() {
-  if (app) return app;
-  if (initError) throw initError;
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-  try {
-    app = express();
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: false }));
+let initialized = false;
 
-    await registerRoutes(app);
-
-    app.use((err: any, _req: any, res: any, _next: any) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-      res.status(status).json({ message });
-    });
-
-    return app;
-  } catch (err) {
-    initError = err as Error;
-    throw err;
-  }
+async function ensureInitialized() {
+  if (initialized) return;
+  await registerRoutes(app);
+  app.use((err: any, _req: any, res: any, _next: any) => {
+    res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
+  });
+  initialized = true;
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+module.exports = async (req: any, res: any) => {
   try {
-    const expressApp = await getApp();
-    expressApp(req, res);
+    await ensureInitialized();
+    app(req, res);
   } catch (err: any) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      error: 'Function initialization failed',
-      message: err.message,
-      stack: err.stack?.split('\n').slice(0, 5),
-    }));
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: err.message, stack: err.stack?.split('\n').slice(0, 3) }));
   }
-}
+};
