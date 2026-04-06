@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import express from 'express';
 import { registerRoutes } from '../server/routes';
-import { storage } from '../server/storage';
 
 let app: any = null;
 let initError: Error | null = null;
