@@ -18,6 +18,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_KEY = 'iv_session';
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [vaultExists, setVaultExists] = useState(false);
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('[Auth] Auto-locking vault due to background/idle');
         setIsUnlocked(false);
         setMasterPassword(null);
+        sessionStorage.removeItem(SESSION_KEY);
         vaultStorage.setEncryptionKey(null as any);
       }
     });
@@ -46,6 +49,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await vaultStorage.init();
       const exists = await vaultStorage.vaultExists();
       setVaultExists(exists);
+
+      // Restore session if vault exists and a saved session is present
+      if (exists) {
+        const saved = sessionStorage.getItem(SESSION_KEY);
+        if (saved) {
+          try {
+            const success = await vaultStorage.unlockVault(saved);
+            if (success) {
+              setIsUnlocked(true);
+              setMasterPassword(saved);
+            } else {
+              sessionStorage.removeItem(SESSION_KEY);
+            }
+          } catch {
+            sessionStorage.removeItem(SESSION_KEY);
+          }
+        }
+      }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
     } finally {
@@ -59,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
         setMasterPassword(password);
+        sessionStorage.setItem(SESSION_KEY, password);
       }
       return success;
     } catch (error) {
@@ -88,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setVaultExists(true);
       setIsUnlocked(true);
       setMasterPassword(password);
+      sessionStorage.setItem(SESSION_KEY, password);
       
       // Clear activity logs when creating a new vault
       clearLogs();
@@ -100,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setIsUnlocked(false);
     setMasterPassword(null);
+    sessionStorage.removeItem(SESSION_KEY);
     // Clear encryption key from storage
     vaultStorage.setEncryptionKey(null as any);
   };
