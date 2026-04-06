@@ -150,17 +150,24 @@ async function unlockVault(page: Page) {
 async function navigate(page: Page, route: string) {
   await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});
-  // Wait for initializeAuth() to finish (it restores session from sessionStorage)
-  // The loading screen disappears once isLoading=false
-  await page.locator('text=Loading IronVault...').waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
-  // If session restore failed and login page appeared, re-unlock WITHOUT redirecting away from target
-  const isOnLogin = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 2000 }).catch(() => false);
+
+  // Check whether the login form appeared (session restore may have failed)
+  const isOnLogin = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 5000 }).catch(() => false);
   if (isOnLogin) {
+    // Re-unlock – login.tsx will call setLocation('/') which redirects to Dashboard
     await page.getByTestId('input-unlock-password').fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').click();
-    // login.tsx calls setLocation('/') — navigate to intended route after that
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'networkidle' });
+    // Wait until we land on Dashboard
+    await page.locator('h1:has-text("Dashboard")').waitFor({ timeout: 15000 });
+
+    // If the target is not '/', use client-side navigation (no full reload → no session loss)
+    if (route && route !== '/') {
+      await page.evaluate((r) => {
+        window.history.pushState({}, '', r);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }, route);
+      await page.waitForTimeout(1000);
+    }
   }
 }
 
