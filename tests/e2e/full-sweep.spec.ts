@@ -158,7 +158,7 @@ async function navigate(page: Page, route: string) {
     await page.getByTestId('input-unlock-password').fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').click();
     // Wait until we land on Dashboard
-    await page.locator('h1:has-text("Dashboard")').waitFor({ timeout: 15000 });
+    await page.locator('h1:has-text("Dashboard")').first().waitFor({ timeout: 15000 });
 
     // If the target is not '/', use client-side navigation (no full reload → no session loss)
     if (route && route !== '/') {
