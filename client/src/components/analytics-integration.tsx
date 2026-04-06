@@ -23,8 +23,8 @@ export function AnalyticsIntegration({ children }: AnalyticsIntegrationProps) {
   useEffect(() => {
     if (isUnlocked && masterPassword && !appIntegrationRef.current) {
       const appIntegration = new AppIntegrationHooks({
-        analyticsEnabled: true,
-        supportTicketsEnabled: true,
+        analyticsEnabled: localStorage.getItem('ironvault-analytics-enabled') !== 'false',
+        supportTicketsEnabled: localStorage.getItem('ironvault-support-enabled') !== 'false',
         syncEnabled: false, // Disabled by default for privacy
         masterPassword: masterPassword
       });

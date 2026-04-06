@@ -149,17 +149,19 @@ export function PasswordGeneratorModal({
                 {options.length}
               </span>
             </div>
-            <Slider
-              value={[options.length]}
-              onValueChange={(value) => 
-                setOptions(prev => ({ ...prev, length: value[0] }))
-              }
-              max={50}
-              min={8}
-              step={1}
-              className="w-full"
-              data-testid="length-slider"
-            />
+            <div onPointerDown={(e) => e.stopPropagation()}>
+              <Slider
+                value={[options.length]}
+                onValueChange={(value) =>
+                  setOptions(prev => ({ ...prev, length: value[0] }))
+                }
+                max={50}
+                min={8}
+                step={1}
+                className="w-full"
+                data-testid="length-slider"
+              />
+            </div>
           </div>
 
           {/* Character Type Options */}

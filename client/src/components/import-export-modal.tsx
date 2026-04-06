@@ -420,7 +420,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
         </DialogHeader>
         
         <Tabs defaultValue="export" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="export" data-testid="tab-export">Export</TabsTrigger>
             <TabsTrigger value="import" data-testid="tab-import">Import</TabsTrigger>
             <TabsTrigger value="csv-import" data-testid="tab-csv-import">CSV Import</TabsTrigger>

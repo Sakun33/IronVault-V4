@@ -43,8 +43,12 @@ import ThemeSelector from '@/components/theme-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function SettingsPage() {
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
-  const [supportTicketsEnabled, setSupportTicketsEnabled] = useState(true);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(
+    () => localStorage.getItem('ironvault-analytics-enabled') !== 'false'
+  );
+  const [supportTicketsEnabled, setSupportTicketsEnabled] = useState(
+    () => localStorage.getItem('ironvault-support-enabled') !== 'false'
+  );
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -78,6 +82,15 @@ export default function SettingsPage() {
   useEffect(() => {
     localStorage.setItem('cloud-sync-enabled', syncEnabled.toString());
   }, [syncEnabled]);
+
+  // Persist analytics and support toggles
+  useEffect(() => {
+    localStorage.setItem('ironvault-analytics-enabled', String(analyticsEnabled));
+  }, [analyticsEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('ironvault-support-enabled', String(supportTicketsEnabled));
+  }, [supportTicketsEnabled]);
 
   const handleManualSync = async () => {
     setIsSyncing(true);

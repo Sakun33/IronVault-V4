@@ -6,13 +6,49 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Download, Trash2, Search, Calendar, Filter, Clock, Shield, Key, Bookmark, FileText, DollarSign, Bell, Settings } from 'lucide-react';
 import { useLogging } from '@/contexts/logging-context';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { isNativeApp } from '@/native/platform';
 
 export default function Logging() {
-  const { logs, clearLogs, exportLogs } = useLogging();
+  const { logs, clearLogs } = useLogging();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
+
+  const handleExportLogs = async () => {
+    try {
+      const csvContent = [
+        'Timestamp,Action,Category,Description,IP Address',
+        ...logs.map(log =>
+          `"${new Date(log.timestamp).toISOString()}","${log.action}","${log.category}","${log.description}","${log.ipAddress || ''}"`
+        ),
+      ].join('\n');
+      const filename = `ironvault-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+
+      if (isNativeApp()) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+        await Filesystem.writeFile({ path: filename, data: csvContent, directory: Directory.Cache, encoding: 'utf8' as any });
+        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+        await Share.share({ title: 'IronVault Logs', url: uri, dialogTitle: 'Save Logs' });
+      } else {
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      toast({ title: 'Logs Exported', description: `${logs.length} entr${logs.length === 1 ? 'y' : 'ies'} exported` });
+    } catch {
+      toast({ title: 'Export Failed', description: 'Failed to export logs', variant: 'destructive' });
+    }
+  };
 
   // Filter logs
   const filteredLogs = useMemo(() => {
@@ -118,7 +154,7 @@ export default function Logging() {
           </p>
         </div>
         <div className="flex gap-1 shrink-0">
-          <Button onClick={exportLogs} variant="outline" size="icon" className="h-9 w-9" title="Export Logs">
+          <Button onClick={handleExportLogs} variant="outline" size="icon" className="h-9 w-9" title="Export Logs">
             <Download className="w-4 h-4" />
           </Button>
           <Button onClick={clearLogs} variant="outline" size="icon" className="h-9 w-9 text-destructive" title="Clear Logs">
