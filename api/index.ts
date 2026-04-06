@@ -1,31 +1,18 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import express from 'express';
-import { registerRoutes } from '../server/routes';
+import { URL } from 'url';
 
-let app: ReturnType<typeof express> | null = null;
+export default function handler(req: IncomingMessage, res: ServerResponse) {
+  const base = `http://${req.headers.host || 'localhost'}`;
+  const { pathname } = new URL(req.url || '/', base);
 
-async function getApp() {
-  if (app) return app;
+  res.setHeader('Content-Type', 'application/json');
 
-  app = express();
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: false }));
-
-  await registerRoutes(app);
-
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
-  });
-
-  return app;
-}
-
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  try {
-    const expressApp = await getApp();
-    expressApp(req as any, res as any);
-  } catch (err: any) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message }));
+  if (pathname === '/api/health' || pathname === '/api/health/') {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+    return;
   }
+
+  res.statusCode = 404;
+  res.end(JSON.stringify({ error: 'Not found', path: pathname }));
 }

@@ -4,11 +4,7 @@
   "builds": [
     {
       "src": "api/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["server/**", "shared/**"],
-        "maxLambdaSize": "50mb"
-      }
+      "use": "@vercel/node"
     },
     {
       "src": "api/debug.ts",
