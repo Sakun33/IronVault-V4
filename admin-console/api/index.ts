@@ -69,6 +69,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ status: "ok", db: !!process.env.DATABASE_URL, admins: 1 });
   }
 
+  // ── GET /api/auth/me ────────────────────────────────────────────────────────
+  if (path === "/api/auth/me" && method === "GET") {
+    const user = getToken(req) as any;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    return res.json({ username: user.username, role: user.role });
+  }
+
   // ── Auth login (public) ─────────────────────────────────────────────────────
   if (path === "/api/auth/login" && method === "POST") {
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
@@ -134,6 +141,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── All remaining routes require JWT ────────────────────────────────────────
   if (!getToken(req)) return res.status(401).json({ error: "Unauthorized" });
+
+  // ── GET /api/customers/export/csv ──────────────────────────────────────────
+  if (path === "/api/customers/export/csv" && method === "GET") {
+    try {
+      const { rows } = await db.query(`SELECT * FROM customers ORDER BY created_at DESC`);
+      const header = "id,email,full_name,country,platform,plan_type,status,created_at\n";
+      const csv = rows.map(r =>
+        [r.id, r.email, r.full_name || "", r.country || "", r.platform || "", r.plan_type, r.status, r.created_at].join(",")
+      ).join("\n");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=customers.csv");
+      return res.status(200).send(header + csv);
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
 
   // ── GET /api/customers ──────────────────────────────────────────────────────
   if (path === "/api/customers" && method === "GET") {
@@ -224,6 +245,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── /api/customers/:id/subscription ────────────────────────────────────────
   const subMatch = path.match(/^\/api\/customers\/([^/]+)\/subscription$/);
+  if (subMatch && method === "GET") {
+    const id = subMatch[1];
+    try {
+      const { rows } = await db.query(`SELECT id, email, plan_type, status FROM customers WHERE id = $1`, [id]);
+      if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
+      return res.json({ plan_type: rows[0].plan_type, status: rows[0].status });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
   if (subMatch && method === "PUT") {
     const id = subMatch[1];
     const { plan_type } = req.body || {};
@@ -249,19 +278,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json([]);
   }
 
-  // ── GET/PUT /api/plans/:id ──────────────────────────────────────────────────
+  // ── POST /api/plans ─────────────────────────────────────────────────────────
+  if (path === "/api/plans" && method === "POST") {
+    return res.json({ success: true, plan: req.body });
+  }
+
+  // ── GET/PUT/DELETE /api/plans/:id ───────────────────────────────────────────
   const planMatch = path.match(/^\/api\/plans\/([^/]+)$/);
   if (planMatch) {
     const plan = PLANS.find(p => p.id === planMatch[1]);
     if (method === "GET") return plan ? res.json(plan) : res.status(404).json({ error: "Plan not found" });
-    if (method === "PUT") return res.json({ ...plan, ...req.body }); // stub
+    if (method === "PUT") return res.json({ ...(plan || {}), ...req.body });
+    if (method === "DELETE") return res.json({ success: true });
   }
 
-  // ── GET /api/tickets ────────────────────────────────────────────────────────
-  if (path === "/api/tickets" && method === "GET") return res.json({ tickets: [], total: 0 });
-  if (path.startsWith("/api/tickets/")) {
+  // ── /api/tickets ────────────────────────────────────────────────────────────
+  if (path === "/api/tickets") {
+    if (method === "GET")  return res.json({ tickets: [], total: 0 });
+    if (method === "POST") return res.json({ success: true, ticket: { id: 1, ...req.body, status: "open" } });
+  }
+  if (path.match(/^\/api\/tickets\/[^/]+$/)) {
     if (method === "GET")  return res.status(404).json({ error: "Ticket not found" });
-    if (method === "POST") return res.json({ success: true });
+    if (method === "PUT")  return res.json({ success: true, ...req.body });
+    if (method === "POST") return res.json({ success: true }); // close / reply
+  }
+  if (path.match(/^\/api\/tickets\/[^/]+\/(close|reply)$/)) {
+    return res.json({ success: true });
   }
 
   // ── GET /api/audit-log / /api/admin-logs ────────────────────────────────────
@@ -305,6 +347,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── Notifications stubs ─────────────────────────────────────────────────────
+  if (path === "/api/notifications/count") return res.json({ count: 0 });
   if (path.startsWith("/api/notifications") || path.startsWith("/api/admin/notifications")) {
     if (method === "GET") return res.json([]);
     return res.json({ success: true });
