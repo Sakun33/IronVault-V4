@@ -58,11 +58,34 @@
       "total_spent": 0,
       "vault_created": true,
       "source": "android"
+    },
+    {
+      "id": 5,
+      "email": "localtest@ironvault.dev",
+      "name": "Local Test",
+      "region": "IN",
+      "plan_name": "free",
+      "subscription_plan": "free",
+      "status": "active",
+      "created_at": "2026-04-06T00:38:46.775Z",
+      "last_active": "2026-04-06T00:38:46.775Z",
+      "total_spent": 0,
+      "vault_created": true,
+      "source": "web"
     }
   ],
   "tickets": [],
   "ticketResponses": [],
   "notifications": [
+    {
+      "id": 5,
+      "type": "customer_signup",
+      "title": "New Customer Signup",
+      "message": "Local Test (localtest@ironvault.dev) just created a vault on web",
+      "link": "/customers/5",
+      "read": false,
+      "created_at": "2026-04-06T00:38:46.776Z"
+    },
     {
       "id": 4,
       "type": "customer_signup",
