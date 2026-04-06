@@ -984,8 +984,9 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('10.5 clear logs button visible', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/logging');
+      // Clear logs is an icon button with title="Clear Logs" (no visible text)
       await expect(
-        page.locator('button:has-text("Clear"), button:has-text("Clear Logs")').first()
+        page.locator('button[title*="clear" i], button:has-text("Clear Logs"), button:has-text("Clear")').first()
       ).toBeVisible({ timeout: 5000 });
     });
   });
