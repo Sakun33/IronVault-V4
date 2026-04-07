@@ -40,7 +40,7 @@
 | Privacy | Account deletion path exists | UNTESTED | |
 | Performance | Dashboard loads < 3s | UNTESTED | |
 | Crash Resistance | Error boundary catches JS errors | UNTESTED | |
-| Landing Page | Renders correctly | RED | BUG-004 OPEN — no marketing landing page for new visitors |
+| Landing Page | Renders correctly | GREEN | BUG-004 FIXED — marketing landing page at / with hero, pricing, FAQ, footer |
 | Store Submission | App icon, splash screen | UNTESTED | |
 | Store Submission | No console errors on first load | UNTESTED | |
 | Store Submission | HTTPS only | GREEN | Verified (https://www.ironvault.app) |

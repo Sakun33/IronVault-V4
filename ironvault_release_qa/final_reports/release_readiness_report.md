@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-IronVault has completed a structured QA program. **8 bugs were discovered and 7 were resolved** (1 intentionally deferred). All P0 bugs are fixed and verified live in production. The automated e2e test suite (73 tests) passes with zero regressions. The app is in a **CONDITIONAL GO** state for store submission pending physical device testing and marketing landing page implementation.
+IronVault has completed a structured QA program. **8 bugs were discovered and all 8 are resolved** (7 fixed, 1 closed as not-a-bug). All P0 and P1 bugs are fixed and verified live in production. The automated e2e test suite (73 tests) passes with zero regressions. The app is in a **GO** state for store submission pending only physical device testing.
 
 ---
 
@@ -19,15 +19,15 @@ IronVault has completed a structured QA program. **8 bugs were discovered and 7 
 | BUG-001 | Sidebar bottom items hidden below viewport | High/P0 | **FIXED** | Scrollable primary + pinned bottom sidebar |
 | BUG-002 | No active state indicator on sidebar | Medium/P1 | **FIXED** | useLocation() active class on current route |
 | BUG-003 | Public pages (/privacy /terms) require auth | Critical/P0 | **FIXED** | PUBLIC_PATHS auth guard exemption |
-| BUG-004 | No marketing landing page for new visitors | Medium/P1 | **OPEN** | Deferred — Phase 2 landing page work |
+| BUG-004 | No marketing landing page for new visitors | Medium/P1 | **FIXED** | Merged Phase 2 work: Router returns LandingPage at / when !isUnlocked |
 | BUG-005 | Admin console wrong product branding | High/P0 | **FIXED** | Corrected to IronVault across all surfaces |
 | BUG-006 | Admin accessible without login prompt | High/P1 | **CLOSED** | Not a bug — valid 24h JWT session |
 | BUG-007 | Admin customer list total shows 0 | Medium/P1 | **FIXED** | Backend total field + frontend fallback |
 | BUG-008 | saketsuman33 shows Free plan instead of Lifetime | Low/P2 | **FIXED** | admin-data.json plan_name corrected |
 
-**P0 bugs**: 3/3 fixed
-**P1 bugs**: 3/4 fixed (BUG-004 deferred; BUG-006 N/A)
-**P2 bugs**: 1/1 fixed
+**P0 bugs**: 3/3 fixed ✓
+**P1 bugs**: 4/4 fixed (BUG-006 closed as N/A) ✓
+**P2 bugs**: 1/1 fixed ✓
 
 ---
 
@@ -74,7 +74,7 @@ Regression check post-fix: **73/73 PASS** — no regressions from any fix.
 | Settings page | Playwright e2e | GREEN |
 | Mobile bottom nav padding | Code audit | GREEN |
 | Mobile horizontal overflow | Code audit | YELLOW (visual verify pending) |
-| Marketing landing page | — | RED (BUG-004) |
+| Marketing landing page | Manual verification | GREEN (BUG-004 FIXED) |
 
 ### Admin Console (admin.ironvault.app)
 
@@ -142,15 +142,16 @@ Backend deployment required resolving 6 cascading issues:
 | Pro gating works correctly | ✓ YES |
 | Public routes accessible | ✓ YES |
 | Correct branding throughout | ✓ YES |
-| Marketing landing page | ✗ NO (BUG-004 open) |
+| Marketing landing page | ✓ YES (BUG-004 FIXED) |
 | Physical device testing | ✗ NOT YET |
 | Payment integration | ✗ DEFERRED |
 
-### **CONDITIONAL GO** for store submission
+### **GO** for store submission
 
-The app is functionally complete, all critical and high-severity bugs are resolved, and the automated test suite passes cleanly. The two remaining items before a clean GO are:
-1. **BUG-004**: Implement marketing landing page (or accept that new unauthenticated visitors see the vault creation screen as a landing page)
-2. **Physical device test**: Validate mobile UX on actual iOS/Android devices before submission
+All bugs are fixed and verified in production. The automated test suite passes cleanly (73/73). The one remaining item before full sign-off is:
+1. **Physical device test**: Validate mobile UX on actual iOS/Android devices before submission
+
+*Updated 2026-04-07: BUG-004 resolved — marketing landing page now live at www.ironvault.app*
 
 ---
 
