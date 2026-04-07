@@ -2353,8 +2353,8 @@ proTest.describe.serial('19 · Expenses CRUD (pro account)', () => {
   proTest('19.2 "Add Expense" button opens modal', async ({ page }) => {
     await unlockProVault(page);
     await navigatePro(page, '/expenses');
-    // Find and click the Add Expense button
-    const addBtn = page.getByRole('button', { name: /add expense/i }).first();
+    // Trigger button has data-testid="button-add-expense" and displays "Add"
+    const addBtn = page.locator('[data-testid="button-add-expense"]').first();
     await addBtn.waitFor({ timeout: 10000 });
     await addBtn.click();
     await page.waitForTimeout(400);
@@ -2368,7 +2368,7 @@ proTest.describe.serial('19 · Expenses CRUD (pro account)', () => {
   proTest('19.3 fills expense form and submits — record appears in list', async ({ page }) => {
     await unlockProVault(page);
     await navigatePro(page, '/expenses');
-    const addBtn = page.getByRole('button', { name: /add expense/i }).first();
+    const addBtn = page.locator('[data-testid="button-add-expense"]').first();
     await addBtn.waitFor({ timeout: 10000 });
     await addBtn.click();
     await page.waitForTimeout(400);
@@ -2422,7 +2422,7 @@ proTest.describe.serial('19 · Expenses CRUD (pro account)', () => {
     ];
 
     for (const exp of expenses) {
-      const addBtn = page.getByRole('button', { name: /add expense/i }).first();
+      const addBtn = page.locator('[data-testid="button-add-expense"]').first();
       await addBtn.waitFor({ timeout: 8000 });
       await addBtn.click();
       await page.waitForTimeout(400);
