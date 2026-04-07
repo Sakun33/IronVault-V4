@@ -5,6 +5,7 @@ import { billingService } from '@/billing/billing-service';
 import { isNativePlatform } from '@/billing/platform';
 import { ENTITLEMENT_IDS } from '@/billing/billing-types';
 import { getEntitlementStatus } from '@/lib/customer-registration';
+import { useAuth } from '@/contexts/auth-context';
 
 interface LicenseContextType {
   license: LicenseInfo;
@@ -23,6 +24,7 @@ interface LicenseContextType {
 const LicenseContext = createContext<LicenseContextType | undefined>(undefined);
 
 export function LicenseProvider({ children }: { children: React.ReactNode }) {
+  const { isUnlocked } = useAuth();
   const [license, setLicense] = useState<LicenseInfo>(PricingService.getDefaultLicense());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -47,6 +49,14 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       syncEntitlements();
     }
   }, []);
+
+  // Re-load license whenever the vault unlocks so we can decrypt the stored license
+  // (LicenseProvider mounts while vault is locked → getPersistentData returns null)
+  useEffect(() => {
+    if (!isUnlocked) return;
+    hasSyncedFromServer.current = false; // allow server re-sync with the newly unlocked vault
+    loadLicense().then(() => syncFromServer());
+  }, [isUnlocked]);
 
   useEffect(() => {
     if (!isNativePlatform()) return;
