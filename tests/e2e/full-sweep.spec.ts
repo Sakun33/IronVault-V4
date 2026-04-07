@@ -115,14 +115,19 @@ async function createVaultFull(page: Page) {
  * avoiding the race where React hasn't yet read localStorage.
  */
 async function unlockVault(page: Page) {
+  // Navigate directly to root — if unlocked, shows Dashboard; if locked, shows landing page
   await page.goto(BASE_URL, { waitUntil: 'networkidle' });
 
-  // Already authenticated?
+  // Already authenticated? (vault session active → Dashboard is shown at /)
   const alreadyIn = await page
     .locator('h1:has-text("Dashboard")')
     .isVisible({ timeout: 4000 })
     .catch(() => false);
   if (alreadyIn) return;
+
+  // Not authenticated — navigate to login page directly
+  await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
 
   // Read vault registry directly from localStorage (bypasses React timing)
   const hasVault = await page.evaluate(() => {
@@ -148,25 +153,48 @@ async function unlockVault(page: Page) {
 }
 
 async function navigate(page: Page, route: string) {
+  // Prefer client-side navigation (pushState) when vault is unlocked.
+  // A full page.goto() reloads the page, reinitialising vaultStorage to the default
+  // 'IronVault' database and losing the active vault reference set by switchToVault().
+  // Checking sessionStorage('iv_session') is the reliable indicator that auth is live.
+  const hasSession = await page.evaluate(() => !!sessionStorage.getItem('iv_session')).catch(() => false);
+
+  if (hasSession) {
+    await page.evaluate((r) => {
+      window.history.pushState({}, '', r);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, route);
+    await page.waitForTimeout(600);
+    return;
+  }
+
+  // Full page load (new page, session expired, or first navigation)
   await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(800);
 
-  // Check whether the login form appeared (session restore may have failed)
-  const isOnLogin = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 5000 }).catch(() => false);
+  // Check whether vault unlock form appeared (session restore may have failed)
+  const unlockBtnVisible = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 3000 }).catch(() => false);
+  // Check whether landing page appeared (unauthenticated redirect)
+  const landingPageShown = !unlockBtnVisible && await page.locator('a[href="/auth/login"]').first().isVisible({ timeout: 2000 }).catch(() => false);
+
+  const isOnLogin = unlockBtnVisible || landingPageShown;
   if (isOnLogin) {
-    // Re-unlock – login.tsx will call setLocation('/') which redirects to Dashboard
+    if (landingPageShown) {
+      // Redirected to landing page — navigate to login URL directly
+      await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(400);
+    }
+    // Re-unlock
     await page.getByTestId('input-unlock-password').fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').click();
-    // Wait until we land on Dashboard
     await page.locator('h1:has-text("Dashboard")').first().waitFor({ timeout: 15000 });
 
-    // If the target is not '/', click the sidebar link (proper wouter client-side nav)
     if (route && route !== '/') {
       const sidebarLink = page.locator(`a[href="${route}"]`).first();
       if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
         await sidebarLink.click();
       } else {
-        // Fallback: evaluate-based navigation for routes not in sidebar
         await page.evaluate((r) => {
           window.history.pushState({}, '', r);
           window.dispatchEvent(new PopStateEvent('popstate'));
@@ -183,7 +211,7 @@ test.describe.serial('IronVault Full Sweep', () => {
   // ── 1. AUTH ────────────────────────────────────────────────────────────────
   test.describe('1 · Auth', () => {
     test('1.1 loads login screen', async ({ page }) => {
-      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);
       const unlockVisible = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 5000 }).catch(() => false);
       const createVisible = await page.getByTestId('button-create-vault').isVisible({ timeout: 5000 }).catch(() => false);
@@ -192,7 +220,7 @@ test.describe.serial('IronVault Full Sweep', () => {
     });
 
     test('1.2 rejects wrong password', async ({ page }) => {
-      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);
       const unlockBtn = page.getByTestId('button-unlock-vault');
       if (!(await unlockBtn.isVisible({ timeout: 5000 }).catch(() => false))) return;

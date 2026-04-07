@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Eye, EyeOff, Mail, User, Shield, Globe, Phone,
-  Sparkles, Crown, Infinity, Users, ChevronRight, Lock,
+  Sparkles, Crown, Infinity, Users, ChevronRight, Lock, KeyRound,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager } from '@/lib/vault-manager';
 import { autoRegisterOnVaultCreation } from '@/lib/customer-registration';
+import { saveAccountCredentials } from '@/lib/account-auth';
 
 const COUNTRIES = [
   { code: 'IN', name: 'India', phoneCode: '+91' },
@@ -97,6 +98,10 @@ export default function SignupPage() {
   const [phoneCode, setPhoneCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [selectedPlan, setSelectedPlan] = useState('free');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [confirmAccountPassword, setConfirmAccountPassword] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [showConfirmAccountPassword, setShowConfirmAccountPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
@@ -118,11 +123,16 @@ export default function SignupPage() {
 
     if (!email || !email.includes('@')) { setError('Please enter a valid email address.'); return; }
     if (!name.trim()) { setError('Please enter your full name.'); return; }
+    if (accountPassword.length < 8) { setError('Account password must be at least 8 characters.'); return; }
+    if (accountPassword !== confirmAccountPassword) { setError('Account passwords do not match.'); return; }
     if (password.length < 8) { setError('Master password must be at least 8 characters.'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
+    if (password !== confirmPassword) { setError('Master passwords do not match.'); return; }
 
     setIsLoading(true);
     try {
+      // Save account credentials (email + account password, separate from vault master password)
+      await saveAccountCredentials(email, accountPassword);
+
       // Create vault in registry
       const newVault = await vaultManager.createVault(vaultName || 'My Vault', true);
       await vaultManager.createVaultPassword(newVault.id, password);
@@ -340,6 +350,70 @@ export default function SignupPage() {
               )}
             </div>
 
+            {/* Divider: Account Security */}
+            <div className="border-t border-border/60 pt-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Account Security</p>
+            </div>
+
+            {/* Account Password */}
+            <div>
+              <Label htmlFor="signup-account-password" className="text-sm font-medium">
+                Account Password <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative mt-1.5">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="signup-account-password"
+                  data-testid="signup-account-password"
+                  type={showAccountPassword ? 'text' : 'password'}
+                  placeholder="Password to log into your account (min 8 chars)"
+                  value={accountPassword}
+                  onChange={e => setAccountPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAccountPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Used to log into your IronVault account.</p>
+            </div>
+
+            {/* Confirm Account Password */}
+            <div>
+              <Label htmlFor="signup-confirm-account-password" className="text-sm font-medium">
+                Confirm Account Password <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative mt-1.5">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="signup-confirm-account-password"
+                  data-testid="signup-confirm-account-password"
+                  type={showConfirmAccountPassword ? 'text' : 'password'}
+                  placeholder="Re-enter your account password"
+                  value={confirmAccountPassword}
+                  onChange={e => setConfirmAccountPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmAccountPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showConfirmAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
             {/* Master Password */}
             <div>
               <Label htmlFor="signup-password" className="text-sm font-medium">
@@ -351,7 +425,7 @@ export default function SignupPage() {
                   id="signup-password"
                   data-testid="signup-password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a strong password (min 8 chars)"
+                  placeholder="Create a master password to encrypt your vault"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="pl-10 pr-10"
@@ -368,14 +442,14 @@ export default function SignupPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                This encrypts your vault. We cannot recover it if lost.
+                This encrypts your vault. We cannot recover it if lost. Can be same as or different from your account password.
               </p>
             </div>
 
-            {/* Confirm Password */}
+            {/* Confirm Master Password */}
             <div>
               <Label htmlFor="signup-confirm" className="text-sm font-medium">
-                Confirm Password <span className="text-destructive">*</span>
+                Confirm Master Password <span className="text-destructive">*</span>
               </Label>
               <div className="relative mt-1.5">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

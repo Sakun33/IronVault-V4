@@ -20,6 +20,7 @@ import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabl
 import { isNativeApp } from '@/native/platform';
 import { vaultManager, MAX_FAILED_ATTEMPTS, type LockoutState } from '@/lib/vault-manager';
 import { ResetVaultDialog } from '@/components/reset-vault-dialog';
+import { hasAccountCredentials, verifyAccountCredentials } from '@/lib/account-auth';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -27,6 +28,14 @@ export default function Login() {
   const { toast } = useToast();
   const { clearLogs } = useLogging();
   
+  // Account login step (step 1 of 2-stage auth)
+  const [accountStep, setAccountStep] = useState(() => hasAccountCredentials());
+  const [accountEmailInput, setAccountEmailInput] = useState('');
+  const [accountPasswordInput, setAccountPasswordInput] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [accountError, setAccountError] = useState('');
+  const [accountLoading, setAccountLoading] = useState(false);
+
   const [masterPassword, setMasterPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -109,6 +118,30 @@ export default function Login() {
     
     return () => clearInterval(interval);
   }, [updateLockoutState, vaultExists]);
+
+  const handleAccountLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccountError('');
+    if (!accountEmailInput || !accountEmailInput.includes('@')) {
+      setAccountError('Please enter a valid email address.');
+      return;
+    }
+    if (!accountPasswordInput) {
+      setAccountError('Please enter your account password.');
+      return;
+    }
+    setAccountLoading(true);
+    try {
+      const valid = await verifyAccountCredentials(accountEmailInput, accountPasswordInput);
+      if (valid) {
+        setAccountStep(false);
+      } else {
+        setAccountError('Incorrect email or password. Please try again.');
+      }
+    } finally {
+      setAccountLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -651,6 +684,96 @@ export default function Login() {
       </Dialog>
       
       <div className="max-w-md w-full animate-fade-in-up">
+
+        {/* ── Step 1: Account Login ─────────────────────────────────────── */}
+        {accountStep && (
+          <>
+            <div className="text-center mb-8">
+              <div className="inline-block mb-4">
+                <AppLogo size={64} variant="hero" />
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">Welcome back</h1>
+              <p className="text-sm text-muted-foreground font-medium">Step 1 of 2 — Sign in to your account</p>
+            </div>
+
+            <Card className="shadow-xl border-border/50 backdrop-blur-sm bg-card/90">
+              <CardContent className="pt-6">
+                <form onSubmit={handleAccountLogin} className="space-y-4">
+                  <div>
+                    <Label htmlFor="account-email" className="block text-sm font-medium text-foreground mb-2">
+                      Email
+                    </Label>
+                    <Input
+                      type="email"
+                      id="account-email"
+                      data-testid="input-account-email"
+                      placeholder="you@example.com"
+                      value={accountEmailInput}
+                      onChange={e => setAccountEmailInput(e.target.value)}
+                      disabled={accountLoading}
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-password" className="block text-sm font-medium text-foreground mb-2">
+                      Account Password
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showAccountPassword ? 'text' : 'password'}
+                        id="account-password"
+                        data-testid="input-account-password"
+                        className="pr-10"
+                        placeholder="Your account password"
+                        value={accountPasswordInput}
+                        onChange={e => setAccountPasswordInput(e.target.value)}
+                        disabled={accountLoading}
+                        autoComplete="current-password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowAccountPassword(!showAccountPassword)}
+                      >
+                        {showAccountPassword ? <EyeOff className="h-5 w-5 text-muted-foreground" /> : <Eye className="h-5 w-5 text-muted-foreground" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {accountError && (
+                    <p className="text-sm text-destructive">{accountError}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={accountLoading}
+                    data-testid="button-account-login"
+                  >
+                    {accountLoading ? 'Verifying…' : 'Continue'}
+                  </Button>
+                </form>
+
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Don't have an account?{' '}
+                    <a href="/auth/signup" className="text-primary font-medium hover:underline">
+                      Sign up free
+                    </a>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* ── Step 2 / direct vault unlock (shown when accountStep = false) ─ */}
+        {!accountStep && (
+        <>
+
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="inline-block mb-4">
@@ -1016,6 +1139,10 @@ export default function Login() {
             />
           </CardContent>
         </Card>
+
+        </> // close {!accountStep && (
+        )}
+
       </div>
     </div>
   );

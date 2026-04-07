@@ -137,7 +137,7 @@ function LandingNav() {
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -152,7 +152,7 @@ function LandingNav() {
               <li key={link.href}>
                 <button
                   onClick={() => scrollTo(link.href)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 >
                   {link.label}
                 </button>
@@ -196,7 +196,7 @@ function HeroSection() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           {/* Copy */}
           <motion.div
             variants={stagger}
@@ -1024,9 +1024,9 @@ function LandingFooter() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top: logo + cols */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
           {/* Brand col */}
-          <div className="col-span-2 sm:col-span-3 lg:col-span-1">
+          <div className="sm:col-span-2 lg:col-span-1">
             <Link href="/">
               <span className="flex items-center gap-2.5 mb-4">
                 <AppLogo size={28} />
