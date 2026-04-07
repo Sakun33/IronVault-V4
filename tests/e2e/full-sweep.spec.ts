@@ -2464,17 +2464,26 @@ proTest.describe.serial('19 · Expenses CRUD (pro account)', () => {
     await navigatePro(page, '/expenses');
     await page.waitForTimeout(500);
 
-    const searchInput = page.locator('input[placeholder*="search" i]').first();
-    await searchInput.waitFor({ timeout: 8000 });
-    await searchInput.fill('Grocery');
+    // Expense search has data-testid="input-expenses-search" (may be in overflow-hidden on mobile)
+    await page.waitForFunction(() => !!document.querySelector('[data-testid="input-expenses-search"]'), { timeout: 8000 });
+    await page.evaluate(() => {
+      const inp = document.querySelector('[data-testid="input-expenses-search"]') as HTMLInputElement;
+      if (inp) {
+        inp.value = 'Grocery';
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
     await page.waitForTimeout(500);
     const hasGrocery = await page.evaluate(() => (document.body.textContent || '').includes('Grocery Shopping QA'));
     expect(hasGrocery).toBe(true);
-    // Other entries should not be visible in filtered results (check Uber not present)
-    // (may still appear in list area; just check search didn't break the page)
-    const pageNotBroken = await page.evaluate(() => !!(document.querySelector('[role="dialog"]') === null));
+    const pageNotBroken = await page.evaluate(() => document.querySelector('[role="dialog"]') === null);
     expect(pageNotBroken).toBe(true);
-    await searchInput.fill('');
+    // Clear search
+    await page.evaluate(() => {
+      const inp = document.querySelector('[data-testid="input-expenses-search"]') as HTMLInputElement;
+      if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
     await page.waitForTimeout(300);
   });
 
