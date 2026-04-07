@@ -14,6 +14,7 @@ import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-sele
 import { useSubscription } from "@/hooks/use-subscription";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import SignupPage from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
 import Passwords from "@/pages/passwords";
 import Subscriptions from "@/pages/subscriptions";
@@ -600,9 +601,9 @@ function Router() {
       <PublicPageWrapper>
         <Switch>
           <Route path="/" component={LandingPage} />
-          {/* Auth routes — Login handles both vault creation and unlock */}
+          {/* Auth routes */}
           <Route path="/auth/login" component={Login} />
-          <Route path="/auth/signup" component={Login} />
+          <Route path="/auth/signup" component={SignupPage} />
           <Route path="/login" component={Login} />
           {/* Public info pages */}
           <Route path="/about" component={AboutPage} />
