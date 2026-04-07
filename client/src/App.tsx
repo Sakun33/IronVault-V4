@@ -43,6 +43,8 @@ import ChangelogPage from "@/pages/info/changelog";
 import StatusPage from "@/pages/info/status";
 import LandingPage from "@/pages/landing";
 import UpgradePage from "@/pages/pricing";
+import VaultPickerPage from "@/pages/vault-picker";
+import CreateVaultPage from "@/pages/create-vault";
 import QAPage from "@/pages/qa";
 import VaultsPage from "@/pages/vaults";
 import { Button } from "@/components/ui/button";
@@ -50,7 +52,8 @@ import { Input } from "@/components/ui/input";
 import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { ExtensionPairingModal } from "@/components/extension-pairing-modal";
@@ -79,6 +82,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
   const [showVaultSwitcher, setShowVaultSwitcher] = useState(false);
+  const [vaultDropdownPos, setVaultDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const mobileVaultBtnRef = useRef<HTMLButtonElement>(null);
+  const desktopVaultBtnRef = useRef<HTMLButtonElement>(null);
   // Search removed from mobile header - individual pages have their own search
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
@@ -113,29 +119,54 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     logout();
   };
 
+  const toggleVaultSwitcher = (btnRef: React.RefObject<HTMLButtonElement | null>) => {
+    if (showVaultSwitcher) {
+      setShowVaultSwitcher(false);
+      setVaultDropdownPos(null);
+      return;
+    }
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) setVaultDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    setShowVaultSwitcher(true);
+  };
+
+  const closeVaultSwitcher = () => {
+    setShowVaultSwitcher(false);
+    setVaultDropdownPos(null);
+  };
+
   const clearSearch = () => {
     setHasSearchInteracted(false);
     setLocalSearchQuery('');
     setSearchQuery('');
   };
 
-  const navItems = [
+  // Core vault items (top section of sidebar)
+  const coreNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary', requiresPro: false },
     { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600', requiresPro: false },
     { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: isPro ? null : `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary', requiresPro: false },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600', requiresPro: true },
     { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: isPro ? null : `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600', requiresPro: false },
-    { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600', requiresPro: true },
-    { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600', requiresPro: false },
-    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
-    { id: 'investments', label: 'Investment / Goals', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
     { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600', requiresPro: true },
     { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true },
+  ];
+  // Finance items (second section)
+  const financeNavItems = [
+    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600', requiresPro: true },
+    { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600', requiresPro: true },
+    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
+    { id: 'investments', label: 'Investment / Goals', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
+    { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600', requiresPro: false },
+  ];
+  // Bottom pinned items (system/account)
+  const bottomNavItems = [
     { id: 'profile', label: 'Profile', icon: User, count: null, color: 'text-primary', requiresPro: false },
     { id: 'logging', label: 'Activity Logs', icon: FileText, count: null, color: 'text-muted-foreground', requiresPro: false },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, count: null, color: 'text-muted-foreground', requiresPro: false },
     { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary', requiresPro: false },
   ];
+  // Flat list for mobile menu and other consumers
+  const navItems = [...coreNavItems, ...financeNavItems, ...bottomNavItems];
 
   // Core sections for bottom navigation (only 4 most used)
   const bottomTabItems: TabItem[] = [
@@ -170,7 +201,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
       {/* Mobile Header - Glassmorphism */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5 overflow-hidden">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5">
         <div className="flex items-center justify-between max-w-full h-11">
           <div className="flex items-center gap-2.5 shrink-0">
             <Button
@@ -190,40 +221,14 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </button>
             {/* Mobile vault switcher chip */}
             {vaults.length > 1 && (
-              <div className="relative">
-                <button
-                  className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40"
-                  onClick={() => setShowVaultSwitcher(v => !v)}
-                >
-                  <span className="max-w-[70px] truncate">{activeVault?.name || 'Vault'}</span>
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-                {showVaultSwitcher && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowVaultSwitcher(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
-                      {vaults.map(vault => (
-                        <button
-                          key={vault.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
-                          onClick={async () => {
-                            setShowVaultSwitcher(false);
-                            if (vault.id !== activeVault?.id) {
-                              await switchVault(vault.id);
-                              window.location.href = '/';
-                            }
-                          }}
-                        >
-                          <span className="truncate">{vault.name}</span>
-                          {vault.id === activeVault?.id && (
-                            <span className="ml-auto text-[10px] text-primary">Active</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                ref={mobileVaultBtnRef}
+                className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40"
+                onClick={() => toggleVaultSwitcher(mobileVaultBtnRef)}
+              >
+                <span className="max-w-[70px] truncate">{activeVault?.name || 'Vault'}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
             )}
           </div>
 
@@ -254,44 +259,17 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
             {/* Vault Switcher */}
             {vaults.length > 0 && (
-              <div className="relative">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1.5 rounded-xl text-sm h-8 px-3 border-border/60 bg-muted/40"
-                  onClick={() => setShowVaultSwitcher(v => !v)}
-                >
-                  <Database className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="max-w-[120px] truncate">{activeVault?.name || 'Default Vault'}</span>
-                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                </Button>
-                {showVaultSwitcher && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowVaultSwitcher(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 min-w-[180px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
-                      {vaults.map(vault => (
-                        <button
-                          key={vault.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
-                          onClick={async () => {
-                            setShowVaultSwitcher(false);
-                            if (vault.id !== activeVault?.id) {
-                              await switchVault(vault.id);
-                              window.location.href = '/';
-                            }
-                          }}
-                        >
-                          <Database className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{vault.name}</span>
-                          {vault.id === activeVault?.id && (
-                            <span className="ml-auto text-[10px] text-primary font-semibold">Active</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <Button
+                ref={desktopVaultBtnRef}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5 rounded-xl text-sm h-8 px-3 border-border/60 bg-muted/40"
+                onClick={() => toggleVaultSwitcher(desktopVaultBtnRef)}
+              >
+                <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="max-w-[120px] truncate">{activeVault?.name || 'Default Vault'}</span>
+                <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              </Button>
             )}
           </div>
 
@@ -462,40 +440,80 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
         <nav className="w-60 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 flex flex-col h-full">
-          {/* Scrollable primary nav items */}
-          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
-            {navItems.filter(item => !['profile', 'logging', 'settings', 'upgrade'].includes(item.id)).map((item) => {
-              const itemPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
-              const isActive = item.id === 'dashboard' ? location === '/' : location === itemPath;
-              return (
-              <Link key={item.id} href={itemPath}>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
-                >
-                  <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
-                  <span className="text-sm">{item.label}</span>
-                  {item.requiresPro && !isPro ? (
-                    <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
-                      Pro
-                    </span>
-                  ) : 'limitLabel' in item && item.limitLabel !== null ? (
-                    <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                      {item.limitLabel}
-                    </span>
-                  ) : item.count !== null && (
-                    <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                      {item.count > 99 ? '99+' : item.count}
-                    </span>
-                  )}
-                </Button>
-              </Link>
-              );
-            })}
+          {/* Scrollable primary nav items with section groups */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {/* Core Vault group */}
+            <div className="px-2 pt-1 pb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Vault</span>
+            </div>
+            <div className="space-y-0.5 mb-1">
+              {coreNavItems.map((item) => {
+                const itemPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
+                const isActive = item.id === 'dashboard' ? location === '/' : location === itemPath;
+                return (
+                <Link key={item.id} href={itemPath}>
+                  <Button
+                    variant="ghost"
+                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                  >
+                    <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                    <span className="text-sm">{item.label}</span>
+                    {item.requiresPro && !isPro ? (
+                      <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                        Pro
+                      </span>
+                    ) : 'limitLabel' in item && item.limitLabel !== null ? (
+                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                        {item.limitLabel}
+                      </span>
+                    ) : item.count !== null && (
+                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                        {item.count > 99 ? '99+' : item.count}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
+                );
+              })}
+            </div>
+            {/* Finance group */}
+            <div className="px-2 pt-2 pb-1 border-t border-border/30 mt-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Finance</span>
+            </div>
+            <div className="space-y-0.5">
+              {financeNavItems.map((item) => {
+                const itemPath = `/${item.id}`;
+                const isActive = location === itemPath;
+                return (
+                <Link key={item.id} href={itemPath}>
+                  <Button
+                    variant="ghost"
+                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                  >
+                    <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                    <span className="text-sm">{item.label}</span>
+                    {item.requiresPro && !isPro ? (
+                      <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                        Pro
+                      </span>
+                    ) : 'limitLabel' in item && item.limitLabel !== null ? (
+                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                        {item.limitLabel}
+                      </span>
+                    ) : item.count !== null && (
+                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                        {item.count > 99 ? '99+' : item.count}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
+                );
+              })}
+            </div>
           </div>
           {/* Pinned bottom utility items — always visible */}
           <div className="border-t border-border/50 pt-2 mt-2 space-y-0.5 flex-shrink-0">
-            {navItems.filter(item => ['profile', 'logging', 'settings', 'upgrade'].includes(item.id)).map((item) => {
+            {bottomNavItems.map((item) => {
               const itemPath = `/${item.id}`;
               const isActive = location === itemPath;
               return (
@@ -506,7 +524,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
-                  {item.requiresPro && !isPro && item.id === 'upgrade' && (
+                  {item.id === 'upgrade' && !isPro && (
                     <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">↑</span>
                   )}
                 </Button>
@@ -560,6 +578,39 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         open={showExtensionPairing}
         onOpenChange={setShowExtensionPairing}
       />
+
+      {/* Vault switcher portal — renders to document.body to escape all stacking contexts
+          and overflow-hidden containers (fixes BUG-016 z-index clipping) */}
+      {showVaultSwitcher && vaultDropdownPos && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={closeVaultSwitcher} />
+          <div
+            style={{ position: 'fixed', top: vaultDropdownPos.top, left: vaultDropdownPos.left, zIndex: 9999 }}
+            className="min-w-[180px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden"
+          >
+            {vaults.map(vault => (
+              <button
+                key={vault.id}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                onClick={async () => {
+                  closeVaultSwitcher();
+                  if (vault.id !== activeVault?.id) {
+                    await switchVault(vault.id);
+                    window.location.href = '/';
+                  }
+                }}
+              >
+                <Database className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{vault.name}</span>
+                {vault.id === activeVault?.id && (
+                  <span className="ml-auto text-[10px] text-primary font-semibold">Active</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }
@@ -578,9 +629,31 @@ function PublicPageWrapper({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Shared public info routes (used in multiple tiers)
+const PUBLIC_INFO_ROUTES = (
+  <>
+    <Route path="/about" component={AboutPage} />
+    <Route path="/features" component={FeaturesPage} />
+    <Route path="/security" component={SecurityPage} />
+    <Route path="/contact" component={ContactPage} />
+    <Route path="/docs" component={DocsPage} />
+    <Route path="/support" component={DocsPage} />
+    <Route path="/privacy" component={PrivacyPage} />
+    <Route path="/terms" component={TermsPage} />
+    <Route path="/disclaimer" component={DisclaimerPage} />
+    <Route path="/cookies" component={PrivacyPage} />
+    <Route path="/pricing" component={PricingPage} />
+    <Route path="/blog" component={BlogPage} />
+    <Route path="/changelog" component={ChangelogPage} />
+    <Route path="/status" component={StatusPage} />
+    <Route path="/roadmap" component={AboutPage} />
+    <Route path="/api" component={AboutPage} />
+  </>
+);
+
 // Router Component
 function Router() {
-  const { isUnlocked, isLoading } = useAuth();
+  const { isUnlocked, isLoading, isAccountLoggedIn } = useAuth();
 
   if (isLoading) {
     return (
@@ -595,33 +668,35 @@ function Router() {
     );
   }
 
-  // If not unlocked: show marketing landing page at / and auth routes; all other paths fall through to landing
-  if (!isUnlocked) {
+  // ── Tier 1: No account session → marketing landing + auth pages ──────────────
+  if (!isAccountLoggedIn) {
     return (
       <PublicPageWrapper>
         <Switch>
           <Route path="/" component={LandingPage} />
-          {/* Auth routes */}
           <Route path="/auth/login" component={Login} />
           <Route path="/auth/signup" component={SignupPage} />
           <Route path="/login" component={Login} />
-          {/* Public info pages */}
-          <Route path="/about" component={AboutPage} />
-          <Route path="/features" component={FeaturesPage} />
-          <Route path="/security" component={SecurityPage} />
-          <Route path="/contact" component={ContactPage} />
-          <Route path="/docs" component={DocsPage} />
-          <Route path="/support" component={DocsPage} />
-          <Route path="/privacy" component={PrivacyPage} />
-          <Route path="/terms" component={TermsPage} />
-          <Route path="/disclaimer" component={DisclaimerPage} />
-          <Route path="/cookies" component={PrivacyPage} />
-          <Route path="/pricing" component={PricingPage} />
-          <Route path="/blog" component={BlogPage} />
-          <Route path="/changelog" component={ChangelogPage} />
-          <Route path="/status" component={StatusPage} />
-          {/* Catch-all: show landing page */}
+          {PUBLIC_INFO_ROUTES}
+          {/* Catch-all → landing */}
           <Route component={LandingPage} />
+        </Switch>
+      </PublicPageWrapper>
+    );
+  }
+
+  // ── Tier 2: Account logged in but vault locked → vault picker + create-vault ─
+  if (!isUnlocked) {
+    return (
+      <PublicPageWrapper>
+        <Switch>
+          <Route path="/auth/create-vault" component={CreateVaultPage} />
+          {/* Redirect signup/login to vault picker (already logged in) */}
+          <Route path="/auth/signup" component={VaultPickerPage} />
+          <Route path="/auth/login" component={VaultPickerPage} />
+          {PUBLIC_INFO_ROUTES}
+          {/* Default → vault picker */}
+          <Route component={VaultPickerPage} />
         </Switch>
       </PublicPageWrapper>
     );
@@ -711,28 +786,12 @@ function Router() {
       )} />
       
       {/* Public Information Pages */}
-      <Route path="/about" component={AboutPage} />
-      <Route path="/features" component={FeaturesPage} />
-      <Route path="/security" component={SecurityPage} />
-      <Route path="/contact" component={ContactPage} />
-      <Route path="/docs" component={DocsPage} />
-      <Route path="/support" component={DocsPage} />
-      <Route path="/privacy" component={PrivacyPage} />
-      <Route path="/terms" component={TermsPage} />
-      <Route path="/disclaimer" component={DisclaimerPage} />
-      <Route path="/cookies" component={PrivacyPage} />
-      <Route path="/pricing" component={PricingPage} />
+      {PUBLIC_INFO_ROUTES}
       <Route path="/upgrade" component={() => (
         <MainLayout>
           <UpgradePage />
         </MainLayout>
       )} />
-      <Route path="/roadmap" component={AboutPage} />
-      <Route path="/blog" component={BlogPage} />
-      <Route path="/changelog" component={ChangelogPage} />
-      <Route path="/status" component={StatusPage} />
-      <Route path="/api" component={AboutPage} />
-      
       <Route component={NotFound} />
     </Switch>
   );

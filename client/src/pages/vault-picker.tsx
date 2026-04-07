@@ -156,6 +156,7 @@ export default function VaultPickerPage() {
       // Register vault in local registry if not already present
       const existing = vaultManager.getExistingVaults().find(v => v.id === cloudVault.vaultId);
       if (!existing) {
+        // New device — add to local registry, initialise the vault encryption, then restore items
         vaultManager.addToRegistry({
           id: cloudVault.vaultId,
           name: cloudVault.vaultName,
@@ -165,12 +166,16 @@ export default function VaultPickerPage() {
           biometricEnabled: false,
           iconColor: '#6366f1',
         });
+        vaultManager.setActiveVaultId(cloudVault.vaultId);
+        await vaultStorage.switchToVault(cloudVault.vaultId);
+        // Initialise vault encryption before importing items (fixes blank-IndexedDB unlock failure)
+        await vaultStorage.createVault(pw);
+        await vaultStorage.importVault(full.encryptedBlob, pw);
+      } else {
+        // Same device — vault already exists locally; skip re-import to avoid duplicate items
+        vaultManager.setActiveVaultId(cloudVault.vaultId);
+        await vaultStorage.switchToVault(cloudVault.vaultId);
       }
-
-      // Switch storage to this vault and import the encrypted data
-      vaultManager.setActiveVaultId(cloudVault.vaultId);
-      await vaultStorage.switchToVault(cloudVault.vaultId);
-      await vaultStorage.importVault(full.encryptedBlob, pw);
 
       // Now unlock using the master password
       const success = await login(pw);
