@@ -50,8 +50,7 @@ import { AddInvestmentModal } from '@/components/add-investment-modal';
 import { EditInvestmentModal } from '@/components/edit-investment-modal';
 
 export default function Investments() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('investments')) return <UpgradeGate feature="Investments" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const [, setLocation] = useLocation();
   const vaultContext = useVault();
@@ -502,6 +501,8 @@ export default function Investments() {
       return colors[type] || colors['other'];
     };
 
+
+    if (!licenseLoading && !isFeatureAvailable('investments')) return <UpgradeGate feature="Investments" />;
 
     return (
       <div className="p-4 space-y-6 overflow-x-hidden">

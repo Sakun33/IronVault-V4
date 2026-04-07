@@ -153,8 +153,7 @@ const GOAL_TEMPLATES = [
 ];
 
 export default function Goals() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('investments')) return <UpgradeGate feature="Goals & Investments" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const [, setLocation] = useLocation();
   
@@ -752,6 +751,8 @@ export default function Goals() {
     if (progress >= 50) return 'bg-yellow-500';
     return 'bg-red-500';
   };
+
+  if (!licenseLoading && !isFeatureAvailable('investments')) return <UpgradeGate feature="Goals & Investments" />;
 
   return (
     <div className="space-y-6 overflow-x-hidden">
