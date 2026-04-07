@@ -10,6 +10,8 @@ Allow: /about
 Allow: /contact
 Allow: /documentation
 Allow: /blog
+Allow: /changelog
+Allow: /status
 Allow: /privacy
 Allow: /terms
 Allow: /disclaimer

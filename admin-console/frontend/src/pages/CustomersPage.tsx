@@ -28,7 +28,9 @@ interface Customer {
 
 interface CustomersResponse {
   customers: Customer[];
-  pagination: {
+  // Some backend versions return a flat `total` field, others wrap it in `pagination`
+  total?: number;
+  pagination?: {
     page: number;
     limit: number;
     total: number;
@@ -78,7 +80,8 @@ export default function CustomersPage() {
   });
 
   const customers = data?.customers || [];
-  const pagination = data?.pagination || { page: 1, limit: 50, total: 0, pages: 0 };
+  const totalCount = data?.pagination?.total ?? data?.total ?? customers.length;
+  const pagination = data?.pagination || { page: 1, limit: 50, total: totalCount, pages: Math.ceil(totalCount / 50) };
 
   const createMutation = useMutation({
     mutationFn: async (form: typeof createForm) => {

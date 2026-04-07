@@ -186,7 +186,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex h-full flex-col">
             <div className="flex h-16 items-center justify-between px-6 border-b">
               <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                SecureVault
+                IronVault
               </h1>
               <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)}>
                 <X className="h-5 w-5" />
@@ -238,7 +238,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="flex flex-col flex-grow">
           <div className="flex h-16 items-center px-6 border-b">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              SecureVault Admin
+              IronVault Admin
             </h1>
           </div>
           <nav className="flex-1 space-y-2 px-4 py-6">

@@ -329,6 +329,7 @@ app.get('/api/customers', authenticateToken, (req, res) => {
 
     res.json({
       customers: paginatedCustomers,
+      total: filteredCustomers.length,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -811,7 +812,7 @@ app.get('/api/customers/:id/communications', authenticateToken, (req, res) => {
       {
         id: 1,
         type: 'email',
-        subject: 'Welcome to SecureVault',
+        subject: 'Welcome to IronVault',
         status: 'sent',
         timestamp: customer.created_at
       },
@@ -1454,11 +1455,15 @@ app.get('/api/crm/entitlement/:userId', (req, res) => {
 // Start server - load persisted data first
 loadData();
 
-app.listen(PORT, () => {
-  console.log(`🚀 Admin Console API running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔐 Login endpoint: http://localhost:${PORT}/api/auth/login`);
-  console.log(`👥 Customers endpoint: http://localhost:${PORT}/api/customers`);
-  console.log(`📈 Dashboard analytics: http://localhost:${PORT}/api/dashboard/analytics`);
-  console.log(`📊 Total customers loaded: ${customers.length}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Admin Console API running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🔐 Login endpoint: http://localhost:${PORT}/api/auth/login`);
+    console.log(`👥 Customers endpoint: http://localhost:${PORT}/api/customers`);
+    console.log(`📈 Dashboard analytics: http://localhost:${PORT}/api/dashboard/analytics`);
+    console.log(`📊 Total customers loaded: ${customers.length}`);
+  });
+}
+
+export default app;

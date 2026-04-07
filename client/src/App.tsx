@@ -37,6 +37,10 @@ import PrivacyPage from "@/pages/info/privacy";
 import TermsPage from "@/pages/info/terms";
 import DisclaimerPage from "@/pages/info/disclaimer";
 import PricingPage from "@/pages/info/pricing";
+import BlogPage from "@/pages/info/blog";
+import ChangelogPage from "@/pages/info/changelog";
+import StatusPage from "@/pages/info/status";
+import LandingPage from "@/pages/landing";
 import UpgradePage from "@/pages/pricing";
 import QAPage from "@/pages/qa";
 import VaultsPage from "@/pages/vaults";
@@ -66,7 +70,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const { searchQuery, setSearchQuery, stats } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, switchVault } = useVaultSelection();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showExtensionPairing, setShowExtensionPairing] = useState(false);
@@ -456,13 +460,17 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
-        <nav className="w-60 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 space-y-1 overflow-y-auto h-full">
-          <div className="space-y-0.5">
-            {navItems.map((item) => (
-              <Link key={item.id} href={item.id === 'dashboard' ? '/' : `/${item.id}`}>
+        <nav className="w-60 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 flex flex-col h-full">
+          {/* Scrollable primary nav items */}
+          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
+            {navItems.filter(item => !['profile', 'logging', 'settings', 'upgrade'].includes(item.id)).map((item) => {
+              const itemPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
+              const isActive = item.id === 'dashboard' ? location === '/' : location === itemPath;
+              return (
+              <Link key={item.id} href={itemPath}>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5"
+                  className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
                 >
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
@@ -481,7 +489,29 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </Button>
               </Link>
-            ))}
+              );
+            })}
+          </div>
+          {/* Pinned bottom utility items — always visible */}
+          <div className="border-t border-border/50 pt-2 mt-2 space-y-0.5 flex-shrink-0">
+            {navItems.filter(item => ['profile', 'logging', 'settings', 'upgrade'].includes(item.id)).map((item) => {
+              const itemPath = `/${item.id}`;
+              const isActive = location === itemPath;
+              return (
+              <Link key={item.id} href={itemPath}>
+                <Button
+                  variant="ghost"
+                  className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                >
+                  <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                  <span className="text-sm">{item.label}</span>
+                  {item.requiresPro && !isPro && item.id === 'upgrade' && (
+                    <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">↑</span>
+                  )}
+                </Button>
+              </Link>
+              );
+            })}
           </div>
         </nav>
 
@@ -550,9 +580,34 @@ function Router() {
     );
   }
 
-  // If not unlocked, redirect all routes to login
+  // If not unlocked: show marketing landing page at / and auth routes; all other paths fall through to landing
   if (!isUnlocked) {
-    return <Login />;
+    return (
+      <Switch>
+        <Route path="/" component={LandingPage} />
+        {/* Auth routes — Login handles both vault creation and unlock */}
+        <Route path="/auth/login" component={Login} />
+        <Route path="/auth/signup" component={Login} />
+        <Route path="/login" component={Login} />
+        {/* Public info pages */}
+        <Route path="/about" component={AboutPage} />
+        <Route path="/features" component={FeaturesPage} />
+        <Route path="/security" component={SecurityPage} />
+        <Route path="/contact" component={ContactPage} />
+        <Route path="/docs" component={DocsPage} />
+        <Route path="/support" component={DocsPage} />
+        <Route path="/privacy" component={PrivacyPage} />
+        <Route path="/terms" component={TermsPage} />
+        <Route path="/disclaimer" component={DisclaimerPage} />
+        <Route path="/cookies" component={PrivacyPage} />
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/blog" component={BlogPage} />
+        <Route path="/changelog" component={ChangelogPage} />
+        <Route path="/status" component={StatusPage} />
+        {/* Catch-all: show landing page */}
+        <Route component={LandingPage} />
+      </Switch>
+    );
   }
 
   return (
@@ -656,7 +711,9 @@ function Router() {
         </MainLayout>
       )} />
       <Route path="/roadmap" component={AboutPage} />
-      <Route path="/blog" component={AboutPage} />
+      <Route path="/blog" component={BlogPage} />
+      <Route path="/changelog" component={ChangelogPage} />
+      <Route path="/status" component={StatusPage} />
       <Route path="/api" component={AboutPage} />
       
       <Route component={NotFound} />
