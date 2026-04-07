@@ -77,15 +77,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `SELECT id, email, plan_type, status FROM customers WHERE ${col} = $1 LIMIT 1`,
         [userId]
       );
-      if (!rows[0]) return res.json({ plan: "free", status: "active", trial_active: false });
+      if (!rows[0]) return res.json({ plan: "free", status: "active", trial_active: false, entitlement: { plan: "free", status: "active", trial_active: false } });
       const row = rows[0];
-      return res.json({
+      const entitlementData = {
         plan: row.plan_type,
         status: row.status,
         trial_active: row.plan_type === "trial",
         id: row.id,
         email: row.email,
-      });
+      };
+      return res.json({ ...entitlementData, entitlement: entitlementData });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
