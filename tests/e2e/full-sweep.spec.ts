@@ -2306,12 +2306,12 @@ async function navigatePro(page: Page, route: string) {
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, route);
 
-  // "View Pricing Plans" is the unique CTA rendered by UpgradeGate — wait until it
-  // is absent so we know we're looking at the real pro page, not the gate.
+  // "Upgrade to unlock" is the unique body copy rendered by UpgradeGate — wait until
+  // it is absent so we know we're looking at the real pro page, not the gate.
   await page.waitForFunction(
     () => {
       const t = document.body.textContent || '';
-      return !t.includes('View Pricing Plans') && t.length > 100;
+      return !t.includes('Upgrade to unlock') && t.length > 100;
     },
     { timeout: 15000 }
   ).catch(() => {});
@@ -2342,7 +2342,8 @@ proTest.describe.serial('19 · Expenses CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/expenses');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const hasGate = text.includes('Upgrade to Pro') && !text.includes('Add Expense');
+    // UpgradeGate contains unique copy "Upgrade to unlock" — this must be absent for pro users
+    const hasGate = text.includes('Upgrade to unlock');
     expect(hasGate).toBe(false);
     // Should have expense-related content
     const hasExpenses = text.includes('Expense') || text.includes('expense') || text.includes('₹') || text.includes('Budget');
@@ -2563,7 +2564,7 @@ proTest.describe.serial('20 · Subscriptions CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/subscriptions');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('Add Subscription') && !text.includes('subscription');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
@@ -2641,7 +2642,7 @@ proTest.describe.serial('21 · Bank Statements CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/bank-statements');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('Statement') && !text.includes('bank');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
@@ -2688,7 +2689,7 @@ proTest.describe.serial('22 · Investments CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/investments');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('Investment') && !text.includes('Portfolio');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
@@ -2711,7 +2712,7 @@ proTest.describe.serial('22 · Investments CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/goals');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('Goal') && !text.includes('goal');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
@@ -2738,7 +2739,7 @@ proTest.describe.serial('23 · API Keys CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/api-keys');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('API') && !text.includes('key');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
@@ -2801,7 +2802,7 @@ proTest.describe.serial('24 · Documents CRUD (pro account)', () => {
     await unlockProVault(page);
     await navigatePro(page, '/documents');
     const text = await page.evaluate(() => document.body.textContent || '');
-    const gated = text.includes('Upgrade to Pro') && !text.includes('Document') && !text.includes('Upload');
+    const gated = text.includes('Upgrade to unlock');
     expect(gated).toBe(false);
   });
 
