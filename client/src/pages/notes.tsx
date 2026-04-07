@@ -900,7 +900,7 @@ export default function Notes() {
                     {note.isPinned && <Pin className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 fill-amber-600 dark:fill-amber-400" />}
                     <span data-testid={`note-title-${note.id}`} className="text-foreground">{note.title}</span>
                   </CardTitle>
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="sm"
