@@ -563,6 +563,20 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Enables document-level scrolling for public/landing pages.
+// The vault app uses overflow-hidden on html/body/root to manage its own scroll
+// panes — this restores normal scroll when the landing page or auth pages are shown.
+function PublicPageWrapper({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const els = [document.documentElement, document.body, document.getElementById('root')];
+    els.forEach(el => { if (el) el.style.overflowY = 'auto'; });
+    return () => {
+      els.forEach(el => { if (el) el.style.overflowY = ''; });
+    };
+  }, []);
+  return <>{children}</>;
+}
+
 // Router Component
 function Router() {
   const { isUnlocked, isLoading } = useAuth();
@@ -583,30 +597,32 @@ function Router() {
   // If not unlocked: show marketing landing page at / and auth routes; all other paths fall through to landing
   if (!isUnlocked) {
     return (
-      <Switch>
-        <Route path="/" component={LandingPage} />
-        {/* Auth routes — Login handles both vault creation and unlock */}
-        <Route path="/auth/login" component={Login} />
-        <Route path="/auth/signup" component={Login} />
-        <Route path="/login" component={Login} />
-        {/* Public info pages */}
-        <Route path="/about" component={AboutPage} />
-        <Route path="/features" component={FeaturesPage} />
-        <Route path="/security" component={SecurityPage} />
-        <Route path="/contact" component={ContactPage} />
-        <Route path="/docs" component={DocsPage} />
-        <Route path="/support" component={DocsPage} />
-        <Route path="/privacy" component={PrivacyPage} />
-        <Route path="/terms" component={TermsPage} />
-        <Route path="/disclaimer" component={DisclaimerPage} />
-        <Route path="/cookies" component={PrivacyPage} />
-        <Route path="/pricing" component={PricingPage} />
-        <Route path="/blog" component={BlogPage} />
-        <Route path="/changelog" component={ChangelogPage} />
-        <Route path="/status" component={StatusPage} />
-        {/* Catch-all: show landing page */}
-        <Route component={LandingPage} />
-      </Switch>
+      <PublicPageWrapper>
+        <Switch>
+          <Route path="/" component={LandingPage} />
+          {/* Auth routes — Login handles both vault creation and unlock */}
+          <Route path="/auth/login" component={Login} />
+          <Route path="/auth/signup" component={Login} />
+          <Route path="/login" component={Login} />
+          {/* Public info pages */}
+          <Route path="/about" component={AboutPage} />
+          <Route path="/features" component={FeaturesPage} />
+          <Route path="/security" component={SecurityPage} />
+          <Route path="/contact" component={ContactPage} />
+          <Route path="/docs" component={DocsPage} />
+          <Route path="/support" component={DocsPage} />
+          <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/terms" component={TermsPage} />
+          <Route path="/disclaimer" component={DisclaimerPage} />
+          <Route path="/cookies" component={PrivacyPage} />
+          <Route path="/pricing" component={PricingPage} />
+          <Route path="/blog" component={BlogPage} />
+          <Route path="/changelog" component={ChangelogPage} />
+          <Route path="/status" component={StatusPage} />
+          {/* Catch-all: show landing page */}
+          <Route component={LandingPage} />
+        </Switch>
+      </PublicPageWrapper>
     );
   }
 
