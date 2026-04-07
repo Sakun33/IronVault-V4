@@ -2126,10 +2126,9 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.waitForTimeout(1000);
 
       // Cloud section should now show at least 1 cloud vault
-      const body = document.body?.textContent ?? '';
       const cloudVaultsVisible = await page.evaluate(() => {
         const text = document.body.textContent ?? '';
-        return text.includes('Cloud Vaults') || text.includes('Cloud') && text.includes('Vault');
+        return text.includes('Cloud Vaults') || (text.includes('Cloud') && text.includes('Vault'));
       });
       // The cloud JWT must be set for cloud vaults to load; if no token this test is vacuous
       if (!cloudToken) return;
@@ -2153,13 +2152,10 @@ test.describe.serial('IronVault Full Sweep', () => {
         return;
       }
 
-      // Enter master password for the cloud vault (same as local vault)
+      // Enter master password for the cloud vault (same as local vault).
+      // Cloud vault inputs share testid "input-unlock-password"; they come after local vault inputs.
       const cloudPwInputs = page.getByTestId('input-unlock-password');
-      // Cloud vault inputs come after local vault inputs; use the one near the unlock-cloud-vault button
-      const cloudSection = page.locator('[data-testid="button-unlock-cloud-vault"]').first().locator('..').locator('[data-testid="input-unlock-password"]');
-      const cloudPw = page.locator('.rounded-xl:has([data-testid="button-unlock-cloud-vault"])').first().getByTestId('input-unlock-password');
       const inputCount = await cloudPwInputs.count();
-      // Fill the LAST input-unlock-password (cloud vault inputs come after local ones)
       if (inputCount > 0) {
         await cloudPwInputs.nth(inputCount - 1).fill(MASTER_PW);
       }
