@@ -49,11 +49,17 @@ import QAPage from "@/pages/qa";
 import VaultsPage from "@/pages/vaults";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useEffect, useCallback } from "react";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { ExtensionPairingModal } from "@/components/extension-pairing-modal";
@@ -81,10 +87,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
-  const [showVaultSwitcher, setShowVaultSwitcher] = useState(false);
-  const [vaultDropdownPos, setVaultDropdownPos] = useState<{ top: number; left: number } | null>(null);
-  const mobileVaultBtnRef = useRef<HTMLButtonElement>(null);
-  const desktopVaultBtnRef = useRef<HTMLButtonElement>(null);
   // Search removed from mobile header - individual pages have their own search
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
@@ -117,22 +119,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
   const handleLockVault = () => {
     logout();
-  };
-
-  const toggleVaultSwitcher = (btnRef: React.RefObject<HTMLButtonElement | null>) => {
-    if (showVaultSwitcher) {
-      setShowVaultSwitcher(false);
-      setVaultDropdownPos(null);
-      return;
-    }
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (rect) setVaultDropdownPos({ top: rect.bottom + 4, left: rect.left });
-    setShowVaultSwitcher(true);
-  };
-
-  const closeVaultSwitcher = () => {
-    setShowVaultSwitcher(false);
-    setVaultDropdownPos(null);
   };
 
   const clearSearch = () => {
@@ -202,36 +188,55 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
       {/* Mobile Header - Glassmorphism */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5">
-        <div className="flex items-center justify-between max-w-full h-11">
-          <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center justify-between max-w-full h-11 gap-1">
+          {/* Left side: menu + logo + vault chip — min-w-0 allows shrinking so right icons stay visible */}
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setShowQuickAccess(true)}
-              className="h-9 w-9 rounded-xl"
+              className="h-9 w-9 rounded-xl shrink-0"
             >
               <Menu className="w-5 h-5" />
             </Button>
             <button
               onClick={() => setLocation('/')}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity shrink-0"
             >
-              <AppLogo size={28} />
-              <span className="text-base font-bold tracking-tight text-foreground">IronVault</span>
+              <AppLogo size={26} />
+              <span className="text-sm font-bold tracking-tight text-foreground hidden xs:inline">IronVault</span>
             </button>
-            {/* Mobile vault switcher chip */}
+            {/* Mobile vault switcher chip — Radix DropdownMenu (portals to body, immune to overflow:hidden) */}
             {vaults.length > 1 && (
-              <button
-                ref={mobileVaultBtnRef}
-                className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40"
-                onClick={() => toggleVaultSwitcher(mobileVaultBtnRef)}
-              >
-                <span className="max-w-[70px] truncate">{activeVault?.name || 'Vault'}</span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40 min-w-0 max-w-[90px] shrink">
+                    <Database className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{activeVault?.name || 'Vault'}</span>
+                    <ChevronDown className="w-3 h-3 shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[160px]">
+                  <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Switch Vault</div>
+                  {vaults.map(vault => (
+                    <DropdownMenuItem
+                      key={vault.id}
+                      className="gap-2"
+                      onClick={async () => {
+                        if (vault.id !== activeVault?.id) await switchVault(vault.id);
+                      }}
+                    >
+                      <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="flex-1 truncate">{vault.name}</span>
+                      {vault.id === activeVault?.id && <Check className="w-3.5 h-3.5 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
+          {/* Right side: always visible, shrink-0 */}
           <div className="flex items-center gap-0.5 shrink-0">
             <NotificationBell userId="current-user" />
             <SimpleThemeToggle />
@@ -257,19 +262,44 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold tracking-tight text-foreground">IronVault</h1>
             </div>
-            {/* Vault Switcher */}
+            {/* Vault Switcher — Radix DropdownMenu (portals to body, bypasses all stacking contexts) */}
             {vaults.length > 0 && (
-              <Button
-                ref={desktopVaultBtnRef}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5 rounded-xl text-sm h-8 px-3 border-border/60 bg-muted/40"
-                onClick={() => toggleVaultSwitcher(desktopVaultBtnRef)}
-              >
-                <Database className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="max-w-[120px] truncate">{activeVault?.name || 'Default Vault'}</span>
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1.5 rounded-xl text-sm h-8 px-3 border-border/60 bg-muted/40"
+                  >
+                    <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="max-w-[120px] truncate">{activeVault?.name || 'Default Vault'}</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[200px]">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Switch Vault</div>
+                  {vaults.map(vault => (
+                    <DropdownMenuItem
+                      key={vault.id}
+                      className="gap-2"
+                      onClick={async () => {
+                        if (vault.id !== activeVault?.id) await switchVault(vault.id);
+                      }}
+                    >
+                      <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="flex-1 truncate">{vault.name}</span>
+                      {vault.id === activeVault?.id && <Check className="w-4 h-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <a href="/vaults" className="gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Manage Vaults</span>
+                    </a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
@@ -579,38 +609,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         onOpenChange={setShowExtensionPairing}
       />
 
-      {/* Vault switcher portal — renders to document.body to escape all stacking contexts
-          and overflow-hidden containers (fixes BUG-016 z-index clipping) */}
-      {showVaultSwitcher && vaultDropdownPos && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={closeVaultSwitcher} />
-          <div
-            style={{ position: 'fixed', top: vaultDropdownPos.top, left: vaultDropdownPos.left, zIndex: 9999 }}
-            className="min-w-[180px] bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden"
-          >
-            {vaults.map(vault => (
-              <button
-                key={vault.id}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${vault.id === activeVault?.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
-                onClick={async () => {
-                  closeVaultSwitcher();
-                  if (vault.id !== activeVault?.id) {
-                    await switchVault(vault.id);
-                    window.location.href = '/';
-                  }
-                }}
-              >
-                <Database className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{vault.name}</span>
-                {vault.id === activeVault?.id && (
-                  <span className="ml-auto text-[10px] text-primary font-semibold">Active</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </>,
-        document.body
-      )}
+      {/* Vault switcher is now handled inline via Radix DropdownMenu in both
+          the mobile chip and desktop button — no portal needed. */}
     </div>
   );
 }

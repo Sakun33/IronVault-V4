@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Mail, User, Sparkles, Phone, Globe, Crown, Zap, Infinity, Shield } from 'lucide-react';
+import { Mail, User, Sparkles, Phone, Globe, Crown, Zap, Infinity, Shield, Users } from 'lucide-react';
+import { PLANS, planPriceLabel } from '@/lib/plans';
 
 const COUNTRIES = [
   { code: 'US', name: 'United States', phoneCode: '+1' },
@@ -30,38 +31,12 @@ const COUNTRIES = [
   { code: 'PH', name: 'Philippines', phoneCode: '+63' },
 ];
 
-const SUBSCRIPTION_PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: '50 passwords, 10 subscriptions, 10 notes, 5 documents',
-    price: 'Free',
-    icon: Sparkles,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50 dark:bg-green-950',
-    borderColor: 'border-green-200 dark:border-green-700',
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Unlimited storage with monthly or yearly billing',
-    price: '₹149/mo',
-    icon: Crown,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-50/50 dark:bg-blue-950/30',
-    borderColor: 'border-blue-100 dark:border-blue-900',
-  },
-  {
-    id: 'lifetime',
-    name: 'Lifetime',
-    description: 'One-time payment, lifetime access',
-    price: '₹9,999',
-    icon: Infinity,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-50/50 dark:bg-amber-950/30',
-    borderColor: 'border-amber-100 dark:border-amber-900',
-  },
-];
+const PLAN_STYLE = {
+  free:     { icon: Sparkles, color: 'text-green-600',  bgColor: 'bg-green-50 dark:bg-green-950',      borderColor: 'border-green-200 dark:border-green-700' },
+  pro:      { icon: Crown,    color: 'text-blue-400',   bgColor: 'bg-blue-50/50 dark:bg-blue-950/30',  borderColor: 'border-blue-100 dark:border-blue-900' },
+  family:   { icon: Users,    color: 'text-purple-400', bgColor: 'bg-purple-50/50 dark:bg-purple-950/30', borderColor: 'border-purple-100 dark:border-purple-900' },
+  lifetime: { icon: Infinity, color: 'text-amber-400',  bgColor: 'bg-amber-50/50 dark:bg-amber-950/30', borderColor: 'border-amber-100 dark:border-amber-900' },
+} as const;
 
 interface CustomerInfoDialogProps {
   open: boolean;
@@ -243,8 +218,9 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
               Your Plan
             </Label>
             <div className="grid grid-cols-1 gap-2">
-              {SUBSCRIPTION_PLANS.map((plan) => {
-                const Icon = plan.icon;
+              {PLANS.map((plan) => {
+                const style = PLAN_STYLE[plan.id];
+                const Icon = style.icon;
                 const isSelected = selectedPlan === plan.id;
                 return (
                   <button
@@ -253,18 +229,18 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
                     onClick={() => setSelectedPlan(plan.id)}
                     className={`relative p-3 rounded-lg border-2 transition-all text-left ${
                       isSelected
-                        ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-2 ring-green-500`
-                        : `${plan.borderColor} ${plan.bgColor} hover:opacity-90`
+                        ? `${style.borderColor} ${style.bgColor} ring-2 ring-offset-2 ring-green-500`
+                        : `${style.borderColor} ${style.bgColor} hover:opacity-90`
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${plan.bgColor}`}>
-                        <Icon className={`w-5 h-5 ${plan.color}`} />
+                      <div className={`p-2 rounded-lg ${style.bgColor}`}>
+                        <Icon className={`w-5 h-5 ${style.color}`} />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <h4 className="font-semibold text-sm">{plan.name}</h4>
-                          <span className={`text-sm font-bold ${plan.color}`}>{plan.price}</span>
+                          <span className={`text-sm font-bold ${style.color}`}>{planPriceLabel(plan)}</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
                         {isSelected && (

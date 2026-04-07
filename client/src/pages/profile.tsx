@@ -1173,8 +1173,12 @@ export default function Profile() {
                     <Shield className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg capitalize">
-                      {userProfile.subscription.tier === 'free' ? 'Free' : userProfile.subscription.tier} Plan
+                    <h3 className="font-semibold text-lg">
+                      {userProfile.subscription.tier === 'free' ? 'Free'
+                        : userProfile.subscription.tier === 'pro' ? 'Pro Monthly'
+                        : userProfile.subscription.tier === 'family' ? 'Pro Family'
+                        : userProfile.subscription.tier === 'lifetime' ? 'Lifetime'
+                        : userProfile.subscription.tier} Plan
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {userProfile.subscription.tier === 'free' 
@@ -1188,28 +1192,23 @@ export default function Profile() {
                 <div className="text-right">
                   {userProfile.subscription.tier === 'free' ? (
                     <>
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">$0</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">Free</div>
                       <p className="text-sm text-muted-foreground">Forever</p>
-                    </>
-                  ) : userProfile.subscription.tier === 'monthly' ? (
-                    <>
-                      <div className="text-2xl font-bold text-primary">$4.99</div>
-                      <p className="text-sm text-muted-foreground">/month</p>
-                    </>
-                  ) : userProfile.subscription.tier === 'yearly' ? (
-                    <>
-                      <div className="text-2xl font-bold text-primary">$39.99</div>
-                      <p className="text-sm text-muted-foreground">/year</p>
                     </>
                   ) : userProfile.subscription.tier === 'lifetime' ? (
                     <>
-                      <div className="text-2xl font-bold text-primary">$99.99</div>
+                      <div className="text-2xl font-bold text-primary">₹9,999</div>
                       <p className="text-sm text-muted-foreground">One-time</p>
+                    </>
+                  ) : userProfile.subscription.tier === 'family' ? (
+                    <>
+                      <div className="text-2xl font-bold text-primary">₹299</div>
+                      <p className="text-sm text-muted-foreground">/month</p>
                     </>
                   ) : (
                     <>
-                      <div className="text-2xl font-bold text-primary capitalize">{userProfile.subscription.tier}</div>
-                      <p className="text-sm text-muted-foreground">{subscriptionStatus.text}</p>
+                      <div className="text-2xl font-bold text-primary">₹149</div>
+                      <p className="text-sm text-muted-foreground">/month</p>
                     </>
                   )}
                 </div>

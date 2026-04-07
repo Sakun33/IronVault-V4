@@ -3,18 +3,20 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Shield, Lock } from 'lucide-react';
+import { Eye, EyeOff, Shield, Lock, Zap } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager } from '@/lib/vault-manager';
 import { pushCloudVault, queueOfflineSync } from '@/lib/cloud-vault-sync';
+import { usePlanFeatures } from '@/hooks/use-plan-features';
 
 export default function CreateVaultPage() {
   const [, setLocation] = useLocation();
   const { createVault } = useAuth();
   const { toast } = useToast();
+  const { localVaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
   const [vaultName, setVaultName] = useState('My Vault');
   const [password, setPassword] = useState('');
@@ -23,6 +25,9 @@ export default function CreateVaultPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const currentVaultCount = vaultManager.getLocalVaultCount();
+  const atLimit = !planLoading && currentVaultCount >= localVaultLimit;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +38,7 @@ export default function CreateVaultPage() {
     setIsLoading(true);
     try {
       const isFirst = vaultManager.isFirstVault();
-      const newVault = await vaultManager.createVault(vaultName.trim() || 'My Vault', isFirst);
+      const newVault = await vaultManager.createVault(vaultName.trim() || 'My Vault', isFirst, localVaultLimit);
       await vaultManager.createVaultPassword(newVault.id, password);
       vaultManager.setActiveVaultId(newVault.id);
       await vaultStorage.switchToVault(newVault.id);
@@ -94,6 +99,25 @@ export default function CreateVaultPage() {
               Your vault is encrypted with a master password — keep it safe, we can't recover it.
             </p>
           </div>
+
+          {/* Plan limit upgrade prompt */}
+          {atLimit && (
+            <div className="mb-6 p-4 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-center">
+              <Zap className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+              <p className="font-semibold text-sm mb-1">
+                {localVaultLimit === 1 ? 'Free plan: 1 vault limit reached' : `Plan limit: ${localVaultLimit} vaults reached`}
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Upgrade to Pro or Lifetime to create up to 5 vaults.
+              </p>
+              <Link href="/pricing">
+                <a className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-600 rounded-lg px-3 py-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                  <Zap className="w-3 h-3" />
+                  Upgrade your plan
+                </a>
+              </Link>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
@@ -187,9 +211,9 @@ export default function CreateVaultPage() {
               type="submit"
               data-testid="button-create-vault"
               className="w-full h-11 text-base font-semibold"
-              disabled={isLoading}
+              disabled={isLoading || atLimit}
             >
-              {isLoading ? 'Creating vault…' : 'Create Vault'}
+              {isLoading ? 'Creating vault…' : atLimit ? 'Vault limit reached — upgrade to continue' : 'Create Vault'}
             </Button>
           </form>
         </div>

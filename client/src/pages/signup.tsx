@@ -6,16 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Eye, EyeOff, Mail, User, Shield, Globe, Phone,
-  Sparkles, Crown, Infinity, Users, ChevronRight, Lock, KeyRound,
+  Eye, EyeOff, Mail, User, Globe, Phone,
+  Sparkles, Crown, Infinity, Users, ChevronRight, KeyRound,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { vaultStorage } from '@/lib/storage';
-import { vaultManager } from '@/lib/vault-manager';
+import { saveAccountCredentials, markOnboardingShown } from '@/lib/account-auth';
 import { autoRegisterOnVaultCreation } from '@/lib/customer-registration';
-import { saveAccountCredentials } from '@/lib/account-auth';
+import { PLANS, planPriceLabel } from '@/lib/plans';
 
 const COUNTRIES = [
   { code: 'IN', name: 'India', phoneCode: '+91' },
@@ -38,62 +37,22 @@ const COUNTRIES = [
   { code: 'MX', name: 'Mexico', phoneCode: '+52' },
 ];
 
-const PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 'Free forever',
-    description: '50 passwords · 10 subscriptions · 10 notes',
-    icon: Sparkles,
-    color: 'text-green-600 dark:text-green-400',
-    ring: 'ring-green-500',
-    bg: 'bg-green-50 dark:bg-green-950/40',
-    border: 'border-green-200 dark:border-green-800',
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '₹149/mo',
-    description: 'Unlimited everything · Bank statements · Expenses',
-    icon: Crown,
-    color: 'text-blue-500 dark:text-blue-400',
-    ring: 'ring-blue-500',
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    border: 'border-blue-200 dark:border-blue-800',
-  },
-  {
-    id: 'family',
-    name: 'Family',
-    price: '₹299/mo',
-    description: 'Everything in Pro · Up to 6 members · Shared vaults',
-    icon: Users,
-    color: 'text-purple-500 dark:text-purple-400',
-    ring: 'ring-purple-500',
-    bg: 'bg-purple-50 dark:bg-purple-950/40',
-    border: 'border-purple-200 dark:border-purple-800',
-  },
-  {
-    id: 'lifetime',
-    name: 'Lifetime',
-    price: '₹9,999 once',
-    description: 'Pay once · All Pro features · All future updates',
-    icon: Infinity,
-    color: 'text-amber-500 dark:text-amber-400',
-    ring: 'ring-amber-500',
-    bg: 'bg-amber-50 dark:bg-amber-950/40',
-    border: 'border-amber-200 dark:border-amber-800',
-  },
-];
+// Icon + style map for signup plan cards (supplements PLANS from plans.ts)
+const PLAN_CARD_STYLE = {
+  free:     { icon: Sparkles, color: 'text-green-600 dark:text-green-400',  ring: 'ring-green-500',  bg: 'bg-green-50 dark:bg-green-950/40',   border: 'border-green-200 dark:border-green-800' },
+  pro:      { icon: Crown,    color: 'text-blue-500 dark:text-blue-400',    ring: 'ring-blue-500',   bg: 'bg-blue-50 dark:bg-blue-950/40',     border: 'border-blue-200 dark:border-blue-800' },
+  family:   { icon: Users,    color: 'text-purple-500 dark:text-purple-400',ring: 'ring-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/40', border: 'border-purple-200 dark:border-purple-800' },
+  lifetime: { icon: Infinity, color: 'text-amber-500 dark:text-amber-400',  ring: 'ring-amber-500',  bg: 'bg-amber-50 dark:bg-amber-950/40',   border: 'border-amber-200 dark:border-amber-800' },
+} as const;
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
-  const { createVault } = useAuth();
+  const { accountLogin } = useAuth();
   const { toast } = useToast();
 
-  // Fields
+  // Stage 1 fields — account identity + security
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [vaultName, setVaultName] = useState('My Vault');
   const [country, setCountry] = useState('IN');
   const [phoneCode, setPhoneCode] = useState('+91');
   const [phone, setPhone] = useState('');
@@ -102,11 +61,7 @@ export default function SignupPage() {
   const [confirmAccountPassword, setConfirmAccountPassword] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [showConfirmAccountPassword, setShowConfirmAccountPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -125,20 +80,12 @@ export default function SignupPage() {
     if (!name.trim()) { setError('Please enter your full name.'); return; }
     if (accountPassword.length < 8) { setError('Account password must be at least 8 characters.'); return; }
     if (accountPassword !== confirmAccountPassword) { setError('Account passwords do not match.'); return; }
-    if (password.length < 8) { setError('Master password must be at least 8 characters.'); return; }
-    if (password !== confirmPassword) { setError('Master passwords do not match.'); return; }
 
     setIsLoading(true);
     try {
-      // Save account credentials (email + account password, separate from vault master password)
+      // Stage 1: save account credentials + create session
       await saveAccountCredentials(email, accountPassword);
-
-      // Create vault in registry
-      const newVault = await vaultManager.createVault(vaultName || 'My Vault', true);
-      await vaultManager.createVaultPassword(newVault.id, password);
-      vaultManager.setActiveVaultId(newVault.id);
-      await vaultStorage.switchToVault(newVault.id);
-      await createVault(password);
+      markOnboardingShown();
 
       // Save customer profile
       const customerProfile = {
@@ -152,24 +99,29 @@ export default function SignupPage() {
         marketingConsent,
       };
       localStorage.setItem('customerProfile', JSON.stringify(customerProfile));
-      localStorage.setItem('showExportReminder', 'true');
 
       // CRM registration (non-blocking)
-      autoRegisterOnVaultCreation(email, name, country, phone ? `${phoneCode}${phone}` : '', marketingConsent, selectedPlan);
+      autoRegisterOnVaultCreation(
+        email, name, country,
+        phone ? `${phoneCode}${phone}` : '',
+        marketingConsent, selectedPlan
+      );
+
+      // Log in to account session (sets isAccountLoggedIn in React state)
+      await accountLogin(email, accountPassword);
 
       toast({
         title: 'Account Created!',
         description: selectedPlan === 'family' || selectedPlan === 'lifetime'
-          ? 'Your vault is ready. Manage your subscription below.'
-          : '💡 Use Import/Export to back up your vault and access it in other browsers.',
+          ? 'Now create your vault. You can manage your subscription after.'
+          : 'Now create your vault to get started.',
       });
 
-      // Plan-based routing
-      if (selectedPlan === 'family' || selectedPlan === 'lifetime') {
-        setLocation('/upgrade');
-      } else {
-        setLocation('/');
-      }
+      // Stage 2: redirect to vault creation
+      // Plan-gated routing: non-free plans are routed to /upgrade after vault creation,
+      // handled by create-vault.tsx. Store plan selection for reference.
+      localStorage.setItem('signup_selected_plan', selectedPlan);
+      setLocation('/auth/create-vault');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create account. Please try again.';
       setError(msg);
@@ -196,12 +148,25 @@ export default function SignupPage() {
         </p>
       </header>
 
+      {/* Progress indicator */}
+      <div className="flex items-center justify-center gap-2 py-4 border-b border-border/30 bg-muted/20">
+        <div className="flex items-center gap-1.5">
+          <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">1</span>
+          <span className="text-sm font-medium">Create account</span>
+        </div>
+        <div className="w-8 h-px bg-border" />
+        <div className="flex items-center gap-1.5 opacity-50">
+          <span className="w-6 h-6 rounded-full border-2 border-border text-xs font-bold flex items-center justify-center">2</span>
+          <span className="text-sm">Create vault</span>
+        </div>
+      </div>
+
       {/* Form */}
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold tracking-tight mb-2">Create your account</h1>
-            <p className="text-muted-foreground">Set up your vault in under a minute. No credit card required.</p>
+            <p className="text-muted-foreground">Step 1 of 2 — Your account details. No credit card required.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -248,25 +213,6 @@ export default function SignupPage() {
                   onChange={e => setName(e.target.value)}
                   className="pl-10"
                   required
-                />
-              </div>
-            </div>
-
-            {/* Vault Name */}
-            <div>
-              <Label htmlFor="signup-vault-name" className="text-sm font-medium">
-                Vault Name
-              </Label>
-              <div className="relative mt-1.5">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="signup-vault-name"
-                  data-testid="signup-vault-name"
-                  type="text"
-                  placeholder="My Vault"
-                  value={vaultName}
-                  onChange={e => setVaultName(e.target.value)}
-                  className="pl-10"
                 />
               </div>
             </div>
@@ -318,7 +264,8 @@ export default function SignupPage() {
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 {PLANS.map(plan => {
-                  const Icon = plan.icon;
+                  const style = PLAN_CARD_STYLE[plan.id];
+                  const Icon = style.icon;
                   const selected = selectedPlan === plan.id;
                   return (
                     <button
@@ -328,15 +275,18 @@ export default function SignupPage() {
                       onClick={() => setSelectedPlan(plan.id)}
                       className={`relative p-3 rounded-xl border-2 text-left transition-all focus:outline-none ${
                         selected
-                          ? `${plan.border} ${plan.bg} ring-2 ${plan.ring} ring-offset-1`
+                          ? `${style.border} ${style.bg} ring-2 ${style.ring} ring-offset-1`
                           : `border-border bg-card hover:bg-muted/50`
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <Icon className={`w-4 h-4 ${selected ? plan.color : 'text-muted-foreground'}`} />
+                        <Icon className={`w-4 h-4 ${selected ? style.color : 'text-muted-foreground'}`} />
                         <span className={`font-semibold text-sm ${selected ? '' : 'text-foreground'}`}>{plan.name}</span>
+                        {!plan.available && (
+                          <span className="ml-auto text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">Soon</span>
+                        )}
                       </div>
-                      <p className={`text-xs font-medium ${selected ? plan.color : 'text-muted-foreground'}`}>{plan.price}</p>
+                      <p className={`text-xs font-medium ${selected ? style.color : 'text-muted-foreground'}`}>{planPriceLabel(plan)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{plan.description}</p>
                     </button>
                   );
@@ -345,14 +295,15 @@ export default function SignupPage() {
               {(selectedPlan === 'family' || selectedPlan === 'lifetime') && (
                 <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                   <ChevronRight className="w-3 h-3" />
-                  After signup you'll be taken to manage your {selectedPlan} subscription.
+                  After vault creation you'll be taken to manage your {selectedPlan} subscription.
                 </p>
               )}
             </div>
 
             {/* Divider: Account Security */}
             <div className="border-t border-border/60 pt-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Account Security</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">Account Password</p>
+              <p className="text-xs text-muted-foreground mb-4">Used to log into your IronVault account. Keep separate from your vault master password.</p>
             </div>
 
             {/* Account Password */}
@@ -366,7 +317,7 @@ export default function SignupPage() {
                   id="signup-account-password"
                   data-testid="signup-account-password"
                   type={showAccountPassword ? 'text' : 'password'}
-                  placeholder="Password to log into your account (min 8 chars)"
+                  placeholder="Min 8 characters"
                   value={accountPassword}
                   onChange={e => setAccountPassword(e.target.value)}
                   className="pl-10 pr-10"
@@ -382,7 +333,6 @@ export default function SignupPage() {
                   {showAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Used to log into your IronVault account.</p>
             </div>
 
             {/* Confirm Account Password */}
@@ -414,67 +364,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Master Password */}
-            <div>
-              <Label htmlFor="signup-password" className="text-sm font-medium">
-                Master Password <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative mt-1.5">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="signup-password"
-                  data-testid="signup-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a master password to encrypt your vault"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  required
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                This encrypts your vault. We cannot recover it if lost. Can be same as or different from your account password.
-              </p>
-            </div>
-
-            {/* Confirm Master Password */}
-            <div>
-              <Label htmlFor="signup-confirm" className="text-sm font-medium">
-                Confirm Master Password <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative mt-1.5">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="signup-confirm"
-                  data-testid="signup-confirm"
-                  type={showConfirm ? 'text' : 'password'}
-                  placeholder="Re-enter your master password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  required
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
             {/* Marketing consent */}
             <div className="flex items-start gap-3">
               <Checkbox
@@ -496,7 +385,7 @@ export default function SignupPage() {
               className="w-full h-11 text-base font-semibold"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating your account…' : 'Create My Account'}
+              {isLoading ? 'Creating account…' : 'Continue to Vault Setup →'}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">

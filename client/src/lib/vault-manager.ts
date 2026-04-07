@@ -253,9 +253,24 @@ export class VaultManager {
     this.saveRegistry(registry);
   }
 
-  async createVault(name: string, isDefault = false): Promise<VaultInfo> {
+  /**
+   * Check how many local vaults exist for the current account.
+   * Used by UI to show upgrade prompts before hitting createVault().
+   */
+  getLocalVaultCount(): number {
+    return this.getRegistry().length;
+  }
+
+  async createVault(name: string, isDefault = false, planLocalLimit?: number): Promise<VaultInfo> {
     const registry = this.getRegistry();
-    
+
+    // Enforce per-plan vault limit when a limit is provided
+    const limit = planLocalLimit ?? MAX_VAULTS_FREE;
+    if (limit !== -1 && registry.length >= limit) {
+      const limitLabel = limit === 1 ? '1 vault' : `${limit} vaults`;
+      throw new Error(`PLAN_LIMIT: Your current plan allows ${limitLabel}. Upgrade to create more.`);
+    }
+
     const id = `vault_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const iconColor = ICON_COLORS[registry.length % ICON_COLORS.length];
     

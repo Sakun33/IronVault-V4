@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Eye, EyeOff, Lock, Plus, Cloud, ShieldCheck, LogOut, Fingerprint,
+  Eye, EyeOff, Lock, Plus, Cloud, ShieldCheck, LogOut, Fingerprint, Zap,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
@@ -15,12 +15,15 @@ import { isNativeApp } from '@/native/platform';
 import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
+import { usePlanFeatures } from '@/hooks/use-plan-features';
 
 export default function VaultPickerPage() {
   const [, setLocation] = useLocation();
   const { login, loginWithKey, accountEmail, accountLogout } = useAuth();
   const { toast } = useToast();
   const { license } = useLicense();
+
+  const { localVaultLimit, isLoading: planLoading } = usePlanFeatures();
 
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
@@ -299,15 +302,36 @@ export default function VaultPickerPage() {
           )}
 
           {/* Create new vault */}
-          <Button
-            data-testid="button-create-new-vault"
-            variant="outline"
-            className="w-full mb-8 gap-2"
-            onClick={() => setLocation('/auth/create-vault')}
-          >
-            <Plus className="w-4 h-4" />
-            Add a vault
-          </Button>
+          {!planLoading && vaults.length >= localVaultLimit ? (
+            <div className="w-full mb-8 p-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-sm text-amber-800 dark:text-amber-300 truncate">
+                  {localVaultLimit === 1 ? 'Free plan: 1 vault max' : `Plan limit: ${localVaultLimit} vaults`}
+                </span>
+              </div>
+              <Button
+                data-testid="button-upgrade-plan"
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                onClick={() => setLocation('/pricing')}
+              >
+                <Zap className="w-3 h-3 mr-1" />
+                Upgrade
+              </Button>
+            </div>
+          ) : (
+            <Button
+              data-testid="button-create-new-vault"
+              variant="outline"
+              className="w-full mb-8 gap-2"
+              onClick={() => setLocation('/auth/create-vault')}
+            >
+              <Plus className="w-4 h-4" />
+              Add a vault
+            </Button>
+          )}
 
           {/* Cloud vaults section */}
           {cloudVaults.length > 0 ? (

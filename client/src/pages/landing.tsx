@@ -231,6 +231,15 @@ function HeroSection() {
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
+              <Link href="/auth/login">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto text-base font-medium px-6"
+                >
+                  Log In
+                </Button>
+              </Link>
               <a
                 href="https://play.google.com/store/apps/details?id=com.bytebookpro.ironvault"
                 target="_blank"
@@ -238,7 +247,7 @@ function HeroSection() {
                 id="download"
               >
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="lg"
                   className="w-full sm:w-auto text-base font-medium px-6"
                 >
@@ -687,8 +696,8 @@ function PricingSection() {
       ctaHref: "/auth/signup",
     },
     {
-      name: "Pro",
-      price: yearly ? "₹1,999" : "₹199",
+      name: "Pro Monthly",
+      price: yearly ? "₹1,499" : "₹149",
       priceNote: yearly ? "/year" : "/month",
       description: yearly ? "Save ~17% vs. monthly. 14-day free trial." : "Full access. 14-day free trial.",
       features: [
@@ -710,7 +719,7 @@ function PricingSection() {
       popular: true,
     },
     {
-      name: "Family",
+      name: "Pro Family",
       price: yearly ? "₹2,999" : "₹299",
       priceNote: yearly ? "/year" : "/month",
       description: yearly ? "Save ~17% vs. monthly." : "Everything in Pro, shared.",
@@ -827,7 +836,7 @@ function PricingSection() {
           viewport={{ once: true }}
           className="text-center text-xs text-muted-foreground mt-8"
         >
-          All prices in Indian Rupees (INR). Family plan launches Q3 2026. Questions?{" "}
+          All prices in Indian Rupees (INR). Pro Family launches Q3 2026. Questions?{" "}
           <a href="mailto:support@ironvault.app" className="text-primary hover:underline">
             support@ironvault.app
           </a>
