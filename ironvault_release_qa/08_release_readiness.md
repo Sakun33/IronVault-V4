@@ -29,8 +29,8 @@
 | Admin | Customer list visible | GREEN | BUG-007 FIXED |
 | Admin | Plan display correct (Lifetime/Free/Pro) | GREEN | BUG-008 FIXED — saketsuman33 shows Lifetime |
 | Admin | Plan changes sync to frontend | GREEN | AM.4 PUT /customers/:id plan change verified; AM.5 main app entitlement confirmed |
-| Admin | Vault count per customer | YELLOW | BUG-024 fix committed (e2ad18c) but pending Vercel deploy — endpoint still 404 on live admin |
-| Plan Gating | Server plan reflected on client within 5 min | GREEN | BUG-025 FIXED — entitlement endpoint accepts email + returns top-level plan; usePlanFeatures hook reads correctly |
+| Admin | Vault count per customer | YELLOW | BUG-024 fix committed + pushed (e2ad18c on claude/fervent-mclaren). Production admin.ironvault.app deploys from main — retest after PR merge |
+| Plan Gating | Server plan reflected on client within 5 min | YELLOW | BUG-025 fix committed + pushed (e2ad18c). www.ironvault.app deploys from main — email lookup will work after PR merge. UUID lookup confirmed working (returns correct plan). |
 | Admin↔Frontend | Customer list visible + CRUD | GREEN | 40/40 admin-deep-verify tests pass |
 | Mobile UX | No horizontal overflow at 390px | YELLOW | Code audit: overflow-x-hidden on mobile main; grid-cols-1/2 responsive layouts; no fixed wide elements found. Visual 390px test blocked by browser resize limits. |
 | Mobile UX | Bottom content not hidden | GREEN | Code confirms `pb-[calc(96px+env(safe-area-inset-bottom))]` padding on mobile main content. Mobile bottom nav visible in DOM at all viewports. |
