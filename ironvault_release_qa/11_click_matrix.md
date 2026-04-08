@@ -1,7 +1,7 @@
 # IronVault Click Matrix
 
 **Format:** page | element | action | viewport | result | pass/fail | bug id  
-**Last updated:** 2026-04-08 (session 016)  
+**Last updated:** 2026-04-08 (session 017)  
 **Test account:** qa-pro@ironvault.app (pro plan)  
 **Production URL:** https://www.ironvault.app
 
@@ -42,8 +42,8 @@ Legend: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | 🔄 PENDING
 | Copy password button | Click → feedback | ✅ | ✅ | Copy feedback visible | ✅ | — |
 | Show/hide password | Click eye icon | ✅ | ✅ | Password revealed/hidden | ✅ | — |
 | Add password | Fill form + save | ✅ | ✅ | Record created | ✅ | — |
-| Edit password | Click edit → update title → save | ✅ | ✅ | Updated title shown | ✅ | — |
-| Delete password | Click delete → confirm | ✅ | ✅ | Record removed or count decreased | ✅ | — |
+| Edit password | Click edit → update title → Update Password | ✅ | ✅ | Updated title shown in list | ✅ | — |
+| Delete password | Click delete → removed immediately | ✅ | ✅ | Record removed, 0/50 shown | ✅ | — |
 | Password generator | Click → modal opens | ✅ | ✅ | Generator opens | ✅ | — |
 | Import passwords | Click → modal opens | ✅ | ✅ | Import modal renders | ✅ | — |
 | Category filter | Select category | ✅ | ✅ | Filters without crash | ✅ | — |
