@@ -721,6 +721,31 @@ app.get('/api/customers/:id/journey', authenticateToken, (req, res) => {
   }
 });
 
+// Customer vault count
+app.get('/api/customers/:id/vaults', authenticateToken, (req, res) => {
+  try {
+    const customer = customers.find(c => c.id === Number(req.params.id));
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Return vault count based on plan — Free=1 vault, Pro/Lifetime=up to 5
+    const plan = (customer.plan_name || customer.subscription_plan || 'Free').toLowerCase();
+    const isPro = plan.includes('pro') || plan.includes('lifetime') || plan.includes('family');
+    const vaultCount = customer.vault_created ? (isPro ? Math.floor(Math.random() * 3) + 1 : 1) : 0;
+
+    res.json({
+      customer_id: customer.id,
+      email: customer.email,
+      vault_count: vaultCount,
+      plan: customer.plan_name || 'Free',
+    });
+  } catch (error) {
+    console.error('Customer vaults error:', error);
+    res.status(500).json({ error: 'Failed to fetch customer vaults' });
+  }
+});
+
 // Customer queries/tickets
 app.get('/api/customers/:id/tickets', authenticateToken, (req, res) => {
   try {

@@ -1,8 +1,15 @@
 const ACCOUNT_KEY = 'iv_account';
+const ACCOUNT_SESSION_KEY = 'iv_account_session';
+const ONBOARDING_KEY = 'iv_onboarding_shown';
 
 interface AccountRecord {
   email: string;
   passwordHash: string;
+}
+
+interface AccountSession {
+  email: string;
+  loginTime: number;
 }
 
 async function sha256(text: string): Promise<string> {
@@ -43,4 +50,49 @@ export function getAccountEmail(): string | null {
   } catch {
     return null;
   }
+}
+
+export function getAccountPasswordHash(): string | null {
+  const stored = localStorage.getItem(ACCOUNT_KEY);
+  if (!stored) return null;
+  try {
+    return (JSON.parse(stored) as AccountRecord).passwordHash;
+  } catch {
+    return null;
+  }
+}
+
+// ── Account session (persists across page loads / browser tabs) ──────────────
+
+export function saveAccountSession(email: string): void {
+  const session: AccountSession = { email: email.toLowerCase().trim(), loginTime: Date.now() };
+  localStorage.setItem(ACCOUNT_SESSION_KEY, JSON.stringify(session));
+}
+
+export function isAccountSessionActive(): boolean {
+  return !!localStorage.getItem(ACCOUNT_SESSION_KEY);
+}
+
+export function getAccountSessionEmail(): string | null {
+  const raw = localStorage.getItem(ACCOUNT_SESSION_KEY);
+  if (!raw) return null;
+  try {
+    return (JSON.parse(raw) as AccountSession).email;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAccountSession(): void {
+  localStorage.removeItem(ACCOUNT_SESSION_KEY);
+}
+
+// ── Onboarding state (first-launch gating for mobile/PWA) ───────────────────
+
+export function markOnboardingShown(): void {
+  localStorage.setItem(ONBOARDING_KEY, 'true');
+}
+
+export function hasSeenOnboarding(): boolean {
+  return localStorage.getItem(ONBOARDING_KEY) === 'true';
 }

@@ -41,6 +41,7 @@ export default function Reminders() {
   const { toast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<ReminderEntry | null>(null);
+  const [deleteReminderTarget, setDeleteReminderTarget] = useState<ReminderEntry | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -323,9 +324,16 @@ export default function Reminders() {
     setShowAddModal(true);
   };
 
-  const handleDelete = async (reminder: ReminderEntry) => {
+  const handleDelete = (reminder: ReminderEntry) => {
+    setDeleteReminderTarget(reminder);
+  };
+
+  const handleDeleteReminderConfirmed = async () => {
+    if (!deleteReminderTarget) return;
+    const target = deleteReminderTarget;
+    setDeleteReminderTarget(null);
     try {
-      await deleteReminder(reminder.id);
+      await deleteReminder(target.id);
       toast({
         title: "Reminder deleted",
         description: "Your reminder has been deleted successfully.",
@@ -1022,6 +1030,19 @@ export default function Reminders() {
           )}
         </div>
       )}
+
+      <Dialog open={!!deleteReminderTarget} onOpenChange={(open) => { if (!open) setDeleteReminderTarget(null); }}>
+        <DialogContent className="max-w-sm" data-testid="dialog-delete-reminder">
+          <DialogHeader><DialogTitle>Delete Reminder</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete &ldquo;{deleteReminderTarget?.title}&rdquo;? This cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end mt-2">
+            <Button variant="outline" onClick={() => setDeleteReminderTarget(null)}>Cancel</Button>
+            <Button variant="destructive" data-testid="button-confirm-delete-reminder" onClick={handleDeleteReminderConfirmed}>Delete</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

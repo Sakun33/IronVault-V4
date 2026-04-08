@@ -165,6 +165,7 @@ export default function Notes() {
   const [selectedNotebook, setSelectedNotebook] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [deleteNoteTarget, setDeleteNoteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
 
   // Note Templates - More practical and useful templates
@@ -349,11 +350,14 @@ export default function Notes() {
     }
   };
 
-  const handleDeleteNote = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) {
-      return;
-    }
+  const handleDeleteNote = (id: string, title: string) => {
+    setDeleteNoteTarget({ id, title });
+  };
 
+  const handleDeleteNoteConfirmed = async () => {
+    if (!deleteNoteTarget) return;
+    const { id } = deleteNoteTarget;
+    setDeleteNoteTarget(null);
     try {
       await deleteNote(id);
       toast({
@@ -1020,6 +1024,28 @@ export default function Notes() {
                 </Card>
               );
             })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteNoteTarget} onOpenChange={(open) => { if (!open) setDeleteNoteTarget(null); }}>
+        <DialogContent className="max-w-sm" data-testid="dialog-delete-note">
+          <DialogHeader>
+            <DialogTitle>Delete Note</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete &ldquo;{deleteNoteTarget?.title}&rdquo;? This cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end mt-2">
+            <Button variant="outline" onClick={() => setDeleteNoteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              data-testid="button-confirm-delete-note"
+              onClick={handleDeleteNoteConfirmed}
+            >
+              Delete
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

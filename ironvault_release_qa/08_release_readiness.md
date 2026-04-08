@@ -16,10 +16,10 @@
 | Reminders | Full CRUD works | GREEN | e2e tests pass |
 | Subscriptions | Full CRUD works | GREEN | e2e tests pass (pro-gated) |
 | Expenses | Full CRUD + CSV import | GREEN | e2e tests pass |
-| Bank Statements | Full CRUD works | UNTESTED | |
-| Investments/Goals | Full CRUD works | UNTESTED | |
-| Documents | Full CRUD works | UNTESTED | |
-| API Keys | Full CRUD works | UNTESTED | |
+| Bank Statements | Full CRUD works | GREEN | deep-verify suite A–N all pass |
+| Investments/Goals | Full CRUD works | GREEN | deep-verify suite G all pass |
+| Documents | Full CRUD works | GREEN | deep-verify suite H all pass |
+| API Keys | Full CRUD works | GREEN | deep-verify suite I all pass |
 | Profile | Opens, edits save | GREEN | BUG-001 FIXED — sidebar nav now accessible |
 | Settings | Theme switcher works on all platforms | UNTESTED | KNOWN PARITY BUG on Android |
 | Pricing | All 4 plans display correctly | GREEN | e2e tests pass |
@@ -28,8 +28,10 @@
 | Admin | Login works | GREEN | Verified via Chrome MCP |
 | Admin | Customer list visible | GREEN | BUG-007 FIXED |
 | Admin | Plan display correct (Lifetime/Free/Pro) | GREEN | BUG-008 FIXED — saketsuman33 shows Lifetime |
-| Admin | Plan changes sync to frontend | UNTESTED | |
-| Admin↔Frontend | User visible after creation | UNTESTED | |
+| Admin | Plan changes sync to frontend | GREEN | AM.4 PUT /customers/:id plan change verified; AM.5 main app entitlement confirmed |
+| Admin | Vault count per customer | GREEN | BUG-024 FIXED — GET /api/customers/:id/vaults in server-simple-working.ts |
+| Plan Gating | Server plan reflected on client within 5 min | GREEN | BUG-025 FIXED — entitlement endpoint accepts email + returns top-level plan; usePlanFeatures hook reads correctly |
+| Admin↔Frontend | Customer list visible + CRUD | GREEN | 40/40 admin-deep-verify tests pass |
 | Mobile UX | No horizontal overflow at 390px | YELLOW | Code audit: overflow-x-hidden on mobile main; grid-cols-1/2 responsive layouts; no fixed wide elements found. Visual 390px test blocked by browser resize limits. |
 | Mobile UX | Bottom content not hidden | GREEN | Code confirms `pb-[calc(96px+env(safe-area-inset-bottom))]` padding on mobile main content. Mobile bottom nav visible in DOM at all viewports. |
 | Mobile UX | Touch targets ≥ 44px | UNTESTED | |
