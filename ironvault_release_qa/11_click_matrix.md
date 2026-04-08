@@ -1,7 +1,7 @@
 # IronVault Click Matrix
 
 **Format:** page | element | action | viewport | result | pass/fail | bug id  
-**Last updated:** 2026-04-08  
+**Last updated:** 2026-04-08 (session 016)  
 **Test account:** qa-pro@ironvault.app (pro plan)  
 **Production URL:** https://www.ironvault.app
 
@@ -61,7 +61,7 @@ Legend: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | 🔄 PENDING
 | Add form: body textarea | Fill body | ✅ | ✅ | Body text entered | ✅ | — |
 | Add form: Save button | Click → note in list | ✅ | ✅ | Note appears in list | ✅ | — |
 | Edit button | Click → update title → save | ✅ | ✅ | Updated title shown | ✅ | BUG-029 fixed |
-| Delete button | Click → confirm → removed | ✅ | ✅ | Note removed from list | ✅ | BUG-029 fixed |
+| Delete button | Click → React dialog → confirm | ✅ | ✅ | Dialog confirms; note removed | ✅ | BUG-031 fixed |
 | Pin button | Click → pin state changes | ✅ | ✅ | Pin state toggles | ✅ | BUG-029 fixed |
 | Search input | Type query → filter | ✅ | ✅ | Notes filter correctly | ✅ | — |
 | Notebook filter | Select notebook | ✅ | ✅ | Filter applies without crash | ✅ | — |
@@ -76,7 +76,7 @@ Legend: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | 🔄 PENDING
 | Add reminder | Fill title + date → save | ✅ | ✅ | Reminder in list | ✅ | — |
 | Mark complete | Click completion button | ✅ | ✅ | State changes | ✅ | — |
 | Edit reminder | Click edit → update title → save | ✅ | ✅ | Updated title shown | ✅ | — |
-| Delete reminder | Click delete → removed | ✅ | ✅ | Reminder removed | ✅ | — |
+| Delete reminder | Click delete → React dialog → confirm | ✅ | ✅ | Dialog confirms; reminder removed | ✅ | BUG-032 fixed |
 | Priority filter | Filter by High priority | ✅ | ✅ | List filters correctly | ✅ | — |
 
 ---
@@ -308,6 +308,7 @@ Legend: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | 🔄 PENDING
 | Promotions | Page load | ✅ | — | Promotions page renders | ✅ | — |
 | Activity Log | Page load + entries | ✅ | — | Log entries visible | ✅ | — |
 | Settings | Page load | ✅ | — | Settings sections render | ✅ | — |
+| Vault count API | GET /api/customers/:id/vaults | ⚠️ | — | 404 on live prod — fix committed e2ad18c, pending Vercel deploy | ⚠️ | BUG-024 |
 
 ---
 

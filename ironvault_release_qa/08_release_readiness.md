@@ -13,7 +13,7 @@
 | Backup/Restore | Restore from backup works | GREEN | e2e tests pass |
 | Passwords | Full CRUD works | GREEN | e2e tests pass |
 | Notes | Full CRUD works | GREEN | e2e tests pass |
-| Reminders | Full CRUD works | GREEN | e2e tests pass |
+| Reminders | Full CRUD works | GREEN | e2e tests pass; BUG-032 FIXED — delete dialog |
 | Subscriptions | Full CRUD works | GREEN | e2e tests pass (pro-gated) |
 | Expenses | Full CRUD + CSV import | GREEN | e2e tests pass |
 | Bank Statements | Full CRUD works | GREEN | deep-verify suite A–N all pass |
@@ -29,7 +29,7 @@
 | Admin | Customer list visible | GREEN | BUG-007 FIXED |
 | Admin | Plan display correct (Lifetime/Free/Pro) | GREEN | BUG-008 FIXED — saketsuman33 shows Lifetime |
 | Admin | Plan changes sync to frontend | GREEN | AM.4 PUT /customers/:id plan change verified; AM.5 main app entitlement confirmed |
-| Admin | Vault count per customer | GREEN | BUG-024 FIXED — GET /api/customers/:id/vaults in server-simple-working.ts |
+| Admin | Vault count per customer | YELLOW | BUG-024 fix committed (e2ad18c) but pending Vercel deploy — endpoint still 404 on live admin |
 | Plan Gating | Server plan reflected on client within 5 min | GREEN | BUG-025 FIXED — entitlement endpoint accepts email + returns top-level plan; usePlanFeatures hook reads correctly |
 | Admin↔Frontend | Customer list visible + CRUD | GREEN | 40/40 admin-deep-verify tests pass |
 | Mobile UX | No horizontal overflow at 390px | YELLOW | Code audit: overflow-x-hidden on mobile main; grid-cols-1/2 responsive layouts; no fixed wide elements found. Visual 390px test blocked by browser resize limits. |
