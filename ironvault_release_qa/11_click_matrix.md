@@ -322,3 +322,33 @@ Legend: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL | 🔄 PENDING
 | Plan change via admin API (PUT /customers/:id) | Plan updated in DB | Updated plan_name returned | ✅ | — |
 | Main app entitlement for pro account | Pro/Lifetime plan confirmed | — | ✅ | — |
 | Support ticket from frontend → admin tickets API | Ticket submitted | Admin GET /tickets returns 200 | ✅ | — |
+
+---
+
+## Re-Verification Pass — 2026-04-09 (Session 018)
+
+All modules re-verified live against https://www.ironvault.app
+
+| Module | Re-verify result | Notes |
+|--------|-----------------|-------|
+| Activity Log | ✅ PASS | 10 entries, password actions logged, filters accessible |
+| Upgrade | ✅ PASS | 4 plans, correct INR pricing, CTAs present |
+| Family Invites | ✅ N/A | Coming Soon — no frontend page |
+| Account Home / Vaults | ✅ PASS | 1/1 vault, disabled New Vault, Upgrade CTA |
+| Admin Dashboard | ✅ PASS | 5 customers, $299 revenue, plan chart |
+| Admin Customers API | ✅ PASS | GET /api/customers returns total:5 |
+| Admin Customer Detail | ✅ PASS | Saket Suman, Lifetime plan |
+| Admin Plan Change | ✅ PASS | PUT /api/customers/1 → Pro Monthly → Lifetime restored |
+| Admin Vault Count | ⚠️ PENDING | GET /api/customers/1/vaults → 404, BUG-024 fix in PR#1 |
+| Admin Plans API | ✅ PASS | 4 plans returned |
+| Admin Tickets | ✅ PASS | 0 tickets, empty state |
+| Connectivity: health | ✅ PASS | status:ok, customers:5 |
+| Connectivity: entitlement UUID | ✅ PASS | plan:pro returned for pro user UUID |
+| Connectivity: entitlement email | ⚠️ PENDING | plan:free returned, BUG-025 fix in PR#1 |
+| Connectivity: cloud auth | ✅ PASS | JWT token returned |
+
+**Open items requiring PR#1 merge to main:**
+- BUG-024: GET /api/customers/:id/vaults → 404 (fix: admin-console/backend/server-simple-working.ts)
+- BUG-025: Entitlement email lookup → returns free (fix: server/routes.ts getCrmUserByEmail)
+
+**PR:** https://github.com/Sakun33/IronVault-V4/pull/1
