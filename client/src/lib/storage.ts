@@ -306,9 +306,12 @@ export class VaultStorage {
     };
 
     await this.saveMetadata(metadata);
-    
+
     // Create password verification entry for future authentication
     await this.createPasswordVerificationEntry(key);
+
+    // Request persistent storage so "clear cached images" won't wipe vault data
+    navigator.storage?.persist?.();
   }
 
   // Unlock vault with master password
@@ -371,7 +374,10 @@ export class VaultStorage {
       }
 
       this.encryptionKey = key;
-      
+
+      // Ensure persistent storage is requested on every unlock
+      navigator.storage?.persist?.();
+
       // Reset failed attempts on successful unlock
       await this.resetFailedAttempts();
 

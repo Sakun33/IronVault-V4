@@ -1,7 +1,7 @@
 // SecureVault PWA Service Worker
-const CACHE_NAME = 'securevault-v1.0.0';
-const STATIC_CACHE = 'securevault-static-v1.0.0';
-const DYNAMIC_CACHE = 'securevault-dynamic-v1.0.0';
+const CACHE_NAME = 'securevault-v2.0.0';
+const STATIC_CACHE = 'securevault-static-v2.0.0';
+const DYNAMIC_CACHE = 'securevault-dynamic-v2.0.0';
 
 // Assets to cache on install (production-ready paths)
 const STATIC_ASSETS = [
@@ -112,22 +112,28 @@ self.addEventListener('fetch', (event) => {
 // Handle different fetch strategies
 async function handleFetchRequest(request) {
   const url = new URL(request.url);
-  
+
+  // Navigation requests (HTML page loads) must always go to network
+  // so users see new deploys without clearing cache
+  if (request.destination === 'document' || request.mode === 'navigate') {
+    return networkOnlyStrategy(request);
+  }
+
   // Never cache sensitive vault data
   if (shouldUseNetworkOnly(url)) {
     return networkOnlyStrategy(request);
   }
-  
+
   // Network first for API calls and dynamic content
   if (shouldUseNetworkFirst(url)) {
     return networkFirstStrategy(request);
   }
-  
+
   // Cache first for static assets
   if (shouldUseCacheFirst(url)) {
     return cacheFirstStrategy(request);
   }
-  
+
   // Default: Network first with fallback
   return networkFirstStrategy(request);
 }

@@ -176,10 +176,15 @@ function VaultCard({
                 Biometric
               </Badge>
             )}
-            {isCloudSynced && (
+            {isCloudSynced ? (
               <Badge variant="outline" className="text-xs whitespace-nowrap text-blue-500 border-blue-300">
                 <Cloud className="w-3 h-3 mr-1" />
                 Cloud
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs whitespace-nowrap text-amber-500 border-amber-300" title="Vault stored on this device only. Clearing browser data will delete it. Enable Cloud Sync to back up.">
+                <CloudOff className="w-3 h-3 mr-1" />
+                Local only
               </Badge>
             )}
 
