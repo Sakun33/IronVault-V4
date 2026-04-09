@@ -225,8 +225,7 @@ const mockDocuments: Document[] = [
 ];
 
 export default function Documents() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('documents')) return <UpgradeGate feature="Documents Vault" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const { stats } = useVault();
   const { toast } = useToast();
@@ -735,6 +734,8 @@ export default function Documents() {
     }
   };
   
+  if (!licenseLoading && !isFeatureAvailable('documents')) return <UpgradeGate feature="Documents Vault" />;
+
   return (
     <div className="space-y-6 overflow-x-hidden">
       {/* Header */}

@@ -98,6 +98,7 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
           'transition-all duration-300 ease-out',
           'pb-[calc(16px+env(safe-area-inset-bottom))]',
           'shadow-[0_-8px_40px_rgba(0,0,0,0.2)]',
+          'overflow-hidden flex flex-col',
           snapPoint === 'partial' ? 'max-h-[70dvh]' : 'max-h-[90dvh]',
           className
         )}
@@ -140,8 +141,8 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
           </div>
         </div>
 
-        {/* Content - Simple List View */}
-        <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: snapPoint === 'partial' ? 'calc(70vh - 8rem)' : 'calc(90vh - 8rem)' }}>
+        {/* Content - Simple List View — flex-1 fills remaining space after header; overflow-y-auto scrolls */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           <div className="p-4">
             <div className="space-y-1">
               {filteredSections.map((item) => {

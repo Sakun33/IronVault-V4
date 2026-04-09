@@ -60,6 +60,8 @@ export default function SettingsPage() {
   const [backupPassword, setBackupPassword] = useState('');
   const [confirmBackupPassword, setConfirmBackupPassword] = useState('');
   const [isBackingUp, setIsBackingUp] = useState(false);
+  // Clear data confirmation dialog
+  const [showClearDataDialog, setShowClearDataDialog] = useState(false);
   
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
@@ -187,9 +189,11 @@ export default function SettingsPage() {
   };
 
   const handleClearData = async () => {
-    if (!confirm('Are you sure you want to clear all analytics data? This action cannot be undone.')) {
-      return;
-    }
+    setShowClearDataDialog(true);
+  };
+
+  const handleClearDataConfirmed = async () => {
+    setShowClearDataDialog(false);
     try {
       localStorage.removeItem('ironvault_analytics');
       localStorage.removeItem('ironvault_support_tickets');
@@ -202,6 +206,26 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Clear Data Confirmation Dialog */}
+      <Dialog open={showClearDataDialog} onOpenChange={setShowClearDataDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-clear-data">
+          <DialogHeader>
+            <DialogTitle>Clear Analytics Data</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to clear all analytics and support data? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowClearDataDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleClearDataConfirmed} data-testid="button-confirm-clear-data">
+              Clear Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Backup Password Dialog */}
       <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
         <DialogContent className="sm:max-w-md">

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { useLicense } from './license-context';
+import { useAuth } from './auth-context';
 
 interface VaultSelectionContextType {
   vaults: VaultInfo[];
@@ -24,6 +25,7 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const [activeVault, setActiveVault] = useState<VaultInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { license } = useLicense();
+  const { accountEmail } = useAuth();
 
   const isPaidUser = license.tier === 'pro' || license.tier === 'lifetime' || license.status === 'trial';
   const maxVaults = vaultManager.getMaxVaults(isPaidUser);
@@ -52,9 +54,11 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Re-run whenever the logged-in account changes so the dropdown always shows
+  // vaults belonging to the current email, not a previous session.
   useEffect(() => {
     loadVaults();
-  }, [loadVaults]);
+  }, [loadVaults, accountEmail]);
 
   const createVault = async (name: string): Promise<VaultInfo> => {
     if (!vaultManager.canCreateVault(isPaidUser)) {

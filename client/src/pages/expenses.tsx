@@ -48,8 +48,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#f97316', '#6b7280'];
 
 export default function Expenses() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('expenses')) return <UpgradeGate feature="Expense Tracking" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
   const { expenses, addExpense, updateExpense, deleteExpense, searchQuery, setSearchQuery } = useVault();
   const { formatCurrency, currency, currencies } = useCurrency();
   const { toast } = useToast();
@@ -704,6 +703,8 @@ export default function Expenses() {
       </DialogContent>
     </Dialog>
   );
+
+  if (!licenseLoading && !isFeatureAvailable('expenses')) return <UpgradeGate feature="Expense Tracking" />;
 
   return (
     <div className="space-y-6">

@@ -51,7 +51,7 @@ const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
 };
 
 export function useSubscription() {
-  const { license } = useLicense();
+  const { license, isLoading } = useLicense();
 
   // Map license tier to PlanType — pro/family/lifetime all unlock pro-level features
   const tierMap: Record<string, PlanType> = {
@@ -69,6 +69,7 @@ export function useSubscription() {
   return {
     currentPlan,
     limits,
+    isLoading,
     isFeatureAvailable: (feature: keyof Omit<PlanLimits, 'passwords' | 'notes' | 'reminders'>) => limits[feature] === true,
     getLimit: (type: 'passwords' | 'notes' | 'reminders') => limits[type],
     isPro: currentPlan === 'pro' || currentPlan === 'family',

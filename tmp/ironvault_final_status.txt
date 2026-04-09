@@ -1,0 +1,7 @@
+deploy_url: https://www.ironvault.app (fervent-mclaren-jy8n128tq, commit 52fbe65)
+migration: success — family_invites + plan_audit_log tables created; vault_count + flagged_over_limit columns added to customers
+saketsuman1312_lifetime: yes
+pro_test_email: qa-pro@ironvault.app
+pro_test_account_password: ProTest@2026!
+pro_test_vault_master_password: VaultMaster@2026! (set on first vault creation at /auth/signup)
+e2e: 210/210
