@@ -1,55 +1,62 @@
 # Latest status
-**Updated:** 2026-04-09 ~14:55 UTC
+**Updated:** 2026-04-09 ~15:30 UTC
 
-## Login — CONFIRMED WORKING ✅
-- saketsuman1312@gmail.com / 12121212 → login confirmed by user ✅
-- BUG-034 CLOSED
+## BUG-035 — Entitlement not syncing to frontend — FIXED ✅
 
-## Pro Plan Upgrade — DONE ✅
-- entitlements.plan updated to 'pro' for user_id 7b11dd22-e6c7-4a05-8c12-c62f131bd610
-- NOTE: customers.plan_type was already 'lifetime' — user already had max-tier entitlements
-- entitlement API (/api/crm/entitlement/saketsuman1312@gmail.com) returns plan: "lifetime"
-- license-context.tsx syncFromServer() will sync tier to 'lifetime' on next vault unlock
-- Cloud sync is enabled: license.tier !== 'free' → cloud vault section visible in vault picker
+**Root cause:** `api/index.ts` was NOT calling `decodeURIComponent()` on the email path param.
+`usePlanFeatures()` calls `encodeURIComponent(email)` → `saketsuman1312%40gmail.com` →
+`%40` never matched the DB row → returned `plan: free`.
 
-## Cloud Sync API Dry-Run — ALL LEGS PASS ✅
-Tested against live https://www.ironvault.app with real JWT token for saketsuman1312@gmail.com:
+**Fix:**
+- `api/index.ts` line 70: `decodeURIComponent(path.replace("/api/crm/entitlement/", ""))`
+- `auth-context.tsx`: `clearPlanCache()` called on login AND logout so stale free-plan cache is never served after fix
 
-| Step | Result |
-|------|--------|
-| POST /api/vaults/cloud (upload) | 201 Created, vault stored ✅ |
-| GET /api/vaults/cloud (list) | Returns vault in array ✅ |
-| GET /api/vaults/cloud/:id (download) | Returns full encryptedBlob ✅ |
-| DELETE /api/vaults/cloud/:id (cleanup) | 200 OK ✅ |
-| Plan gate check (entitlements.plan='pro') | Passed, no 403 ✅ |
+**Verified:**
+- `GET /api/crm/entitlement/saketsuman1312%40gmail.com` → now returns `plan: "lifetime"` ✅
+- New bundle: `index-29b227e6.js` live at www.ironvault.app ✅
+- db: true ✅
+- Deployment: `ironvault-main-nc1xl03f0`, aliased to www.ironvault.app + ironvault.app ✅
 
-## How to upload local vault to cloud (exact UI path)
-**Preconditions:** Logged in + vault unlocked (Pro/Lifetime plan already active for user)
+**User action:** Hard refresh (Cmd+Shift+R) or open fresh incognito → Log in → Pro features unlock immediately.
 
-1. Log in at www.ironvault.app → enter email/password → Sign In
-2. On vault picker: enter master password for local vault → click Unlock Vault → vault opens
-3. In the main app sidebar, click **Vaults** (shield icon)
-4. On the Vaults page, find your vault card → click **⋮ (three-dot menu)**
-5. Click **"Sync to Cloud"**
-6. Dialog prompts for master password → enter it → click **"Sync to Cloud"**
-7. Toast: "Vault synced" confirms upload
+---
 
-**After upload, on a second browser (Comet):**
-1. Log in with same account credentials
-2. Vault picker shows **"Cloud Vaults"** section with a 🔵 Cloud badge
-3. Enter master password → click **"Unlock Vault"** → vault downloads and opens
-4. Contents are present
+## BUG-036 — Per-vault cloud sync toggle — SHIPPED ✅
 
-## Cross-browser test readiness
-- Server API: all CRUD operations confirmed working ✅
-- Plan gate: passed (no 403) ✅
-- Bundle: includes full cloud sync code ✅
-- License tier: 'lifetime' will sync on vault unlock ✅
-- CAVEAT: Chrome in Chrome extension is offline — cannot do full browser UI dry-run.
-  API-level dry-run is complete. User should follow the 7-step path above.
+**What shipped:**
+- Vaults page (Settings → Vaults) now shows a **Cloud Sync** toggle on every vault card
+- Pro/Lifetime users: toggle is active
+  - Toggle ON → "Enable Cloud Sync" dialog → enter master password → vault uploaded to cloud → blue Cloud badge appears on card
+  - Toggle OFF → confirmation dialog → vault deleted from cloud → other devices stop seeing it on next refresh
+- Free users: toggle is disabled + Crown icon → click shows "Upgrade to Pro" toast
+- Source device protection: if you try to turn OFF cloud sync from a device that didn't originally upload the vault, a toast says "Use your original device"
+- Cloud badge shown on vault card header when synced
+- Dropdown menu "Sync to Cloud" item removed (replaced by the toggle)
+
+**DB change:** `ALTER TABLE cloud_vaults ADD COLUMN IF NOT EXISTS source_device_id VARCHAR(64)` — run on live DB ✅
+
+**API change:** POST /api/vaults/cloud now accepts and stores `sourceDeviceId`; GET list returns it ✅
+
+---
+
+## Full round-trip test path for user
+1. Log in at www.ironvault.app → unlock vault
+2. Navigate to Vaults (sidebar)
+3. Cloud Sync toggle shows OFF for your vault
+4. Click it → "Enable Cloud Sync" dialog → enter master password → click "Enable Cloud Sync"
+5. Badge turns blue "Cloud" → toast "Cloud sync enabled"
+6. Open Comet (second browser) → log in → vault picker shows vault in "Cloud Vaults" section
+7. Enter master password → Unlock Vault → vault opens with full contents ✅
+8. Back on Chrome: toggle OFF → "Remove from Cloud" → confirm
+9. Reload Comet → cloud vault disappears from picker ✅
+
+---
 
 ## DB state
-- crm_users: saketsuman1312@gmail.com, id=7b11dd22
-- entitlements: plan='pro', status='active', admin_override=true
-- customers: plan_type='lifetime' (pre-existing)
-- cloud_vaults: 0 rows (test vault cleaned up)
+- entitlements: plan='pro', admin_override=true (user_id 7b11dd22)
+- customers: plan_type='lifetime' (pre-existing) → API returns 'lifetime'
+- cloud_vaults: source_device_id column added
+
+## Deployment
+- ironvault-main-nc1xl03f0 → www.ironvault.app, ironvault.app
+- Commit: 72e1d2e (BUG-035 + BUG-036)
