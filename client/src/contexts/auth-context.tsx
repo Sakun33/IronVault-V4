@@ -9,7 +9,9 @@ import {
   saveAccountSession,
   clearAccountSession,
   verifyAccountCredentials,
+  saveAccountCredentials,
   getAccountPasswordHash,
+  sha256,
 } from '@/lib/account-auth';
 import { acquireCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
@@ -67,7 +69,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const email = getAccountSessionEmail();
         setIsAccountLoggedIn(true);
         setAccountEmail(email);
-        if (email) vaultManager.setAccountEmail(email);
+        if (email) {
+          vaultManager.setAccountEmail(email);
+          // Silently sync stored hash to server in background so cross-device login works.
+          // Trust-on-first-use: if server has no hash yet it stores it; if it does, it verifies.
+          const storedHash = getAccountPasswordHash();
+          if (storedHash) {
+            fetch('/api/auth/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, accountPasswordHash: storedHash }),
+            }).catch(() => {});
+          }
+        }
       }
 
       await vaultStorage.init();
@@ -99,19 +113,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const accountLogin = async (email: string, password: string): Promise<boolean> => {
-    const valid = await verifyAccountCredentials(email, password);
-    if (valid) {
-      const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
+    const passwordHash = await sha256(password);
+
+    const onSuccess = async () => {
+      // Persist credentials locally for offline access
+      await saveAccountCredentials(email, password);
       saveAccountSession(normalizedEmail);
       vaultManager.setAccountEmail(normalizedEmail);
       setIsAccountLoggedIn(true);
       setAccountEmail(normalizedEmail);
-      // Acquire cloud JWT token in the background (fire and forget)
-      const hash = getAccountPasswordHash();
-      if (hash) {
-        acquireCloudToken(normalizedEmail, hash).catch(() => {});
+      acquireCloudToken(normalizedEmail, passwordHash).catch(() => {});
+    };
+
+    // Server is the primary source of truth for cross-device auth.
+    // Trust-on-first-use: if no hash stored server-side yet, it stores and accepts.
+    try {
+      const res = await fetch('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, accountPasswordHash: passwordHash }),
+      });
+      if (res.ok) {
+        await onSuccess();
+        return true;
       }
-      return true;
+      // 401 from server means wrong password — don't fall back to local
+      if (res.status === 401) return false;
+    } catch {
+      // Network error — fall back to localStorage so offline still works
+      const localValid = await verifyAccountCredentials(email, password);
+      if (localValid) {
+        await onSuccess();
+        return true;
+      }
     }
     return false;
   };
