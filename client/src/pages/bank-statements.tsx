@@ -40,8 +40,7 @@ import {
 } from '@shared/schema';
 
 export default function BankStatements() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('bankStatements')) return <UpgradeGate feature="Bank Statements" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV } = useVault();
   const { formatCurrency } = useCurrency();
@@ -290,6 +289,8 @@ export default function BankStatements() {
     };
     return colors[category] || colors['Other'];
   };
+
+  if (!licenseLoading && !isFeatureAvailable('bankStatements')) return <UpgradeGate feature="Bank Statements" />;
 
   return (
     <div className="p-4 space-y-6 overflow-x-hidden">

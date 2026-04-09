@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: '**/full-sweep.spec.ts',
+  testMatch: ['**/full-sweep.spec.ts', '**/deep-verify.spec.ts', '**/admin-deep-verify.spec.ts'],
 
   fullyParallel: false,   // serial – vault state is shared across tests
   forbidOnly: !!process.env.CI,
@@ -47,7 +47,16 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
-        // Use a real persistent context so IndexedDB vault persists between tests
+        launchOptions: {
+          args: ['--disable-web-security', '--allow-running-insecure-content'],
+        },
+      },
+    },
+    {
+      name: 'prod-mobile-chrome',
+      use: {
+        ...devices['Pixel 5'],
+        // viewport: 393×851, mobile UA, touch enabled
         launchOptions: {
           args: ['--disable-web-security', '--allow-running-insecure-content'],
         },

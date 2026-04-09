@@ -46,12 +46,12 @@ function getToken(req: VercelRequest): object | null {
   return auth ? verifyJWT(auth) : null;
 }
 
-// ── Static data ───────────────────────────────────────────────────────────────
+// ── Static data ── canonical plan set (must match client/src/lib/plans.ts) ─────
 const PLANS = [
-  { id: "free",     name: "Free",     price: 0,   interval: null,    features: ["5 vaults", "100MB storage"] },
-  { id: "pro",      name: "Pro",      price: 9.99, interval: "month", features: ["Unlimited vaults", "10GB storage", "Priority support"] },
-  { id: "family",   name: "Family",   price: 14.99, interval: "month", features: ["6 members", "50GB storage", "Priority support"] },
-  { id: "lifetime", name: "Lifetime", price: 99,  interval: null,    features: ["Everything in Pro", "Lifetime access", "All future features"] },
+  { id: "free",     name: "Free",        price: 0,    interval: null,    features: ["50 passwords", "10 notes", "1 vault", "Local storage only"] },
+  { id: "pro",      name: "Pro Monthly", price: 1.79, interval: "month", features: ["Unlimited passwords", "Unlimited notes", "5 vaults", "Cloud sync", "Priority support"] },
+  { id: "family",   name: "Pro Family",  price: 3.58, interval: "month", features: ["Everything in Pro", "Up to 6 members", "Shared vaults", "Family dashboard"], comingSoon: true },
+  { id: "lifetime", name: "Lifetime",    price: 119.75, interval: null,  features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"] },
 ];
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -406,8 +406,133 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
+  // ── GET /api/customers/:id/vaults ──────────────────────────────────────────
+  // Returns vault count metadata for a customer (BUG-024)
+  const vaultsByCustomerMatch = path.match(/^\/api\/customers\/([^/]+)\/vaults$/);
+  if (vaultsByCustomerMatch && method === "GET") {
+    const id = vaultsByCustomerMatch[1];
+    try {
+      // Get customer info including vault_count
+      const { rows: cRows } = await db.query(
+        `SELECT email, plan_type, vault_count, flagged_over_limit FROM customers WHERE id = $1 LIMIT 1`, [id]
+      );
+      if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
+      const c = cRows[0];
+      // Get cloud vaults from cloud_vaults table if it exists
+      const { rows: cvRows } = await db.query(
+        `SELECT vault_id, vault_name, is_default, created_at, server_updated_at
+         FROM cloud_vaults WHERE user_id = (SELECT id FROM crm_users WHERE email = $1 LIMIT 1)
+         ORDER BY created_at DESC`,
+        [c.email]
+      ).catch(() => ({ rows: [] as any[] }));
+      const planLimits: Record<string, number> = { free: 1, pro: 5, family: 5, lifetime: 5 };
+      const limit = planLimits[c.plan_type] ?? 1;
+      return res.json({
+        localVaultCount: c.vault_count || 0,
+        cloudVaultCount: cvRows.length,
+        planLimit: limit,
+        flaggedOverLimit: c.flagged_over_limit || false,
+        cloudVaults: cvRows,
+      });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── GET /api/customers/:id/family-invites ───────────────────────────────────
+  const familyInvitesByCustomerMatch = path.match(/^\/api\/customers\/([^/]+)\/family-invites$/);
+  if (familyInvitesByCustomerMatch) {
+    const id = familyInvitesByCustomerMatch[1];
+    if (method === "GET") {
+      try {
+        const { rows: cRows } = await db.query(`SELECT email FROM customers WHERE id=$1 LIMIT 1`, [id]);
+        if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
+        const { rows } = await db.query(
+          `SELECT * FROM family_invites WHERE owner_email = $1 ORDER BY invited_at DESC`,
+          [cRows[0].email]
+        );
+        return res.json({ invites: rows, total: rows.length });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+    if (method === "DELETE") {
+      const inviteId = req.query?.invite_id as string | undefined;
+      if (!inviteId) return res.status(400).json({ error: "invite_id query param required" });
+      try {
+        const { rows } = await db.query(
+          `UPDATE family_invites SET status = 'revoked', revoked_at = NOW(), updated_at = NOW()
+           WHERE id = $1 RETURNING *`,
+          [inviteId]
+        );
+        if (!rows[0]) return res.status(404).json({ error: "Invite not found" });
+        return res.json({ success: true, invite: rows[0] });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+  }
+
+  // ── POST /api/customers/:id/upgrade ─────────────────────────────────────────
+  // Admin plan upgrade/downgrade with audit log (BUG-024)
+  const upgradeMatch = path.match(/^\/api\/customers\/([^/]+)\/upgrade$/);
+  if (upgradeMatch && method === "POST") {
+    const id = upgradeMatch[1];
+    const { plan_type, reason } = req.body || {};
+    if (!plan_type) return res.status(400).json({ error: "plan_type required" });
+    const validPlans = ["free", "pro", "family", "lifetime"];
+    if (!validPlans.includes(plan_type)) {
+      return res.status(400).json({ error: `plan_type must be one of: ${validPlans.join(", ")}` });
+    }
+    try {
+      const { rows: old } = await db.query(`SELECT email, plan_type FROM customers WHERE id=$1`, [id]);
+      if (!old[0]) return res.status(404).json({ error: "Customer not found" });
+      const { rows: updated } = await db.query(
+        `UPDATE customers SET plan_type=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+        [plan_type, id]
+      );
+      // Write audit log
+      await db.query(
+        `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
+         VALUES ($1, $2, $3, 'admin', $4)`,
+        [old[0].email, old[0].plan_type, plan_type, reason || null]
+      ).catch(() => {}); // Don't fail if table doesn't exist yet
+      return res.json({ success: true, customer: updated[0] });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── GET /api/customers/:id/plan-history ─────────────────────────────────────
+  const planHistoryMatch = path.match(/^\/api\/customers\/([^/]+)\/plan-history$/);
+  if (planHistoryMatch && method === "GET") {
+    const id = planHistoryMatch[1];
+    try {
+      const { rows: cRows } = await db.query(`SELECT email FROM customers WHERE id=$1 LIMIT 1`, [id]);
+      if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
+      const { rows } = await db.query(
+        `SELECT * FROM plan_audit_log WHERE customer_email = $1 ORDER BY created_at DESC`,
+        [cRows[0].email]
+      );
+      return res.json({ history: rows, total: rows.length });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── GET /api/flagged-accounts ────────────────────────────────────────────────
+  // Returns accounts that are over their plan's vault limit (BUG-022)
+  if (path === "/api/flagged-accounts" && method === "GET") {
+    try {
+      const { rows } = await db.query(
+        `SELECT id, email, full_name, plan_type, vault_count, flagged_over_limit, created_at
+         FROM customers WHERE flagged_over_limit = true ORDER BY updated_at DESC`
+      );
+      return res.json({ accounts: rows, total: rows.length });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
   // ── GET /api/audit-log / /api/admin-logs ────────────────────────────────────
-  if (path === "/api/audit-log" || path === "/api/admin-logs") return res.json([]);
+  if (path === "/api/audit-log" || path === "/api/admin-logs") {
+    try {
+      const { rows } = await db.query(
+        `SELECT * FROM plan_audit_log ORDER BY created_at DESC LIMIT 100`
+      );
+      return res.json(rows);
+    } catch {
+      return res.json([]);
+    }
+  }
 
   // ── GET /api/activity-feed ──────────────────────────────────────────────────
   if (path.startsWith("/api/activity-feed")) return res.json([]);

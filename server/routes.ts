@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { randomBytes } from "crypto";
 import { z } from "zod";
+import { sign, verify } from 'jsonwebtoken';
 
 // Admin Console backend URL for forwarding CRM data
 const ADMIN_CONSOLE_URL = process.env.ADMIN_CONSOLE_URL || 'http://localhost:3001';
@@ -407,26 +408,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user entitlement
+  // Get user entitlement — accepts either a UUID userId or an email address
   app.get("/api/crm/entitlement/:userId", async (req, res) => {
     try {
-      const { userId } = req.params;
-      
+      let { userId } = req.params;
+
+      // If the caller passed an email, resolve it to the internal userId first
+      if (userId.includes('@')) {
+        const crmUser = await storage.getCrmUserByEmail(userId);
+        if (!crmUser) {
+          return res.json({
+            success: true,
+            plan: "free",
+            entitlement: { plan: "free", status: "active", trialActive: false },
+          });
+        }
+        userId = crmUser.id;
+      }
+
       const entitlement = await storage.getEntitlement(userId);
-      
+
       if (!entitlement) {
         return res.json({
           success: true,
-          entitlement: {
-            plan: "free",
-            status: "active",
-            trialActive: false,
-          },
+          plan: "free",
+          entitlement: { plan: "free", status: "active", trialActive: false },
         });
       }
 
       res.json({
         success: true,
+        // Top-level `plan` for direct reads (e.g. usePlanFeatures hook)
+        plan: entitlement.plan,
         entitlement: {
           plan: entitlement.plan,
           status: entitlement.status,
@@ -439,9 +452,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Entitlement fetch error:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Failed to fetch entitlement" 
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch entitlement"
       });
     }
   });
@@ -742,6 +755,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Ticket create proxy error:", error);
       res.status(500).json({ success: false, message: "Ticket proxy failed" });
+    }
+  });
+
+  // ============================================
+  // Cloud Vault Auth + CRUD Routes
+  // ============================================
+
+  const JWT_SECRET = process.env.JWT_SECRET || 'ironvault-dev-secret';
+  const JWT_EXPIRY = '30d';
+
+  function signCloudToken(userId: string, email: string): string {
+    return sign({ userId, email }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  }
+
+  function verifyCloudToken(token: string): { userId: string; email: string } | null {
+    try {
+      return verify(token, JWT_SECRET) as { userId: string; email: string };
+    } catch {
+      return null;
+    }
+  }
+
+  const requireCloudAuth = (req: any, res: any, next: any) => {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Auth required' });
+    const payload = verifyCloudToken(auth.substring(7));
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' });
+    req.cloudUser = payload;
+    next();
+  };
+
+  // POST /api/auth/token — trust-on-first-use: stores hash if not set, verifies if set
+  app.post('/api/auth/token', async (req, res) => {
+    try {
+      const { email, accountPasswordHash } = req.body;
+      if (!email || !accountPasswordHash) {
+        return res.status(400).json({ error: 'email and accountPasswordHash required' });
+      }
+      const normalizedEmail = email.toLowerCase().trim();
+      let user = await storage.getCrmUserByEmail(normalizedEmail);
+      if (!user) {
+        // Auto-register minimal CRM user for cloud-only users
+        user = await storage.createCrmUser({
+          email: normalizedEmail,
+          fullName: normalizedEmail.split('@')[0],
+          country: 'US',
+          marketingConsent: false,
+          supportConsent: true,
+        });
+        await storage.createEntitlement({ userId: user.id, plan: 'free', status: 'active', trialActive: false, willRenew: false, adminOverride: false });
+      }
+      // Trust-on-first-use: store hash if not set; verify if already stored
+      if (!user.accountPasswordHash) {
+        await storage.updateCrmUserPasswordHash(user.id, accountPasswordHash);
+      } else if (user.accountPasswordHash !== accountPasswordHash) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      const token = signCloudToken(user.id, normalizedEmail);
+      res.json({ success: true, token, userId: user.id, email: normalizedEmail });
+    } catch (err) {
+      console.error('Auth token error:', err);
+      res.status(500).json({ error: 'Auth failed' });
+    }
+  });
+
+  // GET /api/vaults/cloud — list vaults (metadata only, no blob)
+  app.get('/api/vaults/cloud', requireCloudAuth, async (req: any, res) => {
+    try {
+      const vaults = await storage.getCloudVaultsByUser(req.cloudUser.userId);
+      res.json({ success: true, vaults: vaults.map(v => ({
+        vaultId: v.vaultId, vaultName: v.vaultName, isDefault: v.isDefault,
+        clientModifiedAt: v.clientModifiedAt?.toISOString(),
+        serverUpdatedAt: v.serverUpdatedAt?.toISOString(),
+        createdAt: v.createdAt?.toISOString(),
+      }))});
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to list vaults' });
+    }
+  });
+
+  // GET /api/vaults/cloud/:vaultId — download blob
+  app.get('/api/vaults/cloud/:vaultId', requireCloudAuth, async (req: any, res) => {
+    try {
+      const vault = await storage.getCloudVault(req.cloudUser.userId, req.params.vaultId);
+      if (!vault) return res.status(404).json({ error: 'Vault not found' });
+      res.json({ success: true, vault: {
+        vaultId: vault.vaultId, vaultName: vault.vaultName, isDefault: vault.isDefault,
+        encryptedBlob: vault.encryptedBlob,
+        clientModifiedAt: vault.clientModifiedAt?.toISOString(),
+        serverUpdatedAt: vault.serverUpdatedAt?.toISOString(),
+      }});
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to get vault' });
+    }
+  });
+
+  // POST /api/vaults/cloud — create vault (plan-gated: Free = max 0 cloud vaults)
+  app.post('/api/vaults/cloud', requireCloudAuth, async (req: any, res) => {
+    try {
+      const { vaultId, vaultName, encryptedBlob, isDefault = false, clientModifiedAt } = req.body;
+      if (!vaultId || !vaultName || !encryptedBlob) {
+        return res.status(400).json({ error: 'vaultId, vaultName, encryptedBlob required' });
+      }
+      // Plan check: free users cannot create cloud vaults
+      const entitlement = await storage.getEntitlement(req.cloudUser.userId);
+      const plan = entitlement?.plan || 'free';
+      if (plan === 'free') {
+        return res.status(403).json({ error: 'Cloud vaults require a Pro or Lifetime plan', code: 'PLAN_UPGRADE_REQUIRED' });
+      }
+      // Check for duplicate vaultId
+      const existing = await storage.getCloudVault(req.cloudUser.userId, vaultId);
+      if (existing) {
+        return res.status(409).json({ error: 'Vault already exists in cloud. Use PUT to update.' });
+      }
+      const vault = await storage.createCloudVault({
+        userId: req.cloudUser.userId, vaultId, vaultName, encryptedBlob,
+        isDefault, clientModifiedAt: clientModifiedAt ? new Date(clientModifiedAt) : new Date(),
+      });
+      if (isDefault) await storage.setCloudVaultDefault(req.cloudUser.userId, vaultId);
+      res.json({ success: true, vault: {
+        vaultId: vault.vaultId, vaultName: vault.vaultName, isDefault: vault.isDefault,
+        serverUpdatedAt: vault.serverUpdatedAt?.toISOString(),
+      }});
+    } catch (err) {
+      console.error('Cloud vault create error:', err);
+      res.status(500).json({ error: 'Failed to create cloud vault' });
+    }
+  });
+
+  // PUT /api/vaults/cloud/:vaultId — sync update (last-write-wins)
+  app.put('/api/vaults/cloud/:vaultId', requireCloudAuth, async (req: any, res) => {
+    try {
+      const { encryptedBlob, vaultName, isDefault, clientModifiedAt } = req.body;
+      if (!encryptedBlob) return res.status(400).json({ error: 'encryptedBlob required' });
+      const existing = await storage.getCloudVault(req.cloudUser.userId, req.params.vaultId);
+      if (!existing) return res.status(404).json({ error: 'Vault not found' });
+      // Plan check for updates: free users are read-only
+      const entitlement = await storage.getEntitlement(req.cloudUser.userId);
+      const plan = entitlement?.plan || 'free';
+      if (plan === 'free') {
+        return res.status(403).json({ error: 'Cloud vault sync requires Pro or Lifetime plan', code: 'PLAN_UPGRADE_REQUIRED' });
+      }
+      // Last-write-wins: accept if clientModifiedAt is newer than stored
+      const incomingTs = clientModifiedAt ? new Date(clientModifiedAt) : new Date();
+      const storedTs = existing.clientModifiedAt;
+      if (storedTs && incomingTs < storedTs) {
+        // Server has newer data — return it for client to merge
+        return res.json({ success: true, merged: false, serverNewer: true, vault: {
+          vaultId: existing.vaultId, encryptedBlob: existing.encryptedBlob,
+          clientModifiedAt: existing.clientModifiedAt?.toISOString(),
+          serverUpdatedAt: existing.serverUpdatedAt?.toISOString(),
+        }});
+      }
+      const updated = await storage.updateCloudVault(req.cloudUser.userId, req.params.vaultId, {
+        encryptedBlob,
+        ...(vaultName && { vaultName }),
+        ...(isDefault !== undefined && { isDefault }),
+        clientModifiedAt: incomingTs,
+      });
+      if (isDefault) await storage.setCloudVaultDefault(req.cloudUser.userId, req.params.vaultId);
+      res.json({ success: true, merged: true, vault: {
+        vaultId: updated?.vaultId, serverUpdatedAt: updated?.serverUpdatedAt?.toISOString(),
+      }});
+    } catch (err) {
+      console.error('Cloud vault update error:', err);
+      res.status(500).json({ error: 'Failed to update cloud vault' });
+    }
+  });
+
+  // DELETE /api/vaults/cloud/:vaultId
+  app.delete('/api/vaults/cloud/:vaultId', requireCloudAuth, async (req: any, res) => {
+    try {
+      const deleted = await storage.deleteCloudVault(req.cloudUser.userId, req.params.vaultId);
+      if (!deleted) return res.status(404).json({ error: 'Vault not found' });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete vault' });
+    }
+  });
+
+  // PATCH /api/vaults/cloud/:vaultId/default
+  app.patch('/api/vaults/cloud/:vaultId/default', requireCloudAuth, async (req: any, res) => {
+    try {
+      const vault = await storage.getCloudVault(req.cloudUser.userId, req.params.vaultId);
+      if (!vault) return res.status(404).json({ error: 'Vault not found' });
+      await storage.setCloudVaultDefault(req.cloudUser.userId, req.params.vaultId);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to set default' });
     }
   });
 

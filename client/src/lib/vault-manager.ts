@@ -30,8 +30,9 @@ export interface LockoutState {
   failedAttempts: number;
 }
 
-const VAULT_REGISTRY_KEY = 'ironvault_registry';
-const ACTIVE_VAULT_KEY = 'ironvault_active_vault';
+const VAULT_REGISTRY_KEY = 'ironvault_registry';           // unscoped (legacy / fallback)
+const ACTIVE_VAULT_KEY = 'ironvault_active_vault';         // unscoped (legacy / fallback)
+const VAULT_PASSWORDS_GLOBAL_KEY = 'ironvault_passwords'; // unscoped (legacy / fallback)
 const BIOMETRIC_KEY_PREFIX = 'ironvault_biometric_';
 const MAX_VAULTS_FREE = 1;
 const MAX_VAULTS_PAID = 5;
@@ -58,14 +59,71 @@ interface VaultPasswordData {
   verificationHash: string;
 }
 
-const VAULT_PASSWORDS_KEY = 'ironvault_passwords';
-
 export class VaultManager {
   private static instance: VaultManager;
   private vaultStorages: Map<string, VaultStorage> = new Map();
   private activeVaultId: string | null = null;
+  private _accountEmail: string | null = null;
 
   private constructor() {}
+
+  // ── Email-scoped localStorage key helpers ─────────────────────────────────
+
+  /** Safe suffix derived from an email: lower-cased, only alphanumeric/._- */
+  private static emailSuffix(email: string): string {
+    return email.toLowerCase().replace(/[^a-z0-9._@-]/g, '_');
+  }
+
+  private get registryKey(): string {
+    return this._accountEmail
+      ? `ironvault_registry_${VaultManager.emailSuffix(this._accountEmail)}`
+      : VAULT_REGISTRY_KEY;
+  }
+
+  private get activeVaultKey(): string {
+    return this._accountEmail
+      ? `ironvault_active_vault_${VaultManager.emailSuffix(this._accountEmail)}`
+      : ACTIVE_VAULT_KEY;
+  }
+
+  private get vaultPasswordsKey(): string {
+    return this._accountEmail
+      ? `ironvault_passwords_${VaultManager.emailSuffix(this._accountEmail)}`
+      : VAULT_PASSWORDS_GLOBAL_KEY;
+  }
+
+  /**
+   * Scope all vault data to a specific account email.
+   * On first call for a given email, migrates any existing unscoped registry data
+   * so existing users don't lose their vaults on upgrade.
+   */
+  setAccountEmail(email: string): void {
+    const normalized = email.toLowerCase().trim();
+    const suffix = VaultManager.emailSuffix(normalized);
+    const scopedRegistryKey = `ironvault_registry_${suffix}`;
+
+    // One-time migration: if no scoped registry exists yet but an unscoped one does, copy it over.
+    if (!localStorage.getItem(scopedRegistryKey)) {
+      const legacy = localStorage.getItem(VAULT_REGISTRY_KEY);
+      if (legacy && legacy !== '[]') {
+        localStorage.setItem(scopedRegistryKey, legacy);
+        // Remove the unscoped registry so the next account login starts clean.
+        localStorage.removeItem(VAULT_REGISTRY_KEY);
+        localStorage.removeItem(ACTIVE_VAULT_KEY);
+        localStorage.removeItem(VAULT_PASSWORDS_GLOBAL_KEY);
+      }
+    }
+
+    this._accountEmail = normalized;
+    // Reset in-memory active vault so it's re-read from the scoped key
+    this.activeVaultId = null;
+  }
+
+  /** Called on account logout — vault data stays in scoped keys for next login. */
+  clearAccountEmail(): void {
+    this._accountEmail = null;
+    this.activeVaultId = null;
+  }
 
   static getInstance(): VaultManager {
     if (!VaultManager.instance) {
@@ -76,7 +134,7 @@ export class VaultManager {
 
   private getRegistry(): VaultListEntry[] {
     try {
-      const data = localStorage.getItem(VAULT_REGISTRY_KEY);
+      const data = localStorage.getItem(this.registryKey);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
@@ -84,17 +142,23 @@ export class VaultManager {
   }
 
   private saveRegistry(vaults: VaultListEntry[]): void {
-    localStorage.setItem(VAULT_REGISTRY_KEY, JSON.stringify(vaults));
+    localStorage.setItem(this.registryKey, JSON.stringify(vaults));
   }
 
   getActiveVaultId(): string | null {
     if (this.activeVaultId) return this.activeVaultId;
-    
+
     try {
-      const stored = localStorage.getItem(ACTIVE_VAULT_KEY);
+      const stored = localStorage.getItem(this.activeVaultKey);
       if (stored) {
-        this.activeVaultId = stored;
-        return stored;
+        // Validate that this vault ID actually exists in the current (scoped) registry
+        const registry = this.getRegistry();
+        if (registry.find(v => v.id === stored)) {
+          this.activeVaultId = stored;
+          return stored;
+        }
+        // Stale pointer from a different account — discard it
+        localStorage.removeItem(this.activeVaultKey);
       }
     } catch {}
     
@@ -115,7 +179,7 @@ export class VaultManager {
 
   setActiveVaultId(vaultId: string): void {
     this.activeVaultId = vaultId;
-    localStorage.setItem(ACTIVE_VAULT_KEY, vaultId);
+    localStorage.setItem(this.activeVaultKey, vaultId);
     
     const registry = this.getRegistry();
     const vault = registry.find(v => v.id === vaultId);
@@ -174,9 +238,39 @@ export class VaultManager {
     }));
   }
 
-  async createVault(name: string, isDefault = false): Promise<VaultInfo> {
+  /**
+   * Add an externally-created vault entry to the local registry without generating a new ID.
+   * Used when registering cloud vaults that already have a server-assigned ID.
+   */
+  addToRegistry(entry: VaultListEntry): void {
     const registry = this.getRegistry();
-    
+    // Skip if already present
+    if (registry.find(v => v.id === entry.id)) return;
+    if (entry.isDefault) {
+      registry.forEach(v => { v.isDefault = false; });
+    }
+    registry.push(entry);
+    this.saveRegistry(registry);
+  }
+
+  /**
+   * Check how many local vaults exist for the current account.
+   * Used by UI to show upgrade prompts before hitting createVault().
+   */
+  getLocalVaultCount(): number {
+    return this.getRegistry().length;
+  }
+
+  async createVault(name: string, isDefault = false, planLocalLimit?: number): Promise<VaultInfo> {
+    const registry = this.getRegistry();
+
+    // Enforce per-plan vault limit when a limit is provided
+    const limit = planLocalLimit ?? MAX_VAULTS_FREE;
+    if (limit !== -1 && registry.length >= limit) {
+      const limitLabel = limit === 1 ? '1 vault' : `${limit} vaults`;
+      throw new Error(`PLAN_LIMIT: Your current plan allows ${limitLabel}. Upgrade to create more.`);
+    }
+
     const id = `vault_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const iconColor = ICON_COLORS[registry.length % ICON_COLORS.length];
     
@@ -434,7 +528,7 @@ export class VaultManager {
 
   private getVaultPasswords(): VaultPasswordData[] {
     try {
-      const data = localStorage.getItem(VAULT_PASSWORDS_KEY);
+      const data = localStorage.getItem(this.vaultPasswordsKey);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
@@ -442,7 +536,7 @@ export class VaultManager {
   }
 
   private saveVaultPasswords(passwords: VaultPasswordData[]): void {
-    localStorage.setItem(VAULT_PASSWORDS_KEY, JSON.stringify(passwords));
+    localStorage.setItem(this.vaultPasswordsKey, JSON.stringify(passwords));
   }
 
   /**
@@ -642,10 +736,10 @@ export class VaultManager {
         this.setActiveVaultId(newDefault.id);
       } else {
         this.activeVaultId = null;
-        localStorage.removeItem(ACTIVE_VAULT_KEY);
+        localStorage.removeItem(this.activeVaultKey);
       }
     }
-    
+
     console.log(`✅ Vault reset: ${vaultId}`);
   }
 }

@@ -14,7 +14,7 @@ class AutoLockService {
   private isEnabled: boolean = true;
   private initialized: boolean = false;
   private lastBackgroundTime: number = 0;
-  private gracePeriodMs: number = 0; // Immediate lock by default
+  private gracePeriodMs: number = 30 * 1000; // 30-second grace period (prevents spurious locks from screen dim / app-switch on mobile)
   private idleTimeoutMs: number = 5 * 60 * 1000; // 5 minutes default
   private idleTimerId: ReturnType<typeof setTimeout> | null = null;
   private idleEnabled: boolean = true;
@@ -89,18 +89,19 @@ class AutoLockService {
         }
       });
     } else {
-      // Web: Use visibility change event
+      // Web: Use visibility change event with grace period only.
+      // Do NOT lock immediately on hide (gracePeriodMs === 0 path is skipped on web)
+      // to prevent spurious locks from screen dim / OS-level app-switch on mobile browsers.
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           this.lastBackgroundTime = Date.now();
           console.log('[AutoLock] Tab hidden');
-          
-          if (this.isEnabled && this.gracePeriodMs === 0) {
-            this.triggerLock();
-          }
+          // On web we always wait for the grace period; immediate lock is native-only.
         } else {
           console.log('[AutoLock] Tab visible');
-          
+          // Reset idle timer so returning to the tab doesn't count as idle time.
+          this.resetIdleTimer();
+
           if (this.isEnabled && this.gracePeriodMs > 0) {
             const timeHidden = Date.now() - this.lastBackgroundTime;
             if (timeHidden >= this.gracePeriodMs) {
@@ -133,7 +134,7 @@ class AutoLockService {
       const idleEnabled = localStorage.getItem('autolock_idle_enabled');
       
       this.isEnabled = enabled !== 'false'; // Enabled by default
-      this.gracePeriodMs = gracePeriod ? parseInt(gracePeriod, 10) : 0;
+      this.gracePeriodMs = gracePeriod ? parseInt(gracePeriod, 10) : 30 * 1000;
       this.idleTimeoutMs = idleTimeout ? parseInt(idleTimeout, 10) : 5 * 60 * 1000;
       this.idleEnabled = idleEnabled !== 'false'; // Enabled by default
     } catch (error) {

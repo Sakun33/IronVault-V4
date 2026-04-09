@@ -20,8 +20,7 @@ import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { format, addDays, differenceInCalendarDays } from 'date-fns';
 
 export default function Subscriptions() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('subscriptions')) return <UpgradeGate feature="Subscription Tracker" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const { subscriptions, deleteSubscription, searchQuery, setSearchQuery, stats } = useVault();
   const { formatCurrency, currency } = useCurrency();
@@ -187,6 +186,8 @@ export default function Subscriptions() {
     }, 0);
 
   const activeSubscriptions = subscriptions.filter(s => s.isActive).length;
+
+  if (!licenseLoading && !isFeatureAvailable('subscriptions')) return <UpgradeGate feature="Subscription Tracker" />;
 
   return (
     <div className="overflow-x-hidden">

@@ -3,6 +3,8 @@ import { useLocation } from 'wouter';
 import { useVaultSelection } from '@/contexts/vault-selection-context';
 import { useLicense } from '@/contexts/license-context';
 import { useAuth } from '@/contexts/auth-context';
+import { pushCloudVault, queueOfflineSync } from '@/lib/cloud-vault-sync';
+import { vaultStorage } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +51,9 @@ import {
   Lock,
   Crown,
   ExternalLink,
+  UploadCloud,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -63,10 +68,11 @@ interface VaultCardProps {
   onToggleBiometric: (enabled: boolean) => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  onSyncToCloud: () => void;
   canDelete: boolean;
 }
 
-function VaultCard({ vault, isActive, onSwitch, onOpen, onSetDefault, onToggleBiometric, onRename, onDelete, canDelete }: VaultCardProps) {
+function VaultCard({ vault, isActive, onSwitch, onOpen, onSetDefault, onToggleBiometric, onRename, onDelete, onSyncToCloud, canDelete }: VaultCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(vault.name);
 
@@ -167,9 +173,16 @@ function VaultCard({ vault, isActive, onSwitch, onOpen, onSetDefault, onToggleBi
                   Set as Default
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={(e) => { e.stopPropagation(); onSyncToCloud(); }}
+                data-testid="menu-item-sync-cloud"
+              >
+                <UploadCloud className="w-4 h-4 mr-2" />
+                Sync to Cloud
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {canDelete && !vault.isDefault && (
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={(e) => { e.stopPropagation(); onDelete(); }}
                   className="text-destructive"
                   data-testid="menu-item-delete"
@@ -228,6 +241,12 @@ export function VaultManagerUI() {
   const [deleteVaultId, setDeleteVaultId] = useState<string | null>(null);
   const [pendingBiometricVaultId, setPendingBiometricVaultId] = useState<string | null>(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+
+  // Cloud sync dialog state
+  const [syncDialogVaultId, setSyncDialogVaultId] = useState<string | null>(null);
+  const [syncPassword, setSyncPassword] = useState('');
+  const [syncShowPw, setSyncShowPw] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const isPaidUser = license.tier === 'pro' || license.tier === 'lifetime' || license.status === 'trial';
 
@@ -354,6 +373,39 @@ export function VaultManagerUI() {
     }
   };
 
+  const handleSyncToCloud = async () => {
+    if (!syncDialogVaultId || !syncPassword) return;
+    const vault = vaults.find(v => v.id === syncDialogVaultId);
+    if (!vault) return;
+    setIsSyncing(true);
+    try {
+      const blob: string = await vaultStorage.exportVault(syncPassword);
+      const result = await pushCloudVault(vault.id, vault.name, blob, vault.isDefault);
+      if (result.planError) {
+        toast({ title: 'Upgrade required', description: 'Cloud sync is a Pro feature. Please upgrade your plan.', variant: 'destructive' });
+      } else if (result.serverNewer) {
+        toast({ title: 'Server has newer data', description: 'Cloud already has a newer version of this vault.', variant: 'destructive' });
+      } else if (result.success) {
+        toast({ title: 'Vault synced', description: `"${vault.name}" has been synced to the cloud.` });
+        setSyncDialogVaultId(null);
+        setSyncPassword('');
+      } else {
+        toast({ title: 'Sync failed', description: 'Could not sync vault. Queued for retry.', variant: 'destructive' });
+        queueOfflineSync(vault.id, vault.name, 'push');
+        setSyncDialogVaultId(null);
+        setSyncPassword('');
+      }
+    } catch (err) {
+      toast({
+        title: 'Sync failed',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -455,6 +507,7 @@ export function VaultManagerUI() {
             onToggleBiometric={(enabled) => handleToggleBiometric(vault.id, enabled)}
             onRename={(name) => handleRename(vault.id, name)}
             onDelete={() => setDeleteVaultId(vault.id)}
+            onSyncToCloud={() => { setSyncDialogVaultId(vault.id); setSyncPassword(''); setSyncShowPw(false); }}
             canDelete={vaults.length > 1}
           />
         ))}
@@ -493,6 +546,53 @@ export function VaultManagerUI() {
         title="Verify Identity"
         description="Please verify your identity to enable biometric unlock for this vault."
       />
+
+      {/* Sync to Cloud dialog */}
+      <Dialog open={!!syncDialogVaultId} onOpenChange={(open) => { if (!open) { setSyncDialogVaultId(null); setSyncPassword(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sync Vault to Cloud</DialogTitle>
+            <DialogDescription>
+              Enter your master password to export and sync this vault to the cloud.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="sync-master-password">Master Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="sync-master-password"
+                  data-testid="input-sync-master-password"
+                  type={syncShowPw ? 'text' : 'password'}
+                  placeholder="Enter your master password"
+                  value={syncPassword}
+                  onChange={e => setSyncPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !isSyncing && handleSyncToCloud()}
+                  className="pl-10 pr-10"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSyncShowPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {syncShowPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSyncDialogVaultId(null); setSyncPassword(''); }} disabled={isSyncing}>
+              Cancel
+            </Button>
+            <Button onClick={handleSyncToCloud} disabled={isSyncing || !syncPassword} data-testid="button-confirm-sync-cloud">
+              {isSyncing ? 'Syncing…' : 'Sync to Cloud'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

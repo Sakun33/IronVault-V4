@@ -18,6 +18,7 @@ export const crmUsers = pgTable("crm_users", {
   platform: varchar("platform", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  accountPasswordHash: varchar("account_password_hash", { length: 255 }),
 });
 
 // Entitlements table - unified subscription status across all platforms
@@ -118,6 +119,19 @@ export const deletionRequests = pgTable("deletion_requests", {
   processedBy: varchar("processed_by"),
 });
 
+// Cloud Vaults table - stores encrypted vault blobs server-side
+export const cloudVaults = pgTable("cloud_vaults", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => crmUsers.id, { onDelete: "cascade" }),
+  vaultId: varchar("vault_id", { length: 255 }).notNull(),
+  vaultName: varchar("vault_name", { length: 255 }).notNull(),
+  encryptedBlob: text("encrypted_blob").notNull(),
+  isDefault: boolean("is_default").default(false),
+  clientModifiedAt: timestamp("client_modified_at").notNull(),
+  serverUpdatedAt: timestamp("server_updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Legacy users table (preserved for backward compatibility)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -212,6 +226,17 @@ export const insertDeletionRequestSchema = z.object({
   processedAt: z.date().optional(),
   processedBy: z.string().optional(),
 });
+
+export const insertCloudVaultSchema = z.object({
+  userId: z.string().optional(),
+  vaultId: z.string().min(1),
+  vaultName: z.string().min(1),
+  encryptedBlob: z.string().min(1),
+  isDefault: z.boolean().optional().default(false),
+  clientModifiedAt: z.date(),
+});
+export type CloudVault = typeof cloudVaults.$inferSelect;
+export type InsertCloudVault = z.infer<typeof insertCloudVaultSchema>;
 
 // Types for CRM tables
 export type CrmUser = typeof crmUsers.$inferSelect;

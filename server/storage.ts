@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type CrmUser, type InsertCrmUser, type Entitlement, type InsertEntitlement, type BillingEvent, type InsertBillingEvent, crmUsers, entitlements, billingEvents } from "../shared/schema";
+import { type User, type InsertUser, type CrmUser, type InsertCrmUser, type Entitlement, type InsertEntitlement, type BillingEvent, type InsertBillingEvent, type CloudVault, type InsertCloudVault, crmUsers, entitlements, billingEvents, cloudVaults } from "../shared/schema";
 import { randomUUID } from "crypto";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -21,6 +21,15 @@ export interface IStorage {
   
   // Billing events
   logBillingEvent(data: InsertBillingEvent): Promise<BillingEvent>;
+
+  // Cloud vault operations
+  getCloudVaultsByUser(userId: string): Promise<CloudVault[]>;
+  getCloudVault(userId: string, vaultId: string): Promise<CloudVault | undefined>;
+  createCloudVault(data: InsertCloudVault): Promise<CloudVault>;
+  updateCloudVault(userId: string, vaultId: string, data: Partial<InsertCloudVault>): Promise<CloudVault | undefined>;
+  deleteCloudVault(userId: string, vaultId: string): Promise<boolean>;
+  setCloudVaultDefault(userId: string, vaultId: string): Promise<void>;
+  updateCrmUserPasswordHash(userId: string, hash: string): Promise<void>;
 }
 
 // Database storage using Drizzle
@@ -61,8 +70,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const id = randomUUID() as string;
+    const user: User = { ...insertUser, id } as User;
     this.users.set(id, user);
     return user;
   }
@@ -82,10 +91,18 @@ export class DatabaseStorage implements IStorage {
 
   async createCrmUser(data: InsertCrmUser): Promise<CrmUser> {
     await this.ensureReady();
-    const result = await this.db.insert(crmUsers).values({
-      ...data,
+    const result = await (this.db.insert(crmUsers).values({
       email: data.email.toLowerCase(),
-    }).returning();
+      fullName: data.fullName,
+      country: data.country ?? null,
+      phone: data.phone ?? null,
+      marketingConsent: data.marketingConsent ?? false,
+      supportConsent: data.supportConsent ?? true,
+      vaultCreatedAt: data.vaultCreatedAt ?? null,
+      lastActiveAt: data.lastActiveAt ?? null,
+      appVersion: data.appVersion ?? null,
+      platform: data.platform ?? null,
+    } as any).returning() as any) as CrmUser[];
     return result[0];
   }
 
@@ -136,6 +153,74 @@ export class DatabaseStorage implements IStorage {
     const result = await this.db.insert(billingEvents).values(insertData).returning();
     return result[0];
   }
+
+  // Cloud vault operations
+  async getCloudVaultsByUser(userId: string): Promise<CloudVault[]> {
+    await this.ensureReady();
+    return this.db.select().from(cloudVaults).where(eq(cloudVaults.userId, userId));
+  }
+
+  async getCloudVault(userId: string, vaultId: string): Promise<CloudVault | undefined> {
+    await this.ensureReady();
+    const result = await this.db.select().from(cloudVaults).where(
+      and(eq(cloudVaults.userId, userId), eq(cloudVaults.vaultId, vaultId))
+    ).limit(1);
+    return result[0];
+  }
+
+  async createCloudVault(data: InsertCloudVault): Promise<CloudVault> {
+    await this.ensureReady();
+    const result = await this.db.insert(cloudVaults).values({
+      userId: data.userId,
+      vaultId: data.vaultId,
+      vaultName: data.vaultName,
+      encryptedBlob: data.encryptedBlob,
+      isDefault: data.isDefault ?? false,
+      clientModifiedAt: data.clientModifiedAt,
+    }).returning();
+    return result[0];
+  }
+
+  async updateCloudVault(userId: string, vaultId: string, data: Partial<InsertCloudVault>): Promise<CloudVault | undefined> {
+    await this.ensureReady();
+    const updateData: Record<string, any> = { serverUpdatedAt: new Date() };
+    if (data.encryptedBlob !== undefined) updateData.encryptedBlob = data.encryptedBlob;
+    if (data.vaultName !== undefined) updateData.vaultName = data.vaultName;
+    if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
+    if (data.clientModifiedAt !== undefined) updateData.clientModifiedAt = data.clientModifiedAt;
+    const result = await this.db.update(cloudVaults)
+      .set(updateData)
+      .where(and(eq(cloudVaults.userId, userId), eq(cloudVaults.vaultId, vaultId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCloudVault(userId: string, vaultId: string): Promise<boolean> {
+    await this.ensureReady();
+    const result = await this.db.delete(cloudVaults)
+      .where(and(eq(cloudVaults.userId, userId), eq(cloudVaults.vaultId, vaultId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async setCloudVaultDefault(userId: string, vaultId: string): Promise<void> {
+    await this.ensureReady();
+    // Unset all defaults for this user
+    await this.db.update(cloudVaults)
+      .set({ isDefault: false })
+      .where(eq(cloudVaults.userId, userId));
+    // Set the target as default
+    await this.db.update(cloudVaults)
+      .set({ isDefault: true })
+      .where(and(eq(cloudVaults.userId, userId), eq(cloudVaults.vaultId, vaultId)));
+  }
+
+  async updateCrmUserPasswordHash(userId: string, hash: string): Promise<void> {
+    await this.ensureReady();
+    await this.db.update(crmUsers)
+      .set({ accountPasswordHash: hash })
+      .where(eq(crmUsers.id, userId));
+  }
 }
 
 // Memory storage for development/testing
@@ -144,12 +229,14 @@ export class MemStorage implements IStorage {
   private crmUsersMap: Map<string, CrmUser>;
   private entitlementsMap: Map<string, Entitlement>;
   private billingEventsMap: Map<string, BillingEvent>;
+  private cloudVaultsMap: Map<string, CloudVault>;
 
   constructor() {
     this.users = new Map();
     this.crmUsersMap = new Map();
     this.entitlementsMap = new Map();
     this.billingEventsMap = new Map();
+    this.cloudVaultsMap = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -163,8 +250,8 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const id = randomUUID() as string;
+    const user: User = { ...insertUser, id } as User;
     this.users.set(id, user);
     return user;
   }
@@ -193,6 +280,7 @@ export class MemStorage implements IStorage {
       lastActiveAt: data.lastActiveAt || null,
       appVersion: data.appVersion || null,
       platform: data.platform || null,
+      accountPasswordHash: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -265,6 +353,70 @@ export class MemStorage implements IStorage {
     };
     this.billingEventsMap.set(id, event);
     return event;
+  }
+
+  async getCloudVaultsByUser(userId: string): Promise<CloudVault[]> {
+    return Array.from(this.cloudVaultsMap.values()).filter(v => v.userId === userId);
+  }
+
+  async getCloudVault(userId: string, vaultId: string): Promise<CloudVault | undefined> {
+    return Array.from(this.cloudVaultsMap.values()).find(
+      v => v.userId === userId && v.vaultId === vaultId
+    );
+  }
+
+  async createCloudVault(data: InsertCloudVault): Promise<CloudVault> {
+    const id = randomUUID();
+    const vault: CloudVault = {
+      id,
+      userId: data.userId || null,
+      vaultId: data.vaultId,
+      vaultName: data.vaultName,
+      encryptedBlob: data.encryptedBlob,
+      isDefault: data.isDefault ?? false,
+      clientModifiedAt: data.clientModifiedAt,
+      serverUpdatedAt: new Date(),
+      createdAt: new Date(),
+    };
+    this.cloudVaultsMap.set(id, vault);
+    return vault;
+  }
+
+  async updateCloudVault(userId: string, vaultId: string, data: Partial<InsertCloudVault>): Promise<CloudVault | undefined> {
+    const existing = await this.getCloudVault(userId, vaultId);
+    if (!existing) return undefined;
+    const updated: CloudVault = {
+      ...existing,
+      ...(data.encryptedBlob !== undefined && { encryptedBlob: data.encryptedBlob }),
+      ...(data.vaultName !== undefined && { vaultName: data.vaultName }),
+      ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+      ...(data.clientModifiedAt !== undefined && { clientModifiedAt: data.clientModifiedAt }),
+      serverUpdatedAt: new Date(),
+    };
+    this.cloudVaultsMap.set(existing.id, updated);
+    return updated;
+  }
+
+  async deleteCloudVault(userId: string, vaultId: string): Promise<boolean> {
+    const existing = await this.getCloudVault(userId, vaultId);
+    if (!existing) return false;
+    this.cloudVaultsMap.delete(existing.id);
+    return true;
+  }
+
+  async setCloudVaultDefault(userId: string, vaultId: string): Promise<void> {
+    Array.from(this.cloudVaultsMap.entries()).forEach(([id, vault]) => {
+      if (vault.userId === userId) {
+        this.cloudVaultsMap.set(id, { ...vault, isDefault: vault.vaultId === vaultId });
+      }
+    });
+  }
+
+  async updateCrmUserPasswordHash(userId: string, hash: string): Promise<void> {
+    const existing = this.crmUsersMap.get(userId);
+    if (existing) {
+      this.crmUsersMap.set(userId, { ...existing, accountPasswordHash: hash });
+    }
   }
 }
 

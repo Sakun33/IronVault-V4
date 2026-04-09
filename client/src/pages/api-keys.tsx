@@ -50,8 +50,7 @@ interface APIKey {
 }
 
 export default function APIKeys() {
-  const { isFeatureAvailable } = useSubscription();
-  if (!isFeatureAvailable('apiKeys')) return <UpgradeGate feature="API Key Manager" />;
+  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const { toast } = useToast();
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
@@ -363,6 +362,8 @@ export default function APIKeys() {
       </div>
     );
   }
+
+  if (!licenseLoading && !isFeatureAvailable('apiKeys')) return <UpgradeGate feature="API Key Manager" />;
 
   return (
     <div className="space-y-6 p-4 overflow-x-hidden">
