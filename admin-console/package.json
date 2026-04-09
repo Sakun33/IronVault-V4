@@ -15,6 +15,10 @@
     "db:migrate": "cd backend && npm run db:migrate",
     "db:seed": "cd backend && npm run db:seed"
   },
+  "dependencies": {
+    "@vercel/node": "^5.0.0",
+    "pg": "^8.16.3"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
