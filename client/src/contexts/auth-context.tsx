@@ -140,13 +140,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       // 401 from server means wrong password — don't fall back to local
       if (res.status === 401) return false;
-    } catch {
+      // 5xx or unexpected: fall through to localStorage fallback below
+      console.error('[auth] /api/auth/token returned', res.status, '— falling back to local');
+    } catch (err) {
       // Network error — fall back to localStorage so offline still works
-      const localValid = await verifyAccountCredentials(email, password);
-      if (localValid) {
-        await onSuccess();
-        return true;
-      }
+      console.error('[auth] /api/auth/token network error:', err);
+    }
+    // Offline / server-error fallback: verify against locally-stored hash
+    const localValid = await verifyAccountCredentials(email, password);
+    if (localValid) {
+      await onSuccess();
+      return true;
     }
     return false;
   };
