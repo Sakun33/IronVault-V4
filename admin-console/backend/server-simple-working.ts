@@ -7,8 +7,61 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { Pool } from 'pg';
 
 dotenv.config();
+
+// ── Neon DB connection (same DB as main backend) ─────────────────────────────
+const db = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : null;
+
+// Map: admin integer ID → Neon UUID (rebuilt on every DB refresh)
+const uuidByIntId = new Map<number, string>();
+
+function normalizePlanDisplay(plan: string | null | undefined): string {
+  switch ((plan || '').toLowerCase()) {
+    case 'premium': return 'Pro Monthly';
+    case 'lifetime': return 'Lifetime';
+    case 'free': default: return 'Free';
+  }
+}
+
+async function refreshCustomersFromDb(): Promise<void> {
+  if (!db) return;
+  try {
+    const { rows } = await db.query(`
+      SELECT u.id, u.email, u.full_name, u.phone, u.country, u.platform,
+             u.vault_created_at, u.last_active_at, u.created_at,
+             COALESCE(e.plan, 'free') AS plan
+      FROM crm_users u
+      LEFT JOIN entitlements e ON e.user_id = u.id
+      ORDER BY u.created_at ASC
+    `);
+    uuidByIntId.clear();
+    customers = rows.map((row, i) => {
+      const intId = i + 1;
+      uuidByIntId.set(intId, row.id);
+      return {
+        id: intId,
+        email: row.email,
+        name: row.full_name || row.email.split('@')[0],
+        phone: row.phone || undefined,
+        region: row.country || 'US',
+        plan_name: normalizePlanDisplay(row.plan),
+        subscription_plan: row.plan || 'free',
+        status: 'active',
+        created_at: row.created_at?.toISOString() ?? new Date().toISOString(),
+        last_active: row.last_active_at?.toISOString() ?? new Date().toISOString(),
+        vault_created: !!row.vault_created_at,
+        source: row.platform || 'web',
+      } as Customer;
+    });
+    console.log(`✅ Refreshed ${customers.length} customers from Neon DB`);
+  } catch (err) {
+    console.error('❌ DB refresh failed, keeping cached data:', (err as Error).message);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || process.env.ADMIN_PORT || 3001;
@@ -296,10 +349,11 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 });
 
 // Customers list
-app.get('/api/customers', authenticateToken, (req, res) => {
+app.get('/api/customers', authenticateToken, async (req, res) => {
   try {
+    await refreshCustomersFromDb();
     const { page = 1, limit = 50, search = '', status = '', plan = '' } = req.query;
-    
+
     let filteredCustomers = [...customers];
 
     if (search) {
@@ -452,8 +506,10 @@ app.get('/api/dashboard/recent-activity', authenticateToken, (req, res) => {
 });
 
 // Customer details
-app.get('/api/customers/:id', authenticateToken, (req, res) => {
+app.get('/api/customers/:id', authenticateToken, async (req, res) => {
   try {
+    // Refresh list if empty (cold start) so UUIDs are populated
+    if (customers.length === 0) await refreshCustomersFromDb();
     const customer = customers.find(c => c.id === Number(req.params.id));
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
@@ -465,20 +521,35 @@ app.get('/api/customers/:id', authenticateToken, (req, res) => {
   }
 });
 
-// Update customer
-app.put('/api/customers/:id', authenticateToken, (req, res) => {
+// Update customer (including plan change — persists to Neon entitlements)
+app.put('/api/customers/:id', authenticateToken, async (req, res) => {
   try {
     const customerIndex = customers.findIndex(c => c.id === Number(req.params.id));
     if (customerIndex === -1) {
       return res.status(404).json({ error: 'Customer not found' });
     }
-    
+
     customers[customerIndex] = {
       ...customers[customerIndex],
       ...req.body,
       id: customers[customerIndex].id // Preserve ID
     };
     saveData();
+
+    // If plan changed, persist to Neon entitlements table
+    const newPlan = req.body.plan_name || req.body.subscription_plan;
+    const uuid = uuidByIntId.get(Number(req.params.id));
+    if (db && uuid && newPlan) {
+      const dbPlan = newPlan.toLowerCase().includes('lifetime') ? 'lifetime'
+        : newPlan.toLowerCase().includes('pro') || newPlan.toLowerCase().includes('premium') ? 'premium'
+        : 'free';
+      await db.query(
+        `UPDATE entitlements SET plan = $1, updated_at = NOW() WHERE user_id = $2`,
+        [dbPlan, uuid]
+      ).catch(err => console.error('Failed to update entitlement in DB:', err));
+      console.log(`✅ Updated plan to ${dbPlan} for user ${uuid}`);
+    }
+
     res.json(customers[customerIndex]);
   } catch (error) {
     console.error('Update customer error:', error);
@@ -1477,8 +1548,9 @@ app.get('/api/crm/entitlement/:userId', (req, res) => {
   }
 });
 
-// Start server - load persisted data first
+// Start server — load JSON fallback first, then overlay live DB data
 loadData();
+refreshCustomersFromDb();
 
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {

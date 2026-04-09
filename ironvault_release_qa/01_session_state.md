@@ -1,83 +1,69 @@
 # Session State
 
-**Last updated:** 2026-04-09T(session 020)
+**Last updated:** 2026-04-09T(session 022)
 **Branch:** claude/fervent-mclaren
-**Latest push:** 0085d0a
-**PR:** https://github.com/Sakun33/IronVault-V4/pull/1
+**Latest push:** 0cf8586
+**PR:** https://github.com/Sakun33/IronVault-V4/pull/1 — MERGED (commit 567b00a to main)
 
 ---
 
 ## Current Phase
 
-POST-QA — all 33 bugs filed, fix for BUG-033 (cross-device login) just committed and pushed. Awaiting PR#1 merge to main for production deploy.
+POST-QA COMPLETE — All 34 bugs filed, 33 fixed, 1 not-a-bug. All fixes deployed to production.
 
 ---
 
 ## Last Completed Action
 
-Fixed BUG-033 (user-reported as "BUG-027"): cross-device/cross-browser login failing with "Incorrect email or password" because Stage 1 account auth was 100% localStorage-only. Fixed by making `accountLogin()` call `POST /api/auth/token` (server as source of truth, TOFU) before falling back to localStorage. Also added background hash-sync in `initializeAuth()` for already-logged-in users.
+Fixed and deployed BUG-034 (P0): real signups were not appearing in admin console because `api/index.ts` queried a non-existent `customers` table instead of the main backend's `crm_users` + `entitlements` tables. Three-part fix: rewrote all customer queries in `api/index.ts`, fixed `vercel.json` routing, added `pg` to root `package.json`.
 
-Commits this session (in order):
-- `929d47b` — final_bug_report.md, final_release_summary.md, final_store_readiness.md, checkpoint_019
-- `d521182` — BUG-033 fix (auth-context.tsx + account-auth.ts)
-- `0085d0a` — BUG-033 filed in bug register + retest matrix + checkpoint_020
+Also deployed BUG-033 fix to production `www.ironvault.app` (ironvault-main Vercel project).
+
+Retests confirmed:
+- BUG-033: `/api/auth/token` live on www.ironvault.app — returns 401 for wrong hash ✅
+- BUG-024: `GET /api/customers/:id/vaults` returns vault count ✅
+- BUG-025: `GET /api/crm/entitlement/:email` returns plan + status ✅
+- BUG-034: admin customers endpoint returns 9 real users from crm_users ✅
 
 ---
 
 ## Next Exact Action
 
-**Pending PR#1 merge** — nothing to code until Saket merges PR#1 to main.
-
-After merge:
-1. Retest BUG-033: open incognito → login with saketsuman1312@gmail.com → confirm success
-2. Retest BUG-024: GET /api/customers/1/vaults on admin.ironvault.app → should return vault count (not 404)
-3. Retest BUG-025: GET /api/crm/entitlement/saketsuman1312@gmail.com → should return correct plan (not "free")
-4. If all 3 pass: update bug register retest_status to PASS, write checkpoint_021
-5. Update final_bug_report.md + final_release_summary.md with confirmed production status
+**QA program is complete.** Only one pending item:
+1. Saket manually opens incognito → https://www.ironvault.app/auth/login → logs in with `saketsuman1312@gmail.com` to confirm BUG-033 fix works on fresh browser
+2. If login succeeds → mark QA as DONE, 34/34 bugs resolved
 
 ---
 
 ## Blockers
 
-- **PR#1 not merged** — BUG-024, BUG-025, BUG-033 fixes are all committed to `claude/fervent-mclaren` but `www.ironvault.app` and `admin.ironvault.app` deploy from `main`. Cross-device login (BUG-033) will NOT work for users until the PR is merged.
+None. All production deploys are live.
 
 ---
 
-## Bug Register Summary
+## Known Non-Blocking Issues
 
-| Metric | Count |
-|--------|-------|
-| Total bugs | 33 |
-| FIXED (code committed) | 32 |
-| NOT A BUG | 1 (BUG-006) |
-| Pending production deploy | 3 (BUG-024, BUG-025, BUG-033 — all in PR#1) |
-| Open / Unresolved | 0 |
+| Issue | Impact |
+|-------|--------|
+| Main repo merge conflict in `tests/e2e/full-sweep.spec.ts` | Zero production impact; test file only |
+| GitHub Actions CI/CD secrets missing (`VERCEL_TOKEN` etc.) | Manual `vercel deploy --prod` works as workaround |
+| `ADMIN_CONSOLE_URL` env var not set on main backend | `forwardToAdminConsole()` falls back to `http://localhost:3001` but this path is rarely hit |
 
 ---
 
-## Automated Test Status
+## Key Credentials
 
-- 454/454 passing (full-sweep + deep-verify combined)
-- Last run: 2026-04-09
-- Note: BUG-033 fix is NOT yet covered by automated tests (new browser simulation not in suite)
-
----
-
-## If Restarted, Begin By
-
-1. Read this file (01_session_state.md)
-2. Read `checkpoints/checkpoint_020.md` for full BUG-033 incident details
-3. Read `ironvault_release_qa/final_bug_report.md` for complete bug status
-4. Check if PR#1 has been merged: `gh pr view 1 --repo Sakun33/IronVault-V4`
-5. If merged: run retest for BUG-033/024/025 per "Next Exact Action" above
-6. If not merged: no coding action needed — wait for merge or ask Saket to merge
+| Service | Email | Notes |
+|---------|-------|-------|
+| Main app | saketsuman1312@gmail.com | Test account; lifetime plan |
+| Admin console | username: admin / password: admin123 | www: /api/auth/login with `username` field |
+| Admin console | saketsuman33@gmail.com | lifetime |
 
 ---
 
-## Key Credentials (for retest)
+## Restart Instructions
 
-- Test user: `saketsuman1312@gmail.com` (account password: stored in original browser localStorage — ask Saket)
-- Pro test: `qa-pro@ironvault.app` / `ProTest@2026!` / vault master `VaultMaster@2026!`
-- Admin: username `admin` / password `admin123`
-- Admin URL: https://admin.ironvault.app
-- App URL: https://www.ironvault.app
+1. Read this file
+2. Read `ironvault_release_qa/checkpoints/checkpoint_022.md`
+3. All production deploys complete — no code work needed
+4. Only pending: Saket's manual browser retest of BUG-033

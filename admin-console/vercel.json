@@ -2,22 +2,16 @@
   "version": 2,
   "buildCommand": "cd frontend && npm install --legacy-peer-deps && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd backend && npm install --legacy-peer-deps",
+  "installCommand": "npm install --legacy-peer-deps && cd backend && npm install --legacy-peer-deps",
   "framework": null,
-  "functions": {
-    "backend/server-simple-working.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/backend/server-simple-working.ts"
+      "source": "/api/:path*",
+      "destination": "/api/index"
     },
     {
       "source": "/((?!api).*)",
-      "destination": "/frontend/dist/index.html"
+      "destination": "/index.html"
     }
   ]
 }

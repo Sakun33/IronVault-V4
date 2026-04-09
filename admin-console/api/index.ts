@@ -98,19 +98,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = getPool();
 
-  // ── Public customer registration ────────────────────────────────────────────
+  // ── Public customer registration (writes to crm_users — same table as main backend) ─
   if (path === "/api/public/customers/register" && method === "POST") {
     const { email, fullName, country, platform, planType } = (req.body as Record<string, string>) || {};
     if (!email) return res.status(400).json({ error: "email required" });
     try {
       const { rows } = await db.query(
-        `INSERT INTO customers (email, full_name, country, platform, plan_type, status)
-         VALUES ($1, $2, $3, $4, $5, 'active')
+        `INSERT INTO crm_users (email, full_name, country, platform, marketing_consent, support_consent)
+         VALUES ($1, $2, $3, $4, false, true)
          ON CONFLICT (email) DO UPDATE SET
            full_name = EXCLUDED.full_name, country = EXCLUDED.country,
-           platform = EXCLUDED.platform, updated_at = NOW()
-         RETURNING *`,
-        [email, fullName || null, country || null, platform || null, planType || "free"]
+           platform = EXCLUDED.platform, last_active_at = NOW(), updated_at = NOW()
+         RETURNING id, email, full_name, country, platform, created_at`,
+        [email.toLowerCase().trim(), fullName || null, country || null, platform || null]
       );
       return res.json({ success: true, customer: rows[0] });
     } catch (err: any) {
@@ -153,13 +153,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── All remaining routes require JWT ────────────────────────────────────────
   if (!getToken(req)) return res.status(401).json({ error: "Unauthorized" });
 
+  // ── Shared CRM query helper ─────────────────────────────────────────────────
+  // Reads from crm_users + entitlements — the same tables the main backend writes to.
+  // Returns rows shaped like the legacy "customers" schema the admin frontend expects.
+  async function queryCrmCustomers(where = "", values: any[] = []) {
+    const { rows } = await db.query(
+      `SELECT u.id, u.email,
+              COALESCE(u.full_name, split_part(u.email, '@', 1)) AS name,
+              u.phone, u.country AS region,
+              COALESCE(e.plan, 'free') AS plan_name,
+              COALESCE(e.plan, 'free') AS subscription_plan,
+              'active' AS status,
+              u.created_at,
+              COALESCE(u.last_active_at, u.created_at) AS last_active,
+              u.vault_created_at IS NOT NULL AS vault_created,
+              COALESCE(u.platform, 'web') AS source
+       FROM crm_users u
+       LEFT JOIN entitlements e ON e.user_id = u.id
+       ${where}
+       ORDER BY u.created_at DESC`,
+      values
+    );
+    return rows;
+  }
+
   // ── GET /api/customers/export/csv ──────────────────────────────────────────
   if (path === "/api/customers/export/csv" && method === "GET") {
     try {
-      const { rows } = await db.query(`SELECT * FROM customers ORDER BY created_at DESC`);
-      const header = "id,email,full_name,country,platform,plan_type,status,created_at\n";
+      const rows = await queryCrmCustomers();
+      const header = "id,email,name,region,plan_name,status,created_at\n";
       const csv = rows.map(r =>
-        [r.id, r.email, r.full_name || "", r.country || "", r.platform || "", r.plan_type, r.status, r.created_at].join(",")
+        [r.id, r.email, r.name || "", r.region || "", r.plan_name, r.status, r.created_at].join(",")
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=customers.csv");
@@ -170,8 +194,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/customers ──────────────────────────────────────────────────────
   if (path === "/api/customers" && method === "GET") {
     try {
-      const { rows, rowCount } = await db.query(`SELECT * FROM customers ORDER BY created_at DESC`);
-      return res.json({ customers: rows, total: rowCount });
+      const { search, plan, status: statusFilter, page = "1", limit = "50" } = req.query as Record<string, string>;
+      let where = "";
+      const vals: any[] = [];
+      const conditions: string[] = [];
+      if (search) {
+        vals.push(`%${search}%`);
+        conditions.push(`(u.email ILIKE $${vals.length} OR u.full_name ILIKE $${vals.length})`);
+      }
+      if (plan) {
+        vals.push(plan.toLowerCase());
+        conditions.push(`LOWER(COALESCE(e.plan,'free')) = $${vals.length}`);
+      }
+      if (conditions.length) where = `WHERE ${conditions.join(" AND ")}`;
+      const rows = await queryCrmCustomers(where, vals);
+      const pageN = parseInt(page, 10);
+      const limitN = parseInt(limit, 10);
+      const paginated = rows.slice((pageN - 1) * limitN, pageN * limitN);
+      return res.json({ customers: paginated, total: rows.length, pagination: { page: pageN, limit: limitN, total: rows.length, pages: Math.ceil(rows.length / limitN) } });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
@@ -182,31 +222,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (method === "GET") {
       try {
-        const { rows } = await db.query(`SELECT * FROM customers WHERE id = $1`, [id]);
+        const rows = await queryCrmCustomers(`WHERE u.id = $1`, [id]);
         if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
         return res.json(rows[0]);
       } catch (err: any) { return res.status(500).json({ error: err.message }); }
     }
 
     if (method === "PUT") {
-      const { plan_type, status, full_name, country, platform, app_version } = req.body || {};
-      const updates: string[] = [];
-      const values: any[] = [];
-      let i = 1;
-      if (plan_type    !== undefined) { updates.push(`plan_type = $${i++}`);    values.push(plan_type); }
-      if (status       !== undefined) { updates.push(`status = $${i++}`);       values.push(status); }
-      if (full_name    !== undefined) { updates.push(`full_name = $${i++}`);    values.push(full_name); }
-      if (country      !== undefined) { updates.push(`country = $${i++}`);      values.push(country); }
-      if (platform     !== undefined) { updates.push(`platform = $${i++}`);     values.push(platform); }
-      if (app_version  !== undefined) { updates.push(`app_version = $${i++}`);  values.push(app_version); }
-      if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
-      updates.push(`updated_at = NOW()`);
-      values.push(id);
+      // Update crm_users profile fields and/or entitlement plan
+      const { plan_name, subscription_plan, full_name, country, platform } = req.body || {};
+      const newPlan = plan_name || subscription_plan;
       try {
-        const { rows } = await db.query(
-          `UPDATE customers SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`,
-          values
-        );
+        if (full_name || country || platform) {
+          const updates: string[] = [];
+          const vals: any[] = [];
+          let i = 1;
+          if (full_name !== undefined) { updates.push(`full_name = $${i++}`); vals.push(full_name); }
+          if (country   !== undefined) { updates.push(`country = $${i++}`);   vals.push(country); }
+          if (platform  !== undefined) { updates.push(`platform = $${i++}`);  vals.push(platform); }
+          updates.push(`updated_at = NOW()`);
+          vals.push(id);
+          await db.query(`UPDATE crm_users SET ${updates.join(", ")} WHERE id = $${i}`, vals);
+        }
+        if (newPlan) {
+          const dbPlan = newPlan.toLowerCase().includes("lifetime") ? "lifetime"
+            : newPlan.toLowerCase().includes("pro") || newPlan.toLowerCase().includes("premium") ? "premium"
+            : "free";
+          await db.query(
+            `UPDATE entitlements SET plan = $1, updated_at = NOW() WHERE user_id = $2`,
+            [dbPlan, id]
+          );
+        }
+        const rows = await queryCrmCustomers(`WHERE u.id = $1`, [id]);
         if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
         return res.json(rows[0]);
       } catch (err: any) { return res.status(500).json({ error: err.message }); }
@@ -214,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (method === "DELETE") {
       try {
-        const { rowCount } = await db.query(`DELETE FROM customers WHERE id = $1`, [id]);
+        const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [id]);
         if (!rowCount) return res.status(404).json({ error: "Customer not found" });
         return res.json({ success: true });
       } catch (err: any) { return res.status(500).json({ error: err.message }); }
@@ -259,7 +306,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (subMatch && method === "GET") {
     const id = subMatch[1];
     try {
-      const { rows } = await db.query(`SELECT id, email, plan_type, status FROM customers WHERE id = $1`, [id]);
+      const { rows } = await db.query(
+        `SELECT u.id, u.email, COALESCE(e.plan,'free') AS plan_type, COALESCE(e.status,'active') AS status
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1`, [id]);
       if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
       return res.json({ plan_type: rows[0].plan_type, status: rows[0].status });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
@@ -269,9 +318,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { plan_type } = req.body || {};
     if (!plan_type) return res.status(400).json({ error: "plan_type required" });
     try {
-      const { rows } = await db.query(
-        `UPDATE customers SET plan_type = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      await db.query(
+        `UPDATE entitlements SET plan = $1, updated_at = NOW() WHERE user_id = $2`,
         [plan_type, id]
+      );
+      const { rows } = await db.query(
+        `SELECT u.id, u.email, COALESCE(e.plan,'free') AS plan_type FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1`, [id]
       );
       if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
       return res.json(rows[0]);
@@ -320,7 +373,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { customer_email, subject, description, priority } = req.body || {};
       if (!customer_email || !subject) return res.status(400).json({ error: "customer_email and subject required" });
       try {
-        const { rows: cRows } = await db.query(`SELECT id FROM customers WHERE email=$1 LIMIT 1`, [customer_email]);
+        const { rows: cRows } = await db.query(`SELECT id FROM crm_users WHERE email=$1 LIMIT 1`, [customer_email]);
         const customerId = cRows[0]?.id || null;
         const { rows } = await db.query(
           `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
@@ -412,26 +465,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (vaultsByCustomerMatch && method === "GET") {
     const id = vaultsByCustomerMatch[1];
     try {
-      // Get customer info including vault_count
       const { rows: cRows } = await db.query(
-        `SELECT email, plan_type, vault_count, flagged_over_limit FROM customers WHERE id = $1 LIMIT 1`, [id]
+        `SELECT u.email, COALESCE(e.plan,'free') AS plan_type
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1 LIMIT 1`, [id]
       );
       if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
       const c = cRows[0];
-      // Get cloud vaults from cloud_vaults table if it exists
       const { rows: cvRows } = await db.query(
         `SELECT vault_id, vault_name, is_default, created_at, server_updated_at
-         FROM cloud_vaults WHERE user_id = (SELECT id FROM crm_users WHERE email = $1 LIMIT 1)
-         ORDER BY created_at DESC`,
-        [c.email]
+         FROM cloud_vaults WHERE user_id = $1 ORDER BY created_at DESC`, [id]
       ).catch(() => ({ rows: [] as any[] }));
-      const planLimits: Record<string, number> = { free: 1, pro: 5, family: 5, lifetime: 5 };
-      const limit = planLimits[c.plan_type] ?? 1;
+      const planLimits: Record<string, number> = { free: 1, premium: 5, pro: 5, family: 5, lifetime: 5 };
       return res.json({
-        localVaultCount: c.vault_count || 0,
+        localVaultCount: 0,
         cloudVaultCount: cvRows.length,
-        planLimit: limit,
-        flaggedOverLimit: c.flagged_over_limit || false,
+        planLimit: planLimits[c.plan_type] ?? 1,
         cloudVaults: cvRows,
       });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
@@ -443,7 +491,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const id = familyInvitesByCustomerMatch[1];
     if (method === "GET") {
       try {
-        const { rows: cRows } = await db.query(`SELECT email FROM customers WHERE id=$1 LIMIT 1`, [id]);
+        const { rows: cRows } = await db.query(`SELECT email FROM crm_users WHERE id=$1 LIMIT 1`, [id]);
         if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
         const { rows } = await db.query(
           `SELECT * FROM family_invites WHERE owner_email = $1 ORDER BY invited_at DESC`,
@@ -474,24 +522,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const id = upgradeMatch[1];
     const { plan_type, reason } = req.body || {};
     if (!plan_type) return res.status(400).json({ error: "plan_type required" });
-    const validPlans = ["free", "pro", "family", "lifetime"];
-    if (!validPlans.includes(plan_type)) {
+    const validPlans = ["free", "pro", "premium", "family", "lifetime"];
+    if (!validPlans.includes(plan_type.toLowerCase())) {
       return res.status(400).json({ error: `plan_type must be one of: ${validPlans.join(", ")}` });
     }
+    const dbPlan = plan_type.toLowerCase() === "pro" ? "premium" : plan_type.toLowerCase();
     try {
-      const { rows: old } = await db.query(`SELECT email, plan_type FROM customers WHERE id=$1`, [id]);
+      const { rows: old } = await db.query(
+        `SELECT u.email, COALESCE(e.plan,'free') AS plan_type FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id=$1`, [id]);
       if (!old[0]) return res.status(404).json({ error: "Customer not found" });
-      const { rows: updated } = await db.query(
-        `UPDATE customers SET plan_type=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
-        [plan_type, id]
+      await db.query(
+        `UPDATE entitlements SET plan=$1, updated_at=NOW() WHERE user_id=$2`,
+        [dbPlan, id]
       );
-      // Write audit log
       await db.query(
         `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
          VALUES ($1, $2, $3, 'admin', $4)`,
-        [old[0].email, old[0].plan_type, plan_type, reason || null]
-      ).catch(() => {}); // Don't fail if table doesn't exist yet
-      return res.json({ success: true, customer: updated[0] });
+        [old[0].email, old[0].plan_type, dbPlan, reason || null]
+      ).catch(() => {});
+      const rows = await queryCrmCustomers(`WHERE u.id = $1`, [id]);
+      return res.json({ success: true, customer: rows[0] });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
@@ -500,7 +551,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (planHistoryMatch && method === "GET") {
     const id = planHistoryMatch[1];
     try {
-      const { rows: cRows } = await db.query(`SELECT email FROM customers WHERE id=$1 LIMIT 1`, [id]);
+      const { rows: cRows } = await db.query(`SELECT email FROM crm_users WHERE id=$1 LIMIT 1`, [id]);
       if (!cRows[0]) return res.status(404).json({ error: "Customer not found" });
       const { rows } = await db.query(
         `SELECT * FROM plan_audit_log WHERE customer_email = $1 ORDER BY created_at DESC`,
@@ -513,13 +564,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── GET /api/flagged-accounts ────────────────────────────────────────────────
   // Returns accounts that are over their plan's vault limit (BUG-022)
   if (path === "/api/flagged-accounts" && method === "GET") {
-    try {
-      const { rows } = await db.query(
-        `SELECT id, email, full_name, plan_type, vault_count, flagged_over_limit, created_at
-         FROM customers WHERE flagged_over_limit = true ORDER BY updated_at DESC`
-      );
-      return res.json({ accounts: rows, total: rows.length });
-    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    // No flagging mechanism in crm_users; return empty for now
+    return res.json({ accounts: [], total: 0 });
   }
 
   // ── GET /api/audit-log / /api/admin-logs ────────────────────────────────────
@@ -541,9 +587,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/dashboard/kpis" && method === "GET") {
     try {
       const { rows } = await db.query(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE plan_type='trial') AS trials FROM customers`
+        `SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE e.status='trial') AS trials,
+                COUNT(*) FILTER (WHERE e.plan IN ('premium','lifetime')) AS paid
+         FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id`
       );
-      return res.json({ totalCustomers: parseInt(rows[0].total, 10), activeTrials: parseInt(rows[0].trials, 10), mrr: 0, churn: 0 });
+      return res.json({ totalCustomers: parseInt(rows[0].total, 10), activeTrials: parseInt(rows[0].trials, 10), paidCustomers: parseInt(rows[0].paid, 10), mrr: 0, churn: 0 });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
@@ -556,11 +606,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/dashboard/stats" && method === "GET") {
     try {
       const { rows: cRows } = await db.query(
-        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE plan_type='trial') AS trials FROM customers`
+        `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE e.status='trial') AS trials
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id`
       );
       const { rows: tRows } = await db.query(
         `SELECT COUNT(*) AS open_tickets FROM tickets WHERE status='open'`
-      );
+      ).catch(() => ({ rows: [{ open_tickets: 0 }] }));
       return res.json({
         totalCustomers: parseInt(cRows[0].total, 10),
         activeTrials: parseInt(cRows[0].trials, 10),

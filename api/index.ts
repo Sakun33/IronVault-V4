@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── /api/crm/entitlement/:userId ────────────────────────────────────────────
   if (path.startsWith("/api/crm/entitlement/")) {
-    const userId = path.replace("/api/crm/entitlement/", "");
+    const userId = decodeURIComponent(path.replace("/api/crm/entitlement/", ""));
     if (!userId) return res.status(400).json({ error: "userId required" });
 
     try {
@@ -264,7 +264,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       const { rows } = await db.query(
-        `SELECT vault_id, vault_name, is_default, client_modified_at, server_updated_at, created_at
+        `SELECT vault_id, vault_name, is_default, client_modified_at, server_updated_at, created_at, source_device_id
          FROM cloud_vaults WHERE user_id = $1 ORDER BY created_at DESC`,
         [cloudUser.userId]
       );
@@ -273,6 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         clientModifiedAt: r.client_modified_at?.toISOString(),
         serverUpdatedAt: r.server_updated_at?.toISOString(),
         createdAt: r.created_at?.toISOString(),
+        sourceDeviceId: r.source_device_id ?? null,
       }))});
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed to list vaults' });
@@ -306,7 +307,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/vaults/cloud' && req.method === 'POST') {
     const cloudUser = getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
-    const { vaultId, vaultName, encryptedBlob, isDefault = false, clientModifiedAt } = req.body || {};
+    const { vaultId, vaultName, encryptedBlob, isDefault = false, clientModifiedAt, sourceDeviceId } = req.body || {};
     if (!vaultId || !vaultName || !encryptedBlob) {
       return res.status(400).json({ error: 'vaultId, vaultName, encryptedBlob required' });
     }
@@ -333,9 +334,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (existing[0]) return res.status(409).json({ error: 'Vault already exists. Use PUT to update.' });
       const ts = clientModifiedAt ? new Date(clientModifiedAt) : new Date();
       const { rows: created } = await db.query(
-        `INSERT INTO cloud_vaults (user_id, vault_id, vault_name, encrypted_blob, is_default, client_modified_at)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING vault_id, vault_name, is_default, server_updated_at`,
-        [cloudUser.userId, vaultId, vaultName, encryptedBlob, isDefault, ts]
+        `INSERT INTO cloud_vaults (user_id, vault_id, vault_name, encrypted_blob, is_default, client_modified_at, source_device_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING vault_id, vault_name, is_default, server_updated_at`,
+        [cloudUser.userId, vaultId, vaultName, encryptedBlob, isDefault, ts, sourceDeviceId ?? null]
       );
       if (isDefault) {
         await db.query(`UPDATE cloud_vaults SET is_default = false WHERE user_id = $1 AND vault_id != $2`, [cloudUser.userId, vaultId]);
