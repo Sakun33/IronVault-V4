@@ -1,45 +1,55 @@
 # Latest status
-**Updated:** 2026-04-09 ~14:10 UTC
+**Updated:** 2026-04-09 ~14:55 UTC
 
-## ALL PRODUCTION ENDPOINTS VERIFIED GREEN (2026-04-09 14:08 UTC)
+## Login — CONFIRMED WORKING ✅
+- saketsuman1312@gmail.com / 12121212 → login confirmed by user ✅
+- BUG-034 CLOSED
 
-### www.ironvault.app
-- `/api/health` → `{"status":"ok","db":true}` ✅
-- `/api/auth/token` with SHA256("12121212") for saketsuman1312@gmail.com → **HTTP 200, JWT issued** ✅
-- Bundle: `index-1870c316.js` (new server-auth build) ✅
-- Alias: `ironvault-main-l9q29ld90` ✅
+## Pro Plan Upgrade — DONE ✅
+- entitlements.plan updated to 'pro' for user_id 7b11dd22-e6c7-4a05-8c12-c62f131bd610
+- NOTE: customers.plan_type was already 'lifetime' — user already had max-tier entitlements
+- entitlement API (/api/crm/entitlement/saketsuman1312@gmail.com) returns plan: "lifetime"
+- license-context.tsx syncFromServer() will sync tier to 'lifetime' on next vault unlock
+- Cloud sync is enabled: license.tier !== 'free' → cloud vault section visible in vault picker
 
-### admin.ironvault.app
-- Status: UP ✅
-- All routes (/customers, /dashboard) return 200 ✅
-- SPA rewrite fix committed (f46c3c1) ✅
+## Cloud Sync API Dry-Run — ALL LEGS PASS ✅
+Tested against live https://www.ironvault.app with real JWT token for saketsuman1312@gmail.com:
 
-## Login credentials (confirmed server-side)
-- saketsuman1312@gmail.com → password: **12121212** → server returns 200 ✅
-- saketsuman@gmail.com → password: **12121212** → (backfilled, should work) 
-- SHA-256("12121212") = `054e3b308708370ea029dc2ebd1646c498d59d7203c9e1a44cf0484df98e581a`
+| Step | Result |
+|------|--------|
+| POST /api/vaults/cloud (upload) | 201 Created, vault stored ✅ |
+| GET /api/vaults/cloud (list) | Returns vault in array ✅ |
+| GET /api/vaults/cloud/:id (download) | Returns full encryptedBlob ✅ |
+| DELETE /api/vaults/cloud/:id (cleanup) | 200 OK ✅ |
+| Plan gate check (entitlements.plan='pro') | Passed, no 403 ✅ |
 
-## Next action for Saket
-**Test login in a FRESH INCOGNITO window:**
-1. Open fresh incognito → https://www.ironvault.app
-2. Click "Log In"
-3. Email: saketsuman1312@gmail.com
-4. Account Password: **12121212**
-5. Should succeed
+## How to upload local vault to cloud (exact UI path)
+**Preconditions:** Logged in + vault unlocked (Pro/Lifetime plan already active for user)
 
-**If it still fails:** Open DevTools → Console tab → retry login → share console output.
-The browser will print `[auth] /api/auth/token returned XXX` with the actual HTTP status.
+1. Log in at www.ironvault.app → enter email/password → Sign In
+2. On vault picker: enter master password for local vault → click Unlock Vault → vault opens
+3. In the main app sidebar, click **Vaults** (shield icon)
+4. On the Vaults page, find your vault card → click **⋮ (three-dot menu)**
+5. Click **"Sync to Cloud"**
+6. Dialog prompts for master password → enter it → click **"Sync to Cloud"**
+7. Toast: "Vault synced" confirms upload
 
-## What was broken (now fixed)
-1. `ironvault-main` Vercel project had no DATABASE_URL → API returned `db:false`, all queries failed silently
-2. `vercel deploy --prod` created new deployment but did NOT move `www.ironvault.app` alias → old 56d bundle still served
-3. Old bundle `index-defc20a4.js` had ZERO occurrences of `api/auth/token` — was localStorage-only auth
-4. `admin.ironvault.app` SPA rewrite had wrong destination (`/frontend/dist/index.html` → fixed to `/index.html`)
+**After upload, on a second browser (Comet):**
+1. Log in with same account credentials
+2. Vault picker shows **"Cloud Vaults"** section with a 🔵 Cloud badge
+3. Enter master password → click **"Unlock Vault"** → vault downloads and opens
+4. Contents are present
 
-## All fixes applied
-- DATABASE_URL added to ironvault-main env
-- Re-deployed ironvault-main (ironvault-main-l9q29ld90)
-- Aliases www.ironvault.app + ironvault.app → ironvault-main-l9q29ld90 (explicitly set)
-- New bundle index-1870c316.js live with full server auth
-- admin-console SPA rewrite fixed (admin-console-k07b45ply)
-- All NULL password hashes backfilled with SHA-256("12121212")
+## Cross-browser test readiness
+- Server API: all CRUD operations confirmed working ✅
+- Plan gate: passed (no 403) ✅
+- Bundle: includes full cloud sync code ✅
+- License tier: 'lifetime' will sync on vault unlock ✅
+- CAVEAT: Chrome in Chrome extension is offline — cannot do full browser UI dry-run.
+  API-level dry-run is complete. User should follow the 7-step path above.
+
+## DB state
+- crm_users: saketsuman1312@gmail.com, id=7b11dd22
+- entitlements: plan='pro', status='active', admin_override=true
+- customers: plan_type='lifetime' (pre-existing)
+- cloud_vaults: 0 rows (test vault cleaned up)
