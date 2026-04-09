@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
+import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import SignupPage from "@/pages/signup";
@@ -76,10 +77,11 @@ import { Footer } from "@/components/footer";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, masterPassword } = useAuth();
   const { searchQuery, setSearchQuery, stats } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, switchVault } = useVaultSelection();
+  useCloudAutoSync(activeVault?.id, masterPassword);
   const [location, setLocation] = useLocation();
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);

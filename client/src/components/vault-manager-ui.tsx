@@ -11,6 +11,8 @@ import {
   getCloudToken,
   acquireCloudToken,
   getOrCreateDeviceId,
+  markVaultAsCloudSynced,
+  markVaultAsNotCloudSynced,
   type CloudVaultMeta,
 } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
@@ -424,6 +426,7 @@ export function VaultManagerUI() {
         toast({ title: 'Server has newer data', description: 'Cloud already has a newer version of this vault.', variant: 'destructive' });
       } else if (result.success) {
         toast({ title: 'Cloud sync enabled', description: `"${vault.name}" is now synced to the cloud.` });
+        markVaultAsCloudSynced(vault.id);
         // Refresh the cloud vault map
         const remote = await listCloudVaults();
         const map = new Map<string, CloudVaultMeta>();
@@ -452,6 +455,7 @@ export function VaultManagerUI() {
       const ok = await deleteCloudVault(disableCloudVaultId);
       if (ok) {
         toast({ title: 'Cloud sync disabled', description: `"${vault?.name ?? 'Vault'}" removed from cloud. Other devices will no longer see it.` });
+        markVaultAsNotCloudSynced(disableCloudVaultId);
         setCloudVaultMap(prev => {
           const next = new Map(prev);
           next.delete(disableCloudVaultId);

@@ -12,7 +12,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
-import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
+import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
@@ -175,14 +175,25 @@ export default function VaultPickerPage() {
         await vaultStorage.createVault(pw);
         await vaultStorage.importVault(full.encryptedBlob, pw);
       } else {
-        // Same device — vault already exists locally; skip re-import to avoid duplicate items
+        // Same device — vault exists locally; re-import from cloud to pick up changes from other devices
         vaultManager.setActiveVaultId(cloudVault.vaultId);
         await vaultStorage.switchToVault(cloudVault.vaultId);
+        // Unlock first so encryptionKey is available for re-import
+        const unlocked = await vaultStorage.unlockVault(pw);
+        if (!unlocked) {
+          setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: 'Incorrect master password.' }));
+          setCloudDownloading(null);
+          return;
+        }
+        // Replace local items with cloud version
+        await vaultStorage.clearEncryptedItems();
+        await vaultStorage.importVault(full.encryptedBlob, pw);
       }
 
       // Now unlock using the master password
       const success = await login(pw);
       if (success) {
+        markVaultAsCloudSynced(cloudVault.vaultId);
         toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
         setLocation('/');
       } else {

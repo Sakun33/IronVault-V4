@@ -1,6 +1,7 @@
 const CLOUD_TOKEN_KEY = 'iv_cloud_token';
 const SYNC_QUEUE_KEY = 'iv_sync_queue';
 const DEVICE_ID_KEY = 'iv_device_id';
+const CLOUD_SYNCED_VAULTS_KEY = 'iv_cloud_synced_vaults';
 
 export interface CloudVaultMeta {
   vaultId: string;
@@ -151,6 +152,34 @@ export async function setCloudDefault(vaultId: string): Promise<boolean> {
       method: 'PATCH', headers: authHeaders(),
     });
     return res.ok;
+  } catch { return false; }
+}
+
+// ── Cloud-synced vault registry (local tracking) ──────────────────────────────
+export function markVaultAsCloudSynced(vaultId: string): void {
+  try {
+    const raw = localStorage.getItem(CLOUD_SYNCED_VAULTS_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(vaultId)) {
+      ids.push(vaultId);
+      localStorage.setItem(CLOUD_SYNCED_VAULTS_KEY, JSON.stringify(ids));
+    }
+  } catch {}
+}
+
+export function markVaultAsNotCloudSynced(vaultId: string): void {
+  try {
+    const raw = localStorage.getItem(CLOUD_SYNCED_VAULTS_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem(CLOUD_SYNCED_VAULTS_KEY, JSON.stringify(ids.filter(id => id !== vaultId)));
+  } catch {}
+}
+
+export function isVaultCloudSynced(vaultId: string): boolean {
+  try {
+    const raw = localStorage.getItem(CLOUD_SYNCED_VAULTS_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    return ids.includes(vaultId);
   } catch { return false; }
 }
 
