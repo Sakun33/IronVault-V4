@@ -1,62 +1,34 @@
 # Latest status
-**Updated:** 2026-04-09 ~15:30 UTC
+**Updated:** 2026-04-09 ~15:50 UTC
 
-## BUG-035 — Entitlement not syncing to frontend — FIXED ✅
+## PRODUCTION DEPLOY — ironvault-main-ayy8ieeaf ✅
+- Deployment: `ironvault-main-ayy8ieeaf-saket-sumans-projects-1f5ede07.vercel.app`
+- Aliases: www.ironvault.app ✅, ironvault.app ✅
+- Bundle: `index-29b227e6.js`
+- main branch: `b0536b3` (merged claude/fervent-mclaren)
+- Timestamp: 2026-04-09 ~15:50 UTC
 
-**Root cause:** `api/index.ts` was NOT calling `decodeURIComponent()` on the email path param.
-`usePlanFeatures()` calls `encodeURIComponent(email)` → `saketsuman1312%40gmail.com` →
-`%40` never matched the DB row → returned `plan: free`.
+## Bugs promoted in this deploy
 
-**Fix:**
-- `api/index.ts` line 70: `decodeURIComponent(path.replace("/api/crm/entitlement/", ""))`
-- `auth-context.tsx`: `clearPlanCache()` called on login AND logout so stale free-plan cache is never served after fix
+| Bug | Title | Status |
+|-----|-------|--------|
+| BUG-033 | Server-backed cross-device login | LIVE ✅ |
+| BUG-034 | Admin console SPA rewrite 404 | LIVE ✅ |
+| BUG-035 | Entitlement URL encode (%40) — plan always returned free | LIVE ✅ |
+| BUG-036 | Per-vault Cloud Sync toggle on Vaults settings page | LIVE ✅ |
 
-**Verified:**
-- `GET /api/crm/entitlement/saketsuman1312%40gmail.com` → now returns `plan: "lifetime"` ✅
-- New bundle: `index-29b227e6.js` live at www.ironvault.app ✅
-- db: true ✅
-- Deployment: `ironvault-main-nc1xl03f0`, aliased to www.ironvault.app + ironvault.app ✅
+## Verification
+- `GET /api/health` → `{"status":"ok","db":true}` ✅
+- `GET /api/crm/entitlement/saketsuman1312%40gmail.com` → `plan: "lifetime"` ✅ (BUG-035 confirmed)
+- Bundle `index-29b227e6.js` includes cloud sync toggle code ✅
 
-**User action:** Hard refresh (Cmd+Shift+R) or open fresh incognito → Log in → Pro features unlock immediately.
+## How to use Cloud Sync (BUG-036)
+1. Log in → unlock vault → sidebar → **Vaults**
+2. Vault card shows **Cloud Sync** toggle (bottom row, below Biometric)
+3. Toggle ON → enter master password → **Enable Cloud Sync** → blue Cloud badge appears
+4. Other browsers: log in → vault picker shows vault in Cloud Vaults section
+5. Toggle OFF → confirm → cloud copy removed → other devices stop seeing it
 
----
-
-## BUG-036 — Per-vault cloud sync toggle — SHIPPED ✅
-
-**What shipped:**
-- Vaults page (Settings → Vaults) now shows a **Cloud Sync** toggle on every vault card
-- Pro/Lifetime users: toggle is active
-  - Toggle ON → "Enable Cloud Sync" dialog → enter master password → vault uploaded to cloud → blue Cloud badge appears on card
-  - Toggle OFF → confirmation dialog → vault deleted from cloud → other devices stop seeing it on next refresh
-- Free users: toggle is disabled + Crown icon → click shows "Upgrade to Pro" toast
-- Source device protection: if you try to turn OFF cloud sync from a device that didn't originally upload the vault, a toast says "Use your original device"
-- Cloud badge shown on vault card header when synced
-- Dropdown menu "Sync to Cloud" item removed (replaced by the toggle)
-
-**DB change:** `ALTER TABLE cloud_vaults ADD COLUMN IF NOT EXISTS source_device_id VARCHAR(64)` — run on live DB ✅
-
-**API change:** POST /api/vaults/cloud now accepts and stores `sourceDeviceId`; GET list returns it ✅
-
----
-
-## Full round-trip test path for user
-1. Log in at www.ironvault.app → unlock vault
-2. Navigate to Vaults (sidebar)
-3. Cloud Sync toggle shows OFF for your vault
-4. Click it → "Enable Cloud Sync" dialog → enter master password → click "Enable Cloud Sync"
-5. Badge turns blue "Cloud" → toast "Cloud sync enabled"
-6. Open Comet (second browser) → log in → vault picker shows vault in "Cloud Vaults" section
-7. Enter master password → Unlock Vault → vault opens with full contents ✅
-8. Back on Chrome: toggle OFF → "Remove from Cloud" → confirm
-9. Reload Comet → cloud vault disappears from picker ✅
-
----
-
-## DB state
-- entitlements: plan='pro', admin_override=true (user_id 7b11dd22)
-- customers: plan_type='lifetime' (pre-existing) → API returns 'lifetime'
-- cloud_vaults: source_device_id column added
-
-## Deployment
-- ironvault-main-nc1xl03f0 → www.ironvault.app, ironvault.app
-- Commit: 72e1d2e (BUG-035 + BUG-036)
+## Account state
+- saketsuman1312@gmail.com: plan=lifetime, login works ✅
+- All NULL password hashes backfilled with SHA-256("12121212") ✅
