@@ -1,46 +1,51 @@
 # Latest status
-**Updated:** 2026-04-09 ~20:40 UTC
+**Updated:** 2026-04-09 ~21:40 UTC
 
-## PRODUCTION DEPLOY — ironvault-main-fgc6dm5i8 ✅
-- Deployment: `ironvault-main-fgc6dm5i8-saket-sumans-projects-1f5ede07.vercel.app`
+## PRODUCTION DEPLOY — ironvault-main-eocha1y92 ✅
+- Deployment: `ironvault-main-eocha1y92-saket-sumans-projects-1f5ede07.vercel.app`
 - Aliases: www.ironvault.app ✅, ironvault.app ✅
-- Bundle: `index-ab452011.js`
-- main branch: `bcca560` (merged BUG-037 fix)
-- Timestamp: 2026-04-09 ~20:40 UTC
-- Domains moved from `ironvault` project to `ironvault-main` project (permanent)
+- Bundle: `index-6cb02aac.js`
+- main branch: `b173d5c` (BUG-037 full fix — push on unlock)
+- Timestamp: 2026-04-09 ~21:40 UTC
 
-## Bugs promoted in this deploy
+## Bugs in this deploy
 
 | Bug | Title | Status |
 |-----|-------|--------|
 | BUG-033 | Server-backed cross-device login | LIVE ✅ |
 | BUG-034 | Admin console SPA rewrite 404 | LIVE ✅ |
-| BUG-035 | Entitlement URL encode (%40) — plan always returned free | LIVE ✅ |
-| BUG-036 | Per-vault Cloud Sync toggle on Vaults settings page | LIVE ✅ |
+| BUG-035 | Entitlement URL encode (%40) | LIVE ✅ |
+| BUG-036 | Per-vault Cloud Sync toggle | LIVE ✅ |
 | BUG-037 | Cross-browser cloud vault contents empty | LIVE ✅ |
 
-## Verification
-- `GET /api/health` → `{"status":"ok","db":true}` ✅
-- Bundle `index-ab452011.js` live on www.ironvault.app ✅
-- `vault:item:saved` event auto-sync wired ✅
+## BUG-037 Root Cause (full analysis)
 
-## BUG-037 Fix Summary
-**Root cause:** Cloud vault uploaded empty blob at creation time; no re-sync when items added.
+**Root cause 1 (primary):** Cloud vault blob was uploaded EMPTY at creation time (`create-vault.tsx` exported 917-byte empty vault before any items were added). Items added after creation were never synced because:
+- The auto-sync hook guards on `isVaultCloudSynced(vaultId)` (localStorage flag)  
+- That flag was only set by `markVaultAsCloudSynced()` calls added in the fix
+- Vaults created BEFORE the fix deployment never had the flag set → auto-sync silently skipped them
 
-**Fix components:**
-1. `storage.ts`: `encryptAndStore` + all delete methods dispatch `vault:item:saved` CustomEvent
-2. `cloud-vault-sync.ts`: `markVaultAsCloudSynced` / `markVaultAsNotCloudSynced` / `isVaultCloudSynced` helpers
-3. `hooks/use-cloud-auto-sync.ts`: Debounced (3s) event listener — re-exports and pushes vault to cloud
-4. `App.tsx`: `useCloudAutoSync(activeVault?.id, masterPassword)` wired into MainLayout
-5. `vault-manager-ui.tsx` + `create-vault.tsx`: Mark vault as cloud-synced on enable
-6. `vault-picker.tsx`: Same-device login now re-imports from cloud (clear + reimport)
+**Root cause 2 (secondary):** Browser B downloaded the empty 917-byte blob and imported nothing, resulting in an empty vault regardless of what was on browser A.
 
-## How to test cross-browser sync (BUG-037)
-1. Browser A: log in, unlock vault, Vaults page → enable Cloud Sync → enter master password
-2. Browser A: add a password entry (auto-sync fires after 3s debounce)
-3. Browser B: log in same account → vault appears in Cloud Vaults section → enter master password
-4. Browser B: should see the password entry from step 2 ✅
+## BUG-037 Fix Summary (all layers)
+
+1. **`storage.ts`** — `vault:item:saved` event on every item save/delete
+2. **`use-cloud-auto-sync.ts`** — Debounced 3s push on each event (guards on `isVaultCloudSynced`)
+3. **`cloud-vault-sync.ts`** — `markVaultAsCloudSynced/Not/isVaultCloudSynced` localStorage registry
+4. **`App.tsx` (this fix)** — On every vault unlock: `listCloudVaults()` → if vault is in cloud → `markVaultAsCloudSynced()` + push current items (if blob > 1000 bytes). Heals all pre-fix vaults.
+5. **`vault-picker.tsx`** — Same-device login: `clearEncryptedItems()` + `importVault(cloud_blob)` to pick up remote changes
+6. **`vault-manager-ui.tsx`** + **`create-vault.tsx`** — `markVaultAsCloudSynced` on enable
+
+## Cross-browser sync test path
+
+1. **Browser A**: Log in → unlock vault → wait ~3s (on-unlock effect pushes items to cloud)
+2. **Browser B**: Log in same account → vault appears in Cloud Vaults section → enter master password → items from browser A should be visible ✅
+
+*Note: if browser B did a first login before browser A pushed, log out of browser B and log back in — the same-device path will re-import the updated cloud blob.*
+
+## DB state
+- `vault_1775754523250_1q6o3zl` (Cl1): 917-byte empty blob (pre-fix; will be updated when browser A next unlocks)
 
 ## Account state
-- saketsuman1312@gmail.com: plan=lifetime, login works ✅
-- www.ironvault.app → ironvault-main project (domains moved)
+- saketsuman1312@gmail.com: plan=lifetime ✅
+- www.ironvault.app, ironvault.app → ironvault-main project ✅
