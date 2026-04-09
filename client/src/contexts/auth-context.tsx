@@ -15,6 +15,7 @@ import {
 } from '@/lib/account-auth';
 import { acquireCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
+import { clearPlanCache } from '@/hooks/use-plan-features';
 
 interface AuthContextType {
   isUnlocked: boolean;
@@ -123,6 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       vaultManager.setAccountEmail(normalizedEmail);
       setIsAccountLoggedIn(true);
       setAccountEmail(normalizedEmail);
+      // Clear stale plan cache so the plan hook re-fetches on next render
+      clearPlanCache();
       acquireCloudToken(normalizedEmail, passwordHash).catch(() => {});
     };
 
@@ -157,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const accountLogout = () => {
     clearAccountSession();
+    clearPlanCache();
     vaultManager.clearAccountEmail();
     vaultManager.clearInternalState();
     setIsAccountLoggedIn(false);

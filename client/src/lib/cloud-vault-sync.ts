@@ -1,5 +1,6 @@
 const CLOUD_TOKEN_KEY = 'iv_cloud_token';
 const SYNC_QUEUE_KEY = 'iv_sync_queue';
+const DEVICE_ID_KEY = 'iv_device_id';
 
 export interface CloudVaultMeta {
   vaultId: string;
@@ -8,10 +9,21 @@ export interface CloudVaultMeta {
   clientModifiedAt: string | null;
   serverUpdatedAt: string | null;
   createdAt: string | null;
+  sourceDeviceId: string | null;
 }
 
 export interface CloudVaultFull extends CloudVaultMeta {
   encryptedBlob: string;
+}
+
+// ── Device identity ───────────────────────────────────────────────────────────
+export function getOrCreateDeviceId(): string {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
 }
 
 // ── Token management ──────────────────────────────────────────────────────────
@@ -62,8 +74,10 @@ export async function downloadCloudVault(vaultId: string): Promise<CloudVaultFul
   try {
     const res = await fetch(`/api/vaults/cloud/${vaultId}`, { headers: authHeaders() });
     if (!res.ok) return null;
-    const { vault } = await res.json();
-    return vault ?? null;
+    const data = await res.json();
+    // API returns fields at top level (not nested under `vault`)
+    if (data.vaultId) return data as CloudVaultFull;
+    return data.vault ?? null;
   } catch { return null; }
 }
 
@@ -84,6 +98,7 @@ export async function pushCloudVault(
   const token = getCloudToken();
   if (!token) return { success: false };
   const clientModifiedAt = new Date().toISOString();
+  const sourceDeviceId = getOrCreateDeviceId();
   try {
     // Try PUT first (update existing)
     const putRes = await fetch(`/api/vaults/cloud/${vaultId}`, {
@@ -96,7 +111,7 @@ export async function pushCloudVault(
       const postRes = await fetch('/api/vaults/cloud', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ vaultId, vaultName, encryptedBlob, isDefault, clientModifiedAt }),
+        body: JSON.stringify({ vaultId, vaultName, encryptedBlob, isDefault, clientModifiedAt, sourceDeviceId }),
       });
       if (postRes.status === 403) {
         const body = await postRes.json();
