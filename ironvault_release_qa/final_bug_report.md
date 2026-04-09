@@ -1,8 +1,8 @@
 # IronVault — Final Bug Report
 
-**Generated:** 2026-04-09  
+**Generated:** 2026-04-09 (updated post-PR#1 merge + BUG-034 fix)  
 **Branch:** claude/fervent-mclaren  
-**PR:** https://github.com/Sakun33/IronVault-V4/pull/1  
+**PR:** https://github.com/Sakun33/IronVault-V4/pull/1 — MERGED  
 **Test Suite:** 454/454 passing (full-sweep.spec.ts + deep-verify.spec.ts)
 
 ---
@@ -11,12 +11,12 @@
 
 | Metric | Count |
 |--------|-------|
-| Total bugs filed | 32 |
-| Fixed | 31 |
+| Total bugs filed | 34 |
+| Fixed | 33 |
 | Not a bug | 1 |
 | Open / Unresolved | 0 |
 
-All 32 reported defects have been resolved. Code fixes are committed to `claude/fervent-mclaren`. Two fixes (BUG-024, BUG-025) require PR#1 merge to `main` before they are live in production.
+All 33 reported defects have been resolved and deployed to production. PR#1 merged to main 2026-04-09. BUG-033 (cross-device auth) and BUG-034 (signups not in admin) both fixed and live in production.
 
 ---
 
@@ -56,19 +56,22 @@ All 32 reported defects have been resolved. Code fixes are committed to `claude/
 | BUG-030 | Settings Clear Data uses window.confirm() — blocked in some browsers | Medium | ✅ FIXED | settings.tsx: React Dialog pattern replaces window.confirm() |
 | BUG-031 | Notes delete uses window.confirm() — blocked in restricted contexts | Medium | ✅ FIXED | notes.tsx: React Dialog delete confirmation with data-testid |
 | BUG-032 | Reminders delete uses window.confirm() — blocked in restricted contexts | Medium | ✅ FIXED | reminders.tsx: React Dialog delete confirmation with data-testid |
+| BUG-033 | Cross-device login fails — account credentials stored only in localStorage | Critical | ✅ FIXED | auth-context.tsx: accountLogin() calls POST /api/auth/token first; localStorage fallback on network error |
+| BUG-034 | Real signups not appearing in admin console — admin reads wrong DB table | Critical | ✅ FIXED | api/index.ts: all queries rewritten to use crm_users JOIN entitlements; vercel.json routing fixed |
 
 ---
 
 ## Production Deploy Status
 
-Two bug fixes are committed and verified in preview but **require PR#1 merge to main** before they go live on production domains:
+All fixes are deployed to production as of 2026-04-09.
 
-| Bug | Fix | Production Impact |
-|-----|-----|-------------------|
-| BUG-024 | `GET /api/customers/:id/vaults` endpoint added to admin backend | `admin.ironvault.app` vault count endpoint still returns 404 until merge |
-| BUG-025 | Email-based entitlement lookup + top-level `plan` field | `www.ironvault.app` email entitlement still returns "free" until merge |
-
-UUID-based entitlement lookup (`/api/crm/entitlement/:uuid`) is working correctly in production as of 2026-04-09. These two items are the only remaining production-facing gaps.
+| Domain | Status | Last Deploy |
+|--------|--------|-------------|
+| www.ironvault.app | ✅ LIVE | 2026-04-09 (ironvault-main project, includes BUG-033 fix) |
+| admin.ironvault.app | ✅ LIVE | 2026-04-09 (includes BUG-034 fix, 9 real users visible) |
+| API /api/auth/token | ✅ LIVE | Returns 200 on correct hash, 401 on wrong hash |
+| API /api/crm/entitlement/:email | ✅ LIVE | Returns correct plan + status |
+| Admin /api/customers | ✅ LIVE | Returns 9 real crm_users rows including saketsuman1312@gmail.com |
 
 ---
 
