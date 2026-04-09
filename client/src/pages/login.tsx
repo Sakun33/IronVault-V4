@@ -50,8 +50,17 @@ export default function Login() {
           variant: 'destructive',
         });
       }
-    } catch {
-      setError('An error occurred. Please try again.');
+    } catch (err: any) {
+      if (err?.message === 'SERVER_UNAVAILABLE') {
+        setError('Unable to reach the server. Check your connection and try again.');
+        toast({
+          title: 'Connection error',
+          description: 'Unable to reach the server. Please try again.',
+          variant: 'destructive',
+        });
+      } else {
+        setError('An error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

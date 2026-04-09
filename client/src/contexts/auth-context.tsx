@@ -131,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Server is the primary source of truth for cross-device auth.
     // Trust-on-first-use: if no hash stored server-side yet, it stores and accepts.
+    let serverUnavailable = false;
     try {
       const res = await fetch('/api/auth/token', {
         method: 'POST',
@@ -145,15 +146,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.status === 401) return false;
       // 5xx or unexpected: fall through to localStorage fallback below
       console.error('[auth] /api/auth/token returned', res.status, '— falling back to local');
+      serverUnavailable = true;
     } catch (err) {
       // Network error — fall back to localStorage so offline still works
       console.error('[auth] /api/auth/token network error:', err);
+      serverUnavailable = true;
     }
     // Offline / server-error fallback: verify against locally-stored hash
     const localValid = await verifyAccountCredentials(email, password);
     if (localValid) {
       await onSuccess();
       return true;
+    }
+    // If server was unavailable and no local credentials exist, surface the real error
+    // so the user knows to retry rather than thinking their password is wrong.
+    if (serverUnavailable) {
+      throw new Error('SERVER_UNAVAILABLE');
     }
     return false;
   };
