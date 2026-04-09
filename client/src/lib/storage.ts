@@ -439,6 +439,18 @@ export class VaultStorage {
     }
   }
 
+  // Clear all encrypted items (used before re-importing from cloud)
+  async clearEncryptedItems(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Save metadata
   private async saveMetadata(metadata: VaultMetadata): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
@@ -485,7 +497,10 @@ export class VaultStorage {
       const store = transaction.objectStore('encrypted_data');
       const request = store.put({ ...encryptedEntry, store: storeName });
 
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => {
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        resolve();
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -575,6 +590,7 @@ export class VaultStorage {
 
       request.onsuccess = async () => {
         await this.updatePasswordCount();
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -605,6 +621,7 @@ export class VaultStorage {
 
       request.onsuccess = async () => {
         await this.updateSubscriptionCount();
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -635,6 +652,7 @@ export class VaultStorage {
 
       request.onsuccess = async () => {
         await this.updateNoteCount();
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -665,6 +683,7 @@ export class VaultStorage {
 
       request.onsuccess = async () => {
         await this.updateExpenseCount();
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -695,6 +714,7 @@ export class VaultStorage {
 
       request.onsuccess = async () => {
         await this.updateReminderCount();
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
         resolve();
       };
       request.onerror = () => reject(request.error);

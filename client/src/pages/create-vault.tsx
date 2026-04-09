@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager } from '@/lib/vault-manager';
-import { pushCloudVault, queueOfflineSync } from '@/lib/cloud-vault-sync';
+import { pushCloudVault, queueOfflineSync, markVaultAsCloudSynced } from '@/lib/cloud-vault-sync';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 
 export default function CreateVaultPage() {
@@ -57,6 +57,7 @@ export default function CreateVaultPage() {
             queueOfflineSync(newVault.id, newVault.name, 'push');
           } else {
             toast({ title: 'Cloud vault created', description: 'Your vault is now synced to the cloud.' });
+            markVaultAsCloudSynced(newVault.id);
           }
         } catch {
           toast({ title: 'Cloud sync failed', description: 'Vault created locally.', variant: 'destructive' });
