@@ -4,15 +4,10 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "cd backend && npm install --legacy-peer-deps",
   "framework": null,
-  "functions": {
-    "backend/server-simple-working.ts": {
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/backend/server-simple-working.ts"
+      "source": "/api/:path*",
+      "destination": "/api/index"
     },
     {
       "source": "/((?!api).*)",
