@@ -13,6 +13,8 @@ import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
+import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
+import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import SignupPage from "@/pages/signup";
@@ -77,11 +79,37 @@ import { Footer } from "@/components/footer";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
-  const { logout, masterPassword } = useAuth();
+  const { logout, masterPassword, isUnlocked } = useAuth();
   const { searchQuery, setSearchQuery, stats } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, switchVault } = useVaultSelection();
   useCloudAutoSync(activeVault?.id, masterPassword);
+
+  // On every unlock: heal pre-fix vaults by checking server for cloud entry and pushing current state
+  useEffect(() => {
+    if (!isUnlocked || !activeVault?.id || !masterPassword) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await listCloudVaults();
+        if (cancelled) return;
+        const cloudEntry = remote.find(v => v.vaultId === activeVault.id);
+        if (!cloudEntry) return;
+        // Vault exists in cloud — ensure local tracking flag is set
+        markVaultAsCloudSynced(activeVault.id);
+        // Push current local items to cloud (heals empty/stale blobs)
+        const blob = await vaultStorage.exportVault(masterPassword);
+        if (cancelled) return;
+        // Only push if we have actual content (> empty vault threshold of ~1000 bytes)
+        if (blob.length > 1000) {
+          await pushCloudVault(activeVault.id, activeVault.name ?? cloudEntry.vaultName, blob, false);
+        }
+      } catch {
+        // Best-effort; don't surface errors
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isUnlocked, activeVault?.id, masterPassword]);
   const [location, setLocation] = useLocation();
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
