@@ -197,9 +197,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return verifyCloudToken(auth.substring(7));
   }
 
-  // ── POST /api/auth/token ────────────────────────────────────────────────────
-  if (path === '/api/auth/token' && req.method === 'POST') {
-    const { email, accountPasswordHash } = req.body || {};
+  // ── POST /api/auth/token (also handles /api/auth/login as legacy shim) ──────
+  if ((path === '/api/auth/token' || path === '/api/auth/login') && req.method === 'POST') {
+    let { email, accountPasswordHash } = req.body || {};
+    // Legacy shim: /api/auth/login sends plain password — hash it server-side
+    if (path === '/api/auth/login') {
+      const { password } = req.body || {};
+      if (!email || !password) {
+        return res.status(400).json({ error: 'email and password required' });
+      }
+      const { createHash } = await import('node:crypto');
+      accountPasswordHash = createHash('sha256').update(password as string).digest('hex');
+    }
     if (!email || !accountPasswordHash) {
       return res.status(400).json({ error: 'email and accountPasswordHash required' });
     }
