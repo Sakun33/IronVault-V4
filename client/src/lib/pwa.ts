@@ -44,14 +44,18 @@ class PWAService {
 
       console.log('PWA: Service Worker registered successfully');
 
-      // Handle updates
+      // Handle updates — auto-activate new SW immediately (no user prompt needed)
       this.registration.addEventListener('updatefound', () => {
         const installingWorker = this.registration!.installing;
         if (installingWorker) {
           installingWorker.addEventListener('statechange', () => {
-            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              this.updateAvailable = true;
-              this.notifyUpdateAvailable();
+            if (installingWorker.state === 'installed') {
+              // Silently skip waiting so the new SW takes over on next navigation
+              installingWorker.postMessage({ action: 'SKIP_WAITING' });
+              if (navigator.serviceWorker.controller) {
+                this.updateAvailable = true;
+                this.notifyUpdateAvailable();
+              }
             }
           });
         }
