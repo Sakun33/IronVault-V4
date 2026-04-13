@@ -148,6 +148,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isUnlocked]);
 
+  // Pull refresh: when cloud-sync hook replaces vault data from a remote device
+  useEffect(() => {
+    const handleCloudReplace = () => { if (isUnlocked) refreshData(); };
+    window.addEventListener('vault:cloud:replaced', handleCloudReplace);
+    return () => window.removeEventListener('vault:cloud:replaced', handleCloudReplace);
+  }, [isUnlocked]);
+
   // Monitor security state
   useEffect(() => {
     const updateSecurityState = async () => {

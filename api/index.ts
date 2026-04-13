@@ -498,6 +498,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── GET /api/crm/family-invites/invitee/:email ───────────────────────────────
+  if (path.startsWith('/api/crm/family-invites/invitee/') && req.method === 'GET') {
+    const inviteeEmail = decodeURIComponent(path.replace('/api/crm/family-invites/invitee/', ''));
+    try {
+      const { rows } = await db.query(
+        `SELECT fi.*, c.full_name as owner_name
+         FROM family_invites fi
+         LEFT JOIN customers c ON c.email = fi.owner_email
+         WHERE fi.invitee_email = $1
+           AND fi.status = 'pending'
+         ORDER BY fi.invited_at DESC`,
+        [inviteeEmail.toLowerCase()]
+      );
+      return res.json({ invites: rows, total: rows.length });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── GET /api/crm/family-invites/:ownerEmail ──────────────────────────────────
   if (path.startsWith('/api/crm/family-invites/') && req.method === 'GET') {
     const ownerEmail = decodeURIComponent(path.replace('/api/crm/family-invites/', ''));

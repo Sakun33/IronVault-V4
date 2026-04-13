@@ -75,7 +75,10 @@ import {
   Info,
   CheckCircle2,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Users,
+  UserPlus,
+  UserX
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { useVault } from '@/contexts/vault-context';
@@ -182,6 +185,13 @@ export default function Profile() {
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   
+  // Family invites state
+  const [outgoingInvites, setOutgoingInvites] = useState<any[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<any[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+
   // FAQ expand state
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
   
@@ -223,6 +233,59 @@ export default function Profile() {
     };
     checkBiometrics();
   }, []);
+
+  // Load family invites (outgoing for owner + incoming for this email)
+  const loadFamilyInvites = useCallback(async () => {
+    if (!userProfile.email || userProfile.email === 'john.doe@example.com') return;
+    setInvitesLoading(true);
+    try {
+      const [outRes, inRes] = await Promise.all([
+        fetch(`/api/crm/family-invites/${encodeURIComponent(userProfile.email)}`),
+        fetch(`/api/crm/family-invites/invitee/${encodeURIComponent(userProfile.email)}`),
+      ]);
+      if (outRes.ok) { const d = await outRes.json(); setOutgoingInvites(d.invites ?? []); }
+      if (inRes.ok) { const d = await inRes.json(); setIncomingInvites(d.invites ?? []); }
+    } catch { /* best-effort */ }
+    finally { setInvitesLoading(false); }
+  }, [userProfile.email]);
+
+  useEffect(() => { loadFamilyInvites(); }, [loadFamilyInvites]);
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteLoading(true);
+    try {
+      const res = await fetch('/api/crm/family-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerEmail: userProfile.email, inviteeEmail: inviteEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Invite failed', description: data.error || 'Could not send invite', variant: 'destructive' });
+      } else {
+        toast({ title: 'Invite sent', description: `Invite sent to ${inviteEmail.trim()}` });
+        setInviteEmail('');
+        loadFamilyInvites();
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error sending invite', variant: 'destructive' });
+    } finally { setInviteLoading(false); }
+  };
+
+  const handleUpdateInvite = async (id: string, status: 'accepted' | 'declined' | 'revoked') => {
+    try {
+      const res = await fetch(`/api/crm/family-invites/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        toast({ title: `Invite ${status}` });
+        loadFamilyInvites();
+      }
+    } catch { /* ignore */ }
+  };
 
   const handleBiometricToggle = async (enabled: boolean) => {
     try {
@@ -1345,6 +1408,88 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+          {/* Family Invites Card — visible to all users (send requires pro/family/lifetime) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Family Sharing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Incoming invites — always shown */}
+              {incomingInvites.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Pending invites for you</p>
+                  {incomingInvites.map((inv: any) => (
+                    <div key={inv.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                      <div>
+                        <p className="text-sm font-medium">{inv.owner_name || inv.owner_email}</p>
+                        <p className="text-xs text-muted-foreground">{inv.owner_email} invited you</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleUpdateInvite(inv.id, 'accepted')}>Accept</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleUpdateInvite(inv.id, 'declined')}>Decline</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Send invite — only for pro/family/lifetime */}
+              {['pro', 'family', 'lifetime'].includes(userProfile.subscription.tier) ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Invite a family member</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="invitee@email.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSendInvite()}
+                      className="flex-1"
+                    />
+                    <Button onClick={handleSendInvite} disabled={inviteLoading || !inviteEmail.trim()}>
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      {inviteLoading ? 'Sending…' : 'Invite'}
+                    </Button>
+                  </div>
+
+                  {/* Outgoing invite list */}
+                  {invitesLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : outgoingInvites.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Sent invites</p>
+                      {outgoingInvites.map((inv: any) => (
+                        <div key={inv.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="text-sm font-medium">{inv.invitee_email}</p>
+                            <Badge variant={inv.status === 'accepted' ? 'default' : inv.status === 'declined' ? 'destructive' : 'secondary'} className="text-xs mt-1">
+                              {inv.status}
+                            </Badge>
+                          </div>
+                          {inv.status === 'pending' && (
+                            <Button size="sm" variant="ghost" onClick={() => handleUpdateInvite(inv.id, 'revoked')}>
+                              <UserX className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No invites sent yet.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 border rounded-lg bg-muted/50 text-center">
+                  <Users className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm font-medium">Family sharing requires Pro or higher</p>
+                  <p className="text-xs text-muted-foreground mt-1">Upgrade your plan to invite family members.</p>
+                  <Button size="sm" className="mt-3" onClick={() => setShowPricingModal(true)}>Upgrade Plan</Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
