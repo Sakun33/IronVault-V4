@@ -140,20 +140,41 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const entitlement = await getEntitlementStatus();
-      if (!entitlement?.plan) return;
 
-      const serverPlan = entitlement.plan.toLowerCase() as 'free' | 'pro' | 'premium' | 'lifetime' | 'family';
-      // Normalize: server may store "premium" meaning "pro"
-      const normalizedPlan: 'free' | 'pro' | 'family' | 'lifetime' =
-        serverPlan === 'premium' ? 'pro' : (serverPlan as 'free' | 'pro' | 'family' | 'lifetime');
+      let resolvedPlan: 'free' | 'pro' | 'family' | 'lifetime' | null = null;
+
+      if (entitlement?.plan) {
+        const serverPlan = entitlement.plan.toLowerCase() as 'free' | 'pro' | 'premium' | 'lifetime' | 'family';
+        // Normalize: server may store "premium" meaning "pro"
+        resolvedPlan = serverPlan === 'premium' ? 'pro' : (serverPlan as 'free' | 'pro' | 'family' | 'lifetime');
+      } else {
+        // Fallback: read iv_plan_cache (written by use-plan-features.ts after CRM fetch).
+        // crmUserId may be absent for users registered without the CRM flow, but the plan
+        // cache is still authoritative enough to restore the correct tier locally.
+        try {
+          const raw = localStorage.getItem('iv_plan_cache');
+          if (raw) {
+            const cache = JSON.parse(raw) as { email: string; planId: string; fetchedAt: number };
+            const planId = cache.planId as 'free' | 'pro' | 'family' | 'lifetime';
+            if (planId && planId !== 'free') {
+              resolvedPlan = planId;
+              console.log('Plan cache fallback:', planId);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!resolvedPlan) return;
 
       // Read current stored license to compare
       const storedLicense = await vaultStorage.getPersistentData('license');
       const currentTier = storedLicense?.tier || 'free';
 
-      if (normalizedPlan !== currentTier) {
-        console.log(`Server entitlement sync: ${currentTier} → ${normalizedPlan}`);
-        await changePlan(normalizedPlan);
+      if (resolvedPlan !== currentTier) {
+        console.log(`Server entitlement sync: ${currentTier} → ${resolvedPlan}`);
+        await changePlan(resolvedPlan);
       }
     } catch (e) {
       // Silently fail — offline or no CRM registration is OK
