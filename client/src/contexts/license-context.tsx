@@ -93,7 +93,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       
       const storedLicense = await vaultStorage.getPersistentData('license');
       
-      if (storedLicense) {
+      if (storedLicense && storedLicense.tier) {
         const parsedLicense: LicenseInfo = {
           ...storedLicense,
           startDate: new Date(storedLicense.startDate),

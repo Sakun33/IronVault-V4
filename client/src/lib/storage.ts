@@ -224,19 +224,17 @@ export class VaultStorage {
   // Enhanced persistent storage methods
   async savePersistentData(key: string, data: any): Promise<void> {
     if (!this.encryptionKey) throw new Error('Encryption key not set');
-    
+
     try {
-      const jsonData = JSON.stringify(data);
-      const { encrypted, iv } = await CryptoService.encrypt(jsonData, this.encryptionKey);
-      
-      // Store in IndexedDB (survives cache clear)
-      await this.encryptAndStore('persistent_data', { 
-        id: key, 
-        data: encrypted, 
-        iv: iv,
+      // encryptAndStore handles all encryption — do NOT pre-encrypt here.
+      // Pre-encrypting passes ArrayBuffer/Uint8Array into encryptAndStore which
+      // JSON.stringifies them (losing their types), causing decryption to fail.
+      await this.encryptAndStore('persistent_data', {
+        id: key,
+        data: data,
         timestamp: Date.now()
       });
-      
+
       console.log(`✅ Persistent data saved: ${key}`);
     } catch (error) {
       console.error(`❌ Failed to save persistent data ${key}:`, error);
@@ -246,13 +244,13 @@ export class VaultStorage {
 
   async getPersistentData(key: string): Promise<any> {
     if (!this.encryptionKey) throw new Error('Encryption key not set');
-    
+
     try {
+      // decryptAndRetrieve already handles decryption — result.data is the raw stored value.
       const result = await this.decryptAndRetrieve('persistent_data', key);
       if (!result) return null;
-      
-      const decrypted = await CryptoService.decrypt(result.data, this.encryptionKey, result.iv);
-      return JSON.parse(new TextDecoder().decode(decrypted));
+
+      return result.data;
     } catch (error) {
       console.error(`❌ Failed to get persistent data ${key}:`, error);
       return null;
