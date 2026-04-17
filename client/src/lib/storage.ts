@@ -449,6 +449,12 @@ export class VaultStorage {
     });
   }
 
+  // Replace vault contents from an encrypted cloud blob (clear then re-import)
+  async replaceVaultFromBlob(encryptedBlob: string, masterPassword: string): Promise<void> {
+    await this.clearEncryptedItems();
+    await this.importVault(encryptedBlob, masterPassword);
+  }
+
   // Save metadata
   private async saveMetadata(metadata: VaultMetadata): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');

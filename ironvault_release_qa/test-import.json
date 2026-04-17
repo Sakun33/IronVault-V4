@@ -1,0 +1,2052 @@
+{
+  "passwords": [
+    {
+      "id": "23abbfa0-f41b-484d-8896-f69e7bfb0665",
+      "name": "Site 1",
+      "url": "https://site1.example.com",
+      "username": "user1@example.com",
+      "password": "P@ss1word!",
+      "category": "Finance",
+      "notes": "Note for site 1",
+      "createdAt": "2026-04-10T16:06:12.199108Z",
+      "updatedAt": "2026-04-12T16:06:12.199120Z"
+    },
+    {
+      "id": "b9998f8e-07f4-42b4-b026-a8dc7080bf45",
+      "name": "Site 2",
+      "url": "https://site2.example.com",
+      "username": "user2@example.com",
+      "password": "P@ss2word!",
+      "category": "Work",
+      "notes": "Note for site 2",
+      "createdAt": "2026-04-07T16:06:12.199130Z",
+      "updatedAt": "2026-04-11T16:06:12.199132Z"
+    },
+    {
+      "id": "75e282a0-fb30-43ab-9e7a-8c04c1814e29",
+      "name": "Site 3",
+      "url": "https://site3.example.com",
+      "username": "user3@example.com",
+      "password": "P@ss3word!",
+      "category": "Personal",
+      "notes": "Note for site 3",
+      "createdAt": "2026-04-04T16:06:12.199139Z",
+      "updatedAt": "2026-04-10T16:06:12.199141Z"
+    },
+    {
+      "id": "27611c1a-d371-4b03-936c-600589c84d06",
+      "name": "Site 4",
+      "url": "https://site4.example.com",
+      "username": "user4@example.com",
+      "password": "P@ss4word!",
+      "category": "Email",
+      "notes": "Note for site 4",
+      "createdAt": "2026-04-01T16:06:12.199147Z",
+      "updatedAt": "2026-04-09T16:06:12.199149Z"
+    },
+    {
+      "id": "43f681d0-7f88-4ae7-b91a-fd51bd46906b",
+      "name": "Site 5",
+      "url": "https://site5.example.com",
+      "username": "user5@example.com",
+      "password": "P@ss5word!",
+      "category": "Social Media",
+      "notes": "Note for site 5",
+      "createdAt": "2026-03-29T16:06:12.199156Z",
+      "updatedAt": "2026-04-08T16:06:12.199157Z"
+    },
+    {
+      "id": "48caa010-2a46-4f42-a773-c4825cbc3020",
+      "name": "Site 6",
+      "url": "https://site6.example.com",
+      "username": "user6@example.com",
+      "password": "P@ss6word!",
+      "category": "Finance",
+      "notes": "Note for site 6",
+      "createdAt": "2026-03-26T16:06:12.199164Z",
+      "updatedAt": "2026-04-07T16:06:12.199166Z"
+    },
+    {
+      "id": "5c85c3e8-f2db-4a56-afd5-ef30247d4d45",
+      "name": "Site 7",
+      "url": "https://site7.example.com",
+      "username": "user7@example.com",
+      "password": "P@ss7word!",
+      "category": "Work",
+      "notes": "Note for site 7",
+      "createdAt": "2026-03-23T16:06:12.199172Z",
+      "updatedAt": "2026-04-06T16:06:12.199174Z"
+    },
+    {
+      "id": "32841817-8c5e-482d-96e4-cd19c9551501",
+      "name": "Site 8",
+      "url": "https://site8.example.com",
+      "username": "user8@example.com",
+      "password": "P@ss8word!",
+      "category": "Personal",
+      "notes": "Note for site 8",
+      "createdAt": "2026-03-20T16:06:12.199180Z",
+      "updatedAt": "2026-04-05T16:06:12.199182Z"
+    },
+    {
+      "id": "453e20c2-f47f-4ac2-b760-829298dbfe9e",
+      "name": "Site 9",
+      "url": "https://site9.example.com",
+      "username": "user9@example.com",
+      "password": "P@ss9word!",
+      "category": "Email",
+      "notes": "Note for site 9",
+      "createdAt": "2026-03-17T16:06:12.199188Z",
+      "updatedAt": "2026-04-04T16:06:12.199189Z"
+    },
+    {
+      "id": "20c92940-cc36-4636-996c-1c557ceb6410",
+      "name": "Site 10",
+      "url": "https://site10.example.com",
+      "username": "user10@example.com",
+      "password": "P@ss10word!",
+      "category": "Social Media",
+      "notes": "Note for site 10",
+      "createdAt": "2026-03-14T16:06:12.199196Z",
+      "updatedAt": "2026-04-03T16:06:12.199197Z"
+    },
+    {
+      "id": "f1db2a80-65dd-4ad9-9824-5e9fe0c22521",
+      "name": "Site 11",
+      "url": "https://site11.example.com",
+      "username": "user11@example.com",
+      "password": "P@ss11word!",
+      "category": "Finance",
+      "notes": "Note for site 11",
+      "createdAt": "2026-03-11T16:06:12.199204Z",
+      "updatedAt": "2026-04-02T16:06:12.199205Z"
+    },
+    {
+      "id": "83b67105-8a3f-4644-9fcf-c690b88cb999",
+      "name": "Site 12",
+      "url": "https://site12.example.com",
+      "username": "user12@example.com",
+      "password": "P@ss12word!",
+      "category": "Work",
+      "notes": "Note for site 12",
+      "createdAt": "2026-03-08T16:06:12.199212Z",
+      "updatedAt": "2026-04-01T16:06:12.199213Z"
+    },
+    {
+      "id": "cdb65861-e9e6-4ee3-aab9-6830e1e46abe",
+      "name": "Site 13",
+      "url": "https://site13.example.com",
+      "username": "user13@example.com",
+      "password": "P@ss13word!",
+      "category": "Personal",
+      "notes": "Note for site 13",
+      "createdAt": "2026-03-05T16:06:12.199220Z",
+      "updatedAt": "2026-03-31T16:06:12.199221Z"
+    },
+    {
+      "id": "8b5f00ff-f87a-4292-a278-43907fd70862",
+      "name": "Site 14",
+      "url": "https://site14.example.com",
+      "username": "user14@example.com",
+      "password": "P@ss14word!",
+      "category": "Email",
+      "notes": "Note for site 14",
+      "createdAt": "2026-03-02T16:06:12.199228Z",
+      "updatedAt": "2026-03-30T16:06:12.199229Z"
+    },
+    {
+      "id": "ab573278-3496-4f28-81a1-8ecba0af98b1",
+      "name": "Site 15",
+      "url": "https://site15.example.com",
+      "username": "user15@example.com",
+      "password": "P@ss15word!",
+      "category": "Social Media",
+      "notes": "Note for site 15",
+      "createdAt": "2026-02-27T16:06:12.199235Z",
+      "updatedAt": "2026-03-29T16:06:12.199237Z"
+    },
+    {
+      "id": "0fbd0166-356c-4abf-9bd5-64d60e2863ac",
+      "name": "Site 16",
+      "url": "https://site16.example.com",
+      "username": "user16@example.com",
+      "password": "P@ss16word!",
+      "category": "Finance",
+      "notes": "Note for site 16",
+      "createdAt": "2026-02-24T16:06:12.199244Z",
+      "updatedAt": "2026-03-28T16:06:12.199245Z"
+    },
+    {
+      "id": "983d1273-ec82-4b50-9b19-84b2334446ac",
+      "name": "Site 17",
+      "url": "https://site17.example.com",
+      "username": "user17@example.com",
+      "password": "P@ss17word!",
+      "category": "Work",
+      "notes": "Note for site 17",
+      "createdAt": "2026-02-21T16:06:12.199251Z",
+      "updatedAt": "2026-03-27T16:06:12.199253Z"
+    },
+    {
+      "id": "8cd56b1e-bd62-4797-8db0-36c6dd58e2bd",
+      "name": "Site 18",
+      "url": "https://site18.example.com",
+      "username": "user18@example.com",
+      "password": "P@ss18word!",
+      "category": "Personal",
+      "notes": "Note for site 18",
+      "createdAt": "2026-02-18T16:06:12.199259Z",
+      "updatedAt": "2026-03-26T16:06:12.199260Z"
+    },
+    {
+      "id": "828ef6f7-13c7-43ac-9359-fd8072209f84",
+      "name": "Site 19",
+      "url": "https://site19.example.com",
+      "username": "user19@example.com",
+      "password": "P@ss19word!",
+      "category": "Email",
+      "notes": "Note for site 19",
+      "createdAt": "2026-02-15T16:06:12.199266Z",
+      "updatedAt": "2026-03-25T16:06:12.199268Z"
+    },
+    {
+      "id": "2d37761f-fe02-41c8-8564-8e14e6529023",
+      "name": "Site 20",
+      "url": "https://site20.example.com",
+      "username": "user20@example.com",
+      "password": "P@ss20word!",
+      "category": "Social Media",
+      "notes": "Note for site 20",
+      "createdAt": "2026-02-12T16:06:12.199274Z",
+      "updatedAt": "2026-03-24T16:06:12.199275Z"
+    },
+    {
+      "id": "b21e6f42-25da-44a0-82d4-640c37f83822",
+      "name": "Site 21",
+      "url": "https://site21.example.com",
+      "username": "user21@example.com",
+      "password": "P@ss21word!",
+      "category": "Finance",
+      "notes": "Note for site 21",
+      "createdAt": "2026-02-09T16:06:12.199281Z",
+      "updatedAt": "2026-03-23T16:06:12.199283Z"
+    },
+    {
+      "id": "740c99a3-a60e-4795-a99b-4469c1bf2d41",
+      "name": "Site 22",
+      "url": "https://site22.example.com",
+      "username": "user22@example.com",
+      "password": "P@ss22word!",
+      "category": "Work",
+      "notes": "Note for site 22",
+      "createdAt": "2026-02-06T16:06:12.199289Z",
+      "updatedAt": "2026-03-22T16:06:12.199290Z"
+    },
+    {
+      "id": "b81e22ee-527c-4653-8f76-8832a7bcaac9",
+      "name": "Site 23",
+      "url": "https://site23.example.com",
+      "username": "user23@example.com",
+      "password": "P@ss23word!",
+      "category": "Personal",
+      "notes": "Note for site 23",
+      "createdAt": "2026-02-03T16:06:12.199296Z",
+      "updatedAt": "2026-03-21T16:06:12.199298Z"
+    },
+    {
+      "id": "e344608c-85cf-4c1b-8480-de42f9adf36c",
+      "name": "Site 24",
+      "url": "https://site24.example.com",
+      "username": "user24@example.com",
+      "password": "P@ss24word!",
+      "category": "Email",
+      "notes": "Note for site 24",
+      "createdAt": "2026-01-31T16:06:12.199306Z",
+      "updatedAt": "2026-03-20T16:06:12.199308Z"
+    },
+    {
+      "id": "89d2ab7e-1b8a-48b6-aaff-68c07e6a148c",
+      "name": "Site 25",
+      "url": "https://site25.example.com",
+      "username": "user25@example.com",
+      "password": "P@ss25word!",
+      "category": "Social Media",
+      "notes": "Note for site 25",
+      "createdAt": "2026-01-28T16:06:12.199315Z",
+      "updatedAt": "2026-03-19T16:06:12.199316Z"
+    }
+  ],
+  "subscriptions": [
+    {
+      "id": "6e8157af-977a-4197-abb5-3f4292fb65bb",
+      "name": "Service 1",
+      "plan": "Basic",
+      "cost": 19.98,
+      "currency": "USD",
+      "billingCycle": "yearly",
+      "nextBillingDate": "2026-06-12T16:06:12.199326Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "subscriptionType": "software",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-04-08T16:06:12.199328Z",
+      "updatedAt": "2026-04-11T16:06:12.199330Z"
+    },
+    {
+      "id": "063bae57-aaf9-4435-8e65-7904fb14dbef",
+      "name": "Service 2",
+      "plan": "Pro",
+      "cost": 29.97,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-07-12T16:06:12.199337Z",
+      "reminderDays": 7,
+      "category": "Cloud Storage",
+      "subscriptionType": "cloud",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-04-03T16:06:12.199339Z",
+      "updatedAt": "2026-04-09T16:06:12.199340Z"
+    },
+    {
+      "id": "d4130f95-f557-448c-b9da-b2bc37a526a3",
+      "name": "Service 3",
+      "plan": "Enterprise",
+      "cost": 39.96,
+      "currency": "USD",
+      "billingCycle": "weekly",
+      "nextBillingDate": "2026-05-13T16:06:12.199347Z",
+      "reminderDays": 7,
+      "category": "Gaming",
+      "subscriptionType": "gaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-29T16:06:12.199348Z",
+      "updatedAt": "2026-04-07T16:06:12.199349Z"
+    },
+    {
+      "id": "e27feb70-074b-492c-8a6e-39a7883813ca",
+      "name": "Service 4",
+      "plan": "Free",
+      "cost": 49.95,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-06-12T16:06:12.199356Z",
+      "reminderDays": 7,
+      "category": "Streaming",
+      "subscriptionType": "streaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-24T16:06:12.199358Z",
+      "updatedAt": "2026-04-05T16:06:12.199359Z"
+    },
+    {
+      "id": "4e0f004a-1bab-4c2c-a249-1ae1c30105b0",
+      "name": "Service 5",
+      "plan": "Basic",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "yearly",
+      "nextBillingDate": "2026-07-12T16:06:12.199365Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "subscriptionType": "software",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-19T16:06:12.199367Z",
+      "updatedAt": "2026-04-03T16:06:12.199368Z"
+    },
+    {
+      "id": "127fb943-ff71-4a98-84ae-dfadc5fc3878",
+      "name": "Service 6",
+      "plan": "Pro",
+      "cost": 19.98,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-05-13T16:06:12.199375Z",
+      "reminderDays": 7,
+      "category": "Cloud Storage",
+      "subscriptionType": "cloud",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-14T16:06:12.199376Z",
+      "updatedAt": "2026-04-01T16:06:12.199378Z"
+    },
+    {
+      "id": "0e32a44c-1e63-4053-8887-3a65000f188b",
+      "name": "Service 7",
+      "plan": "Enterprise",
+      "cost": 29.97,
+      "currency": "USD",
+      "billingCycle": "weekly",
+      "nextBillingDate": "2026-06-12T16:06:12.199384Z",
+      "reminderDays": 7,
+      "category": "Gaming",
+      "subscriptionType": "gaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-09T16:06:12.199386Z",
+      "updatedAt": "2026-03-30T16:06:12.199387Z"
+    },
+    {
+      "id": "d06a94a8-ce84-401f-98a0-51c8f59c7fda",
+      "name": "Service 8",
+      "plan": "Free",
+      "cost": 39.96,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-07-12T16:06:12.199393Z",
+      "reminderDays": 7,
+      "category": "Streaming",
+      "subscriptionType": "streaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-03-04T16:06:12.199395Z",
+      "updatedAt": "2026-03-28T16:06:12.199396Z"
+    },
+    {
+      "id": "2c88d1bf-5034-488d-9f45-70c9da0fbdf6",
+      "name": "Service 9",
+      "plan": "Basic",
+      "cost": 49.95,
+      "currency": "USD",
+      "billingCycle": "yearly",
+      "nextBillingDate": "2026-05-13T16:06:12.199403Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "subscriptionType": "software",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-27T16:06:12.199404Z",
+      "updatedAt": "2026-03-26T16:06:12.199406Z"
+    },
+    {
+      "id": "01ec8a75-c51d-494b-b55e-7fd569c3e953",
+      "name": "Service 10",
+      "plan": "Pro",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-06-12T16:06:12.199412Z",
+      "reminderDays": 7,
+      "category": "Cloud Storage",
+      "subscriptionType": "cloud",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-22T16:06:12.199414Z",
+      "updatedAt": "2026-03-24T16:06:12.199415Z"
+    },
+    {
+      "id": "eb65ce63-793c-44e6-a061-1b9ce58365c2",
+      "name": "Service 11",
+      "plan": "Enterprise",
+      "cost": 19.98,
+      "currency": "USD",
+      "billingCycle": "weekly",
+      "nextBillingDate": "2026-07-12T16:06:12.199421Z",
+      "reminderDays": 7,
+      "category": "Gaming",
+      "subscriptionType": "gaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-17T16:06:12.199423Z",
+      "updatedAt": "2026-03-22T16:06:12.199424Z"
+    },
+    {
+      "id": "cc56e003-1d76-4d6e-b730-55724b048000",
+      "name": "Service 12",
+      "plan": "Free",
+      "cost": 29.97,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-05-13T16:06:12.199431Z",
+      "reminderDays": 7,
+      "category": "Streaming",
+      "subscriptionType": "streaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-12T16:06:12.199432Z",
+      "updatedAt": "2026-03-20T16:06:12.199433Z"
+    },
+    {
+      "id": "e90578f9-3325-43e9-bc73-69d512ffc767",
+      "name": "Service 13",
+      "plan": "Basic",
+      "cost": 39.96,
+      "currency": "USD",
+      "billingCycle": "yearly",
+      "nextBillingDate": "2026-06-12T16:06:12.199440Z",
+      "reminderDays": 7,
+      "category": "Software",
+      "subscriptionType": "software",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-07T16:06:12.199441Z",
+      "updatedAt": "2026-03-18T16:06:12.199443Z"
+    },
+    {
+      "id": "d098952f-a0d2-46f5-8248-9889b554786d",
+      "name": "Service 14",
+      "plan": "Pro",
+      "cost": 49.95,
+      "currency": "USD",
+      "billingCycle": "monthly",
+      "nextBillingDate": "2026-07-12T16:06:12.199449Z",
+      "reminderDays": 7,
+      "category": "Cloud Storage",
+      "subscriptionType": "cloud",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-02-02T16:06:12.199451Z",
+      "updatedAt": "2026-03-16T16:06:12.199452Z"
+    },
+    {
+      "id": "c7bbfbe4-8305-4241-9884-a479d24ec8b9",
+      "name": "Service 15",
+      "plan": "Enterprise",
+      "cost": 9.99,
+      "currency": "USD",
+      "billingCycle": "weekly",
+      "nextBillingDate": "2026-05-13T16:06:12.199458Z",
+      "reminderDays": 7,
+      "category": "Gaming",
+      "subscriptionType": "gaming",
+      "isActive": true,
+      "autoRenew": true,
+      "createdAt": "2026-01-28T16:06:12.199460Z",
+      "updatedAt": "2026-03-14T16:06:12.199461Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "045b670e-d0cd-4ff2-a087-ccc041c8fc93",
+      "title": "Note 1",
+      "content": "# Note 1\n\nThis is the content of note 1.\n\n- Point one\n- Point two",
+      "notebook": "Work",
+      "tags": [
+        "tag1"
+      ],
+      "isPinned": true,
+      "createdAt": "2026-04-11T16:06:12.199469Z",
+      "updatedAt": "2026-04-12T16:06:12.199470Z"
+    },
+    {
+      "id": "d6abf5c9-3105-4f0e-b166-a76852fe2aa4",
+      "title": "Note 2",
+      "content": "# Note 2\n\nThis is the content of note 2.\n\n- Point one\n- Point two",
+      "notebook": "Personal",
+      "tags": [
+        "tag2"
+      ],
+      "isPinned": true,
+      "createdAt": "2026-04-09T16:06:12.199476Z",
+      "updatedAt": "2026-04-11T16:06:12.199478Z"
+    },
+    {
+      "id": "870ffc31-9908-477b-80b4-c78f9aa41287",
+      "title": "Note 3",
+      "content": "# Note 3\n\nThis is the content of note 3.\n\n- Point one\n- Point two",
+      "notebook": "Ideas",
+      "tags": [
+        "tag3",
+        "important"
+      ],
+      "isPinned": true,
+      "createdAt": "2026-04-07T16:06:12.199484Z",
+      "updatedAt": "2026-04-10T16:06:12.199486Z"
+    },
+    {
+      "id": "52708147-362c-4431-b039-41b79cd5a176",
+      "title": "Note 4",
+      "content": "# Note 4\n\nThis is the content of note 4.\n\n- Point one\n- Point two",
+      "notebook": "Default",
+      "tags": [
+        "tag4"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-04-05T16:06:12.199492Z",
+      "updatedAt": "2026-04-09T16:06:12.199493Z"
+    },
+    {
+      "id": "d7adcee7-ebfe-48a5-bad2-7830bfcf5e5e",
+      "title": "Note 5",
+      "content": "# Note 5\n\nThis is the content of note 5.\n\n- Point one\n- Point two",
+      "notebook": "Work",
+      "tags": [
+        "tag5"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-04-03T16:06:12.199499Z",
+      "updatedAt": "2026-04-08T16:06:12.199500Z"
+    },
+    {
+      "id": "640c723a-64dc-41f9-a36a-e49054d32be8",
+      "title": "Note 6",
+      "content": "# Note 6\n\nThis is the content of note 6.\n\n- Point one\n- Point two",
+      "notebook": "Personal",
+      "tags": [
+        "tag6",
+        "important"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-04-01T16:06:12.199507Z",
+      "updatedAt": "2026-04-07T16:06:12.199508Z"
+    },
+    {
+      "id": "731531e1-bd5d-4ca2-b33b-03527ad5c50e",
+      "title": "Note 7",
+      "content": "# Note 7\n\nThis is the content of note 7.\n\n- Point one\n- Point two",
+      "notebook": "Ideas",
+      "tags": [
+        "tag7"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-30T16:06:12.199514Z",
+      "updatedAt": "2026-04-06T16:06:12.199516Z"
+    },
+    {
+      "id": "e518c204-93bc-4f7f-9813-53e81de17edb",
+      "title": "Note 8",
+      "content": "# Note 8\n\nThis is the content of note 8.\n\n- Point one\n- Point two",
+      "notebook": "Default",
+      "tags": [
+        "tag8"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-28T16:06:12.199524Z",
+      "updatedAt": "2026-04-05T16:06:12.199526Z"
+    },
+    {
+      "id": "e78807fa-f063-4b5f-9e33-6e2b6ff8f0ac",
+      "title": "Note 9",
+      "content": "# Note 9\n\nThis is the content of note 9.\n\n- Point one\n- Point two",
+      "notebook": "Work",
+      "tags": [
+        "tag9",
+        "important"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-26T16:06:12.199532Z",
+      "updatedAt": "2026-04-04T16:06:12.199533Z"
+    },
+    {
+      "id": "4c0c0557-d136-463b-b55f-39cbbb325f50",
+      "title": "Note 10",
+      "content": "# Note 10\n\nThis is the content of note 10.\n\n- Point one\n- Point two",
+      "notebook": "Personal",
+      "tags": [
+        "tag10"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-24T16:06:12.199540Z",
+      "updatedAt": "2026-04-03T16:06:12.199541Z"
+    },
+    {
+      "id": "8b69223b-89ea-4e3c-bcf7-05c1f213fcc6",
+      "title": "Note 11",
+      "content": "# Note 11\n\nThis is the content of note 11.\n\n- Point one\n- Point two",
+      "notebook": "Ideas",
+      "tags": [
+        "tag11"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-22T16:06:12.199547Z",
+      "updatedAt": "2026-04-02T16:06:12.199549Z"
+    },
+    {
+      "id": "42dc8316-c696-449d-9cbb-53543d497025",
+      "title": "Note 12",
+      "content": "# Note 12\n\nThis is the content of note 12.\n\n- Point one\n- Point two",
+      "notebook": "Default",
+      "tags": [
+        "tag12",
+        "important"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-20T16:06:12.199555Z",
+      "updatedAt": "2026-04-01T16:06:12.199556Z"
+    },
+    {
+      "id": "0aafe8dd-a723-45d1-bcea-9863fd4601cc",
+      "title": "Note 13",
+      "content": "# Note 13\n\nThis is the content of note 13.\n\n- Point one\n- Point two",
+      "notebook": "Work",
+      "tags": [
+        "tag13"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-18T16:06:12.199562Z",
+      "updatedAt": "2026-03-31T16:06:12.199564Z"
+    },
+    {
+      "id": "ec0dd0ab-6be9-42e9-bffe-e3bcdbbadb2c",
+      "title": "Note 14",
+      "content": "# Note 14\n\nThis is the content of note 14.\n\n- Point one\n- Point two",
+      "notebook": "Personal",
+      "tags": [
+        "tag14"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-16T16:06:12.199570Z",
+      "updatedAt": "2026-03-30T16:06:12.199571Z"
+    },
+    {
+      "id": "80210529-95fc-49b8-bcea-077010344f24",
+      "title": "Note 15",
+      "content": "# Note 15\n\nThis is the content of note 15.\n\n- Point one\n- Point two",
+      "notebook": "Ideas",
+      "tags": [
+        "tag15",
+        "important"
+      ],
+      "isPinned": false,
+      "createdAt": "2026-03-14T16:06:12.199577Z",
+      "updatedAt": "2026-03-29T16:06:12.199579Z"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "36914de1-c087-4abc-aa2d-7cef83a45917",
+      "title": "Reminder 1",
+      "description": "Description for reminder 1",
+      "dueDate": "2026-04-15T16:06:12.199585Z",
+      "dueTime": "09:00",
+      "priority": "medium",
+      "category": "Work",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag1"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-12T16:06:12.199589Z",
+      "updatedAt": "2026-04-12T16:06:12.199591Z"
+    },
+    {
+      "id": "0cc7e7d8-3473-492f-a66d-b0af91ea7716",
+      "title": "Reminder 2",
+      "description": "Description for reminder 2",
+      "dueDate": "2026-04-17T16:06:12.199597Z",
+      "dueTime": "10:00",
+      "priority": "high",
+      "category": "Bills & Payments",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag2"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-11T16:06:12.199599Z",
+      "updatedAt": "2026-04-11T16:06:12.199601Z"
+    },
+    {
+      "id": "6a838f12-059c-48ae-abe5-f9395e9f64af",
+      "title": "Reminder 3",
+      "description": "Description for reminder 3",
+      "dueDate": "2026-04-19T16:06:12.199607Z",
+      "dueTime": "11:00",
+      "priority": "urgent",
+      "category": "Healthcare",
+      "isCompleted": false,
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "tags": [
+        "tag3"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-10T16:06:12.199609Z",
+      "updatedAt": "2026-04-10T16:06:12.199610Z"
+    },
+    {
+      "id": "c076994c-92bd-4d6f-beef-2413ddc3e592",
+      "title": "Reminder 4",
+      "description": "Description for reminder 4",
+      "dueDate": "2026-04-21T16:06:12.199616Z",
+      "dueTime": "12:00",
+      "priority": "low",
+      "category": "Personal",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag4"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-09T16:06:12.199618Z",
+      "updatedAt": "2026-04-09T16:06:12.199619Z"
+    },
+    {
+      "id": "a87b3264-5f5f-494f-8383-33240f9376d5",
+      "title": "Reminder 5",
+      "description": "Description for reminder 5",
+      "dueDate": "2026-04-23T16:06:12.199625Z",
+      "dueTime": "13:00",
+      "priority": "medium",
+      "category": "Work",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag5"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-08T16:06:12.199627Z",
+      "updatedAt": "2026-04-08T16:06:12.199629Z"
+    },
+    {
+      "id": "7d02cfa6-3b74-43f5-ab58-73fc951c174c",
+      "title": "Reminder 6",
+      "description": "Description for reminder 6",
+      "dueDate": "2026-04-25T16:06:12.199634Z",
+      "dueTime": "14:00",
+      "priority": "high",
+      "category": "Bills & Payments",
+      "isCompleted": false,
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "tags": [
+        "tag6"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-07T16:06:12.199637Z",
+      "updatedAt": "2026-04-07T16:06:12.199638Z"
+    },
+    {
+      "id": "dfad5681-95a9-4e6d-b58b-e8083c524076",
+      "title": "Reminder 7",
+      "description": "Description for reminder 7",
+      "dueDate": "2026-04-27T16:06:12.199644Z",
+      "dueTime": "15:00",
+      "priority": "urgent",
+      "category": "Healthcare",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag7"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-06T16:06:12.199646Z",
+      "updatedAt": "2026-04-06T16:06:12.199647Z"
+    },
+    {
+      "id": "71abebd8-bf0c-4e2b-bfa7-bb68d113fbc5",
+      "title": "Reminder 8",
+      "description": "Description for reminder 8",
+      "dueDate": "2026-04-29T16:06:12.199656Z",
+      "dueTime": "16:00",
+      "priority": "low",
+      "category": "Personal",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag8"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-05T16:06:12.199658Z",
+      "updatedAt": "2026-04-05T16:06:12.199660Z"
+    },
+    {
+      "id": "5e4abcc6-ddb5-435f-8b93-c6a40603e196",
+      "title": "Reminder 9",
+      "description": "Description for reminder 9",
+      "dueDate": "2026-05-01T16:06:12.199665Z",
+      "dueTime": "17:00",
+      "priority": "medium",
+      "category": "Work",
+      "isCompleted": false,
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "tags": [
+        "tag9"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-04T16:06:12.199667Z",
+      "updatedAt": "2026-04-04T16:06:12.199669Z"
+    },
+    {
+      "id": "6e041e87-a93d-4302-a850-aaa4e059289a",
+      "title": "Reminder 10",
+      "description": "Description for reminder 10",
+      "dueDate": "2026-05-03T16:06:12.199675Z",
+      "dueTime": "18:00",
+      "priority": "high",
+      "category": "Bills & Payments",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag10"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-03T16:06:12.199677Z",
+      "updatedAt": "2026-04-03T16:06:12.199678Z"
+    },
+    {
+      "id": "1864d972-afd9-4272-aaaa-3f1d7f4ac5c9",
+      "title": "Reminder 11",
+      "description": "Description for reminder 11",
+      "dueDate": "2026-05-05T16:06:12.199684Z",
+      "dueTime": "19:00",
+      "priority": "urgent",
+      "category": "Healthcare",
+      "isCompleted": false,
+      "isRecurring": false,
+      "recurringFrequency": null,
+      "tags": [
+        "tag11"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-02T16:06:12.199686Z",
+      "updatedAt": "2026-04-02T16:06:12.199687Z"
+    },
+    {
+      "id": "1cc335f8-d92f-41c7-afa4-f37c6ce0bae6",
+      "title": "Reminder 12",
+      "description": "Description for reminder 12",
+      "dueDate": "2026-05-07T16:06:12.199693Z",
+      "dueTime": "20:00",
+      "priority": "low",
+      "category": "Personal",
+      "isCompleted": false,
+      "isRecurring": true,
+      "recurringFrequency": "monthly",
+      "tags": [
+        "tag12"
+      ],
+      "color": "#6366f1",
+      "notificationEnabled": true,
+      "alarmEnabled": false,
+      "alertMinutesBefore": 15,
+      "preAlertEnabled": false,
+      "createdAt": "2026-04-01T16:06:12.199695Z",
+      "updatedAt": "2026-04-01T16:06:12.199697Z"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "d36c9c7e-a11a-4aa1-8b3e-bd733e95ae94",
+      "title": "Expense 1",
+      "amount": 20.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-04-12T16:06:12.199704Z",
+      "notes": "Expense note 1",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-04-11T16:06:12.199705Z",
+      "updatedAt": "2026-04-12T16:06:12.199707Z"
+    },
+    {
+      "id": "69dfaacf-c571-42c3-a811-f5b99889cdde",
+      "title": "Expense 2",
+      "amount": 30.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-04-11T16:06:12.199713Z",
+      "notes": "Expense note 2",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-04-09T16:06:12.199715Z",
+      "updatedAt": "2026-04-11T16:06:12.199716Z"
+    },
+    {
+      "id": "76aa9997-cc29-4455-842a-92bd9e7bfd54",
+      "title": "Expense 3",
+      "amount": 40.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-04-10T16:06:12.199722Z",
+      "notes": "Expense note 3",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-04-07T16:06:12.199724Z",
+      "updatedAt": "2026-04-10T16:06:12.199725Z"
+    },
+    {
+      "id": "24c9ea55-85fa-441e-8abf-fe09536c5262",
+      "title": "Expense 4",
+      "amount": 50.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-04-09T16:06:12.199731Z",
+      "notes": "Expense note 4",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-04-05T16:06:12.199733Z",
+      "updatedAt": "2026-04-09T16:06:12.199734Z"
+    },
+    {
+      "id": "4e6538f0-cf9c-49ac-bf6e-bd6844dd7510",
+      "title": "Expense 5",
+      "amount": 60.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-04-08T16:06:12.199740Z",
+      "notes": "Expense note 5",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-04-03T16:06:12.199742Z",
+      "updatedAt": "2026-04-08T16:06:12.199743Z"
+    },
+    {
+      "id": "51b9e933-267b-497e-8d1c-f6582f69d466",
+      "title": "Expense 6",
+      "amount": 70.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-04-07T16:06:12.199749Z",
+      "notes": "Expense note 6",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-04-01T16:06:12.199751Z",
+      "updatedAt": "2026-04-07T16:06:12.199754Z"
+    },
+    {
+      "id": "72ca810b-066e-443c-8dcc-095b04057ba2",
+      "title": "Expense 7",
+      "amount": 80.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-04-06T16:06:12.199762Z",
+      "notes": "Expense note 7",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-03-30T16:06:12.199763Z",
+      "updatedAt": "2026-04-06T16:06:12.199765Z"
+    },
+    {
+      "id": "59025850-807e-4c86-b7d5-2686bfa0b24d",
+      "title": "Expense 8",
+      "amount": 90.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-04-05T16:06:12.199771Z",
+      "notes": "Expense note 8",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-03-28T16:06:12.199773Z",
+      "updatedAt": "2026-04-05T16:06:12.199774Z"
+    },
+    {
+      "id": "5bb8f300-af4e-41ac-8e6c-ccf0ee12a7c1",
+      "title": "Expense 9",
+      "amount": 100.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-04-04T16:06:12.199781Z",
+      "notes": "Expense note 9",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-03-26T16:06:12.199782Z",
+      "updatedAt": "2026-04-04T16:06:12.199783Z"
+    },
+    {
+      "id": "3f235344-c35b-4321-8acd-dbaaa413d0a4",
+      "title": "Expense 10",
+      "amount": 110.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-04-03T16:06:12.199790Z",
+      "notes": "Expense note 10",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-03-24T16:06:12.199792Z",
+      "updatedAt": "2026-04-03T16:06:12.199793Z"
+    },
+    {
+      "id": "1afb7358-96e2-491d-8fa1-eca89f6758f5",
+      "title": "Expense 11",
+      "amount": 120.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-04-02T16:06:12.199800Z",
+      "notes": "Expense note 11",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-03-22T16:06:12.199801Z",
+      "updatedAt": "2026-04-02T16:06:12.199803Z"
+    },
+    {
+      "id": "03d939a7-7dfb-4d1b-a200-6bb70992f09d",
+      "title": "Expense 12",
+      "amount": 130.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-04-01T16:06:12.199809Z",
+      "notes": "Expense note 12",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-03-20T16:06:12.199811Z",
+      "updatedAt": "2026-04-01T16:06:12.199812Z"
+    },
+    {
+      "id": "e3398a06-506b-48ca-8274-6dec89a380c9",
+      "title": "Expense 13",
+      "amount": 140.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-03-31T16:06:12.199818Z",
+      "notes": "Expense note 13",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-03-18T16:06:12.199820Z",
+      "updatedAt": "2026-03-31T16:06:12.199821Z"
+    },
+    {
+      "id": "590fa3fa-6107-47f2-bf6d-0d4cd019058f",
+      "title": "Expense 14",
+      "amount": 150.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-03-30T16:06:12.199828Z",
+      "notes": "Expense note 14",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-03-16T16:06:12.199829Z",
+      "updatedAt": "2026-03-30T16:06:12.199831Z"
+    },
+    {
+      "id": "def03dd3-7088-424f-a7bc-d4e19aad5608",
+      "title": "Expense 15",
+      "amount": 160.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-03-29T16:06:12.199837Z",
+      "notes": "Expense note 15",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-03-14T16:06:12.199839Z",
+      "updatedAt": "2026-03-29T16:06:12.199840Z"
+    },
+    {
+      "id": "34c7438f-bf10-41ec-9281-f8e4e82ae27d",
+      "title": "Expense 16",
+      "amount": 170.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-03-28T16:06:12.199847Z",
+      "notes": "Expense note 16",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-03-12T16:06:12.199849Z",
+      "updatedAt": "2026-03-28T16:06:12.199850Z"
+    },
+    {
+      "id": "3862c018-dae3-42e8-b6c8-419fdbd9c682",
+      "title": "Expense 17",
+      "amount": 180.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-03-27T16:06:12.199856Z",
+      "notes": "Expense note 17",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-03-10T16:06:12.199858Z",
+      "updatedAt": "2026-03-27T16:06:12.199859Z"
+    },
+    {
+      "id": "4198c1a0-b7f1-4c03-bcc8-e56b73417e21",
+      "title": "Expense 18",
+      "amount": 190.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-03-26T16:06:12.199866Z",
+      "notes": "Expense note 18",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-03-08T16:06:12.199867Z",
+      "updatedAt": "2026-03-26T16:06:12.199869Z"
+    },
+    {
+      "id": "78f2343b-f829-4f0a-9085-41db9e6ad699",
+      "title": "Expense 19",
+      "amount": 200.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-03-25T16:06:12.199875Z",
+      "notes": "Expense note 19",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-03-06T16:06:12.199877Z",
+      "updatedAt": "2026-03-25T16:06:12.199878Z"
+    },
+    {
+      "id": "d374d112-e11f-49b6-9c42-a205c1047cfa",
+      "title": "Expense 20",
+      "amount": 10.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-03-24T16:06:12.199884Z",
+      "notes": "Expense note 20",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-03-04T16:06:12.199886Z",
+      "updatedAt": "2026-03-24T16:06:12.199887Z"
+    },
+    {
+      "id": "4ce475cb-7ede-4e8c-8d51-199f46fbabbd",
+      "title": "Expense 21",
+      "amount": 20.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-03-23T16:06:12.199897Z",
+      "notes": "Expense note 21",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-03-02T16:06:12.199898Z",
+      "updatedAt": "2026-03-23T16:06:12.199900Z"
+    },
+    {
+      "id": "74a77d22-522c-42b4-b1e9-ac9f7e5147ae",
+      "title": "Expense 22",
+      "amount": 30.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-03-22T16:06:12.199906Z",
+      "notes": "Expense note 22",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-02-28T16:06:12.199908Z",
+      "updatedAt": "2026-03-22T16:06:12.199909Z"
+    },
+    {
+      "id": "b3d6aa04-4659-47cc-aba0-596bd52216a9",
+      "title": "Expense 23",
+      "amount": 40.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-03-21T16:06:12.199916Z",
+      "notes": "Expense note 23",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-02-26T16:06:12.199917Z",
+      "updatedAt": "2026-03-21T16:06:12.199919Z"
+    },
+    {
+      "id": "84b3fb80-d0db-4350-b9d3-c162a89cf667",
+      "title": "Expense 24",
+      "amount": 50.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-03-20T16:06:12.199927Z",
+      "notes": "Expense note 24",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-02-24T16:06:12.199928Z",
+      "updatedAt": "2026-03-20T16:06:12.199930Z"
+    },
+    {
+      "id": "144f6c33-5177-4a13-b1cd-d28e2f8a60ca",
+      "title": "Expense 25",
+      "amount": 60.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-03-19T16:06:12.199936Z",
+      "notes": "Expense note 25",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-02-22T16:06:12.199938Z",
+      "updatedAt": "2026-03-19T16:06:12.199939Z"
+    },
+    {
+      "id": "a71d7c3b-d885-47b1-af2d-828c15a28dc4",
+      "title": "Expense 26",
+      "amount": 70.0,
+      "currency": "USD",
+      "category": "Transportation",
+      "date": "2026-03-18T16:06:12.199945Z",
+      "notes": "Expense note 26",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-02-20T16:06:12.199947Z",
+      "updatedAt": "2026-03-18T16:06:12.199948Z"
+    },
+    {
+      "id": "d436c73a-a030-4032-90fb-af3fe21bcd3c",
+      "title": "Expense 27",
+      "amount": 80.0,
+      "currency": "USD",
+      "category": "Shopping",
+      "date": "2026-03-17T16:06:12.199955Z",
+      "notes": "Expense note 27",
+      "isRecurring": false,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2026-02-18T16:06:12.199957Z",
+      "updatedAt": "2026-03-17T16:06:12.199958Z"
+    },
+    {
+      "id": "5dc42cc7-d723-4c67-b377-186714adf3a2",
+      "title": "Expense 28",
+      "amount": 90.0,
+      "currency": "USD",
+      "category": "Entertainment",
+      "date": "2026-03-16T16:06:12.199965Z",
+      "notes": "Expense note 28",
+      "isRecurring": false,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2026-02-16T16:06:12.199966Z",
+      "updatedAt": "2026-03-16T16:06:12.199968Z"
+    },
+    {
+      "id": "9dbd8c7c-35f0-4e90-a3e1-531aa7eb99c2",
+      "title": "Expense 29",
+      "amount": 100.0,
+      "currency": "USD",
+      "category": "Bills & Utilities",
+      "date": "2026-03-15T16:06:12.199974Z",
+      "notes": "Expense note 29",
+      "isRecurring": false,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2026-02-14T16:06:12.199975Z",
+      "updatedAt": "2026-03-15T16:06:12.199977Z"
+    },
+    {
+      "id": "a0c1c85a-71dd-48b5-891f-e098116262d5",
+      "title": "Expense 30",
+      "amount": 110.0,
+      "currency": "USD",
+      "category": "Food & Dining",
+      "date": "2026-03-14T16:06:12.199983Z",
+      "notes": "Expense note 30",
+      "isRecurring": false,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2026-02-12T16:06:12.199984Z",
+      "updatedAt": "2026-03-14T16:06:12.199986Z"
+    }
+  ],
+  "bankStatements": [
+    {
+      "id": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "bankName": "Chase",
+      "accountName": "Current Account 1",
+      "accountNumber": "****1000",
+      "statementPeriod": {
+        "startDate": "2026-01-13T16:06:12.200003Z",
+        "endDate": "2026-02-12T16:06:12.200004Z"
+      },
+      "currency": "USD",
+      "openingBalance": 5000.0,
+      "closingBalance": 4800.0,
+      "totalCredits": 3000.0,
+      "totalDebits": 3200.0,
+      "transactionCount": 8,
+      "fileType": "csv",
+      "importDate": "2026-04-13T16:06:12.200006Z",
+      "createdAt": "2026-04-13T16:06:12.200008Z",
+      "updatedAt": "2026-04-13T16:06:12.200009Z"
+    },
+    {
+      "id": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "bankName": "HDFC",
+      "accountName": "Current Account 2",
+      "accountNumber": "****1001",
+      "statementPeriod": {
+        "startDate": "2026-02-12T16:06:12.200011Z",
+        "endDate": "2026-03-14T16:06:12.200012Z"
+      },
+      "currency": "INR",
+      "openingBalance": 6000.0,
+      "closingBalance": 5800.0,
+      "totalCredits": 3000.0,
+      "totalDebits": 3200.0,
+      "transactionCount": 8,
+      "fileType": "csv",
+      "importDate": "2026-04-03T16:06:12.200014Z",
+      "createdAt": "2026-04-03T16:06:12.200015Z",
+      "updatedAt": "2026-04-03T16:06:12.200016Z"
+    },
+    {
+      "id": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "bankName": "SBI",
+      "accountName": "Current Account 3",
+      "accountNumber": "****1002",
+      "statementPeriod": {
+        "startDate": "2026-03-14T16:06:12.200018Z",
+        "endDate": "2026-04-13T16:06:12.200020Z"
+      },
+      "currency": "INR",
+      "openingBalance": 7000.0,
+      "closingBalance": 6800.0,
+      "totalCredits": 3000.0,
+      "totalDebits": 3200.0,
+      "transactionCount": 8,
+      "fileType": "csv",
+      "importDate": "2026-03-24T16:06:12.200021Z",
+      "createdAt": "2026-03-24T16:06:12.200022Z",
+      "updatedAt": "2026-03-24T16:06:12.200024Z"
+    }
+  ],
+  "bankTransactions": [
+    {
+      "id": "1e8f208f-8945-4798-9b4c-cd22604efb8d",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-01-23T16:06:12.200032Z",
+      "description": "Transaction 1 for stmt 1",
+      "amount": 50.0,
+      "currency": "USD",
+      "transactionType": "credit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-01-23T16:06:12.200035Z",
+      "updatedAt": "2026-01-23T16:06:12.200037Z"
+    },
+    {
+      "id": "e0eb045e-6720-4e2f-b177-235ec7c6e8a5",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-01-26T16:06:12.200044Z",
+      "description": "Transaction 2 for stmt 1",
+      "amount": -60.0,
+      "currency": "USD",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-01-26T16:06:12.200047Z",
+      "updatedAt": "2026-01-26T16:06:12.200049Z"
+    },
+    {
+      "id": "d9fddb3f-d2bb-4505-be73-959843bf2abe",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-01-29T16:06:12.200055Z",
+      "description": "Transaction 3 for stmt 1",
+      "amount": -70.0,
+      "currency": "USD",
+      "transactionType": "debit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-01-29T16:06:12.200057Z",
+      "updatedAt": "2026-01-29T16:06:12.200058Z"
+    },
+    {
+      "id": "4d3f21ba-7839-405d-aba2-fe2c41fa417a",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-02-01T16:06:12.200065Z",
+      "description": "Transaction 4 for stmt 1",
+      "amount": 80.0,
+      "currency": "USD",
+      "transactionType": "credit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-01T16:06:12.200067Z",
+      "updatedAt": "2026-02-01T16:06:12.200069Z"
+    },
+    {
+      "id": "615e9401-985e-4bea-b56c-0b3e855ffec1",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-02-04T16:06:12.200075Z",
+      "description": "Transaction 5 for stmt 1",
+      "amount": -90.0,
+      "currency": "USD",
+      "transactionType": "debit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-04T16:06:12.200078Z",
+      "updatedAt": "2026-02-04T16:06:12.200079Z"
+    },
+    {
+      "id": "8bcd4fba-56fb-43f4-950e-d36b203693e6",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-02-07T16:06:12.200085Z",
+      "description": "Transaction 6 for stmt 1",
+      "amount": -100.0,
+      "currency": "USD",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-07T16:06:12.200088Z",
+      "updatedAt": "2026-02-07T16:06:12.200089Z"
+    },
+    {
+      "id": "432b0ea5-f95a-478f-9f48-510093fd9a72",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-02-10T16:06:12.200095Z",
+      "description": "Transaction 7 for stmt 1",
+      "amount": 110.0,
+      "currency": "USD",
+      "transactionType": "credit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-10T16:06:12.200098Z",
+      "updatedAt": "2026-02-10T16:06:12.200099Z"
+    },
+    {
+      "id": "b13acb59-fac7-4bc6-a78f-75e5d4220bb6",
+      "statementId": "1ce76023-e66d-4823-be22-d2abebcb8616",
+      "date": "2026-02-13T16:06:12.200105Z",
+      "description": "Transaction 8 for stmt 1",
+      "amount": -120.0,
+      "currency": "USD",
+      "transactionType": "debit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-13T16:06:12.200107Z",
+      "updatedAt": "2026-02-13T16:06:12.200109Z"
+    },
+    {
+      "id": "ec401d04-ca80-47fe-ad75-4a30ebb5ae7a",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-02-22T16:06:12.200115Z",
+      "description": "Transaction 1 for stmt 2",
+      "amount": 50.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-22T16:06:12.200118Z",
+      "updatedAt": "2026-02-22T16:06:12.200119Z"
+    },
+    {
+      "id": "70a4b2a4-3a78-451f-ad7c-9802f1a921fd",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-02-25T16:06:12.200125Z",
+      "description": "Transaction 2 for stmt 2",
+      "amount": -60.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-25T16:06:12.200128Z",
+      "updatedAt": "2026-02-25T16:06:12.200129Z"
+    },
+    {
+      "id": "8eec4f24-29bc-4185-8717-ce6e45dbd71e",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-02-28T16:06:12.200136Z",
+      "description": "Transaction 3 for stmt 2",
+      "amount": -70.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-02-28T16:06:12.200138Z",
+      "updatedAt": "2026-02-28T16:06:12.200139Z"
+    },
+    {
+      "id": "3e18f20d-7ed2-4797-a979-762bb660e153",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-03-03T16:06:12.200146Z",
+      "description": "Transaction 4 for stmt 2",
+      "amount": 80.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-03T16:06:12.200148Z",
+      "updatedAt": "2026-03-03T16:06:12.200149Z"
+    },
+    {
+      "id": "ce6000b0-715d-45ce-a4c9-48ebd4bc0283",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-03-06T16:06:12.200158Z",
+      "description": "Transaction 5 for stmt 2",
+      "amount": -90.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-06T16:06:12.200161Z",
+      "updatedAt": "2026-03-06T16:06:12.200162Z"
+    },
+    {
+      "id": "1d3e41de-e94d-4b0d-bc65-a135da2e356c",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-03-09T16:06:12.200168Z",
+      "description": "Transaction 6 for stmt 2",
+      "amount": -100.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-09T16:06:12.200171Z",
+      "updatedAt": "2026-03-09T16:06:12.200172Z"
+    },
+    {
+      "id": "56491749-3ff6-4fe2-91a0-05165824dd5f",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-03-12T16:06:12.200178Z",
+      "description": "Transaction 7 for stmt 2",
+      "amount": 110.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-12T16:06:12.200180Z",
+      "updatedAt": "2026-03-12T16:06:12.200182Z"
+    },
+    {
+      "id": "51fef244-51c4-4ec0-9b3f-260e291a0a42",
+      "statementId": "6f63bc36-afe9-49e5-92f6-3c94236908a1",
+      "date": "2026-03-15T16:06:12.200188Z",
+      "description": "Transaction 8 for stmt 2",
+      "amount": -120.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-15T16:06:12.200190Z",
+      "updatedAt": "2026-03-15T16:06:12.200191Z"
+    },
+    {
+      "id": "ee3a1a46-8302-4e0a-b3e0-033149d38f76",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-03-24T16:06:12.200197Z",
+      "description": "Transaction 1 for stmt 3",
+      "amount": 50.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-24T16:06:12.200200Z",
+      "updatedAt": "2026-03-24T16:06:12.200201Z"
+    },
+    {
+      "id": "4b3646db-0ec7-4351-aa71-27730d0349a0",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-03-27T16:06:12.200207Z",
+      "description": "Transaction 2 for stmt 3",
+      "amount": -60.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-27T16:06:12.200209Z",
+      "updatedAt": "2026-03-27T16:06:12.200211Z"
+    },
+    {
+      "id": "1e4302ae-eade-4e19-aa40-ffc26cada826",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-03-30T16:06:12.200217Z",
+      "description": "Transaction 3 for stmt 3",
+      "amount": -70.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-03-30T16:06:12.200219Z",
+      "updatedAt": "2026-03-30T16:06:12.200220Z"
+    },
+    {
+      "id": "7a601fa9-ca72-4882-abc4-a68d55a6bd1f",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-04-02T16:06:12.200226Z",
+      "description": "Transaction 4 for stmt 3",
+      "amount": 80.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-04-02T16:06:12.200229Z",
+      "updatedAt": "2026-04-02T16:06:12.200230Z"
+    },
+    {
+      "id": "e619b24a-6136-4ae3-8bbe-580268908b90",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-04-05T16:06:12.200236Z",
+      "description": "Transaction 5 for stmt 3",
+      "amount": -90.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Income",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-04-05T16:06:12.200238Z",
+      "updatedAt": "2026-04-05T16:06:12.200240Z"
+    },
+    {
+      "id": "4d00f295-634b-483c-b903-e99747365f13",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-04-08T16:06:12.200245Z",
+      "description": "Transaction 6 for stmt 3",
+      "amount": -100.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Food & Dining",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-04-08T16:06:12.200248Z",
+      "updatedAt": "2026-04-08T16:06:12.200249Z"
+    },
+    {
+      "id": "2305f867-1fe3-45be-9b5d-826b1bf3980a",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-04-11T16:06:12.200255Z",
+      "description": "Transaction 7 for stmt 3",
+      "amount": 110.0,
+      "currency": "INR",
+      "transactionType": "credit",
+      "category": "Shopping",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-04-11T16:06:12.200257Z",
+      "updatedAt": "2026-04-11T16:06:12.200258Z"
+    },
+    {
+      "id": "2bce65a5-d923-4e8d-9f13-6d3e3403c281",
+      "statementId": "0060e119-ad0b-4579-a5e9-162e4abae29b",
+      "date": "2026-04-14T16:06:12.200264Z",
+      "description": "Transaction 8 for stmt 3",
+      "amount": -120.0,
+      "currency": "INR",
+      "transactionType": "debit",
+      "category": "Bills & Utilities",
+      "tags": [],
+      "isRecurring": false,
+      "createdAt": "2026-04-14T16:06:12.200266Z",
+      "updatedAt": "2026-04-14T16:06:12.200268Z"
+    }
+  ],
+  "investments": [
+    {
+      "id": "42a4c265-cd3e-45c6-baa4-19b792c6973b",
+      "name": "Investment 0",
+      "type": "fixed_deposit",
+      "institution": "SBI",
+      "ticker": null,
+      "purchaseDate": "2025-04-13T16:06:12.200275Z",
+      "purchasePrice": 1000.0,
+      "quantity": 1.0,
+      "currentPrice": 1100.0,
+      "currentValue": 1100.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag0"
+      ],
+      "createdAt": "2025-04-13T16:06:12.200278Z",
+      "updatedAt": "2026-03-14T16:06:12.200280Z"
+    },
+    {
+      "id": "75216bc2-0466-4187-8ec0-efcf9a0d482d",
+      "name": "Investment 1",
+      "type": "mutual_fund",
+      "institution": "HDFC",
+      "ticker": "TKR1",
+      "purchaseDate": "2025-05-13T16:06:12.200286Z",
+      "purchasePrice": 2000.0,
+      "quantity": 2.0,
+      "currentPrice": 2200.0,
+      "currentValue": 4400.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag1"
+      ],
+      "createdAt": "2025-05-13T16:06:12.200289Z",
+      "updatedAt": "2026-03-14T16:06:12.200290Z"
+    },
+    {
+      "id": "e27e77c3-69f1-4750-9629-85b1a8168228",
+      "name": "Investment 2",
+      "type": "stocks",
+      "institution": "Zerodha",
+      "ticker": "TKR2",
+      "purchaseDate": "2025-06-12T16:06:12.200298Z",
+      "purchasePrice": 3000.0,
+      "quantity": 3.0,
+      "currentPrice": 3300.0,
+      "currentValue": 9900.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag2"
+      ],
+      "createdAt": "2025-06-12T16:06:12.200301Z",
+      "updatedAt": "2026-03-14T16:06:12.200303Z"
+    },
+    {
+      "id": "734a9ec7-b55c-4f5e-a75b-280778f9daf9",
+      "name": "Investment 3",
+      "type": "bonds",
+      "institution": "ICICI",
+      "ticker": null,
+      "purchaseDate": "2025-07-12T16:06:12.200309Z",
+      "purchasePrice": 4000.0,
+      "quantity": 4.0,
+      "currentPrice": 4400.0,
+      "currentValue": 17600.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag3"
+      ],
+      "createdAt": "2025-07-12T16:06:12.200312Z",
+      "updatedAt": "2026-03-14T16:06:12.200313Z"
+    },
+    {
+      "id": "85a838a7-6a7c-48ad-bd9c-ef38a9831d3a",
+      "name": "Investment 4",
+      "type": "crypto",
+      "institution": "SBI",
+      "ticker": "TKR4",
+      "purchaseDate": "2025-08-11T16:06:12.200319Z",
+      "purchasePrice": 5000.0,
+      "quantity": 5.0,
+      "currentPrice": 5500.0,
+      "currentValue": 27500.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag4"
+      ],
+      "createdAt": "2025-08-11T16:06:12.200325Z",
+      "updatedAt": "2026-03-14T16:06:12.200326Z"
+    },
+    {
+      "id": "b9806fa2-e2ef-4c5b-9d03-c0426b3ef115",
+      "name": "Investment 5",
+      "type": "recurring_deposit",
+      "institution": "HDFC",
+      "ticker": "TKR5",
+      "purchaseDate": "2025-09-10T16:06:12.200335Z",
+      "purchasePrice": 6000.0,
+      "quantity": 6.0,
+      "currentPrice": 6600.0,
+      "currentValue": 39600.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag5"
+      ],
+      "createdAt": "2025-09-10T16:06:12.200337Z",
+      "updatedAt": "2026-03-14T16:06:12.200339Z"
+    },
+    {
+      "id": "65f6a654-156c-4177-ac93-0fbd231d9a8f",
+      "name": "Investment 6",
+      "type": "real_estate",
+      "institution": "Zerodha",
+      "ticker": null,
+      "purchaseDate": "2025-10-10T16:06:12.200345Z",
+      "purchasePrice": 7000.0,
+      "quantity": 7.0,
+      "currentPrice": 7700.0,
+      "currentValue": 53900.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag6"
+      ],
+      "createdAt": "2025-10-10T16:06:12.200348Z",
+      "updatedAt": "2026-03-14T16:06:12.200349Z"
+    },
+    {
+      "id": "2f948bf5-eaed-4578-96f5-c5a477a4abd8",
+      "name": "Investment 7",
+      "type": "other",
+      "institution": "ICICI",
+      "ticker": "TKR7",
+      "purchaseDate": "2025-11-09T16:06:12.200355Z",
+      "purchasePrice": 8000.0,
+      "quantity": 8.0,
+      "currentPrice": 8800.0,
+      "currentValue": 70400.0,
+      "currency": "INR",
+      "fees": 0.0,
+      "isActive": true,
+      "tags": [
+        "tag7"
+      ],
+      "createdAt": "2025-11-09T16:06:12.200358Z",
+      "updatedAt": "2026-03-14T16:06:12.200359Z"
+    }
+  ],
+  "investmentGoals": [
+    {
+      "id": "65d9780b-02c7-4785-81af-78f95ed3385e",
+      "name": "Goal 0",
+      "description": "Saving for retirement",
+      "targetAmount": 100000.0,
+      "targetDate": "2027-04-13T16:06:12.200366Z",
+      "currentAmount": 10000.0,
+      "currency": "INR",
+      "priority": "low",
+      "category": "Retirement",
+      "investmentIds": [],
+      "isAchieved": false,
+      "createdAt": "2026-02-12T16:06:12.200368Z",
+      "updatedAt": "2026-04-03T16:06:12.200369Z"
+    },
+    {
+      "id": "65271dbd-d855-4cab-968f-b5e0d3e8ed40",
+      "name": "Goal 1",
+      "description": "Saving for house",
+      "targetAmount": 200000.0,
+      "targetDate": "2028-04-12T16:06:12.200376Z",
+      "currentAmount": 20000.0,
+      "currency": "INR",
+      "priority": "medium",
+      "category": "House",
+      "investmentIds": [],
+      "isAchieved": false,
+      "createdAt": "2026-02-12T16:06:12.200378Z",
+      "updatedAt": "2026-04-03T16:06:12.200379Z"
+    },
+    {
+      "id": "e4ab2d54-b642-4f36-8d72-68e98e7f3ced",
+      "name": "Goal 2",
+      "description": "Saving for education",
+      "targetAmount": 300000.0,
+      "targetDate": "2029-04-12T16:06:12.200385Z",
+      "currentAmount": 30000.0,
+      "currency": "INR",
+      "priority": "high",
+      "category": "Education",
+      "investmentIds": [],
+      "isAchieved": false,
+      "createdAt": "2026-02-12T16:06:12.200387Z",
+      "updatedAt": "2026-04-03T16:06:12.200388Z"
+    },
+    {
+      "id": "90da7b67-d601-436d-9907-d5296cadaa14",
+      "name": "Goal 3",
+      "description": "Saving for travel",
+      "targetAmount": 400000.0,
+      "targetDate": "2030-04-12T16:06:12.200397Z",
+      "currentAmount": 40000.0,
+      "currency": "INR",
+      "priority": "low",
+      "category": "Travel",
+      "investmentIds": [],
+      "isAchieved": false,
+      "createdAt": "2026-02-12T16:06:12.200398Z",
+      "updatedAt": "2026-04-03T16:06:12.200400Z"
+    }
+  ],
+  "exportedAt": "2026-04-13T16:06:12.200402Z",
+  "version": 2
+}
