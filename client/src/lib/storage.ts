@@ -502,7 +502,12 @@ export class VaultStorage {
       const request = store.put({ ...encryptedEntry, store: storeName });
 
       request.onsuccess = () => {
-        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        // Don't trigger sync for internal/metadata stores — they are written
+        // during export itself (saveBackupMetadata), which would create an
+        // infinite push loop: save → export → saveBackupMetadata → vault:item:saved → export → …
+        if (storeName !== 'persistent_data') {
+          window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        }
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -1575,9 +1580,13 @@ export class VaultStorage {
 
   async deleteBankStatement(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const transaction = this.db.transaction(['bankStatements'], 'readwrite');
-    const store = transaction.objectStore('bankStatements');
-    await store.delete(id);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Bank Transactions CRUD Operations
@@ -1595,9 +1604,13 @@ export class VaultStorage {
 
   async deleteBankTransaction(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const transaction = this.db.transaction(['bankTransactions'], 'readwrite');
-    const store = transaction.objectStore('bankTransactions');
-    await store.delete(id);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Investments CRUD Operations
@@ -1615,9 +1628,13 @@ export class VaultStorage {
 
   async deleteInvestment(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const transaction = this.db.transaction(['investments'], 'readwrite');
-    const store = transaction.objectStore('investments');
-    await store.delete(id);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Investment Goals CRUD Operations
@@ -1635,9 +1652,13 @@ export class VaultStorage {
 
   async deleteInvestmentGoal(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const transaction = this.db.transaction(['investmentGoals'], 'readwrite');
-    const store = transaction.objectStore('investmentGoals');
-    await store.delete(id);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Bank Statement CSV Import - Auto-detects multiple formats

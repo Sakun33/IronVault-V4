@@ -33,6 +33,7 @@ import APIKeys from "@/pages/api-keys";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
 import AboutPage from "@/pages/info/about";
+import FAQPage from "@/pages/info/faq";
 import FeaturesPage from "@/pages/info/features";
 import SecurityPage from "@/pages/info/security";
 import ContactPage from "@/pages/info/contact";
@@ -82,7 +83,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const { logout, masterPassword, isUnlocked } = useAuth();
   const { searchQuery, setSearchQuery, stats } = useVault();
   const { getLimit, isPro } = useSubscription();
-  const { vaults, activeVault, switchVault } = useVaultSelection();
+  const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   useCloudAutoSync(activeVault?.id, masterPassword);
 
   // On every unlock: heal pre-fix vaults by checking server for cloud entry and pushing current state
@@ -103,6 +104,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         // Only push if we have actual content (> empty vault threshold of ~1000 bytes)
         if (blob.length > 1000) {
           await pushCloudVault(activeVault.id, activeVault.name ?? cloudEntry.vaultName, blob, false);
+          if (!cancelled) {
+            // Advance lastPull so the 60-s poll doesn't immediately re-download
+            // the data we just uploaded.
+            localStorage.setItem(`iv_last_pull_${activeVault.id}`, new Date().toISOString());
+          }
         }
       } catch {
         // Best-effort; don't surface errors
@@ -252,8 +258,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                     <DropdownMenuItem
                       key={vault.id}
                       className="gap-2"
-                      onClick={async () => {
-                        if (vault.id !== activeVault?.id) await switchVault(vault.id);
+                      onClick={() => {
+                        if (vault.id !== activeVault?.id) requestVaultSwitch(vault.id);
                       }}
                     >
                       <Database className="w-3.5 h-3.5 text-muted-foreground" />
@@ -312,8 +318,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                     <DropdownMenuItem
                       key={vault.id}
                       className="gap-2"
-                      onClick={async () => {
-                        if (vault.id !== activeVault?.id) await switchVault(vault.id);
+                      onClick={() => {
+                        if (vault.id !== activeVault?.id) requestVaultSwitch(vault.id);
                       }}
                     >
                       <Database className="w-3.5 h-3.5 text-muted-foreground" />
@@ -663,6 +669,7 @@ function PublicPageWrapper({ children }: { children: React.ReactNode }) {
 const PUBLIC_INFO_ROUTES = (
   <>
     <Route path="/about" component={AboutPage} />
+    <Route path="/faq" component={FAQPage} />
     <Route path="/features" component={FeaturesPage} />
     <Route path="/security" component={SecurityPage} />
     <Route path="/contact" component={ContactPage} />

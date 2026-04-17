@@ -593,7 +593,7 @@ function BudgetSettingsModal(props: BudgetSettingsModalProps) {
   };
 
   return (
-    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+    <DialogContent className="max-w-2xl max-h-[80svh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <Target className="w-5 h-5" />

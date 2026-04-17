@@ -58,18 +58,12 @@ function LandingNav() {
   }, []);
 
   const navLinks = [
-    { label: "Features", href: "#features" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "Security", href: "#security" },
-    { label: "FAQ", href: "#faq" },
+    { label: "Features", href: "/features" },
+    { label: "Pricing", href: "/pricing" },
+    { label: "Security", href: "/security" },
+    { label: "FAQ", href: "/faq" },
     { label: "Download", href: "#download" },
   ];
-
-  const scrollTo = (href: string) => {
-    setMobileOpen(false);
-    const el = document.querySelector(href);
-    el?.scrollIntoView({ behavior: "smooth" });
-  };
 
   return (
     <header
@@ -105,12 +99,21 @@ function LandingNav() {
         <ul className="hidden md:flex items-center gap-7" role="list">
           {navLinks.map((link) => (
             <li key={link.href}>
-              <button
-                onClick={() => scrollTo(link.href)}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-              >
-                {link.label}
-              </button>
+              {link.href.startsWith('#') ? (
+                <a
+                  href={link.href}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                >
+                  {link.label}
+                </a>
+              ) : (
+                <Link
+                  href={link.href}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                >
+                  {link.label}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -150,12 +153,23 @@ function LandingNav() {
           <ul className="space-y-1" role="list">
             {navLinks.map((link) => (
               <li key={link.href}>
-                <button
-                  onClick={() => scrollTo(link.href)}
-                  className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                >
-                  {link.label}
-                </button>
+                {link.href.startsWith('#') ? (
+                  <a
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
@@ -182,7 +196,7 @@ function HeroSection() {
   return (
     <section
       id="main-content"
-      className="relative min-h-[90vh] flex items-center pt-24 pb-20 md:pt-32 md:pb-28 overflow-hidden"
+      className="relative min-h-[100dvh] flex items-center pt-24 pb-20 md:pt-32 md:pb-28 overflow-hidden"
       aria-label="Hero"
     >
       {/* Gradient bg */}
@@ -1138,19 +1152,53 @@ function LandingFooter() {
   );
 }
 
+// ─── Quick category links ─────────────────────────────────────────────────────
+function QuickLinksGrid() {
+  const items = [
+    { icon: Key, label: "Passwords", href: "/features", color: "text-primary", bg: "bg-primary/10" },
+    { icon: Building2, label: "Bank Statements", href: "/features", color: "text-indigo-500", bg: "bg-indigo-500/10" },
+    { icon: Bookmark, label: "Subscriptions", href: "/features", color: "text-purple-500", bg: "bg-purple-500/10" },
+    { icon: FileText, label: "Secure Notes", href: "/features", color: "text-orange-500", bg: "bg-orange-500/10" },
+    { icon: Bell, label: "Reminders", href: "/features", color: "text-yellow-500", bg: "bg-yellow-500/10" },
+    { icon: RefreshCw, label: "Cloud Sync", href: "/security", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  ];
+
+  return (
+    <section className="py-10 bg-background" aria-label="Feature overview">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {items.map((item) => (
+            <Link key={item.label} href={item.href}>
+              <div className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-accent transition-colors text-center cursor-pointer">
+                <div className={`p-2.5 rounded-xl ${item.bg}`}>
+                  <item.icon className={`w-5 h-5 ${item.color}`} aria-hidden="true" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground leading-tight">{item.label}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+        <div className="text-center mt-4">
+          <Link href="/features">
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+              See all features <ChevronRight className="ml-1 w-3 h-3" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Analytics placeholder — add GA4/Plausible here when ready */}
+    <div className="bg-background text-foreground">
       <LandingNav />
       <main>
         <HeroSection />
         <TrustStrip />
-        <FeaturesSection />
-        <SecuritySection />
-        <PricingSection />
-        <FAQSection />
+        <QuickLinksGrid />
         <CTABand />
       </main>
       <LandingFooter />

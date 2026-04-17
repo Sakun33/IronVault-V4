@@ -124,7 +124,7 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-card rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-lg p-6 max-w-2xl w-full max-h-[90svh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <TrendingUp className="w-5 h-5" />
