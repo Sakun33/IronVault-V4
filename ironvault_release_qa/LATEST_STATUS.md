@@ -1,29 +1,32 @@
 # Latest status
 **Updated:** 2026-04-17
 
-## PRODUCTION DEPLOY — ironvault-main-qumag7grp ✅
-- Deployment: `ironvault-main-qumag7grp-saket-sumans-projects-1f5ede07.vercel.app`
+## PRODUCTION DEPLOY — ironvault-main-bwkx8nfth ✅
+- Deployment: `ironvault-main-bwkx8nfth-saket-sumans-projects-1f5ede07.vercel.app`
 - Target: www.ironvault.app / ironvault.app
 - Branch: claude/xenodochial-mendeleev (merged → main)
-- Build: Vite ✓
+- Build: Vite ✓ — bundle `index-6971de40.js`
 
 ## APK
 - Built: `android/app/build/outputs/apk/debug/app-debug.apk` ✅
 - Rebuilt: 2026-04-17 with @aparajita/capacitor-biometric-auth@9.1.2
 - Install: `adb install -r <path>` — device not connected; install manually
 
-## Latest session — three features shipped
+## Latest session — three bugs fixed
+
+| Bug | Title | Status |
+|-----|-------|--------|
+| BUG-055 | Vault picker deduplication + Synced badge | LIVE ✅ |
+| BUG-056 | Cloud vault CRUD race (isBulkImporting + lastPull) | LIVE ✅ |
+| BUG-057 | Landing page single-viewport; remove duplicate Log In | LIVE ✅ |
+
+## Previous bugs (still live)
 
 | Bug | Title | Status |
 |-----|-------|--------|
 | BUG-052 | Family vault cryptographic key exchange | BUILT ✅ (device test pending) |
 | BUG-053 | Argon2id → PBKDF2-SHA256 copy fix | LIVE ✅ |
 | BUG-054 | Biometric plugin Capacitor 7 upgrade | APK ✅ (device install pending) |
-
-## Previous bugs (still live)
-
-| Bug | Title | Status |
-|-----|-------|--------|
 | BUG-047 | No delete confirmation for passwords | LIVE ✅ |
 | BUG-048 | /goals missing labelled Add Goal button | LIVE ✅ |
 | BUG-049 | License-context mount race (Encryption key not set) | LIVE ✅ |
@@ -52,3 +55,4 @@
 - `COMPREHENSIVE_TEST_RESULTS.md` — phase-by-phase test outcomes
 - `COMPREHENSIVE_BUG_REPORT.md` — BUG-047..051 with root causes + fix guidance
 - `RELEASE_READINESS_FINAL.md` — original verdict + blocker list
+- `05_bug_register.csv` — full bug registry BUG-041..057
