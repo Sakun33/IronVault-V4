@@ -82,7 +82,7 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
 
   return (
     <Dialog open={open}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90svh] overflow-y-auto">
         <DialogHeader>
           <div className="mx-auto w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
             <Sparkles className="w-6 h-6 text-white" />

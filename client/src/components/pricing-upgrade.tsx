@@ -210,7 +210,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90svh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Upgrade Your Plan</DialogTitle>
           <p className="text-muted-foreground">

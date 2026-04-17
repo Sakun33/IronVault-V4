@@ -290,7 +290,7 @@ export function VaultManagerUI() {
     canCreateVault,
     maxVaults,
     createVault,
-    switchVault,
+    requestVaultSwitch,
     updateVault,
     deleteVault,
     setDefaultVault,
@@ -368,13 +368,8 @@ export function VaultManagerUI() {
     }
   };
 
-  const handleOpenVault = async (vaultId: string) => {
-    try {
-      await switchVault(vaultId);
-      window.location.href = '/dashboard';
-    } catch (error) {
-      toast({ title: 'Failed to Open Vault', description: error instanceof Error ? error.message : 'An error occurred', variant: 'destructive' });
-    }
+  const handleOpenVault = (vaultId: string) => {
+    requestVaultSwitch(vaultId);
   };
 
   const handleRename = async (vaultId: string, name: string) => {
@@ -563,8 +558,8 @@ export function VaultManagerUI() {
               isCloudSynced={isCloudSynced}
               isSourceDevice={isSourceDevice}
               isPaidUser={isPaidUser}
-              onSwitch={() => switchVault(vault.id)}
-              onOpen={() => handleOpenVault(vault.id)}
+              onSwitch={() => requestVaultSwitch(vault.id)}
+              onOpen={() => requestVaultSwitch(vault.id)}
               onSetDefault={() => setDefaultVault(vault.id)}
               onToggleBiometric={(enabled) => handleToggleBiometric(vault.id, enabled)}
               onRename={(name) => handleRename(vault.id, name)}

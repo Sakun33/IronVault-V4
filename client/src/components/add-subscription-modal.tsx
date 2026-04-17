@@ -207,7 +207,7 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="add-subscription-modal">
+      <DialogContent className="sm:max-w-lg max-h-[90svh] overflow-y-auto" data-testid="add-subscription-modal">
         <DialogHeader>
           <DialogTitle>{editingSubscription ? 'Edit Subscription' : 'Add New Subscription'}</DialogTitle>
         </DialogHeader>

@@ -152,7 +152,7 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`max-w-7xl max-h-[95vh] p-0 ${isFullscreen ? 'w-screen h-screen' : ''}`}>
+      <DialogContent className={`max-w-7xl max-h-[95svh] p-0 ${isFullscreen ? 'w-screen h-screen' : ''}`}>
         <DialogHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

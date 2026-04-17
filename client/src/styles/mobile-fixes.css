@@ -59,7 +59,7 @@ select:focus {
   background-color: var(--background) !important;
   color: var(--foreground) !important;
   border: 1px solid var(--border) !important;
-  max-height: 90vh !important;
+  max-height: 90svh !important;
   overflow-y: auto !important;
   opacity: 1 !important;
   backdrop-filter: none !important;

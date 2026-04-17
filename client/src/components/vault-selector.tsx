@@ -17,12 +17,12 @@ interface VaultSelectorProps {
 }
 
 export function VaultSelector({ onVaultSwitch, compact = false }: VaultSelectorProps) {
-  const { vaults, activeVault, switchVault, canCreateVault } = useVaultSelection();
+  const { vaults, activeVault, requestVaultSwitch, canCreateVault } = useVaultSelection();
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleVaultSelect = async (vaultId: string) => {
+  const handleVaultSelect = (vaultId: string) => {
     if (vaultId !== activeVault?.id) {
-      await switchVault(vaultId);
+      requestVaultSwitch(vaultId);
       onVaultSwitch?.();
     }
     setIsOpen(false);

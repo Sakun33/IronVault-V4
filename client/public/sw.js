@@ -1,7 +1,7 @@
 // SecureVault PWA Service Worker
-const CACHE_NAME = 'securevault-v1.0.0';
-const STATIC_CACHE = 'securevault-static-v1.0.0';
-const DYNAMIC_CACHE = 'securevault-dynamic-v1.0.0';
+const CACHE_NAME = 'ironvault-v2.0.0';
+const STATIC_CACHE = 'ironvault-static-v2.0.0';
+const DYNAMIC_CACHE = 'ironvault-dynamic-v2.0.0';
 
 // Assets to cache on install (production-ready paths)
 const STATIC_ASSETS = [

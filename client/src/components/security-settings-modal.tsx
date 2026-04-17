@@ -284,7 +284,7 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
       <DialogTrigger asChild data-testid="button-security-settings">
         {trigger}
       </DialogTrigger>
-      <DialogContent className="w-[min(96vw,64rem)] max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="w-[min(96vw,64rem)] max-w-4xl max-h-[90svh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
