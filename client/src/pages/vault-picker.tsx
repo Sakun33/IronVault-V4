@@ -12,7 +12,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
-import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
+import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, isVaultCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
@@ -194,6 +194,11 @@ export default function VaultPickerPage() {
       const success = await login(pw);
       if (success) {
         markVaultAsCloudSynced(cloudVault.vaultId);
+        // Tell the auto-sync hook we already have this version — prevents the
+        // initial doPull from re-downloading what we just imported, which would
+        // race with any passwords the user adds immediately after opening.
+        const lastPullKey = `iv_last_pull_${cloudVault.vaultId}`;
+        localStorage.setItem(lastPullKey, full.serverUpdatedAt ?? new Date().toISOString());
         toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
         setLocation('/');
       } else {
@@ -273,7 +278,11 @@ export default function VaultPickerPage() {
                     {vault.isDefault && (
                       <span className="ml-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">Default</span>
                     )}
-                    <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Local</span>
+                    {isVaultCloudSynced(vault.id) ? (
+                      <span className="ml-auto text-xs text-blue-500 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">Synced</span>
+                    ) : (
+                      <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Local</span>
+                    )}
                   </div>
                   {errors[vault.id] && (
                     <p className="text-destructive text-sm mb-2">{errors[vault.id]}</p>
@@ -344,11 +353,15 @@ export default function VaultPickerPage() {
             </Button>
           )}
 
-          {/* Cloud vaults section */}
-          {cloudVaults.length > 0 ? (
+          {/* Cloud vaults section — only show vaults NOT already in the local registry.
+               Locally registered cloud vaults appear above with a "Synced" badge instead.
+               If all cloud vaults are local, skip this section entirely (no empty state needed). */}
+          {(() => {
+            const remoteOnly = cloudVaults.filter(cv => !vaults.some(v => v.id === cv.vaultId));
+            if (remoteOnly.length > 0) return (
             <div className="space-y-4 mb-6">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cloud Vaults</p>
-              {cloudVaults.map(cv => (
+              {remoteOnly.map(cv => (
                 <div key={cv.vaultId} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Cloud className="w-5 h-5 text-blue-500" />
@@ -393,7 +406,11 @@ export default function VaultPickerPage() {
                 </div>
               ))}
             </div>
-          ) : (
+          );
+            // All cloud vaults are already in local registry — no separate Cloud section needed
+            if (cloudVaults.length > 0) return null;
+            // Genuinely no cloud vaults — show empty state / upgrade prompt
+            return (
             <div className="rounded-xl border border-dashed border-border/50 bg-muted/30 p-5 text-center mb-4">
               <Cloud className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
               {license.tier === 'free' ? (
@@ -414,7 +431,8 @@ export default function VaultPickerPage() {
                 </>
               )}
             </div>
-          )}
+            );
+          })()}
         </div>
       </main>
     </div>

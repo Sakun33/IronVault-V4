@@ -11,6 +11,10 @@ export class VaultStorage {
   private maxFailedAttempts: number = 3;
   private lastFailedAttempt: number = 0;
   private lockoutDuration: number = 5 * 60 * 1000; // 5 minutes
+  // Suppresses vault:item:saved events during bulk import/replace operations.
+  // Without this flag, each item saved during replaceVaultFromBlob triggers the
+  // auto-sync push handler, causing a wasteful push immediately after every pull.
+  private isBulkImporting = false;
 
   // Public method to get database
   getDatabase(): IDBDatabase | undefined {
@@ -114,6 +118,30 @@ export class VaultStorage {
         reject(new Error('Failed to delete database'));
       };
     });
+  }
+
+  /**
+   * Derive an extractable copy of the vault encryption key using the master password.
+   * Used for family vault key sharing — the default key is non-extractable.
+   *
+   * @param masterPassword - Owner's master password (verified against vault data)
+   */
+  async deriveExtractableVaultKey(masterPassword: string): Promise<CryptoKey> {
+    if (!this.encryptionKey) throw new Error('Vault not unlocked');
+    const metadata = await this.getMetadata();
+    if (!metadata) throw new Error('Vault metadata not found');
+    const salt = CryptoService.base64ToUint8Array(metadata.encryptionSalt);
+    const kdfConfig = metadata.kdfConfig || CryptoService.KDF_PRESETS.standard;
+    // Re-derive with extractable=true for key export
+    return CryptoService.deriveKeyWithConfig(masterPassword, salt, kdfConfig, true);
+  }
+
+  /**
+   * Return the vault ID (database name) for the current vault.
+   * Used to identify which vault is being shared.
+   */
+  getCurrentVaultId(): string {
+    return this.dbName;
   }
 
   // Reset all internal state for full vault reset
@@ -449,10 +477,17 @@ export class VaultStorage {
     });
   }
 
-  // Replace vault contents from an encrypted cloud blob (clear then re-import)
+  // Replace vault contents from an encrypted cloud blob (clear then re-import).
+  // Sets isBulkImporting so individual item saves don't fire vault:item:saved,
+  // which would trigger a cloud push immediately after every pull.
   async replaceVaultFromBlob(encryptedBlob: string, masterPassword: string): Promise<void> {
-    await this.clearEncryptedItems();
-    await this.importVault(encryptedBlob, masterPassword);
+    this.isBulkImporting = true;
+    try {
+      await this.clearEncryptedItems();
+      await this.importVault(encryptedBlob, masterPassword);
+    } finally {
+      this.isBulkImporting = false;
+    }
   }
 
   // Save metadata
@@ -502,10 +537,12 @@ export class VaultStorage {
       const request = store.put({ ...encryptedEntry, store: storeName });
 
       request.onsuccess = () => {
-        // Don't trigger sync for internal/metadata stores — they are written
-        // during export itself (saveBackupMetadata), which would create an
-        // infinite push loop: save → export → saveBackupMetadata → vault:item:saved → export → …
-        if (storeName !== 'persistent_data') {
+        // Don't trigger sync for:
+        // 1. Internal stores (persistent_data) — written during export, would cause
+        //    an infinite push loop: save → export → saveBackupMetadata → vault:item:saved → …
+        // 2. Bulk import/replace operations — each imported item would queue a push,
+        //    causing a spurious upload immediately after every cloud pull.
+        if (storeName !== 'persistent_data' && !this.isBulkImporting) {
           window.dispatchEvent(new CustomEvent('vault:item:saved'));
         }
         resolve();

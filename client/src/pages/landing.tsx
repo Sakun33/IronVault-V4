@@ -196,7 +196,7 @@ function HeroSection() {
   return (
     <section
       id="main-content"
-      className="relative min-h-[100dvh] flex items-center pt-24 pb-20 md:pt-32 md:pb-28 overflow-hidden"
+      className="relative h-full flex items-center pt-4 pb-4 overflow-hidden"
       aria-label="Hero"
     >
       {/* Gradient bg */}
@@ -245,15 +245,6 @@ function HeroSection() {
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
-              <Link href="/auth/login">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:w-auto text-base font-medium px-6"
-                >
-                  Log In
-                </Button>
-              </Link>
               <a
                 href="https://play.google.com/store/apps/details?id=com.bytebookpro.ironvault"
                 target="_blank"
@@ -261,7 +252,7 @@ function HeroSection() {
                 id="download"
               >
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="lg"
                   className="w-full sm:w-auto text-base font-medium px-6"
                 >
@@ -1191,15 +1182,13 @@ function QuickLinksGrid() {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+// Single-viewport hero only. Features/pricing/FAQ live on their own routes.
 export default function LandingPage() {
   return (
-    <div className="bg-background text-foreground">
+    <div className="h-[100dvh] overflow-hidden flex flex-col bg-background text-foreground">
       <LandingNav />
-      <main>
+      <main className="flex-1 overflow-hidden">
         <HeroSection />
-        <TrustStrip />
-        <QuickLinksGrid />
-        <CTABand />
       </main>
       <LandingFooter />
     </div>
