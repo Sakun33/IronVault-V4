@@ -265,6 +265,13 @@ function HeroSection() {
             <motion.p variants={fadeUp} className="text-sm text-muted-foreground">
               Free forever · No credit card required · Available on Android & Web
             </motion.p>
+
+            <motion.p variants={fadeUp} className="text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <Link href="/auth/login" className="text-primary font-medium hover:underline underline-offset-2">
+                Log in
+              </Link>
+            </motion.p>
           </motion.div>
 
           {/* App mockup */}
@@ -1181,16 +1188,45 @@ function QuickLinksGrid() {
   );
 }
 
+// ─── Minimal footer (landing only) ───────────────────────────────────────────
+function LandingMinimalFooter() {
+  return (
+    <footer
+      className="shrink-0 border-t border-border/40 py-3 px-4"
+      aria-label="Site footer"
+    >
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>© 2026 ByteBook Pro · Made in India 🇮🇳</span>
+        <div className="flex items-center gap-4">
+          <Link href="/privacy">
+            <span className="hover:text-foreground transition-colors cursor-pointer">Privacy</span>
+          </Link>
+          <Link href="/terms">
+            <span className="hover:text-foreground transition-colors cursor-pointer">Terms</span>
+          </Link>
+          <Link href="/security">
+            <span className="hover:text-foreground transition-colors cursor-pointer">Security</span>
+          </Link>
+          <a href="mailto:support@ironvault.app" className="hover:text-foreground transition-colors">
+            Contact
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 // Single-viewport hero only. Features/pricing/FAQ live on their own routes.
 export default function LandingPage() {
   return (
     <div className="h-[100dvh] overflow-hidden flex flex-col bg-background text-foreground">
       <LandingNav />
-      <main className="flex-1 overflow-hidden">
+      {/* pt-16 offsets the fixed nav (h-16 = 64px) so hero content isn't hidden behind it */}
+      <main className="flex-1 overflow-hidden pt-16">
         <HeroSection />
       </main>
-      <LandingFooter />
+      <LandingMinimalFooter />
     </div>
   );
 }
