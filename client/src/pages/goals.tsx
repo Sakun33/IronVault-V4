@@ -796,8 +796,9 @@ export default function Goals() {
             >
               <Calculator className="w-4 h-4" />
             </Button>
-            <Button size="icon" onClick={() => setShowAddModal(true)} className="h-9 w-9" title="Add Goal">
+            <Button onClick={() => setShowAddModal(true)} className="h-9 flex items-center gap-1">
               <Plus className="w-4 h-4" />
+              <span>Add Goal</span>
             </Button>
           </div>
         </div>
