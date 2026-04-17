@@ -48,50 +48,32 @@ const stagger: Variants = {
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 function LandingNav() {
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 12);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
 
   const navLinks = [
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
     { label: "Security", href: "/security" },
     { label: "FAQ", href: "/faq" },
-    { label: "Download", href: "#download" },
   ];
 
   return (
-    <header
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-background/80 backdrop-blur-xl border-b border-border/60 shadow-sm"
-          : "bg-transparent"
-      }`}
-    >
-      {/* Skip to content */}
+    <header className="fixed top-0 inset-x-0 z-50 border-b border-white/10 backdrop-blur-xl bg-slate-900/70">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-lg focus:outline-none"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:outline-none"
       >
         Skip to content
       </a>
-
       <nav
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+        className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between"
         aria-label="Main navigation"
       >
         {/* Logo */}
         <Link href="/" aria-label="IronVault home">
-          <span className="flex items-center gap-2.5 group">
-            <AppLogo size={32} />
-            <span className="text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">
-              IronVault
-            </span>
+          <span className="flex items-center gap-2.5">
+            <AppLogo size={28} />
+            <span className="text-base font-bold text-white tracking-tight">IronVault</span>
           </span>
         </Link>
 
@@ -99,35 +81,33 @@ function LandingNav() {
         <ul className="hidden md:flex items-center gap-7" role="list">
           {navLinks.map((link) => (
             <li key={link.href}>
-              {link.href.startsWith('#') ? (
-                <a
-                  href={link.href}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-                >
-                  {link.label}
-                </a>
-              ) : (
-                <Link
-                  href={link.href}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-                >
-                  {link.label}
-                </Link>
-              )}
+              <Link
+                href={link.href}
+                className="text-sm font-medium text-slate-400 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              >
+                {link.label}
+              </Link>
             </li>
           ))}
         </ul>
 
-        {/* CTA buttons */}
+        {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-3">
           <SimpleThemeToggle />
           <Link href="/auth/login">
-            <Button variant="ghost" size="sm" className="font-medium">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-300 hover:text-white hover:bg-white/10 font-medium border-0"
+            >
               Log in
             </Button>
           </Link>
           <Link href="/auth/signup">
-            <Button size="sm" className="font-medium">
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold border-0 shadow-lg shadow-blue-500/20"
+            >
               Get started free
             </Button>
           </Link>
@@ -140,47 +120,44 @@ function LandingNav() {
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </nav>
 
-      {/* Mobile menu */}
+      {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border/60 px-4 pb-5 pt-2">
-          <ul className="space-y-1" role="list">
+        <div className="md:hidden bg-slate-900/98 backdrop-blur-xl border-b border-white/10 px-5 pb-5 pt-2">
+          <ul className="space-y-1 mb-4" role="list">
             {navLinks.map((link) => (
               <li key={link.href}>
-                {link.href.startsWith('#') ? (
-                  <a
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  >
-                    {link.label}
-                  </a>
-                ) : (
-                  <Link
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full text-left px-3 min-h-[44px] flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                )}
+                <Link
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-3 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+                >
+                  {link.label}
+                </Link>
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <Link href="/auth/login">
-              <Button variant="outline" className="w-full" onClick={() => setMobileOpen(false)}>
+              <Button
+                variant="outline"
+                className="w-full border-white/20 text-slate-200 hover:bg-white/10 hover:text-white"
+                onClick={() => setMobileOpen(false)}
+              >
                 Log in
               </Button>
             </Link>
             <Link href="/auth/signup">
-              <Button className="w-full" onClick={() => setMobileOpen(false)}>
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold border-0"
+                onClick={() => setMobileOpen(false)}
+              >
                 Get started free
               </Button>
             </Link>
@@ -193,165 +170,88 @@ function LandingNav() {
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 function HeroSection() {
+  const trust = [
+    { icon: Shield, text: "AES-256-GCM encryption" },
+    { icon: RefreshCw, text: "Cross-device sync" },
+    { icon: Lock, text: "Free forever" },
+  ];
+
   return (
     <section
       id="main-content"
-      className="relative h-full flex items-center pt-4 pb-4 overflow-hidden"
+      className="flex-1 flex flex-col items-center justify-center px-5 text-center"
       aria-label="Hero"
     >
-      {/* Gradient bg */}
-      <div
-        className="absolute inset-0 -z-10 pointer-events-none"
-        aria-hidden="true"
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="visible"
+        className="w-full max-w-2xl space-y-7"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-background dark:from-primary/15" />
-        <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-violet-500/5 rounded-full blur-3xl" />
-      </div>
+        {/* Badge */}
+        <motion.div variants={fadeUp}>
+          <span className="inline-flex items-center gap-2 bg-blue-500/15 text-blue-400 text-xs font-semibold px-3.5 py-1.5 rounded-full border border-blue-500/25 tracking-wide uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" aria-hidden="true" />
+            Zero-knowledge · End-to-end encrypted
+          </span>
+        </motion.div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-          {/* Copy */}
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="visible"
-            className="space-y-8"
-          >
-            <motion.div variants={fadeUp}>
-              <Badge variant="secondary" className="mb-4 text-xs font-semibold tracking-wide uppercase">
-                Zero-knowledge · Open-source crypto
-              </Badge>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
-                Your passwords,{" "}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-500">
-                  finances, and secrets
-                </span>{" "}
-                — vaulted.
-              </h1>
-            </motion.div>
+        {/* Headline */}
+        <motion.h1
+          variants={fadeUp}
+          className="text-[2.5rem] leading-[1.1] sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight"
+        >
+          Your Secrets.<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-300 to-violet-400">
+            Zero-Knowledge Encrypted.
+          </span>
+        </motion.h1>
 
-            <motion.p
-              variants={fadeUp}
-              className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-xl"
+        {/* Subheadline */}
+        <motion.p
+          variants={fadeUp}
+          className="text-base sm:text-lg text-slate-400 leading-relaxed max-w-md mx-auto"
+        >
+          The vault that protects your passwords, finances, and documents with military-grade encryption. Your master password never leaves your device.
+        </motion.p>
+
+        {/* Primary CTA */}
+        <motion.div variants={fadeUp} className="flex flex-col items-center gap-3">
+          <Link href="/auth/signup" className="w-full sm:w-auto">
+            <Button
+              size="lg"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-base px-8 h-12 rounded-xl shadow-xl shadow-blue-500/30 transition-all duration-200 hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.99] border-0"
             >
-              IronVault protects everything that matters — passwords, bank statements, subscriptions, secure notes, and investments — with zero-knowledge encryption, cross-device sync, and family sharing. Your master password never leaves your device.
-            </motion.p>
+              Get started free
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+          <p className="text-sm text-slate-500">
+            Already have an account?{" "}
+            <Link
+              href="/auth/login"
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors font-medium"
+            >
+              Log in
+            </Link>
+          </p>
+        </motion.div>
 
-            <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-3">
-              <Link href="/auth/signup">
-                <Button size="lg" className="w-full sm:w-auto text-base font-semibold px-6">
-                  Get started free
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <a
-                href="https://play.google.com/store/apps/details?id=com.bytebookpro.ironvault"
-                target="_blank"
-                rel="noopener noreferrer"
-                id="download"
-              >
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:w-auto text-base font-medium px-6"
-                >
-                  <Smartphone className="mr-2 w-4 h-4" />
-                  Download for Android
-                </Button>
-              </a>
-            </motion.div>
-
-            <motion.p variants={fadeUp} className="text-sm text-muted-foreground">
-              Free forever · No credit card required · Available on Android & Web
-            </motion.p>
-
-            <motion.p variants={fadeUp} className="text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/auth/login" className="text-primary font-medium hover:underline underline-offset-2">
-                Log in
-              </Link>
-            </motion.p>
-          </motion.div>
-
-          {/* App mockup */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-            className="relative"
-            aria-hidden="true"
+        {/* Trust strip */}
+        <motion.div variants={fadeUp}>
+          <ul
+            className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-8 text-sm text-slate-500"
+            role="list"
           >
-            <div className="relative mx-auto max-w-sm lg:max-w-none">
-              {/* Glow */}
-              <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-violet-500/20 rounded-3xl blur-2xl" />
-              {/* Phone frame */}
-              <div className="relative bg-card border border-border/60 rounded-[2rem] shadow-2xl overflow-hidden">
-                {/* Status bar */}
-                <div className="bg-muted/50 px-6 py-3 flex items-center justify-between border-b border-border/40">
-                  <div className="flex items-center gap-2">
-                    <AppLogo size={20} />
-                    <span className="text-sm font-bold text-foreground">IronVault</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-muted-foreground">Encrypted</span>
-                  </div>
-                </div>
-
-                {/* Mock dashboard */}
-                <div className="p-4 space-y-3 bg-background">
-                  {/* Stats row */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: "Passwords", value: "247", color: "text-primary" },
-                      { label: "Subscriptions", value: "12", color: "text-purple-500" },
-                      { label: "Notes", value: "38", color: "text-orange-500" },
-                    ].map((s) => (
-                      <div key={s.label} className="bg-muted/50 rounded-xl p-2.5 text-center">
-                        <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
-                        <div className="text-[10px] text-muted-foreground">{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Recent items */}
-                  <div className="space-y-2">
-                    {[
-                      { icon: Key, label: "GitHub", sub: "github.com", color: "bg-primary/10 text-primary" },
-                      { icon: Bookmark, label: "Spotify", sub: "₹119/mo · renews in 14d", color: "bg-purple-500/10 text-purple-500" },
-                      { icon: FileText, label: "Server passwords", sub: "Secure note", color: "bg-orange-500/10 text-orange-500" },
-                      { icon: Building2, label: "HDFC Statement", sub: "Feb 2026 · OCR done", color: "bg-indigo-500/10 text-indigo-500" },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center gap-3 bg-muted/30 rounded-xl px-3 py-2.5"
-                      >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.color}`}>
-                          <item.icon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-foreground truncate">{item.label}</div>
-                          <div className="text-[10px] text-muted-foreground truncate">{item.sub}</div>
-                        </div>
-                        <Lock className="ml-auto w-3 h-3 text-muted-foreground/40 shrink-0" />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Encryption badge */}
-                  <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2">
-                    <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                      Vault sealed · PBKDF2 + AES-256-GCM
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
+            {trust.map((t) => (
+              <li key={t.text} className="flex items-center gap-2">
+                <t.icon className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
+                {t.text}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
@@ -1192,22 +1092,22 @@ function QuickLinksGrid() {
 function LandingMinimalFooter() {
   return (
     <footer
-      className="shrink-0 border-t border-border/40 py-3 px-4"
+      className="shrink-0 border-t border-white/10 py-4 px-5"
       aria-label="Site footer"
     >
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
         <span>© 2026 ByteBook Pro · Made in India 🇮🇳</span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           <Link href="/privacy">
-            <span className="hover:text-foreground transition-colors cursor-pointer">Privacy</span>
+            <span className="hover:text-slate-400 transition-colors cursor-pointer">Privacy</span>
           </Link>
           <Link href="/terms">
-            <span className="hover:text-foreground transition-colors cursor-pointer">Terms</span>
+            <span className="hover:text-slate-400 transition-colors cursor-pointer">Terms</span>
           </Link>
           <Link href="/security">
-            <span className="hover:text-foreground transition-colors cursor-pointer">Security</span>
+            <span className="hover:text-slate-400 transition-colors cursor-pointer">Security</span>
           </Link>
-          <a href="mailto:support@ironvault.app" className="hover:text-foreground transition-colors">
+          <a href="mailto:support@ironvault.app" className="hover:text-slate-400 transition-colors">
             Contact
           </a>
         </div>
@@ -1217,13 +1117,13 @@ function LandingMinimalFooter() {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-// Single-viewport hero only. Features/pricing/FAQ live on their own routes.
+// Single-viewport landing. Sub-pages (/features /pricing /security /faq) have their own layouts.
 export default function LandingPage() {
   return (
-    <div className="h-[100dvh] overflow-hidden flex flex-col bg-background text-foreground">
+    <div className="h-[100dvh] overflow-hidden flex flex-col bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
       <LandingNav />
-      {/* pt-16 offsets the fixed nav (h-16 = 64px) so hero content isn't hidden behind it */}
-      <main className="flex-1 overflow-hidden pt-16">
+      {/* pt-16 = fixed nav height so hero content clears the nav */}
+      <main className="pt-16 flex-1 flex flex-col overflow-hidden">
         <HeroSection />
       </main>
       <LandingMinimalFooter />
