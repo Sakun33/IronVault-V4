@@ -15,10 +15,26 @@ function getPool(): Pool {
   return pool;
 }
 
+const ALLOWED_ORIGINS = [
+  'https://www.ironvault.app',
+  'https://ironvault.app',
+];
+
+function stripHtml(str: string): string {
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin as string | undefined;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (!origin) {
+    // Same-origin or server-to-server requests (no Origin header)
+    res.setHeader("Access-Control-Allow-Origin", "https://www.ironvault.app");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-api-key");
+  res.setHeader("Vary", "Origin");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const path = (req.url || "").replace(/\?.*$/, "");
@@ -43,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/crm/register" && req.method === "POST") {
     const { email, fullName, country, platform, appVersion, planType } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
+    const safeFullName = fullName ? stripHtml(String(fullName)) : null;
 
     try {
       const { rows } = await db.query(
@@ -55,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            app_version = EXCLUDED.app_version,
            updated_at = NOW()
          RETURNING id, email, plan_type`,
-        [email, fullName || null, country || null, platform || null, appVersion || null, planType || "free"]
+        [email, safeFullName, country || null, platform || null, appVersion || null, planType || "free"]
       );
       const row = rows[0];
       return res.json({ success: true, message: "Registration received", email, plan: row.plan_type, id: row.id });
@@ -131,6 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/crm/tickets" && req.method === "POST") {
     const { email, subject, description, priority } = req.body || {};
     if (!email || !subject) return res.status(400).json({ error: "email and subject required" });
+    const safeSubject = stripHtml(String(subject));
+    const safeDescription = description ? stripHtml(String(description)) : null;
     try {
       // Look up customer_id (optional — ticket can exist without a customer row)
       const { rows: cRows } = await db.query(
@@ -141,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [customerId, email, subject, description || null, priority || "normal"]
+        [customerId, email, safeSubject, safeDescription, priority || "normal"]
       );
       return res.json({ success: true, ticket: rows[0] });
     } catch (err: any) {

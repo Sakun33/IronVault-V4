@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Lock, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, Gamepad2, ShoppingBag, Building2, Plane, Heart, GraduationCap } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +35,7 @@ export default function Passwords() {
   const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // Password Templates - More practical with pre-filled URLs
   const PASSWORD_TEMPLATES = [
@@ -158,9 +160,14 @@ export default function Passwords() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
     try {
-      await deletePassword(id);
+      await deletePassword(deleteTargetId);
       toast({
         title: "Deleted",
         description: "Password deleted successfully",
@@ -171,6 +178,8 @@ export default function Passwords() {
         description: "Failed to delete password",
         variant: "destructive",
       });
+    } finally {
+      setDeleteTargetId(null);
     }
   };
 
@@ -437,6 +446,23 @@ export default function Passwords() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete password?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the password. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

@@ -40,10 +40,17 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   const hasSyncedFromServer = useRef(false);
 
   useEffect(() => {
-    loadLicense().then(() => {
-      // After loading local license, sync from server to pick up admin changes
-      syncFromServer();
-    });
+    // Vault starts locked — loadLicense will get null from encrypted storage and use
+    // default free plan. The second effect (below) re-runs after unlock with real data.
+    // Only attempt the initial load if vault is already unlocked (e.g. biometric resume).
+    if (isUnlocked) {
+      loadLicense().then(() => {
+        syncFromServer();
+      });
+    } else {
+      // Vault is locked — skip encrypted read, just mark loading done.
+      setIsLoading(false);
+    }
 
     if (isNativePlatform()) {
       syncEntitlements();
