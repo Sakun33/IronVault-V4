@@ -9,9 +9,18 @@
 
 ## APK
 - Built: `android/app/build/outputs/apk/debug/app-debug.apk` ✅
+- Rebuilt: 2026-04-17 with @aparajita/capacitor-biometric-auth@9.1.2
 - Install: `adb install -r <path>` — device not connected; install manually
 
-## All bugs fixed — RELEASE READY ✅
+## Latest session — three features shipped
+
+| Bug | Title | Status |
+|-----|-------|--------|
+| BUG-052 | Family vault cryptographic key exchange | BUILT ✅ (device test pending) |
+| BUG-053 | Argon2id → PBKDF2-SHA256 copy fix | LIVE ✅ |
+| BUG-054 | Biometric plugin Capacitor 7 upgrade | APK ✅ (device install pending) |
+
+## Previous bugs (still live)
 
 | Bug | Title | Status |
 |-----|-------|--------|
@@ -20,11 +29,6 @@
 | BUG-049 | License-context mount race (Encryption key not set) | LIVE ✅ |
 | BUG-050 | Stored XSS in ticket description API | LIVE ✅ |
 | BUG-051 | CORS allow-origin: * | LIVE ✅ |
-
-## Previous deploy bugs (still live)
-
-| Bug | Title | Status |
-|-----|-------|--------|
 | BUG-041 | CRUD persistence broken (prev session) | LIVE ✅ |
 | BUG-042 | Android text overlapping (vh→svh) | LIVE ✅ |
 | BUG-043 | Landing page too scrollable | LIVE ✅ |
@@ -36,7 +40,8 @@
 
 | Item | Notes |
 |------|-------|
-| Android APK install (BUG-045/046/042) | Requires physical device; `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` |
+| Android APK install (BUG-052/054/045/046/042) | Requires physical device |
+| Family vault sharing e2e test | Needs two accounts on device |
 | iOS PWA | Roadmap: late 2026 |
 
 ## Release verdict

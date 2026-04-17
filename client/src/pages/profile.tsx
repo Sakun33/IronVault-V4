@@ -91,6 +91,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useLicense } from '@/contexts/license-context';
 import { useLocation } from 'wouter';
 import { CryptoService } from '@/lib/crypto';
+import { vaultStorage } from '@/lib/storage';
 import { VaultManagementSection } from '@/components/vault-management-section';
 import { vaultManager } from '@/lib/vault-manager';
 import { TwoFactorAuth } from '@/components/two-factor-auth';
@@ -191,6 +192,14 @@ export default function Profile() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [invitesLoading, setInvitesLoading] = useState(false);
+  // Key exchange dialogs
+  const [showInviteCodeDialog, setShowInviteCodeDialog] = useState(false);
+  const [generatedInviteCode, setGeneratedInviteCode] = useState('');
+  const [showAcceptCodeDialog, setShowAcceptCodeDialog] = useState<string | null>(null); // invite id
+  const [enteredInviteCode, setEnteredInviteCode] = useState('');
+  const [invitePasswordForExport, setInvitePasswordForExport] = useState('');
+  const [showPasswordForExportDialog, setShowPasswordForExportDialog] = useState(false);
+  const [pendingInviteEmail, setPendingInviteEmail] = useState('');
 
   // FAQ expand state
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
@@ -251,29 +260,65 @@ export default function Profile() {
 
   useEffect(() => { loadFamilyInvites(); }, [loadFamilyInvites]);
 
-  const handleSendInvite = async () => {
+  const handleSendInvite = () => {
     if (!inviteEmail.trim()) return;
+    // Ask for master password first so we can derive an extractable vault key
+    setPendingInviteEmail(inviteEmail.trim());
+    setInvitePasswordForExport('');
+    setShowPasswordForExportDialog(true);
+  };
+
+  const handlePasswordForExportSubmit = async () => {
+    if (!invitePasswordForExport || !pendingInviteEmail) return;
     setInviteLoading(true);
+    setShowPasswordForExportDialog(false);
     try {
+      // Re-derive the vault key in extractable form using master password
+      const extractableKey = await vaultStorage.deriveExtractableVaultKey(invitePasswordForExport);
+
+      // Generate a one-time invite code and encrypt the vault key with it
+      const code = CryptoService.generateInviteCode();
+      const blob = await CryptoService.encryptVaultKeyForInvite(extractableKey, code);
+      const codeHash = await CryptoService.hashData(code.replace(/-/g, ''));
+
+      const vaultId = vaultStorage.getCurrentVaultId();
+
       const res = await fetch('/api/crm/family-invites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerEmail: userProfile.email, inviteeEmail: inviteEmail.trim() }),
+        body: JSON.stringify({
+          ownerEmail: userProfile.email,
+          inviteeEmail: pendingInviteEmail,
+          vaultShareId: vaultId,
+          vaultName: vaultId,
+          encryptedKeyBlob: blob,
+          inviteCodeHash: codeHash,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         toast({ title: 'Invite failed', description: data.error || 'Could not send invite', variant: 'destructive' });
       } else {
-        toast({ title: 'Invite sent', description: `Invite sent to ${inviteEmail.trim()}` });
         setInviteEmail('');
+        setGeneratedInviteCode(code);
+        setShowInviteCodeDialog(true);
         loadFamilyInvites();
       }
-    } catch {
-      toast({ title: 'Error', description: 'Network error sending invite', variant: 'destructive' });
-    } finally { setInviteLoading(false); }
+    } catch (err: any) {
+      toast({ title: 'Invite failed', description: err?.message || 'Could not encrypt vault key', variant: 'destructive' });
+    } finally {
+      setInviteLoading(false);
+      setInvitePasswordForExport('');
+    }
   };
 
   const handleUpdateInvite = async (id: string, status: 'accepted' | 'declined' | 'revoked') => {
+    if (status === 'accepted') {
+      // Show the enter-code dialog; actual PATCH happens in handleAcceptWithCode
+      setEnteredInviteCode('');
+      setShowAcceptCodeDialog(id);
+      return;
+    }
     try {
       const res = await fetch(`/api/crm/family-invites/${id}`, {
         method: 'PATCH',
@@ -285,6 +330,41 @@ export default function Profile() {
         loadFamilyInvites();
       }
     } catch { /* ignore */ }
+  };
+
+  const handleAcceptWithCode = async () => {
+    const id = showAcceptCodeDialog;
+    if (!id || !enteredInviteCode.trim()) return;
+    setInviteLoading(true);
+    setShowAcceptCodeDialog(null);
+    try {
+      const codeHash = await CryptoService.hashData(enteredInviteCode.trim().replace(/-/g, ''));
+      const res = await fetch(`/api/crm/family-invites/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'accepted', inviteCodeHash: codeHash }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Accept failed', description: data.error || 'Invalid invite code', variant: 'destructive' });
+        return;
+      }
+      // Decrypt the vault key blob and store it so vault picker can load shared vault
+      const blob: string | null = data.encryptedKeyBlob ?? null;
+      if (blob) {
+        const rawKeyB64 = await CryptoService.decryptVaultKeyFromInvite(blob, enteredInviteCode.trim());
+        localStorage.setItem(`ironvault_shared_key_${id}`, rawKeyB64);
+        toast({ title: 'Vault access granted', description: 'Shared vault key stored. You can now access the shared vault.' });
+      } else {
+        toast({ title: 'Invite accepted', description: 'Invite accepted. No key blob was attached.' });
+      }
+      loadFamilyInvites();
+    } catch (err: any) {
+      toast({ title: 'Accept failed', description: err?.message || 'Wrong invite code or network error', variant: 'destructive' });
+    } finally {
+      setInviteLoading(false);
+      setEnteredInviteCode('');
+    }
   };
 
   const handleBiometricToggle = async (enabled: boolean) => {
@@ -2296,6 +2376,116 @@ export default function Profile() {
               </Button>
               <Button onClick={handleChangePasscode} disabled={!currentPasscode || !newPasscode || !confirmNewPasscode} className="flex-1">
                 Change Passcode
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password confirmation before generating family invite */}
+      <Dialog open={showPasswordForExportDialog} onOpenChange={open => { setShowPasswordForExportDialog(open); if (!open) setInvitePasswordForExport(''); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5" />
+              Confirm Master Password
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Enter your master password to generate a secure invite code. IronVault will encrypt your vault key with it — your password is never sent anywhere.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="exportPassword">Master password</Label>
+              <Input
+                id="exportPassword"
+                type="password"
+                placeholder="Enter your master password"
+                value={invitePasswordForExport}
+                onChange={e => setInvitePasswordForExport(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handlePasswordForExportSubmit()}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setShowPasswordForExportDialog(false); setInvitePasswordForExport(''); }} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handlePasswordForExportSubmit} disabled={!invitePasswordForExport || inviteLoading} className="flex-1">
+                Generate Invite Code
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Show generated invite code to vault owner */}
+      <Dialog open={showInviteCodeDialog} onOpenChange={setShowInviteCodeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="w-5 h-5" />
+              Invite Code
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Share this one-time code with <strong>{pendingInviteEmail}</strong> via a secure channel (e.g. Signal, in person). They'll need it to access the shared vault.
+            </p>
+            <div className="p-4 bg-muted rounded-lg text-center">
+              <p className="font-mono text-xl tracking-widest font-bold select-all">{generatedInviteCode}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { navigator.clipboard.writeText(generatedInviteCode); toast({ title: 'Copied', description: 'Invite code copied to clipboard' }); }}
+              >
+                <Copy className="w-4 h-4 mr-1" />
+                Copy
+              </Button>
+              <Button onClick={() => setShowInviteCodeDialog(false)} className="flex-1">
+                Done
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              This code is shown only once and cannot be recovered. The invitee has 48 hours to use it.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invitee enters invite code to decrypt and store shared vault key */}
+      <Dialog open={!!showAcceptCodeDialog} onOpenChange={open => { if (!open) { setShowAcceptCodeDialog(null); setEnteredInviteCode(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5" />
+              Enter Invite Code
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Enter the invite code shared by the vault owner. It looks like <span className="font-mono">XXXX-XXXX-XXXX-XXXX</span>.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="inviteCodeInput">Invite code</Label>
+              <Input
+                id="inviteCodeInput"
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                value={enteredInviteCode}
+                onChange={e => setEnteredInviteCode(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && handleAcceptWithCode()}
+                className="font-mono tracking-wider"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setShowAcceptCodeDialog(null); setEnteredInviteCode(''); }} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleAcceptWithCode} disabled={!enteredInviteCode.trim() || inviteLoading} className="flex-1">
+                Unlock Shared Vault
               </Button>
             </div>
           </div>

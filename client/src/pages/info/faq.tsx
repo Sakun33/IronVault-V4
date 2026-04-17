@@ -9,7 +9,7 @@ import {
 const faqs = [
   {
     q: "Is IronVault really zero-knowledge?",
-    a: "Yes. Your master password is used to derive an encryption key on your device using Argon2id. The raw password is never transmitted. All vault data is encrypted with AES-256-GCM before leaving your device — our servers only ever see ciphertext. We have no way to read your data, even with a court order.",
+    a: "Yes. Your master password is used to derive an encryption key on your device using PBKDF2-SHA256 (600,000+ iterations). The raw password is never transmitted. All vault data is encrypted with AES-256-GCM before leaving your device — our servers only ever see ciphertext. We have no way to read your data, even with a court order.",
   },
   {
     q: "What happens if I forget my master password?",
@@ -33,7 +33,7 @@ const faqs = [
   },
   {
     q: "Is IronVault open source?",
-    a: "The cryptographic primitives (Argon2id key derivation, AES-256-GCM encryption, PBKDF2 fallback) are implemented using the Web Crypto API — an open, auditable browser standard. The app source code is proprietary but built on open-source libraries. We plan to open-source the client-side crypto module for independent audit.",
+    a: "The cryptographic primitives (PBKDF2-SHA256 key derivation with 600,000+ iterations, AES-256-GCM authenticated encryption) are implemented using the Web Crypto API — an open, auditable browser standard. The app source code is proprietary but built on open-source libraries. We plan to open-source the client-side crypto module for independent audit.",
   },
   {
     q: "What about Apple iOS?",
