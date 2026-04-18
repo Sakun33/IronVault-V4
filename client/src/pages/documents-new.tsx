@@ -59,8 +59,11 @@ const FILTER_OPTIONS: { value: FileCategory; label: string }[] = [
   { value: 'text', label: 'Text' },
 ];
 
+import { useSubscription } from '@/hooks/use-subscription';
+
 export default function DocumentsPage() {
   const { toast } = useToast();
+  const { isPro, getLimit } = useSubscription();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State
@@ -121,6 +124,18 @@ export default function DocumentsPage() {
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+
+    // Enforce free plan document limit (SRS: Free = 5 documents)
+    const docLimit = getLimit('documentLimit');
+    if (!isPro && documents.length >= docLimit) {
+      toast({
+        title: 'Document limit reached',
+        description: `Free plan allows up to ${docLimit} documents. Upgrade to Pro for unlimited.`,
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
 
     setImporting(true);
     setImportProgress({ stage: 'reading', progress: 0, message: 'Starting import...' });

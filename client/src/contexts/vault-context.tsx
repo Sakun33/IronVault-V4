@@ -91,6 +91,11 @@ interface VaultContextType {
   addInvestmentGoal: (goal: Omit<InvestmentGoal, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateInvestmentGoal: (id: string, updates: Partial<InvestmentGoal>) => Promise<void>;
   deleteInvestmentGoal: (id: string) => Promise<void>;
+  // API Keys CRUD (encrypted vault storage)
+  apiKeys: any[];
+  addApiKey: (key: any) => Promise<void>;
+  updateApiKey: (id: string, updates: any) => Promise<void>;
+  deleteApiKey: (id: string) => Promise<void>;
   importBankStatementsFromCSV: (csvContent: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -123,6 +128,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [investmentGoals, setInvestmentGoals] = useState<InvestmentGoal[]>([]);
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -218,7 +224,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       // Always refresh data to ensure we have the latest from storage
       console.log('VaultContext: Refreshing all data from storage...');
       
-      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData] = await Promise.all([
+      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
         vaultStorage.getAllNotes(),
@@ -228,6 +234,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllBankTransactions(),
         vaultStorage.getAllInvestments(),
         vaultStorage.getAllInvestmentGoals(),
+        vaultStorage.getAllApiKeys(),
       ]);
 
       console.log('VaultContext: Data loaded:', {
@@ -252,6 +259,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setBankTransactions(bankTransactionsData.map(hydrateDates));
       setInvestments(investmentsData.map(hydrateDates));
       setInvestmentGoals(investmentGoalsData.map(hydrateDates));
+      setApiKeys(apiKeysData.map(hydrateDates));
       
       // Log vault unlock activity
       addLog('Vault Unlocked', 'system', `Vault data loaded: ${passwordsData.length} passwords, ${subscriptionsData.length} subscriptions`);
@@ -603,6 +611,26 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     setInvestmentGoals(prev => prev.filter(ig => ig.id !== id));
   };
 
+  // ── API Keys CRUD ────────────────────────────────────────────────────────────
+  const addApiKey = async (key: any) => {
+    const newKey = { ...key, id: key.id || crypto.randomUUID(), createdAt: key.createdAt || new Date(), updatedAt: new Date() };
+    await vaultStorage.saveApiKey(newKey);
+    setApiKeys(prev => [...prev, newKey]);
+  };
+
+  const updateApiKey = async (id: string, updates: any) => {
+    const existing = apiKeys.find(k => k.id === id);
+    if (!existing) return;
+    const updated = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveApiKey(updated);
+    setApiKeys(prev => prev.map(k => k.id === id ? updated : k));
+  };
+
+  const deleteApiKeyFromVault = async (id: string) => {
+    await vaultStorage.deleteApiKey(id);
+    setApiKeys(prev => prev.filter(k => k.id !== id));
+  };
+
   const importBankStatementsFromCSV = async (csvContent: string) => {
     try {
       console.log('VaultContext: Starting bank statements import...');
@@ -752,6 +780,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addInvestmentGoal,
     updateInvestmentGoal,
     deleteInvestmentGoal,
+    apiKeys,
+    addApiKey,
+    updateApiKey,
+    deleteApiKey: deleteApiKeyFromVault,
     importBankStatementsFromCSV,
     exportVault,
     importVault,

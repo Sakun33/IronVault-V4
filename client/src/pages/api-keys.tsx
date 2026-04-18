@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
+import { useVault } from '@/contexts/vault-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -51,9 +52,9 @@ interface APIKey {
 
 export default function APIKeys() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { apiKeys, addApiKey, updateApiKey, deleteApiKey } = useVault();
 
   const { toast } = useToast();
-  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
@@ -82,32 +83,7 @@ export default function APIKeys() {
     tags: [] as string[],
   });
 
-  // Load API keys from localStorage (encrypted in production)
-  useEffect(() => {
-    const stored = localStorage.getItem('ironvault_api_keys');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setApiKeys(parsed.map((k: any) => ({
-          ...k,
-          createdAt: new Date(k.createdAt),
-          updatedAt: new Date(k.updatedAt),
-          lastUsed: k.lastUsed ? new Date(k.lastUsed) : undefined,
-        })));
-      } catch (error) {
-        console.error('Failed to load API keys:', error);
-      }
-    }
-  }, []);
-
-  // Save API keys to localStorage
-  const saveKeys = (keys: APIKey[]) => {
-    localStorage.setItem('ironvault_api_keys', JSON.stringify(keys));
-    setApiKeys(keys);
-  };
-
-
-  const handleAddKey = () => {
+  const handleAddKey = async () => {
     if (!formData.name || !formData.service || !formData.apiKey) {
       toast({
         title: "Error",
@@ -125,8 +101,8 @@ export default function APIKeys() {
       updatedAt: new Date(),
     };
 
-    saveKeys([...apiKeys, newKey]);
-    
+    await addApiKey(newKey);
+
     setFormData({
       name: '',
       service: '',
@@ -152,7 +128,7 @@ export default function APIKeys() {
     });
   };
 
-  const handleUpdateKey = () => {
+  const handleUpdateKey = async () => {
     if (!editingKey || !formData.name || !formData.service || !formData.apiKey) {
       toast({
         title: "Error",
@@ -162,15 +138,13 @@ export default function APIKeys() {
       return;
     }
 
-    const updated: APIKey = {
-      ...editingKey,
+    const updates = {
       ...formData,
       expiresAt: formData.expiresAt ? new Date(formData.expiresAt) : undefined,
-      updatedAt: new Date(),
     };
 
-    saveKeys(apiKeys.map(k => k.id === editingKey.id ? updated : k));
-    
+    await updateApiKey(editingKey.id, updates);
+
     setEditingKey(null);
     setShowAddModal(false);
     setFormData({
@@ -197,9 +171,9 @@ export default function APIKeys() {
     });
   };
 
-  const handleDeleteKey = (id: string, name: string) => {
+  const handleDeleteKey = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete "${name}"?`)) {
-      saveKeys(apiKeys.filter(k => k.id !== id));
+      await deleteApiKey(id);
       toast({
         title: "Deleted",
         description: "API key deleted successfully",

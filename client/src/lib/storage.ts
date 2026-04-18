@@ -776,6 +776,33 @@ export class VaultStorage {
     }
   }
 
+  // API Key methods — stored in encrypted_data with store='apiKeys', no IDB version bump needed
+  async saveApiKey(apiKey: any): Promise<void> {
+    await this.encryptAndStore('apiKeys', apiKey);
+  }
+
+  async getApiKey(id: string): Promise<any | undefined> {
+    return this.decryptAndRetrieve('apiKeys', id);
+  }
+
+  async getAllApiKeys(): Promise<any[]> {
+    return this.getAllEncrypted('apiKeys');
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => {
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Export vault data
   async exportVault(exportPassword: string): Promise<string> {
     console.log('📦 Starting vault export...');
