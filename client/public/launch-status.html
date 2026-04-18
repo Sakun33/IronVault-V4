@@ -212,40 +212,40 @@
   <div>
     <h1>🛡️ IronVault Launch Commander</h1>
     <div class="meta">
-      <span class="pulse"></span>Final QA Status · Play Store Submission: 2026-04-19
+      <span class="pulse"></span>DEEP PASS IN PROGRESS · Play Store Submission: 2026-04-19
     </div>
     <div class="meta" style="margin-top:4px">
       Deploy: <a href="https://www.ironvault.app" target="_blank">www.ironvault.app</a>
-      &nbsp;·&nbsp; Last updated: <strong>2026-04-18 (Phase 28 complete)</strong>
+      &nbsp;·&nbsp; Last updated: <strong>2026-04-18 (Deep Pass — GAPs 1–10 click verification)</strong>
     </div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <span class="badge badge-green">BUILD PASSING</span>
     <span class="badge badge-green">PROD LIVE</span>
-    <span class="badge badge-green">ALL 28 PHASES DONE</span>
+    <span class="badge badge-blue">DEEP PASS RUNNING</span>
   </div>
 </div>
 
 <!-- Verdict Banner -->
-<div class="verdict-banner">
-  <div class="verdict-icon">✅</div>
+<div class="verdict-banner" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.3)">
+  <div class="verdict-icon">🔍</div>
   <div class="verdict-text">
-    <h2>READY FOR PLAY STORE SUBMISSION</h2>
-    <p>All 28 QA phases complete · 56 bugs found and fixed · 0 open P0 blockers · All SRS functional requirements met · Security: XSS/CORS/SQLi all passing</p>
+    <h2 style="color:var(--accent)">DEEP PASS IN PROGRESS — REAL CLICK VERIFICATION</h2>
+    <p>Phase 28 declared done · User challenged surface-level coverage · Now doing real click verification across all 10 GAP areas before final Play Store submission · BUG-057..060 found and being fixed</p>
   </div>
 </div>
 
 <!-- Progress -->
 <div class="progress-wrap">
   <div class="progress-label">
-    <span>Overall Launch Readiness</span>
-    <span class="pct">100%</span>
+    <span>Overall Launch Readiness (Deep Pass)</span>
+    <span class="pct" style="color:var(--accent)">15%</span>
   </div>
   <div class="progress-bar">
-    <div class="progress-fill"></div>
+    <div class="progress-fill" style="width:15%;background:linear-gradient(90deg,#1d4ed8,#3b82f6)"></div>
   </div>
   <div class="progress-subtext">
-    28/28 phases complete · Latest deploy: ironvault-main · 56 bugs fixed across all sessions
+    1/10 deep-pass GAPs in progress · 28/28 original phases done · 58 bugs fixed · BUG-057..060 in current session
   </div>
 </div>
 
@@ -463,6 +463,84 @@
   </table>
 </div>
 
+<!-- Deep Pass GAPs -->
+<div class="section">
+  <div class="section-header">🔍 Deep Pass — Real Click Verification (GAPs 1–10)</div>
+  <table>
+    <thead>
+      <tr>
+        <th>GAP</th>
+        <th>Area</th>
+        <th>Status</th>
+        <th>Bugs Found</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td><td>Admin Console Full Walkthrough</td>
+        <td class="status-partial">🔄 IN PROGRESS</td>
+        <td>BUG-059, BUG-060</td>
+        <td style="color:var(--muted)">All 9 pages clicked · Plans show "Inactive" · Admin user shows Inactive+Never · Search ✅ · Plan fix ✅ (saketsuman→Lifetime)</td>
+      </tr>
+      <tr>
+        <td>2</td><td>Form Validation (every form)</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Empty submit · XSS input · special chars · max length</td>
+      </tr>
+      <tr>
+        <td>3</td><td>Free-Plan Enforcement</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">passwords=50 · notes=10 · subs=10 · reminders=10 · docs=5 · gated features</td>
+      </tr>
+      <tr>
+        <td>4</td><td>Goals — 9 calculators + math</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Input values, verify displayed math results</td>
+      </tr>
+      <tr>
+        <td>5</td><td>Import/Export Round-trip</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>BUG-058 (fixed)</td>
+        <td style="color:var(--muted)">Export → clear → import → verify counts · API keys now included (v3)</td>
+      </tr>
+      <tr>
+        <td>6</td><td>Cloud Sync Two-device</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Add on session A · verify on session B after 60s · delete cycle</td>
+      </tr>
+      <tr>
+        <td>7</td><td>Error States</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Wrong password · offline mode · token expiry</td>
+      </tr>
+      <tr>
+        <td>8</td><td>Dark Mode — all screens</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Screenshots across 20+ screens in dark mode</td>
+      </tr>
+      <tr>
+        <td>9</td><td>Accessibility (keyboard · contrast · aria)</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">Tab nav · contrast ratio · aria-label on all icon buttons</td>
+      </tr>
+      <tr>
+        <td>10</td><td>Physical Android Device</td>
+        <td class="status-pending">⏳ PENDING</td>
+        <td>—</td>
+        <td style="color:var(--muted)">adb install app-debug.apk · smoke test on device</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase 28 Deliverables -->
 <div class="section">
   <div class="section-header">📦 Phase 28 Deliverables</div>
@@ -514,36 +592,36 @@
 
 <!-- Bug Fix Log -->
 <div class="section">
-  <div class="section-header">🐛 Bug Fix Log — This Session (BUG-052..056)</div>
+  <div class="section-header">🐛 Bug Fix Log — Deep Pass Session (BUG-057..060)</div>
   <div>
     <div class="blocker-item">
       <span class="blocker-tag fixed">FIXED</span>
       <div class="blocker-desc">
-        <strong>BUG-052</strong> · API Keys stored in plain localStorage (critical security) → migrated to AES-256 encrypted IndexedDB vault
+        <strong>BUG-057</strong> · XSS in Notes viewer + rich-text editor — <code>dangerouslySetInnerHTML</code> with no sanitization → wrapped with <code>DOMPurify.sanitize()</code> in notes.tsx + rich-text-editor.tsx
       </div>
     </div>
     <div class="blocker-item">
       <span class="blocker-tag fixed">FIXED</span>
       <div class="blocker-desc">
-        <strong>BUG-053</strong> · use-subscription hook missing subscriptionLimit + documentLimit fields → added to PlanLimits interface
+        <strong>BUG-058</strong> · API Keys missing from vault export/import — <code>getAllApiKeys()</code> existed but was never called in exportVault/importVault → added to storage.ts, export format bumped to v3
+      </div>
+    </div>
+    <div class="blocker-item">
+      <span class="blocker-tag partial">FOUND</span>
+      <div class="blocker-desc">
+        <strong>BUG-059</strong> · Admin console Plans page — all 4 plans show "Inactive" status · Fix pending: admin-console backend <code>is_active</code> field not set on plan creation
+      </div>
+    </div>
+    <div class="blocker-item">
+      <span class="blocker-tag partial">FOUND</span>
+      <div class="blocker-desc">
+        <strong>BUG-060</strong> · Admin console Settings — admin user shows "Inactive" + "Last Login: Never" despite active JWT session · Fix pending: login endpoint not updating <code>is_active/last_login</code> in DB
       </div>
     </div>
     <div class="blocker-item">
       <span class="blocker-tag fixed">FIXED</span>
       <div class="blocker-desc">
-        <strong>BUG-054</strong> · Notes free limit was 5 (SRS requires 10) → corrected to 10 in PLAN_LIMITS.free
-      </div>
-    </div>
-    <div class="blocker-item">
-      <span class="blocker-tag fixed">FIXED</span>
-      <div class="blocker-desc">
-        <strong>BUG-055</strong> · Subscriptions: free users fully blocked (UpgradeGate) vs SRS free=10 → removed gate, added soft count limit at 10
-      </div>
-    </div>
-    <div class="blocker-item">
-      <span class="blocker-tag fixed">FIXED</span>
-      <div class="blocker-desc">
-        <strong>BUG-056</strong> · Documents: free users had no limit (SRS requires max 5) → added limit guard in handleFileSelect
+        <strong>DATA FIX</strong> · saketsuman1312@gmail.com plan was "pro" in CRM, should be "lifetime" → corrected via admin API <code>PUT /api/customers/:id/subscription</code>
       </div>
     </div>
   </div>
@@ -597,6 +675,12 @@
         <td style="color:var(--muted)">API Keys security · SRS plan limits</td>
         <td>5</td>
         <td class="status-pass">✅ All Closed</td>
+      </tr>
+      <tr>
+        <td>BUG-057 – BUG-060</td>
+        <td style="color:var(--muted)">Deep Pass: XSS notes · export/import · admin plans/user status</td>
+        <td>4</td>
+        <td class="status-partial">⚠️ 057–058 Fixed · 059–060 Pending fix</td>
       </tr>
     </tbody>
   </table>
@@ -673,8 +757,8 @@
 </div>
 
 <div class="footer">
-  <span>IronVault Launch Commander · Phase 28/28 · v1.0.0 · 2026-04-18</span>
-  <span>56 bugs fixed · 0 P0 blockers · <span style="color:var(--green)">✅ READY FOR PLAY STORE</span></span>
+  <span>IronVault Launch Commander · Deep Pass 1/10 complete · v1.0.0 · 2026-04-18</span>
+  <span>58 bugs fixed · BUG-059/060 pending · <span style="color:var(--accent)">🔍 DEEP PASS IN PROGRESS</span></span>
 </div>
 
 </body>
