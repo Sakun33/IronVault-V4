@@ -48,10 +48,10 @@ function getToken(req: VercelRequest): object | null {
 
 // ── Static data ── canonical plan set (must match client/src/lib/plans.ts) ─────
 const PLANS = [
-  { id: "free",     name: "Free",        price: 0,    interval: null,    features: ["50 passwords", "10 notes", "1 vault", "Local storage only"] },
-  { id: "pro",      name: "Pro Monthly", price: 1.79, interval: "month", features: ["Unlimited passwords", "Unlimited notes", "5 vaults", "Cloud sync", "Priority support"] },
-  { id: "family",   name: "Pro Family",  price: 3.58, interval: "month", features: ["Everything in Pro", "Up to 6 members", "Shared vaults", "Family dashboard"], comingSoon: true },
-  { id: "lifetime", name: "Lifetime",    price: 119.75, interval: null,  features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"] },
+  { id: "free",     name: "Free",        price: 0,    interval: null,    is_active: true, features: ["50 passwords", "10 notes", "1 vault", "Local storage only"] },
+  { id: "pro",      name: "Pro Monthly", price: 1.79, interval: "month", is_active: true, features: ["Unlimited passwords", "Unlimited notes", "5 vaults", "Cloud sync", "Priority support"] },
+  { id: "family",   name: "Pro Family",  price: 3.58, interval: "month", is_active: true, features: ["Everything in Pro", "Up to 6 members", "Shared vaults", "Family dashboard"], comingSoon: true },
+  { id: "lifetime", name: "Lifetime",    price: 119.75, interval: null,  is_active: true, features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"] },
 ];
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -639,7 +639,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── Admins stub ─────────────────────────────────────────────────────────────
   if (path === "/api/admins") {
-    if (method === "GET") return res.json([{ username: ADMIN_USERNAME, role: "super_admin" }]);
+    if (method === "GET") return res.json([{ username: ADMIN_USERNAME, role: "super_admin", is_active: true, last_login: new Date().toISOString() }]);
     return res.json({ success: true });
   }
 
