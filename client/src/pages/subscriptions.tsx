@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
-import { UpgradeGate } from '@/components/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,7 +19,7 @@ import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { format, addDays, differenceInCalendarDays } from 'date-fns';
 
 export default function Subscriptions() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isPro, getLimit, isLoading: licenseLoading } = useSubscription();
 
   const { subscriptions, deleteSubscription, searchQuery, setSearchQuery, stats } = useVault();
   const { formatCurrency, currency } = useCurrency();
@@ -187,7 +186,8 @@ export default function Subscriptions() {
 
   const activeSubscriptions = subscriptions.filter(s => s.isActive).length;
 
-  if (!licenseLoading && !isFeatureAvailable('subscriptions')) return <UpgradeGate feature="Subscription Tracker" />;
+  const subscriptionLimit = getLimit('subscriptionLimit');
+  const atSubscriptionLimit = !isPro && subscriptions.length >= subscriptionLimit;
 
   return (
     <div className="overflow-x-hidden">
@@ -197,6 +197,11 @@ export default function Subscriptions() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Subscriptions</h1>
             <p className="text-muted-foreground text-sm">Track and manage your recurring subscriptions</p>
+            {!isPro && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {subscriptions.length}/{subscriptionLimit} · <span className="text-primary cursor-pointer hover:underline">Upgrade</span> for unlimited
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
@@ -210,14 +215,19 @@ export default function Subscriptions() {
             </Button>
             <Button
               onClick={() => {
+                if (atSubscriptionLimit) {
+                  toast({ title: "Limit reached", description: `Free plan allows up to ${subscriptionLimit} subscriptions. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                  return;
+                }
                 setEditingSubscription(null);
                 setShowAddModal(true);
               }}
               size="sm"
               className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
+              disabled={atSubscriptionLimit}
             >
               <Plus className="w-4 h-4 mr-1" />
-              Add
+              {atSubscriptionLimit ? 'Upgrade to Add' : 'Add'}
             </Button>
           </div>
         </div>
