@@ -169,6 +169,18 @@ if (allowed.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origi
 
 ---
 
+## BUGS FROM USER DEVICE TESTING (2026-04-19, Android PWA)
+
+| ID | Title | Severity | Status | Fix |
+|----|-------|----------|--------|-----|
+| BUG-066 | Weak password not detected in dashboard | MEDIUM | FIXED | Calculate strength via PasswordGenerator.calculateStrength per password |
+| BUG-067 | Audit entries duplicated in activity log | MEDIUM | FIXED | Dedup window: skip identical action+description logged within 5 s |
+| BUG-068 | Imported data lost after app reopens (cloud vault) | HIGH | FIXED | Dispatch vault:item:saved after importVault/importPasswordsFromCSV to trigger cloud push |
+| BUG-069 | Two X close buttons overlapping on sheets | MEDIUM | FIXED | Added hideClose prop to SheetContent; MobileSheet passes hideClose=true |
+| BUG-070 | No back navigation on inner pages (Android PWA) | HIGH | FIXED | ChevronLeft back button in mobile header on inner pages; Capacitor backButton handler |
+
+---
+
 ## PRE-EXISTING OPEN BUGS (from prior sessions, still unverified on device)
 
 | ID | Title | Status |
