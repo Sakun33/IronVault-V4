@@ -18,6 +18,11 @@ function getPool(): Pool {
 const ALLOWED_ORIGINS = [
   'https://www.ironvault.app',
   'https://ironvault.app',
+  // Capacitor Android app origin
+  'capacitor://localhost',
+  // Capacitor iOS / local dev origins
+  'https://localhost',
+  'http://localhost',
 ];
 
 function stripHtml(str: string): string {
@@ -496,6 +501,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updated_at TIMESTAMPTZ DEFAULT NOW(),
           UNIQUE(owner_email, invitee_email)
         );
+        -- Cryptographic key exchange columns (added in key-exchange migration)
+        ALTER TABLE family_invites
+          ADD COLUMN IF NOT EXISTS encrypted_key_blob TEXT,
+          ADD COLUMN IF NOT EXISTS invite_code_hash TEXT,
+          ADD COLUMN IF NOT EXISTS vault_name TEXT;
         CREATE INDEX IF NOT EXISTS idx_family_invites_owner ON family_invites(owner_email);
         CREATE INDEX IF NOT EXISTS idx_family_invites_invitee ON family_invites(invitee_email);
 
@@ -552,7 +562,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/crm/family-invites ─────────────────────────────────────────────
   if (path === '/api/crm/family-invites' && req.method === 'POST') {
-    const { ownerEmail, inviteeEmail, vaultShareId } = req.body || {};
+    const { ownerEmail, inviteeEmail, vaultShareId, vaultName, encryptedKeyBlob, inviteCodeHash } = req.body || {};
     if (!ownerEmail || !inviteeEmail) {
       return res.status(400).json({ error: 'ownerEmail and inviteeEmail required' });
     }
@@ -567,12 +577,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: 'Family invites require a Pro or higher plan', code: 'PLAN_UPGRADE_REQUIRED' });
       }
       const { rows } = await db.query(
-        `INSERT INTO family_invites (owner_email, invitee_email, vault_share_id)
-         VALUES ($1, $2, $3)
+        `INSERT INTO family_invites (owner_email, invitee_email, vault_share_id, vault_name, encrypted_key_blob, invite_code_hash)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (owner_email, invitee_email) DO UPDATE
-           SET status = 'pending', invited_at = NOW(), updated_at = NOW()
+           SET status = 'pending', invited_at = NOW(), updated_at = NOW(),
+               vault_share_id = EXCLUDED.vault_share_id,
+               vault_name = EXCLUDED.vault_name,
+               encrypted_key_blob = EXCLUDED.encrypted_key_blob,
+               invite_code_hash = EXCLUDED.invite_code_hash
          RETURNING *`,
-        [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(), vaultShareId || null]
+        [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(),
+         vaultShareId || null, stripHtml(vaultName || 'Shared Vault'),
+         encryptedKeyBlob || null, inviteCodeHash || null]
       );
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
@@ -582,21 +598,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── PATCH /api/crm/family-invites/:id ────────────────────────────────────────
   // Accepts status: accepted | declined | revoked
+  // For 'accepted': optionally verify invite_code_hash and return encrypted_key_blob
   if (path.match(/^\/api\/crm\/family-invites\/[^/]+$/) && req.method === 'PATCH') {
     const id = path.split('/').pop();
-    const { status } = req.body || {};
+    const { status, inviteCodeHash } = req.body || {};
     if (!['accepted', 'declined', 'revoked'].includes(status)) {
       return res.status(400).json({ error: 'status must be accepted, declined, or revoked' });
     }
     const tsCol = status === 'accepted' ? 'accepted_at' : status === 'declined' ? 'declined_at' : 'revoked_at';
     try {
+      // If accepting, verify the invite code hash matches (rate-limit-safe verification)
+      if (status === 'accepted' && inviteCodeHash) {
+        const { rows: checkRows } = await db.query(
+          `SELECT invite_code_hash FROM family_invites WHERE id = $1`, [id]
+        );
+        if (checkRows[0]?.invite_code_hash && checkRows[0].invite_code_hash !== inviteCodeHash) {
+          return res.status(403).json({ error: 'Invalid invite code' });
+        }
+      }
       const { rows } = await db.query(
         `UPDATE family_invites SET status = $1, ${tsCol} = NOW(), updated_at = NOW()
          WHERE id = $2 RETURNING *`,
         [status, id]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Invite not found' });
-      return res.json({ success: true, invite: rows[0] });
+      // Return the encrypted key blob on acceptance so invitee can decrypt locally
+      return res.json({ success: true, invite: rows[0], encryptedKeyBlob: rows[0].encrypted_key_blob || null });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
