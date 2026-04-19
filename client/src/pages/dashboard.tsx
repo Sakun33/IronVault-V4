@@ -39,6 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, isWithinInterval, addDays, startOfDay, differenceInCalendarDays } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { PasswordGenerator } from "@/lib/password-generator";
+import { Favicon } from "@/components/favicon";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -448,9 +449,7 @@ export default function Dashboard() {
                   {recentPasswords.map((password) => (
                     <div key={password.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Lock className="w-4 h-4 text-primary" />
-                        </div>
+                        <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{password.name}</p>
                           <p className="text-xs text-muted-foreground">{password.username}</p>
@@ -486,9 +485,7 @@ export default function Dashboard() {
                   {upcomingRenewals.map((subscription) => (
                     <div key={subscription.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bookmark className="w-4 h-4 text-primary" />
-                        </div>
+                        <Favicon url={subscription.platformLink} name={subscription.name} className="w-8 h-8 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{subscription.name}</p>
                           <p className="text-xs text-muted-foreground">

@@ -13,6 +13,7 @@ import { useCurrency } from '@/contexts/currency-context';
 import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_CATEGORIES } from '@shared/schema';
 import { AddSubscriptionModal } from '@/components/add-subscription-modal';
+import { Favicon } from '@/components/favicon';
 import { SubscriptionAnalytics } from '@/components/subscription-analytics';
 import { SubscriptionReminderComponent } from '@/components/subscription-reminder-component';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
@@ -341,9 +342,11 @@ export default function Subscriptions() {
                         <div className="mb-4">
                           {/* Row 1: Icon + Name + Status Badge */}
                           <div className="flex items-start gap-3 mb-3">
-                            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <Bookmark className="w-5 h-5 text-primary" />
-                            </div>
+                            <Favicon
+                              url={subscription.platformLink}
+                              name={subscription.name}
+                              className="w-11 h-11 flex-shrink-0"
+                            />
                             
                             <div className="flex-1 min-w-0">
                               <h3 className="font-semibold text-base text-foreground leading-tight mb-1">
