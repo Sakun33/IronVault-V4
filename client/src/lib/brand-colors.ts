@@ -71,7 +71,6 @@ const BRAND_COLORS: Record<string, string> = {
   peacock: '#F0368E',
   deezer: '#FF0092',
   tidal: '#000000',
-  spotify: '#1DB954',
   'apple music': '#FC3C44',
   'apple tv': '#000000',
 };
