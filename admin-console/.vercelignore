@@ -1,0 +1,6 @@
+node_modules
+.nm-bak
+frontend/node_modules
+frontend/.nm-bak
+backend/node_modules
+backend/.nm-bak
