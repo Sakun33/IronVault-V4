@@ -4,6 +4,13 @@ import { UpgradeGate } from '@/components/upgrade-gate';
 import { useVault } from '@/contexts/vault-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BrandCard } from '@/components/brand-card';
+
+const envBrandColor = (env: string) => {
+  if (env === 'production') return '#ef4444';
+  if (env === 'staging') return '#f59e0b';
+  return '#3b82f6';
+};
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -434,9 +441,9 @@ export default function APIKeys() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {filteredKeys.map(key => (
-            <Card key={key.id} className="hover:shadow-lg transition-shadow">
+            <BrandCard key={key.id} name={key.service || key.name} brandColor={envBrandColor(key.environment)}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -533,7 +540,7 @@ export default function APIKeys() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </BrandCard>
           ))}
         </div>
       )}

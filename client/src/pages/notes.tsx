@@ -4,6 +4,7 @@ import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BrandCard } from '@/components/brand-card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -887,16 +888,14 @@ export default function Notes() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 stagger-children">
           {sortedNotes.map(note => (
-            <Card 
-              key={note.id} 
-              className={`group cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-[1.02] border-2 ${
-                note.isPinned 
-                  ? 'border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950' 
-                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
-              }`}
+            <BrandCard
+              key={note.id}
+              name={note.notebook || note.title}
+              brandColor={note.isPinned ? '#f59e0b' : undefined}
               onClick={() => setViewingNote(note)}
+              className="cursor-pointer group"
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -986,7 +985,7 @@ export default function Notes() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </BrandCard>
           ))}
         </div>
       )}

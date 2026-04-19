@@ -6,8 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, ExternalLink, User, Mail, Key, Clock, AlertTriangle, Eye, EyeOff, LogIn, Copy, Check, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, ExternalLink, User, Mail, Key, Clock, AlertTriangle, Eye, EyeOff, LogIn, Copy, Check, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { BrandCard } from '@/components/brand-card';
+import { Favicon } from '@/components/favicon';
 import { useVault } from '@/contexts/vault-context';
 import { useCurrency } from '@/contexts/currency-context';
 import { useToast } from '@/hooks/use-toast';
@@ -329,298 +332,118 @@ export default function Subscriptions() {
 
             {/* Subscription List */}
             {filteredSubscriptions.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 stagger-children">
                 {filteredSubscriptions.map((subscription) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
-                  
+
                   return (
-                    <Card key={subscription.id} className="rounded-2xl shadow-sm border-border/40 bg-card hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-                      <CardContent className="p-5">
-                        {/* Header Section - Redesigned for mobile */}
-                        <div className="mb-4">
-                          {/* Row 1: Icon + Name + Status Badge */}
-                          <div className="flex items-start gap-3 mb-3">
-                            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <Bookmark className="w-5 h-5 text-primary" />
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-base text-foreground leading-tight mb-1">
-                                {subscription.name}
-                              </h3>
-                              {subscription.plan && (
-                                <p className="text-sm text-muted-foreground">
-                                  {subscription.plan}
-                                </p>
+                    <BrandCard key={subscription.id} name={subscription.name} url={subscription.platformLink || undefined}>
+                      <div className="px-4 py-3">
+                        {/* Main row: favicon + name/plan + kebab */}
+                        <div className="flex items-center gap-3">
+                          <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-10 h-10 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-[15px] text-foreground truncate leading-tight">{subscription.name}</h3>
+                            <p className="text-[13px] text-muted-foreground truncate leading-tight mt-0.5">
+                              {subscription.plan || subscription.category || subscription.billingCycle}
+                            </p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {subscription.platformLink && (
+                                <DropdownMenuItem onClick={() => openPlatform(subscription.platformLink || '', subscription.name)}>
+                                  <LogIn className="w-4 h-4 mr-2" /> Open site
+                                </DropdownMenuItem>
                               )}
-                            </div>
-                            
-                            <Badge 
+                              {subscription.credentials && (subscription.credentials.username || subscription.credentials.email || subscription.credentials.password) && (
+                                <DropdownMenuItem onClick={() => toggleCredentialVisibility(subscription.id)}>
+                                  {revealedCredentials.has(subscription.id)
+                                    ? <><EyeOff className="w-4 h-4 mr-2" /> Hide credentials</>
+                                    : <><Eye className="w-4 h-4 mr-2" /> Reveal credentials</>}
+                                </DropdownMenuItem>
+                              )}
+                              {revealedCredentials.has(subscription.id) && subscription.credentials?.username && (
+                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.username!, 'Username')}>
+                                  <Copy className="w-4 h-4 mr-2" /> Copy username
+                                </DropdownMenuItem>
+                              )}
+                              {revealedCredentials.has(subscription.id) && subscription.credentials?.email && (
+                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.email!, 'Email')}>
+                                  <Copy className="w-4 h-4 mr-2" /> Copy email
+                                </DropdownMenuItem>
+                              )}
+                              {revealedCredentials.has(subscription.id) && subscription.credentials?.password && (
+                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.password!, 'Password')}>
+                                  <Copy className="w-4 h-4 mr-2" /> Copy password
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setEditingSubscription(subscription)}>
+                                <Edit className="w-4 h-4 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDeleteSubscription(subscription.id, subscription.name)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {/* Revealed credentials */}
+                        {revealedCredentials.has(subscription.id) && subscription.credentials && (
+                          <div className="mt-2.5 px-3 py-2 bg-muted/60 rounded-lg text-[13px] font-mono space-y-1">
+                            {subscription.credentials.username && (
+                              <div><span className="text-muted-foreground text-[12px]">user </span>{subscription.credentials.username}</div>
+                            )}
+                            {subscription.credentials.email && (
+                              <div><span className="text-muted-foreground text-[12px]">email </span>{subscription.credentials.email}</div>
+                            )}
+                            {subscription.credentials.password && (
+                              <div><span className="text-muted-foreground text-[12px]">pass </span>{subscription.credentials.password}</div>
+                            )}
+                            {subscription.credentials.accountId && (
+                              <div><span className="text-muted-foreground text-[12px]">id </span>{subscription.credentials.accountId}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Bottom: cost + renewal + status */}
+                        <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border/40">
+                          <span className="text-[13px] font-semibold text-foreground">
+                            {formatCurrency(subscription.cost || 0, currency)}
+                            <span className="text-[11px] font-normal text-muted-foreground ml-0.5">
+                              /{subscription.billingCycle === 'yearly' ? 'yr' : 'mo'}
+                            </span>
+                          </span>
+                          <span className="text-muted-foreground/40 text-[11px]">•</span>
+                          <Calendar className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-[11px] text-muted-foreground">
+                            {format(subscription.nextBillingDate, 'MMM dd')}
+                          </span>
+                          <div className="ml-auto flex items-center gap-1.5">
+                            {isUpcoming && (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
+                                Due soon
+                              </span>
+                            )}
+                            <Badge
                               variant={subscription.isActive ? "default" : "secondary"}
-                              className="text-xs flex-shrink-0"
+                              className="text-[11px] h-5 px-1.5"
                             >
                               {subscription.isActive ? "Active" : "Inactive"}
                             </Badge>
                           </div>
-                          
-                          {/* Row 2: Action Buttons - Right aligned */}
-                          <div className="flex items-center justify-end gap-2 border-b border-border pb-3">
-                            {subscription.platformLink && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openPlatform(subscription.platformLink || '', subscription.name)}
-                                className="h-8 px-3 rounded-lg text-xs gap-1.5"
-                              >
-                                <LogIn className="w-3.5 h-3.5" />
-                                <span>Open</span>
-                              </Button>
-                            )}
-                            
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingSubscription(subscription)}
-                              className="h-8 px-3 rounded-lg text-xs gap-1.5"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </Button>
-                            
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteSubscription(subscription.id, subscription.name)}
-                              className="h-8 px-3 rounded-lg text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete</span>
-                            </Button>
-                          </div>
                         </div>
-
-                        {/* Main Info Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          {/* Left Column - Billing Info */}
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Calendar className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Next Billing:</span>
-                              <span className="font-medium text-foreground">
-                                {format(subscription.nextBillingDate, 'MMM dd, yyyy')}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-sm">
-                              <DollarSign className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Cost:</span>
-                              <span className="font-medium text-foreground">
-                                {formatCurrency(subscription.cost || 0, currency)}
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                {subscription.billingCycle}
-                              </Badge>
-                            </div>
-
-                            {subscription.expiryDate && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Clock className="w-4 h-4 text-muted-foreground" />
-                                <span className="text-muted-foreground">Expires:</span>
-                                <span className="font-medium text-foreground">
-                                  {format(subscription.expiryDate, 'MMM dd, yyyy')}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Right Column - Status & Type */}
-                          <div className="space-y-3">
-                            {subscription.subscriptionType && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="text-muted-foreground">Type:</span>
-                                <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
-                                  {subscription.subscriptionType}
-                                </Badge>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-muted-foreground">Auto-renew:</span>
-                              <span className={`font-medium ${subscription.autoRenew ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                {subscription.autoRenew ? 'On' : 'Off'}
-                              </span>
-                            </div>
-
-                            {/* Warning Badges */}
-                            <div className="flex flex-wrap gap-2">
-                              {isUpcoming && (
-                                <Badge variant="outline" className="text-xs text-orange-600 border-orange-600">
-                                  <Bell className="w-3 h-3 mr-1" />
-                                  Due Soon
-                                </Badge>
-                              )}
-                              
-                              {subscription.expiryDate && new Date(subscription.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
-                                <Badge variant="outline" className="text-xs text-red-600 border-red-600">
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Expires Soon
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Credentials Section */}
-                        {subscription.credentials && (subscription.credentials.username || subscription.credentials.email || subscription.credentials.accountId) && (
-                          <div className="border-t border-border pt-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-                                <Key className="w-4 h-4" />
-                                Login Credentials
-                              </h4>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleCredentialVisibility(subscription.id)}
-                                className="text-xs h-6 px-2"
-                              >
-                                {revealedCredentials.has(subscription.id) ? (
-                                  <>
-                                    <EyeOff className="w-3 h-3 mr-1" />
-                                    Hide
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye className="w-3 h-3 mr-1" />
-                                    Reveal
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                              {subscription.credentials.username && (
-                                <div className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg">
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-muted-foreground flex-shrink-0">Username:</span>
-                                    <span className="font-mono text-foreground truncate">
-                                      {revealedCredentials.has(subscription.id) 
-                                        ? subscription.credentials.username 
-                                        : maskCredential(subscription.credentials.username)
-                                      }
-                                    </span>
-                                  </div>
-                                  {revealedCredentials.has(subscription.id) && subscription.credentials?.username && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 flex-shrink-0"
-                                      onClick={() => copyCredential(subscription.credentials!.username!, 'Username')}
-                                    >
-                                      {copiedCredential === 'Username' ? (
-                                        <Check className="w-3 h-3 text-green-600" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {subscription.credentials.email && (
-                                <div className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg">
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <Mail className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-muted-foreground flex-shrink-0">Email:</span>
-                                    <span className="font-mono text-foreground truncate">
-                                      {revealedCredentials.has(subscription.id) 
-                                        ? subscription.credentials.email 
-                                        : maskCredential(subscription.credentials.email)
-                                      }
-                                    </span>
-                                  </div>
-                                  {revealedCredentials.has(subscription.id) && subscription.credentials?.email && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 flex-shrink-0"
-                                      onClick={() => copyCredential(subscription.credentials!.email!, 'Email')}
-                                    >
-                                      {copiedCredential === 'Email' ? (
-                                        <Check className="w-3 h-3 text-green-600" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {subscription.credentials.accountId && (
-                                <div className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg">
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <Key className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-muted-foreground flex-shrink-0">Account ID:</span>
-                                    <span className="font-mono text-foreground truncate">
-                                      {revealedCredentials.has(subscription.id) 
-                                        ? subscription.credentials.accountId 
-                                        : maskCredential(subscription.credentials.accountId)
-                                      }
-                                    </span>
-                                  </div>
-                                  {revealedCredentials.has(subscription.id) && subscription.credentials?.accountId && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 flex-shrink-0"
-                                      onClick={() => copyCredential(subscription.credentials!.accountId!, 'Account ID')}
-                                    >
-                                      {copiedCredential === 'Account ID' ? (
-                                        <Check className="w-3 h-3 text-green-600" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Password field */}
-                              {subscription.credentials.password && (
-                                <div className="flex items-center justify-between gap-2 p-2 bg-muted rounded-lg col-span-full">
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <Key className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-muted-foreground flex-shrink-0">Password:</span>
-                                    <span className="font-mono text-foreground truncate">
-                                      {revealedCredentials.has(subscription.id) 
-                                        ? subscription.credentials.password 
-                                        : maskCredential(subscription.credentials.password)
-                                      }
-                                    </span>
-                                  </div>
-                                  {revealedCredentials.has(subscription.id) && subscription.credentials?.password && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 flex-shrink-0"
-                                      onClick={() => copyCredential(subscription.credentials!.password!, 'Password')}
-                                    >
-                                      {copiedCredential === 'Password' ? (
-                                        <Check className="w-3 h-3 text-green-600" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </BrandCard>
                   );
                 })}
               </div>

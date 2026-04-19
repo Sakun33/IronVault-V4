@@ -2,6 +2,18 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BrandCard } from '@/components/brand-card';
+
+const getFileBrandColor = (type: string) => {
+  switch (type) {
+    case 'pdf': return '#ef4444';
+    case 'doc': case 'docx': return '#2563eb';
+    case 'xls': case 'xlsx': return '#16a34a';
+    case 'ppt': case 'pptx': return '#ea580c';
+    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'bmp': return '#7c3aed';
+    default: return '#6366f1';
+  }
+};
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1002,15 +1014,16 @@ export default function Documents() {
               {filteredDocuments.map(document => {
                 const FileIcon = getFileIcon(document.type);
                 const fileColor = getFileColor(document.type);
-                
+
                 return (
-                  <div
+                  <BrandCard
                     key={document.id}
-                    className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer ${
-                      viewMode === 'list' ? 'flex-row' : 'flex-col text-center'
-                    }`}
+                    name={document.name}
+                    brandColor={getFileBrandColor(document.type)}
+                    className="cursor-pointer"
                     onClick={() => handleDocumentClick(document)}
                   >
+                  <div className={`flex items-center gap-3 p-3 ${viewMode === 'list' ? 'flex-row' : 'flex-col text-center'}`}>
                     {viewMode === 'grid' ? (
                       <>
                         <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
@@ -1088,6 +1101,7 @@ export default function Documents() {
                       </Button>
                     </div>
                   </div>
+                  </BrandCard>
                 );
               })}
             </div>

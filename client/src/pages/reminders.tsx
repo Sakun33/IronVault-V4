@@ -4,6 +4,14 @@ import { scheduleReminderNotification, requestNotificationPermission, checkNotif
 import { ReminderEntry, REMINDER_CATEGORIES, REMINDER_COLORS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BrandCard } from '@/components/brand-card';
+
+const priorityBrandColor = (priority: string) => {
+  if (priority === 'urgent') return '#ef4444';
+  if (priority === 'high') return '#f97316';
+  if (priority === 'medium') return '#eab308';
+  return '#22c55e';
+};
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -404,7 +412,7 @@ export default function Reminders() {
   };
 
   const renderReminderCard = (reminder: ReminderEntry) => (
-    <Card key={reminder.id} className={`transition-all hover:shadow-md ${reminder.isCompleted ? 'opacity-60' : ''}`} data-testid={`card-reminder-${reminder.id}`}>
+    <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={reminder.isCompleted ? 'opacity-60' : ''} data-testid={`card-reminder-${reminder.id}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-3 flex-1">
@@ -499,7 +507,7 @@ export default function Reminders() {
           </div>
         </div>
       </CardContent>
-    </Card>
+    </BrandCard>
   );
 
   return (
@@ -1007,7 +1015,7 @@ export default function Reminders() {
       ) : (
         <div className="space-y-4">
           {viewMode === 'list' ? (
-            <div className="space-y-3">
+            <div className="space-y-3 stagger-children">
               {sortedReminders.map(renderReminderCard)}
             </div>
           ) : (
