@@ -3,6 +3,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BrandCard } from '@/components/brand-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -885,13 +886,13 @@ export default function Goals() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 stagger-children">
           {filteredGoals.map(goal => {
             const progress = calculateGoalProgress(goal);
             const IconComponent = GOAL_ICONS[goal.category as keyof typeof GOAL_ICONS] || Target;
-            
+
             return (
-              <Card key={goal.id} className="cursor-pointer transition-shadow hover:shadow-md">
+              <BrandCard key={goal.id} name={goal.name} className="cursor-pointer">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base line-clamp-2 flex items-center gap-2">
@@ -972,7 +973,7 @@ export default function Goals() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </BrandCard>
             );
           })}
         </div>
