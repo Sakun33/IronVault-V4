@@ -243,20 +243,25 @@ export default function Profile() {
     checkBiometrics();
   }, []);
 
-  // Load family invites (outgoing for owner + incoming for this email)
+  // Load family invites (outgoing for owner + incoming for this email).
+  // NOTE: userProfile is declared later in this file (useState at line ~662).
+  // useCallback dep array is [] to avoid a const temporal dead zone crash —
+  // the callback reads email at invocation time (after full render), not at creation.
   const loadFamilyInvites = useCallback(async () => {
-    if (!userProfile.email || userProfile.email === 'john.doe@example.com') return;
+    const savedProfile = (() => { try { return JSON.parse(localStorage.getItem('customerProfile') || 'null'); } catch { return null; } })();
+    const email = savedProfile?.email;
+    if (!email || email === 'john.doe@example.com') return;
     setInvitesLoading(true);
     try {
       const [outRes, inRes] = await Promise.all([
-        fetch(`/api/crm/family-invites/${encodeURIComponent(userProfile.email)}`),
-        fetch(`/api/crm/family-invites/invitee/${encodeURIComponent(userProfile.email)}`),
+        fetch(`/api/crm/family-invites/${encodeURIComponent(email)}`),
+        fetch(`/api/crm/family-invites/invitee/${encodeURIComponent(email)}`),
       ]);
       if (outRes.ok) { const d = await outRes.json(); setOutgoingInvites(d.invites ?? []); }
       if (inRes.ok) { const d = await inRes.json(); setIncomingInvites(d.invites ?? []); }
     } catch { /* best-effort */ }
     finally { setInvitesLoading(false); }
-  }, [userProfile.email]);
+  }, []);
 
   useEffect(() => { loadFamilyInvites(); }, [loadFamilyInvites]);
 
