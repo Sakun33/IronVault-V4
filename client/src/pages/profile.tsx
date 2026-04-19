@@ -623,9 +623,9 @@ export default function Profile() {
     createdAt: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
     lastLogin: new Date(),
     stats: {
-      totalPasswords: stats.totalPasswords,
-      totalNotes: stats.totalNotes,
-      totalSubscriptions: stats.activeSubscriptions,
+      totalPasswords: stats?.totalPasswords ?? 0,
+      totalNotes: stats?.totalNotes ?? 0,
+      totalSubscriptions: stats?.activeSubscriptions ?? 0,
       totalExpenses: 0,
       totalInvestments: 0,
       vaultSize: 2.5, // MB

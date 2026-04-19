@@ -294,7 +294,7 @@ export default function VaultPickerPage() {
                       type="button"
                       onClick={() => setShowPw(s => ({ ...s, [vault.id]: !s[vault.id] }))}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
+                      aria-label={showPw[vault.id] ? 'Hide password' : 'Show password'}
                     >
                       {showPw[vault.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -377,7 +377,7 @@ export default function VaultPickerPage() {
                       type="button"
                       onClick={() => setCloudShowPw(s => ({ ...s, [cv.vaultId]: !s[cv.vaultId] }))}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
+                      aria-label={cloudShowPw[cv.vaultId] ? 'Hide password' : 'Show password'}
                     >
                       {cloudShowPw[cv.vaultId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

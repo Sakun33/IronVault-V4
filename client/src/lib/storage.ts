@@ -816,6 +816,7 @@ export class VaultStorage {
     const bankTransactions = await this.getAllBankTransactions();
     const investments = await this.getAllInvestments();
     const investmentGoals = await this.getAllInvestmentGoals();
+    const apiKeys = await this.getAllApiKeys();
     const metadata = await this.getMetadata();
 
     const exportData = {
@@ -828,9 +829,10 @@ export class VaultStorage {
       bankTransactions,
       investments,
       investmentGoals,
+      apiKeys,
       metadata,
       exportedAt: new Date(),
-      version: 2, // Updated version for new data types
+      version: 3, // v3 adds apiKeys
     };
 
     const salt = CryptoService.generateSalt();
@@ -964,6 +966,8 @@ export class VaultStorage {
           diagnosticMessage = 'The file appears to be a JSON array, but IronVault expects a JSON object.';
         } else if (data.length < 10) {
           diagnosticMessage = 'The file is too short to be a valid JSON export.';
+        } else if (parseError instanceof DOMException && parseError.name === 'OperationError') {
+          diagnosticMessage = 'Incorrect password — decryption failed. Please check your export password and try again.';
         } else {
           diagnosticMessage = 'The file format is not recognized. Please ensure it\'s a valid IronVault JSON export.';
         }
@@ -1031,6 +1035,13 @@ export class VaultStorage {
       if (importData.bankTransactions) {
         for (const transaction of importData.bankTransactions) {
           await this.saveBankTransaction(transaction);
+        }
+      }
+
+      // Import API keys (v3+)
+      if (importData.apiKeys) {
+        for (const apiKey of importData.apiKeys) {
+          await this.saveApiKey(apiKey);
         }
       }
 
