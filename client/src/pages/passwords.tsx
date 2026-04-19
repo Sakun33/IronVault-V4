@@ -14,6 +14,7 @@ import { PASSWORD_CATEGORIES } from '@shared/schema';
 import { PasswordGenerator } from '@/lib/password-generator';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
+import { BrandCard } from '@/components/brand-card';
 import { ShareModal } from '@/components/share-modal';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { format } from 'date-fns';
@@ -278,14 +279,14 @@ export default function Passwords() {
 
         {/* Password List */}
         {filteredPasswords.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-3 stagger-children">
             {filteredPasswords.map((password) => {
               const { level, score } = PasswordGenerator.calculateStrength(password.password);
               const isVisible = visiblePasswords.has(password.id);
-              
+
               return (
-                <Card key={password.id} className="rounded-2xl shadow-sm border-border/40 bg-card hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5" data-testid={`password-row-${password.id}`}>
-                  <CardContent className="p-4 space-y-3">
+                <BrandCard key={password.id} name={password.name} url={password.url} data-testid={`password-row-${password.id}`}>
+                  <div className="p-4 space-y-3">
                     {/* Header Row - Name and Actions */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -360,8 +361,8 @@ export default function Passwords() {
                         </Button>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </BrandCard>
               );
             })}
           </div>

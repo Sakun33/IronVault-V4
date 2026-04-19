@@ -187,6 +187,11 @@ function getFallbackColor(name: string): string {
   return 'bg-primary/20';
 }
 
+export function getFaviconUrl(url?: string, name?: string): string | null {
+  const domain = getDomain(url, name);
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
+}
+
 interface FaviconProps {
   url?: string;
   name: string;

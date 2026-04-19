@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_CATEGORIES } from '@shared/schema';
 import { AddSubscriptionModal } from '@/components/add-subscription-modal';
 import { Favicon } from '@/components/favicon';
+import { BrandCard } from '@/components/brand-card';
 import { SubscriptionAnalytics } from '@/components/subscription-analytics';
 import { SubscriptionReminderComponent } from '@/components/subscription-reminder-component';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
@@ -330,14 +331,14 @@ export default function Subscriptions() {
 
             {/* Subscription List */}
             {filteredSubscriptions.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 stagger-children">
                 {filteredSubscriptions.map((subscription) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
-                  
+
                   return (
-                    <Card key={subscription.id} className="rounded-2xl shadow-sm border-border/40 bg-card hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-                      <CardContent className="p-5">
+                    <BrandCard key={subscription.id} name={subscription.name} url={subscription.platformLink}>
+                      <div className="p-5">
                         {/* Header Section - Redesigned for mobile */}
                         <div className="mb-4">
                           {/* Row 1: Icon + Name + Status Badge */}
@@ -622,8 +623,8 @@ export default function Subscriptions() {
                             </div>
                           </div>
                         )}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </BrandCard>
                   );
                 })}
               </div>
