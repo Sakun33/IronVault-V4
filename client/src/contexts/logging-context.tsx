@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useRef, ReactNode, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { vaultManager } from '@/lib/vault-manager';
 
@@ -26,6 +26,9 @@ const LoggingContext = createContext<LoggingContextType | undefined>(undefined);
 
 export function LoggingProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  // Deduplication: map of "action::description" → last timestamp (ms)
+  const recentSigs = useRef<Map<string, number>>(new Map());
+  const DEDUP_WINDOW_MS = 5000;
 
   const addLog = useCallback((
     action: string,
@@ -33,6 +36,12 @@ export function LoggingProvider({ children }: { children: ReactNode }) {
     description: string,
     details?: any
   ) => {
+    const sig = `${action}::${description}`;
+    const now = Date.now();
+    const last = recentSigs.current.get(sig);
+    if (last !== undefined && now - last < DEDUP_WINDOW_MS) return;
+    recentSigs.current.set(sig, now);
+
     const currentVaultId = vaultManager.getActiveVaultId();
     const newLog: LogEntry = {
       id: Math.random().toString(36).substring(2, 15),

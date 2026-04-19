@@ -38,6 +38,7 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, isWithinInterval, addDays, startOfDay, differenceInCalendarDays } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
+import { PasswordGenerator } from "@/lib/password-generator";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -216,8 +217,10 @@ export default function Dashboard() {
     .filter(s => s.isActive)
     .reduce((total, s) => total + (s.cost || 0), 0);
 
-  // Count weak passwords (assuming we'll add strength calculation later)
-  const weakPasswords = 0; // passwords.filter(p => (p.strength || 0) < 3).length;
+  const weakPasswords = passwords.filter(p => {
+    if (!p.password) return false;
+    return PasswordGenerator.calculateStrength(p.password).level === 'weak';
+  }).length;
 
   return (
     <div>

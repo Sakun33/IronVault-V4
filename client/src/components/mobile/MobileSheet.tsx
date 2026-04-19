@@ -40,6 +40,7 @@ export function MobileSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={side}
+        hideClose={true}
         className={cn(
           'max-h-[calc(100dvh-env(safe-area-inset-top)-48px)]',
           side === 'bottom' && 'max-h-[90dvh]',
