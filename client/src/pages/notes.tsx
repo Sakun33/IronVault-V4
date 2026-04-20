@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
@@ -160,6 +161,7 @@ export default function Notes() {
   const { notes, addNote, updateNote, deleteNote, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
+  const { lastNotebook, saveNotebook } = useFormDefaults();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [viewingNote, setViewingNote] = useState<NoteEntry | null>(null);
@@ -197,6 +199,13 @@ export default function Notes() {
     setShowTemplatesModal(false);
     setShowAddModal(true);
   };
+
+  // Pre-fill last-used notebook when opening add modal
+  useEffect(() => {
+    if (showAddModal && !editingNote) {
+      setFormData(prev => ({ ...prev, notebook: lastNotebook || 'Default' }));
+    }
+  }, [showAddModal]);
 
   // Form state for add/edit modal
   const [formData, setFormData] = useState({
@@ -273,14 +282,15 @@ export default function Notes() {
         isPinned: formData.isPinned,
       });
 
-    setFormData({
-      title: '',
-      content: '',
-      notebook: 'Default',
-      tags: [],
-      isPinned: false,
-      noteType: 'rich',
-    });
+      saveNotebook(formData.notebook);
+      setFormData({
+        title: '',
+        content: '',
+        notebook: formData.notebook,
+        tags: [],
+        isPinned: false,
+        noteType: 'rich',
+      });
       setShowAddModal(false);
 
       toast({
@@ -522,7 +532,7 @@ export default function Notes() {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (editingNote ? handleUpdateNote : handleAddNote)(); } }}>
           {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>

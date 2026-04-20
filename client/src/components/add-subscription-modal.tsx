@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { POPULAR_SUBSCRIPTION_SERVICES } from '@/lib/popular-services';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,7 +213,31 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
           <DialogTitle>{editingSubscription ? 'Edit Subscription' : 'Add New Subscription'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }}>
+          {!editingSubscription && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Popular services</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SUBSCRIPTION_SERVICES.slice(0, 10).map(svc => (
+                  <button
+                    key={svc.name}
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      name: svc.name,
+                      cost: svc.cost?.toString() ?? prev.cost,
+                      billingCycle: svc.billingCycle ?? prev.billingCycle,
+                      category: svc.category,
+                      platformLink: svc.url,
+                    }))}
+                    className={`px-2 py-1 text-xs rounded-full border transition-colors ${formData.name === svc.name ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'}`}
+                  >
+                    {svc.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="service-name">Service Name *</Label>
             <Input
