@@ -5,8 +5,8 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 3000
+const TOAST_LIMIT = 3
+const TOAST_REMOVE_DELAY = 1000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -141,6 +141,8 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
+  // Default durations: success=3000ms, error/destructive=5000ms
+  const defaultDuration = props.variant === 'destructive' ? 5000 : 3000;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -152,6 +154,7 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: "ADD_TOAST",
     toast: {
+      duration: defaultDuration,
       ...props,
       id,
       open: true,

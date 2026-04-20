@@ -48,7 +48,6 @@ import {
 } from '@shared/schema';
 import { AddInvestmentModal } from '@/components/add-investment-modal';
 import { EditInvestmentModal } from '@/components/edit-investment-modal';
-import { getInvestmentTypeConfig } from '@/lib/brand-colors';
 
 export default function Investments() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
@@ -842,14 +841,10 @@ export default function Investments() {
                       const invested = investment.purchasePrice * investment.quantity;
                       const gainLoss = currentValue - invested;
                       const returnPct = (gainLoss / invested) * 100;
-                      const typeConfig = getInvestmentTypeConfig(investment.type);
 
                       return (
-                        <div key={investment.id} className="group relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-px hover:shadow-sm"
-                             style={{ borderLeft: `3px solid ${typeConfig.color}`, background: `linear-gradient(135deg, hsl(var(--card)), ${typeConfig.color}08)` }}>
-                          <div aria-hidden className="absolute -bottom-4 -right-2 pointer-events-none select-none opacity-[0.07] group-hover:opacity-[0.13] transition-opacity duration-300"
-                               style={{ fontSize: '5rem', lineHeight: 1 }}>{typeConfig.emoji}</div>
-                          <div className="flex flex-col gap-3 relative z-10">
+                        <div key={investment.id} className="p-4 hover:bg-muted/50 transition-colors">
+                          <div className="flex flex-col gap-3">
                             {/* Top row: Info and Value */}
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-3 min-w-0 flex-1">

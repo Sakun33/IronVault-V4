@@ -60,7 +60,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check, ChevronLeft } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -118,29 +118,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [isUnlocked, activeVault?.id, masterPassword]);
   const [location, setLocation] = useLocation();
-  const isInnerPage = location !== '/';
-
-  // Android hardware back button: go back in history, or dashboard if no history
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-    (async () => {
-      try {
-        const { App: CapApp } = await import('@capacitor/app');
-        const handle = await CapApp.addListener('backButton', ({ canGoBack }) => {
-          if (canGoBack) {
-            window.history.back();
-          } else {
-            setLocation('/');
-          }
-        });
-        cleanup = () => handle.remove();
-      } catch {
-        // Not running in Capacitor native context — no-op
-      }
-    })();
-    return () => cleanup?.();
-  }, [setLocation]);
-
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showExtensionPairing, setShowExtensionPairing] = useState(false);
@@ -249,28 +226,16 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header - Glassmorphism */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5">
         <div className="flex items-center justify-between max-w-full h-11 gap-1">
-          {/* Left side: back/menu + logo + vault chip — min-w-0 allows shrinking so right icons stay visible */}
+          {/* Left side: menu + logo + vault chip — min-w-0 allows shrinking so right icons stay visible */}
           <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-            {isInnerPage ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => window.history.back()}
-                className="h-9 w-9 rounded-xl shrink-0"
-                aria-label="Go back"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowQuickAccess(true)}
-                className="h-9 w-9 rounded-xl shrink-0"
-              >
-                <Menu className="w-5 h-5" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowQuickAccess(true)}
+              className="h-9 w-9 rounded-xl shrink-0"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
             <button
               onClick={() => setLocation('/')}
               className="flex items-center gap-1.5 hover:opacity-80 transition-opacity shrink-0"

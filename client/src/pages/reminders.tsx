@@ -45,7 +45,8 @@ import {
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 
 export default function Reminders() {
-  const { reminders, addReminder, updateReminder, deleteReminder, searchQuery, setSearchQuery } = useVault();
+  const { reminders, addReminder, updateReminder, deleteReminder } = useVault();
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<ReminderEntry | null>(null);
@@ -511,17 +512,25 @@ export default function Reminders() {
   );
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Reminders</h1>
-          <p className="text-muted-foreground text-sm">Manage tasks</p>
+    <div className="space-y-5 overflow-x-hidden">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+            <Bell className="w-6 h-6 text-purple-500" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Reminders</h1>
+              <Badge variant="secondary" className="rounded-full text-xs font-semibold">{reminders.length}</Badge>
+            </div>
+            <p className="text-muted-foreground text-sm">Tasks &amp; deadlines</p>
+          </div>
         </div>
-        
+
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
-            <Button size="icon" onClick={resetForm} data-testid="button-add-reminder" className="h-9 w-9 shrink-0" title="Add Reminder">
-              <Plus className="h-4 w-4" />
+            <Button size="sm" onClick={resetForm} data-testid="button-add-reminder" className="rounded-xl flex-shrink-0">
+              <Plus className="h-4 w-4 mr-1.5" />New
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90svh] overflow-y-auto">
@@ -926,6 +935,39 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Quick filter pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        {[
+          { label: `All (${reminders.length})`, key: 'all' },
+          { label: `Today (${viewStats.dueToday})`, key: 'today' },
+          { label: `This Week (${viewStats.thisWeek})`, key: 'week' },
+          { label: `Overdue (${viewStats.overdue})`, key: 'overdue' },
+          { label: `Done (${viewStats.completed})`, key: 'done' },
+        ].map(({ label, key }) => {
+          const isActive = key === 'overdue' ? showOverdueOnly
+            : key === 'done' ? showCompletedOnly
+            : dateFilter === key;
+          const activeColor = key === 'overdue' ? 'bg-red-500 border-red-500 text-white'
+            : key === 'done' ? 'bg-green-500 border-green-500 text-white'
+            : 'bg-purple-500 border-purple-500 text-white';
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                if (key === 'overdue') { setShowOverdueOnly(!showOverdueOnly); setShowCompletedOnly(false); setDateFilter('all'); }
+                else if (key === 'done') { setShowCompletedOnly(!showCompletedOnly); setShowOverdueOnly(false); setDateFilter('all'); }
+                else { setDateFilter(key as any); setShowOverdueOnly(false); setShowCompletedOnly(false); }
+              }}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                isActive ? activeColor : 'bg-muted/50 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters and Search */}

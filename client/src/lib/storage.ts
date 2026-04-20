@@ -1,7 +1,6 @@
 import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, VaultMetadata, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal } from '@shared/schema';
 import { CryptoService, KDFConfig as CryptoKDFConfig } from './crypto';
 import { PASSWORD_MANAGER_PARSERS, type ParserConfig } from './csv-parsers';
-import { getVaultFileAdapter, VaultFileAdapter, RawEntry, VaultSnapshot } from './vault-file-storage';
 
 export class VaultStorage {
   private dbName = 'IronVault';
@@ -12,114 +11,6 @@ export class VaultStorage {
   private maxFailedAttempts: number = 3;
   private lastFailedAttempt: number = 0;
   private lockoutDuration: number = 5 * 60 * 1000; // 5 minutes
-  // Suppresses vault:item:saved events during bulk import/replace operations.
-  // Without this flag, each item saved during replaceVaultFromBlob triggers the
-  // auto-sync push handler, causing a wasteful push immediately after every pull.
-  private isBulkImporting = false;
-
-  // ── Persistent file storage (OPFS on web, Capacitor Filesystem on native) ──
-  private readonly fileAdapter: VaultFileAdapter = getVaultFileAdapter();
-  private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor() {
-    // Auto-snapshot whenever any vault item is saved.
-    // vault:item:saved is dispatched by encryptAndStore + all delete methods,
-    // so this catches every mutation without touching each call site.
-    if (typeof window !== 'undefined') {
-      window.addEventListener('vault:item:saved', () => this.scheduleSnapshot());
-    }
-  }
-
-  // ── File-storage helpers ────────────────────────────────────────────────────
-
-  private fileVaultId(): string {
-    // Sanitize dbName so it is safe as a file-name component
-    return this.dbName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  }
-
-  /** Read all raw (already-encrypted) entries from IndexedDB without decrypting. */
-  private async getAllRawEntries(): Promise<RawEntry[]> {
-    if (!this.db) return [];
-    return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(['encrypted_data'], 'readonly');
-      const req = tx.objectStore('encrypted_data').getAll();
-      req.onsuccess = () => resolve(req.result ?? []);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  /** Write raw entries back into IndexedDB (used during file-restore). */
-  private async putRawEntries(entries: RawEntry[]): Promise<void> {
-    if (!this.db || entries.length === 0) return;
-    return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(['encrypted_data'], 'readwrite');
-      const store = tx.objectStore('encrypted_data');
-      let i = 0;
-      const putNext = () => {
-        if (i >= entries.length) { resolve(); return; }
-        const req = store.put(entries[i++]);
-        req.onsuccess = putNext;
-        req.onerror = () => reject(req.error);
-      };
-      putNext();
-    });
-  }
-
-  /** Debounce: write a full snapshot at most once per 2 seconds after the last write. */
-  private scheduleSnapshot(): void {
-    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
-    this.snapshotTimer = setTimeout(() => { this.snapshotToFile(); }, 2000);
-  }
-
-  /** Serialise the current vault state to the persistent file. Fire-and-forget. */
-  async snapshotToFile(): Promise<void> {
-    try {
-      const [entries, metadata] = await Promise.all([
-        this.getAllRawEntries(),
-        this.getMetadata(),
-      ]);
-      const snap: VaultSnapshot = {
-        v: 1,
-        vaultId: this.fileVaultId(),
-        metadata: metadata ?? null,
-        entries,
-        snapshottedAt: Date.now(),
-      };
-      await this.fileAdapter.write(this.fileVaultId(), snap);
-      console.log(`💾 Vault snapshot written (${entries.length} entries)`);
-    } catch (err) {
-      console.error('[vault-file] snapshot failed:', err);
-    }
-  }
-
-  /**
-   * If IndexedDB metadata is absent (browser wiped storage), restore from the
-   * persistent file snapshot. Called at the top of unlockVault / unlockVaultWithKey
-   * so the unlock proceeds normally against the restored data.
-   */
-  private async restoreFromFileIfNeeded(): Promise<boolean> {
-    try {
-      const snap = await this.fileAdapter.read(this.fileVaultId());
-      if (!snap) return false;
-
-      // Restore metadata first (needed for key derivation in unlock)
-      if (snap.metadata) {
-        await this.saveMetadata(snap.metadata);
-      }
-      // Restore encrypted entries
-      if (snap.entries.length > 0) {
-        await this.putRawEntries(snap.entries);
-        console.log(`♻️ Vault auto-restored from persistent storage (${snap.entries.length} items)`);
-        window.dispatchEvent(new CustomEvent('vault:restored-from-file', {
-          detail: { count: snap.entries.length },
-        }));
-      }
-      return !!(snap.metadata);
-    } catch (err) {
-      console.error('[vault-file] restore failed:', err);
-      return false;
-    }
-  }
 
   // Public method to get database
   getDatabase(): IDBDatabase | undefined {
@@ -133,10 +24,6 @@ export class VaultStorage {
 
   // Initialize IndexedDB with proper migration handling
   async init(): Promise<void> {
-    // Request durable (non-evictable) storage on web; best-effort, no await needed.
-    if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-      navigator.storage.persist().catch(() => {});
-    }
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
@@ -206,17 +93,13 @@ export class VaultStorage {
   // Force database recreation
   async recreateDatabase(): Promise<void> {
     console.log('🔄 Forcing database recreation...');
-
-    // Also remove the persistent file snapshot so it doesn't re-hydrate the
-    // deleted data on the next unlock.
-    await this.fileAdapter.delete(this.fileVaultId()).catch(() => {});
-
+    
     // Close current connection
     if (this.db) {
       this.db.close();
       this.db = undefined;
     }
-
+    
     // Delete and recreate
     return new Promise((resolve, reject) => {
       const deleteRequest = indexedDB.deleteDatabase(this.dbName);
@@ -231,30 +114,6 @@ export class VaultStorage {
         reject(new Error('Failed to delete database'));
       };
     });
-  }
-
-  /**
-   * Derive an extractable copy of the vault encryption key using the master password.
-   * Used for family vault key sharing — the default key is non-extractable.
-   *
-   * @param masterPassword - Owner's master password (verified against vault data)
-   */
-  async deriveExtractableVaultKey(masterPassword: string): Promise<CryptoKey> {
-    if (!this.encryptionKey) throw new Error('Vault not unlocked');
-    const metadata = await this.getMetadata();
-    if (!metadata) throw new Error('Vault metadata not found');
-    const salt = CryptoService.base64ToUint8Array(metadata.encryptionSalt);
-    const kdfConfig = metadata.kdfConfig || CryptoService.KDF_PRESETS.standard;
-    // Re-derive with extractable=true for key export
-    return CryptoService.deriveKeyWithConfig(masterPassword, salt, kdfConfig, true);
-  }
-
-  /**
-   * Return the vault ID (database name) for the current vault.
-   * Used to identify which vault is being shared.
-   */
-  getCurrentVaultId(): string {
-    return this.dbName;
   }
 
   // Reset all internal state for full vault reset
@@ -404,17 +263,12 @@ export class VaultStorage {
     console.log('✅ Encryption key set');
   }
 
-  // Check if vault exists (IndexedDB OR persistent file backup)
+  // Check if vault exists
   async vaultExists(): Promise<boolean> {
     if (!this.db) throw new Error('Database not initialized');
 
     const metadata = await this.getMetadata();
-    if (metadata) return true;
-
-    // If IndexedDB was cleared, check whether a file snapshot exists.
-    // This prevents "Create New Vault" from appearing after a cache wipe.
-    const snap = await this.fileAdapter.read(this.fileVaultId()).catch(() => null);
-    return !!(snap?.metadata);
+    return metadata !== undefined;
   }
 
   // Create new vault with optional KDF configuration
@@ -460,15 +314,7 @@ export class VaultStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      let metadata = await this.getMetadata();
-
-      // If IndexedDB was wiped (e.g. browser cleared "Cookies and site data"),
-      // restore from the persistent file snapshot before attempting unlock.
-      if (!metadata) {
-        await this.restoreFromFileIfNeeded();
-        metadata = await this.getMetadata();
-      }
-
+      const metadata = await this.getMetadata();
       if (!metadata) return false;
 
       const salt = CryptoService.base64ToUint8Array(metadata.encryptionSalt);
@@ -523,20 +369,13 @@ export class VaultStorage {
       }
 
       this.encryptionKey = key;
-
+      
       // Reset failed attempts on successful unlock
       await this.resetFailedAttempts();
 
       // Update last unlocked time
       metadata.lastUnlocked = new Date();
       await this.saveMetadata(metadata);
-
-      // Ensure a persistent file snapshot exists (creates it on first unlock
-      // after the feature is deployed, so existing users are protected too).
-      const existingSnap = await this.fileAdapter.read(this.fileVaultId()).catch(() => null);
-      if (!existingSnap) {
-        this.scheduleSnapshot();
-      }
 
       return true;
     } catch (error) {
@@ -551,12 +390,6 @@ export class VaultStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      // Auto-restore from persistent file if IndexedDB was cleared
-      const existingMetadata = await this.getMetadata();
-      if (!existingMetadata) {
-        await this.restoreFromFileIfNeeded();
-      }
-
       // Import the base64 key as a CryptoKey
       const keyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
       const key = await crypto.subtle.importKey(
@@ -616,33 +449,10 @@ export class VaultStorage {
     });
   }
 
-  // Replace vault contents from an encrypted cloud blob (clear then re-import).
-  // Sets isBulkImporting so individual item saves don't fire vault:item:saved,
-  // which would trigger a cloud push immediately after every pull.
+  // Replace vault contents from an encrypted cloud blob (clear then re-import)
   async replaceVaultFromBlob(encryptedBlob: string, masterPassword: string): Promise<void> {
-    this.isBulkImporting = true;
-    try {
-      await this.clearEncryptedItems();
-      await this.importVault(encryptedBlob, masterPassword);
-    } finally {
-      this.isBulkImporting = false;
-      // Snapshot the fully-imported vault to the persistent file.
-      this.scheduleSnapshot();
-    }
-  }
-
-  // User-facing import: suppresses per-item events, fires vault:import:complete
-  // when ALL items are in IndexedDB so the cloud sync hook can do an immediate push.
-  async importVaultBulk(data: string, password?: string): Promise<void> {
-    this.isBulkImporting = true;
-    try {
-      await this.importVault(data, password);
-    } finally {
-      this.isBulkImporting = false;
-    }
-    // Dispatch AFTER finally so isBulkImporting is already false before any
-    // handler runs (prevents re-entry into bulk mode).
-    window.dispatchEvent(new CustomEvent('vault:import:complete'));
+    await this.clearEncryptedItems();
+    await this.importVault(encryptedBlob, masterPassword);
   }
 
   // Save metadata
@@ -692,12 +502,10 @@ export class VaultStorage {
       const request = store.put({ ...encryptedEntry, store: storeName });
 
       request.onsuccess = () => {
-        // Don't trigger sync for:
-        // 1. Internal stores (persistent_data) — written during export, would cause
-        //    an infinite push loop: save → export → saveBackupMetadata → vault:item:saved → …
-        // 2. Bulk import/replace operations — each imported item would queue a push,
-        //    causing a spurious upload immediately after every cloud pull.
-        if (storeName !== 'persistent_data' && !this.isBulkImporting) {
+        // Don't trigger sync for internal/metadata stores — they are written
+        // during export itself (saveBackupMetadata), which would create an
+        // infinite push loop: save → export → saveBackupMetadata → vault:item:saved → export → …
+        if (storeName !== 'persistent_data') {
           window.dispatchEvent(new CustomEvent('vault:item:saved'));
         }
         resolve();
@@ -1008,7 +816,6 @@ export class VaultStorage {
     const bankTransactions = await this.getAllBankTransactions();
     const investments = await this.getAllInvestments();
     const investmentGoals = await this.getAllInvestmentGoals();
-    const apiKeys = await this.getAllApiKeys();
     const metadata = await this.getMetadata();
 
     const exportData = {
@@ -1021,10 +828,9 @@ export class VaultStorage {
       bankTransactions,
       investments,
       investmentGoals,
-      apiKeys,
       metadata,
       exportedAt: new Date(),
-      version: 3, // v3 adds apiKeys
+      version: 2, // Updated version for new data types
     };
 
     const salt = CryptoService.generateSalt();
@@ -1158,8 +964,6 @@ export class VaultStorage {
           diagnosticMessage = 'The file appears to be a JSON array, but IronVault expects a JSON object.';
         } else if (data.length < 10) {
           diagnosticMessage = 'The file is too short to be a valid JSON export.';
-        } else if (parseError instanceof DOMException && parseError.name === 'OperationError') {
-          diagnosticMessage = 'Incorrect password — decryption failed. Please check your export password and try again.';
         } else {
           diagnosticMessage = 'The file format is not recognized. Please ensure it\'s a valid IronVault JSON export.';
         }
@@ -1227,13 +1031,6 @@ export class VaultStorage {
       if (importData.bankTransactions) {
         for (const transaction of importData.bankTransactions) {
           await this.saveBankTransaction(transaction);
-        }
-      }
-
-      // Import API keys (v3+)
-      if (importData.apiKeys) {
-        for (const apiKey of importData.apiKeys) {
-          await this.saveApiKey(apiKey);
         }
       }
 

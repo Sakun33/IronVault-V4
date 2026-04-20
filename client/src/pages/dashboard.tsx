@@ -38,10 +38,8 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, isWithinInterval, addDays, startOfDay, differenceInCalendarDays } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
-import { PasswordGenerator } from "@/lib/password-generator";
-import { Favicon } from "@/components/favicon";
-import { getBrandColor } from "@/lib/brand-colors";
 import { ImportExportModal } from "@/components/import-export-modal";
+import { Favicon } from "@/components/favicon";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 
@@ -219,10 +217,8 @@ export default function Dashboard() {
     .filter(s => s.isActive)
     .reduce((total, s) => total + (s.cost || 0), 0);
 
-  const weakPasswords = passwords.filter(p => {
-    if (!p.password) return false;
-    return PasswordGenerator.calculateStrength(p.password).level === 'weak';
-  }).length;
+  // Count weak passwords (assuming we'll add strength calculation later)
+  const weakPasswords = 0; // passwords.filter(p => (p.strength || 0) < 3).length;
 
   return (
     <div>
@@ -447,12 +443,9 @@ export default function Dashboard() {
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="p-4">
                 <div className="space-y-3">
-                  {recentPasswords.map((password) => {
-                    const brandColor = getBrandColor(password.name);
-                    return (
-                    <div key={password.id} className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
-                         style={{ borderLeft: `3px solid ${brandColor}`, background: `linear-gradient(135deg, hsl(var(--accent)/0.5), ${brandColor}08)` }}>
-                      <div className="flex items-center gap-3 relative z-10">
+                  {recentPasswords.map((password) => (
+                    <div key={password.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
+                      <div className="flex items-center gap-3">
                         <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{password.name}</p>
@@ -463,7 +456,7 @@ export default function Dashboard() {
                         variant="ghost"
                         size="sm"
                         onClick={() => copyPassword(password.password, password.id)}
-                        className="p-2 relative z-10"
+                        className="p-2"
                       >
                         {copiedId === password.id ? (
                           <CheckCircle className="w-4 h-4 text-primary" />
@@ -472,7 +465,7 @@ export default function Dashboard() {
                         )}
                       </Button>
                     </div>
-                  );})}
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -486,13 +479,12 @@ export default function Dashboard() {
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="p-4">
                 <div className="space-y-3">
-                  {upcomingRenewals.map((subscription) => {
-                    const brandColor = getBrandColor(subscription.name);
-                    return (
-                    <div key={subscription.id} className="group relative flex items-center justify-between p-3 rounded-xl overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
-                         style={{ borderLeft: `3px solid ${brandColor}`, background: `linear-gradient(135deg, hsl(var(--accent)/0.5), ${brandColor}08)` }}>
-                      <div className="flex items-center gap-3 relative z-10">
-                        <Favicon url={subscription.platformLink} name={subscription.name} className="w-8 h-8 flex-shrink-0" />
+                  {upcomingRenewals.map((subscription) => (
+                    <div key={subscription.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bookmark className="w-4 h-4 text-primary" />
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">{subscription.name}</p>
                           <p className="text-xs text-muted-foreground">
@@ -500,7 +492,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right relative z-10">
+                      <div className="text-right">
                         <p className="text-sm font-medium text-foreground">
                           {formatCurrency(subscription.cost || 0, currency)}
                         </p>
@@ -509,7 +501,7 @@ export default function Dashboard() {
                         </Badge>
                       </div>
                     </div>
-                  );})}
+                  ))}
                 </div>
               </CardContent>
             </Card>

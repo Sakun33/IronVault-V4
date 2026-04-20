@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { vaultStorage } from '@/lib/storage';
-import { pushCloudVault, isVaultCloudSynced, listCloudVaults, downloadCloudVault } from '@/lib/cloud-vault-sync';
+import { pushCloudVault, isVaultCloudSynced, listCloudVaults, downloadCloudVault, getCloudToken, markVaultAsCloudSynced } from '@/lib/cloud-vault-sync';
 
 const DEBOUNCE_MS = 3000;
 const POLL_MS = 60_000;
@@ -55,25 +55,42 @@ export function useCloudAutoSync(
   }, [vaultId, masterPassword]);
 
   // ── Immediate push after a bulk import (no debounce) ─────────────────────
+  // Uses getCloudToken() instead of isVaultCloudSynced() so this never silently
+  // skips the push due to a race condition: the heal effect in App.tsx marks the
+  // vault as cloud-synced ASYNCHRONOUSLY (after a listCloudVaults() round-trip),
+  // so a user who imports immediately after unlock could beat that write.
   useEffect(() => {
     if (!vaultId || !masterPassword) return;
 
     const handleImportComplete = async () => {
-      if (!isVaultCloudSynced(vaultId)) return;
+      // Primary gate: user must have cloud auth. For non-cloud users this is null.
+      if (!getCloudToken()) return;
+      if (!vaultId || !masterPassword) return;
+
       // Cancel any pending debounced push — we're about to push right now
       pushPendingRef.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       try {
         const blob = await vaultStorage.exportVault(masterPassword);
         const { vaultManager } = await import('@/lib/vault-manager');
-        const vaultMeta = vaultManager.getLocalVaults().find(v => v.id === vaultId);
+        const vaultMeta = vaultManager.getLocalVaults().find((v: any) => v.id === vaultId);
         const vaultName = vaultMeta?.name ?? 'My Vault';
-        console.log('IMPORT: pushing vault to cloud after import');
-        await pushCloudVault(vaultId, vaultName, blob, false);
-        const lastPullKey = `${LAST_PULL_PREFIX}${vaultId}`;
-        localStorage.setItem(lastPullKey, new Date().toISOString());
-      } catch {
-        // Silently fail — next debounced push or manual sync will retry
+        console.log('[IMPORT] Pushing vault to cloud after import...');
+        const result = await pushCloudVault(vaultId, vaultName, blob, false);
+        if (result.success) {
+          // Ensure vault is registered as cloud-synced in case the heal effect
+          // hasn't run yet (the race condition this whole fix addresses).
+          markVaultAsCloudSynced(vaultId);
+          const lastPullKey = `${LAST_PULL_PREFIX}${vaultId}`;
+          localStorage.setItem(lastPullKey, new Date().toISOString());
+          console.log('[IMPORT] Cloud push complete — all imported records synced.');
+        } else if (result.serverNewer) {
+          console.warn('[IMPORT] Server has newer data — skipping push to avoid overwrite.');
+        } else {
+          console.error('[IMPORT] Cloud push failed. Records may not sync to other devices.', result);
+        }
+      } catch (e) {
+        console.error('[IMPORT] Cloud push threw an error:', e);
       } finally {
         pushPendingRef.current = false;
       }

@@ -328,7 +328,7 @@ export default function SignupPage() {
                   type="button"
                   onClick={() => setShowAccountPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showAccountPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
                 >
                   {showAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -357,7 +357,7 @@ export default function SignupPage() {
                   type="button"
                   onClick={() => setShowConfirmAccountPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showConfirmAccountPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
                 >
                   {showConfirmAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

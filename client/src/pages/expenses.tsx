@@ -43,8 +43,6 @@ import {
   Plane
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { BrandCard } from '@/components/brand-card';
-import { getExpenseCategoryConfig } from '@/lib/brand-colors';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 // Color palette for charts
@@ -1076,11 +1074,9 @@ export default function Expenses() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-          {sortedExpenses.map(expense => {
-            const catConfig = getExpenseCategoryConfig(expense.category);
-            return (
-            <BrandCard key={expense.id} name={expense.title} brandColor={catConfig.color} watermarkEmoji={catConfig.emoji} className="cursor-pointer">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedExpenses.map(expense => (
+            <Card key={expense.id} className="cursor-pointer transition-shadow hover:shadow-md">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-base line-clamp-1" data-testid={`expense-title-${expense.id}`}>
@@ -1166,8 +1162,8 @@ export default function Expenses() {
                   </div>
                 )}
               </CardContent>
-            </BrandCard>
-          );})}
+            </Card>
+          ))}
         </div>
       )}
 

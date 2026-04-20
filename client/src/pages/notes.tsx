@@ -158,7 +158,8 @@ const EnhancedMarkdown = ({ content }: { content: string }) => {
 };
 
 export default function Notes() {
-  const { notes, addNote, updateNote, deleteNote, searchQuery, setSearchQuery } = useVault();
+  const { notes, addNote, updateNote, deleteNote } = useVault();
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
   const { lastNotebook, saveNotebook } = useFormDefaults();

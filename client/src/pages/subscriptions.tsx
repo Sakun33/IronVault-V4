@@ -196,25 +196,24 @@ export default function Subscriptions() {
     <div className="overflow-x-hidden">
       <div className="space-y-6 overflow-x-hidden">
         {/* Header */}
-        <div className="flex flex-col gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Subscriptions</h1>
-            <p className="text-muted-foreground text-sm">Track and manage your recurring subscriptions</p>
-            {!isPro && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {subscriptions.length}/{subscriptionLimit} · <span className="text-primary cursor-pointer hover:underline">Upgrade</span> for unlimited
-              </p>
-            )}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Bell className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Subscriptions</h1>
+                <Badge variant="secondary" className="rounded-full text-xs font-semibold">
+                  {subscriptions.length}{!isPro && `/${subscriptionLimit}`}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground text-sm">Recurring payments &amp; services</p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowTemplatesModal(true)}
-              className="rounded-xl"
-            >
-              <LayoutTemplate className="w-4 h-4 mr-1" />
-              Templates
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl hidden sm:flex">
+              <LayoutTemplate className="w-4 h-4 mr-1.5" />Templates
             </Button>
             <Button
               onClick={() => {
@@ -226,11 +225,11 @@ export default function Subscriptions() {
                 setShowAddModal(true);
               }}
               size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
+              className="rounded-xl"
               disabled={atSubscriptionLimit}
             >
-              <Plus className="w-4 h-4 mr-1" />
-              {atSubscriptionLimit ? 'Upgrade to Add' : 'Add'}
+              <Plus className="w-4 h-4 mr-1.5" />
+              {atSubscriptionLimit ? 'Upgrade' : 'Add'}
             </Button>
           </div>
         </div>

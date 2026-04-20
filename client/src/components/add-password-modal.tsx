@@ -58,7 +58,7 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
           name: editingPassword.name || '',
           url: editingPassword.url || '',
           username: editingPassword.username || '',
-          password: editingPassword.password || '',
+          password: editingPassword.password || (!editingPassword.id ? generateDefaultPassword() : ''),
           category: editingPassword.category || '',
           notes: editingPassword.notes || '',
         });
@@ -91,7 +91,7 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
     }
     setIsSubmitting(true);
     try {
-      if (editingPassword) {
+      if (editingPassword?.id) {
         await updatePassword(editingPassword.id, formData);
         toast({ title: "Updated", description: "Password updated successfully" });
       } else {
@@ -142,27 +142,27 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
       <MobileDialog
         open={open}
         onOpenChange={onOpenChange}
-        title={editingPassword ? 'Edit Password' : 'Add New Password'}
+        title={editingPassword?.id ? 'Edit Password' : 'Add New Password'}
         contentClassName="space-y-4"
         footer={
           <div className="flex gap-2 w-full">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1" data-testid="cancel-button">
               Cancel
             </Button>
-            {!editingPassword && (
+            {!editingPassword?.id && (
               <Button type="button" variant="outline" onClick={handleSaveAndAddAnother} disabled={isSubmitting} className="flex-1 text-xs">
                 Save & Add Another
               </Button>
             )}
             <Button type="submit" form="password-form" className="flex-1" disabled={isSubmitting} data-testid="save-password-button">
-              {isSubmitting ? "Saving…" : (editingPassword ? "Update" : "Save")}
+              {isSubmitting ? "Saving…" : (editingPassword?.id ? "Update" : "Save")}
             </Button>
           </div>
         }
       >
         <form id="password-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
           {/* Service template chips */}
-          {!editingPassword && (
+          {!editingPassword?.id && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Quick fill</Label>
               <div className="flex flex-wrap gap-1.5">

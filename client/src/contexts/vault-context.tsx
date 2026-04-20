@@ -656,10 +656,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   const importVault = async (data: string, password?: string): Promise<void> => {
-    // importVaultBulk suppresses per-item events and fires vault:import:complete
-    // after ALL items are in IndexedDB — the cloud sync hook handles the push immediately.
-    await vaultStorage.importVaultBulk(data, password);
+    await vaultStorage.importVault(data, password);
+    
+    // Log the import activity
     addLog('Import Vault', 'system', `Imported complete vault data${password ? ' with password protection' : ' (plaintext)'}`);
+    
     await refreshData();
   };
 
@@ -676,10 +677,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   const importPasswordsFromCSV = async (csvContent: string, parserId: string): Promise<{ imported: number; skipped: number }> => {
     const result = await vaultStorage.importPasswordsFromCSV(csvContent, parserId);
+    
+    // Log the import activity
     addLog('Import Passwords', 'password', `Imported ${result.imported} passwords from CSV (${result.skipped} skipped)`);
+    
     await refreshData();
-    // Use vault:import:complete so the cloud push fires immediately (no 3-second debounce).
-    window.dispatchEvent(new CustomEvent('vault:import:complete'));
     return result;
   };
 

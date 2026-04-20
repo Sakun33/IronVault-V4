@@ -120,9 +120,24 @@ export default function Login() {
 
             {/* Account Password */}
             <div>
-              <Label htmlFor="account-password" className="text-sm font-medium mb-1.5 block">
-                Account Password
-              </Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label htmlFor="account-password" className="text-sm font-medium">
+                  Account Password
+                </Label>
+                <Link href="/auth/signup">
+                  <a
+                    data-testid="link-forgot-password"
+                    className="text-xs text-primary hover:underline"
+                    onClick={(e) => {
+                      // Placeholder — show toast since password reset not yet implemented
+                      e.preventDefault();
+                      toast({ title: 'Password reset', description: 'Email password reset is not available yet. Contact support at subsafeironvault@gmail.com' });
+                    }}
+                  >
+                    Forgot password?
+                  </a>
+                </Link>
+              </div>
               <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -140,23 +155,10 @@ export default function Login() {
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
-              </div>
-              <div className="flex justify-end mt-1">
-                <a
-                  data-testid="link-forgot-password"
-                  className="text-xs text-primary hover:underline"
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast({ title: 'Password reset', description: 'Email password reset is not available yet. Contact support at subsafeironvault@gmail.com' });
-                  }}
-                >
-                  Forgot password?
-                </a>
               </div>
             </div>
 

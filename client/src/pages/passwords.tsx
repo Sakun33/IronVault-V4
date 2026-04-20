@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, MoreVertical, CheckCircle } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, MoreVertical, CheckCircle, User } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
@@ -242,8 +242,20 @@ export default function Passwords() {
                         </p>
                       </div>
 
-                      {/* Inline actions: copy + kebab */}
+                      {/* Inline actions: copy username + copy password + kebab */}
                       <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => copyUsername(password.username, password.id)}
+                          data-testid={`copy-username-${password.id}`}
+                          title="Copy username"
+                        >
+                          {copiedId === `${password.id}-username`
+                            ? <CheckCircle className="w-4 h-4 text-primary" />
+                            : <User className="w-4 h-4 text-muted-foreground" />}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -271,10 +283,6 @@ export default function Passwords() {
                               {isVisible
                                 ? <><EyeOff className="w-4 h-4 mr-2" />Hide password</>
                                 : <><Eye className="w-4 h-4 mr-2" />Reveal password</>}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => copyUsername(password.username, password.id)}>
-                              <Copy className="w-4 h-4 mr-2" />
-                              Copy username
                             </DropdownMenuItem>
                             {password.url && (
                               <DropdownMenuItem onClick={() => window.open(password.url, '_blank')}>

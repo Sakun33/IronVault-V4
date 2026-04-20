@@ -544,6 +544,32 @@
   .stagger-children > *:nth-child(9) { animation-delay: 400ms; }
   .stagger-children > *:nth-child(10) { animation-delay: 450ms; }
 
+  /* ── Tiptap editor styles ──────────────────────────────────────────────── */
+  .tiptap-editor { font-size: 0.9375rem; line-height: 1.7; color: hsl(var(--foreground)); }
+  .tiptap-editor h1 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.5rem; line-height: 1.3; }
+  .tiptap-editor h2 { font-size: 1.25rem; font-weight: 600; margin: 0.9rem 0 0.4rem; line-height: 1.3; }
+  .tiptap-editor h3 { font-size: 1.1rem; font-weight: 600; margin: 0.8rem 0 0.35rem; line-height: 1.3; }
+  .tiptap-editor p { margin: 0.35rem 0; }
+  .tiptap-editor strong { font-weight: 700; }
+  .tiptap-editor em { font-style: italic; }
+  .tiptap-editor s { text-decoration: line-through; }
+  .tiptap-editor code { font-family: ui-monospace, monospace; font-size: 0.85em; background: hsl(var(--muted)); padding: 0.1em 0.35em; border-radius: 4px; }
+  .tiptap-editor pre { background: hsl(var(--muted)); border-radius: 8px; padding: 0.75rem 1rem; margin: 0.5rem 0; overflow-x: auto; }
+  .tiptap-editor pre code { background: none; padding: 0; font-size: 0.875rem; }
+  .tiptap-editor blockquote { border-left: 3px solid hsl(var(--primary)); margin: 0.5rem 0; padding: 0.25rem 0 0.25rem 1rem; color: hsl(var(--muted-foreground)); font-style: italic; }
+  .tiptap-editor hr { border: none; border-top: 1px solid hsl(var(--border)); margin: 1rem 0; }
+  .tiptap-bullet-list, .tiptap-ordered-list { padding-left: 1.5rem; margin: 0.4rem 0; }
+  .tiptap-bullet-list li, .tiptap-ordered-list li { margin: 0.15rem 0; }
+  .tiptap-bullet-list { list-style-type: disc; }
+  .tiptap-ordered-list { list-style-type: decimal; }
+  .tiptap-task-list { list-style: none; padding-left: 0.25rem; margin: 0.4rem 0; }
+  .tiptap-task-item { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.2rem 0; }
+  .tiptap-task-item > label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+  .tiptap-task-item > label > input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: hsl(var(--primary)); cursor: pointer; }
+  .tiptap-task-item > div { flex: 1; }
+  .tiptap-task-item[data-checked="true"] > div { text-decoration: line-through; color: hsl(var(--muted-foreground)); }
+  .tiptap-empty:first-child::before { content: attr(data-placeholder); float: left; color: hsl(var(--muted-foreground)); pointer-events: none; height: 0; }
+
   /* Safe areas */
   .safe-top { padding-top: env(safe-area-inset-top); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

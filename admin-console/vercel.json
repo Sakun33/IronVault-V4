@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "echo 'using pre-built frontend dist'",
+  "buildCommand": "cd frontend && npm install --legacy-peer-deps && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "echo 'skipping install'",
+  "installCommand": "npm install --legacy-peer-deps && cd backend && npm install --legacy-peer-deps",
   "framework": null,
   "rewrites": [
     {

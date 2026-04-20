@@ -85,7 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      await vaultStorage.init();
+      // Sync vaultStorage to the persisted active vault (e.g. a cloud vault) before
+      // calling init, so we open the right IndexedDB instead of always defaulting to
+      // the bare "IronVault" database.
+      const activeVaultId = vaultManager.getActiveVaultId();
+      if (activeVaultId) {
+        await vaultStorage.switchToVault(activeVaultId);
+      } else {
+        await vaultStorage.init();
+      }
       const exists = await vaultStorage.vaultExists();
       setVaultExists(exists);
 
