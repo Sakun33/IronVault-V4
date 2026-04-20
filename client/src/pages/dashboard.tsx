@@ -5,46 +5,109 @@ import { StatCard, SectionCard } from "@/components/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Lock, 
-  Bookmark, 
-  FileText, 
-  DollarSign, 
-  Bell, 
-  TrendingUp, 
-  Building2,
-  ClipboardList,
+import {
+  Lock,
+  Bookmark,
+  FileText,
+  DollarSign,
+  Bell,
   Plus,
-  Eye,
-  EyeOff,
-  Calendar,
   CreditCard,
   AlertTriangle,
   CheckCircle,
   Clock,
-  BarChart3,
-  Search,
   Globe,
   Copy,
-  Edit,
   Upload,
   Shield,
-  RefreshCw
+  RefreshCw,
+  Info,
+  BarChart3,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, isWithinInterval, addDays, startOfDay, differenceInCalendarDays } from "date-fns";
+import { format, addDays, differenceInCalendarDays, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+
+// ── Security score ring ───────────────────────────────────────────────────────
+function SecurityRing({ score }: { score: number }) {
+  const r = 30, cx = 38, cy = 38, sw = 8;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  const color = score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
+  const label = score >= 75 ? 'Strong' : score >= 50 ? 'Fair' : 'Weak';
+  return (
+    <div className="flex items-center gap-3">
+      <svg width="76" height="76" viewBox="0 0 76 76" className="flex-shrink-0">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-muted/20" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
+          strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+        />
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="15" fontWeight="700" fill={color}>{score}</text>
+      </svg>
+      <div>
+        <p className="text-sm font-semibold text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">Security score</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Expense mini donut ────────────────────────────────────────────────────────
+function polarToXY(cx: number, cy: number, r: number, deg: number) {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function MiniDonut({ segments }: { segments: { pct: number; color: string }[] }) {
+  const cx = 44, cy = 44, r = 34, sw = 14;
+  let angle = 0;
+  const arcs = segments.map((seg) => {
+    const start = angle;
+    const sweep = Math.min(seg.pct, 99.9) * 3.6;
+    angle += sweep;
+    const s = polarToXY(cx, cy, r, start);
+    const e = polarToXY(cx, cy, r, angle);
+    const large = sweep > 180 ? 1 : 0;
+    return { ...seg, d: `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}` };
+  });
+  return (
+    <svg width="88" height="88" viewBox="0 0 88 88" className="flex-shrink-0">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-muted/20" />
+      {arcs.map((arc, i) => (
+        <path key={i} d={arc.d} fill="none" stroke={arc.color} strokeWidth={sw} strokeLinecap="butt" />
+      ))}
+    </svg>
+  );
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'Food & Dining': '#f97316',
+  'Transportation': '#3b82f6',
+  'Shopping': '#a855f7',
+  'Entertainment': '#ec4899',
+  'Bills & Utilities': '#eab308',
+  'Healthcare': '#22c55e',
+  'Travel': '#06b6d4',
+  'Education': '#8b5cf6',
+  'Business': '#64748b',
+  'Home & Garden': '#84cc16',
+  'Personal Care': '#f43f5e',
+  'Insurance': '#6366f1',
+  'Investments': '#10b981',
+  'Gifts & Donations': '#f59e0b',
+  'Other': '#94a3b8',
+};
 
 export default function Dashboard() {
-  const { passwords, subscriptions, stats, searchQuery, setSearchQuery, refreshData } = useVault();
+  const { passwords, subscriptions, expenses, reminders, stats, searchQuery, setSearchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { getLogsForCurrentVault } = useLogging();
   const { toast } = useToast();
@@ -220,6 +283,45 @@ export default function Dashboard() {
   // Count weak passwords (assuming we'll add strength calculation later)
   const weakPasswords = 0; // passwords.filter(p => (p.strength || 0) < 3).length;
 
+  const securityScore = useMemo(() => {
+    if (stats.totalPasswords === 0) return 0;
+    let score = Math.min(50, stats.totalPasswords * 5);
+    if (stats.activeSubscriptions > 0) score += 20;
+    if (expenses.length > 0) score += 15;
+    if (stats.totalNotes > 0) score += 15;
+    score -= weakPasswords * 5;
+    return Math.max(0, Math.min(100, score));
+  }, [stats.totalPasswords, stats.activeSubscriptions, expenses.length, stats.totalNotes, weakPasswords]);
+
+  const topExpenseCategories = useMemo(() => {
+    const byCategory: Record<string, number> = {};
+    expenses.forEach(e => {
+      const cat = e.category || 'Other';
+      byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0);
+    });
+    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+    if (total === 0) return [];
+    return Object.entries(byCategory)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([cat, amount]) => ({
+        cat,
+        amount,
+        pct: (amount / total) * 100,
+        color: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS['Other'],
+      }));
+  }, [expenses]);
+
+  const dueReminders = useMemo(() => {
+    const now = new Date();
+    const in7 = addDays(now, 7);
+    return reminders
+      .filter(r => !r.isCompleted && r.dueDate)
+      .filter(r => isAfter(r.dueDate, startOfDay(now)) && isBefore(r.dueDate, endOfDay(in7)))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 5);
+  }, [reminders]);
+
   return (
     <div>
       <div className="space-y-6">
@@ -352,12 +454,11 @@ export default function Dashboard() {
             value={formatCurrency(monthlySpend, currency)} 
             color="text-foreground" 
           />
-          <StatCard 
-            icon={AlertTriangle} 
-            label="Weak Passwords" 
-            value={weakPasswords} 
-            color="text-foreground" 
-          />
+          <Card className="rounded-2xl shadow-sm">
+            <CardContent className="p-4 flex items-center h-full">
+              <SecurityRing score={securityScore} />
+            </CardContent>
+          </Card>
         </div>
 
         {/* Quick Access Sections */}
@@ -398,6 +499,64 @@ export default function Dashboard() {
             </Link>
           </div>
         </div>
+
+        {/* Expense Donut */}
+        {topExpenseCategories.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Expense Breakdown</h2>
+            <Card className="rounded-2xl shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-6">
+                  <MiniDonut segments={topExpenseCategories.map(c => ({ pct: c.pct, color: c.color }))} />
+                  <div className="flex-1 space-y-2">
+                    {topExpenseCategories.map(c => (
+                      <div key={c.cat} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                          <span className="text-xs text-foreground">{c.cat}</span>
+                        </div>
+                        <span className="text-xs font-medium text-muted-foreground">{c.pct.toFixed(0)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Due Soon Reminders */}
+        {dueReminders.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Due This Week</h2>
+            <Card className="rounded-2xl shadow-sm">
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {dueReminders.map(r => {
+                    const daysLeft = differenceInCalendarDays(r.dueDate, new Date());
+                    const urgentColor = r.priority === 'high' || r.priority === 'urgent' ? 'text-destructive' : daysLeft <= 1 ? 'text-amber-500' : 'text-foreground';
+                    return (
+                      <div key={r.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Bell className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{r.title}</p>
+                            <p className="text-xs text-muted-foreground">{format(r.dueDate, 'MMM dd, yyyy')}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className={`text-xs ${urgentColor}`}>
+                          {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Recent Activity */}
         <div>
@@ -482,9 +641,7 @@ export default function Dashboard() {
                   {upcomingRenewals.map((subscription) => (
                     <div key={subscription.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bookmark className="w-4 h-4 text-primary" />
-                        </div>
+                        <Favicon url={subscription.platformLink} name={subscription.name} className="w-8 h-8 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{subscription.name}</p>
                           <p className="text-xs text-muted-foreground">
