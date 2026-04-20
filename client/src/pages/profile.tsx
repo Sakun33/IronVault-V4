@@ -83,7 +83,15 @@ import {
 import { useCurrency } from '@/contexts/currency-context';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
-import { format, addDays, addMonths, addYears } from 'date-fns';
+import { format, addDays, addMonths, addYears, isValid } from 'date-fns';
+
+const safeFormat = (date: Date | null | undefined, fmt: string, fallback = '—') => {
+  try {
+    return date && isValid(date) ? format(date, fmt) : fallback;
+  } catch {
+    return fallback;
+  }
+};
 import { PricingService, PricingTier, LicenseInfo } from '@/lib/pricing';
 import { PricingUpgrade } from '@/components/pricing-upgrade';
 import { checkBiometricCapabilities, enableBiometricUnlock, disableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore } from '@/native/biometrics';
@@ -1087,7 +1095,7 @@ export default function Profile() {
         <CardContent>
           <div className="flex items-start gap-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
-              {userProfile.name.split(' ').map(n => n[0]).join('')}
+              {(userProfile.name || '?').split(' ').filter(n => n).map(n => n[0]).join('')}
             </div>
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2">
@@ -1099,7 +1107,7 @@ export default function Profile() {
               </div>
               <p className="text-muted-foreground">{userProfile.email}</p>
               <p className="text-sm text-muted-foreground">
-                Member since {format(userProfile.createdAt, 'MMM yyyy')}
+                Member since {safeFormat(userProfile.createdAt, 'MMM yyyy')}
               </p>
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1">
@@ -1108,7 +1116,7 @@ export default function Profile() {
                 </div>
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  <span>Last login: {format(userProfile.lastLogin, 'MMM dd, yyyy')}</span>
+                  <span>Last login: {safeFormat(userProfile.lastLogin, 'MMM dd, yyyy')}</span>
                 </div>
               </div>
             </div>
@@ -1194,7 +1202,7 @@ export default function Profile() {
                   <div>
                     <p className="text-sm font-medium">Vault backup completed</p>
                     <p className="text-xs text-muted-foreground">
-                      {userProfile.stats.lastBackup ? format(userProfile.stats.lastBackup, 'MMM dd, HH:mm') : 'Never'}
+                      {userProfile.stats.lastBackup ? safeFormat(userProfile.stats.lastBackup, 'MMM dd, HH:mm') : 'Never'}
                     </p>
                   </div>
                 </div>
@@ -1205,7 +1213,7 @@ export default function Profile() {
                   <div>
                     <p className="text-sm font-medium">Profile updated</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(userProfile.lastLogin, 'MMM dd, HH:mm')}
+                      {safeFormat(userProfile.lastLogin, 'MMM dd, HH:mm')}
                     </p>
                   </div>
                 </div>
@@ -1594,7 +1602,7 @@ export default function Profile() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium">Last Export</h4>
-                    <p className="text-sm text-muted-foreground">{lastExportDate ? format(lastExportDate, 'MMM d, yyyy h:mm a') : 'Never exported'}</p>
+                    <p className="text-sm text-muted-foreground">{lastExportDate ? safeFormat(lastExportDate, 'MMM d, yyyy h:mm a') : 'Never exported'}</p>
                   </div>
                   <Button variant="outline" size="sm" disabled>
                     <RefreshCw className="w-4 h-4 mr-2" />
@@ -1648,7 +1656,7 @@ export default function Profile() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium">Backup Status</h4>
-                    <p className="text-sm text-muted-foreground">{lastBackupDate ? `Last backup: ${format(lastBackupDate, 'MMM d, yyyy')}` : 'No backups found'}</p>
+                    <p className="text-sm text-muted-foreground">{lastBackupDate ? `Last backup: ${safeFormat(lastBackupDate, 'MMM d, yyyy')}` : 'No backups found'}</p>
                   </div>
                   <Badge variant="outline">No Backups</Badge>
                 </div>
@@ -1832,7 +1840,7 @@ export default function Profile() {
                           </div>
                         </div>
                         <div className="text-right text-sm text-muted-foreground">
-                          <div>{format(ticket.createdAt, 'MMM dd, yyyy')}</div>
+                          <div>{safeFormat(ticket.createdAt, 'MMM dd, yyyy')}</div>
                         </div>
                       </div>
                     </div>

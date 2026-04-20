@@ -194,7 +194,7 @@ export default function MultiVaultLogin() {
       });
     } catch (err) {
       console.error('Unlock error:', err);
-      setError(err instanceof Error ? err.message : 'Unlock failed');
+      setError('Incorrect master password');
     } finally {
       setIsLoading(false);
     }
@@ -206,7 +206,7 @@ export default function MultiVaultLogin() {
   const handleVaultSelect = async (vaultId: string) => {
     setShowVaultChooser(false);
     setIsLoading(true);
-    
+
     try {
       const success = await unlockVault(vaultId, pendingPassword);
       if (success) {
@@ -215,10 +215,10 @@ export default function MultiVaultLogin() {
           description: 'Welcome back!',
         });
       } else {
-        setError('Failed to unlock vault');
+        setError('Incorrect master password');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unlock failed');
+      setError('Incorrect master password');
     } finally {
       setIsLoading(false);
       setPendingPassword('');

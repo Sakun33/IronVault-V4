@@ -257,6 +257,13 @@ export default function Expenses() {
     return { total, count: thisMonth.length, topCat: topCat?.[0] ?? null, topCatAmount: topCat?.[1] ?? 0 };
   }, [expenses]);
 
+  // Auto-navigate away from "this month" if no data exists for current month
+  useEffect(() => {
+    if (dateFilter === 'month' && expenses.length > 0 && filteredExpenses.length === 0) {
+      setDateFilter('all');
+    }
+  }, [expenses.length, filteredExpenses.length, dateFilter]);
+
   // Daily-grouped list for the filtered expense list
   const groupedByDay = useMemo(() => {
     const groups: Record<string, typeof sortedExpenses> = {};

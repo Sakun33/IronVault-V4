@@ -5,6 +5,7 @@ import { pushCloudVault, isVaultCloudSynced, listCloudVaults, downloadCloudVault
 const DEBOUNCE_MS = 3000;
 const POLL_MS = 60_000;
 const LAST_PULL_PREFIX = 'iv_last_pull_';
+const LAST_BLOB_HASH_PREFIX = 'iv_last_blob_hash_';
 
 export function useCloudAutoSync(
   vaultId: string | null | undefined,
@@ -128,8 +129,15 @@ export function useCloudAutoSync(
       if (pushPendingRef.current) return;
       if (!full?.encryptedBlob) return;
 
+      const blobHash = `${full.encryptedBlob.length}_${full.encryptedBlob.slice(-32)}`;
+      const hashKey = `${LAST_BLOB_HASH_PREFIX}${vaultId}`;
+      if (blobHash === localStorage.getItem(hashKey)) {
+        localStorage.setItem(lastPullKey, meta.serverUpdatedAt);
+        return;
+      }
       await vaultStorage.replaceVaultFromBlob(full.encryptedBlob, masterPassword);
       localStorage.setItem(lastPullKey, meta.serverUpdatedAt);
+      localStorage.setItem(hashKey, blobHash);
       window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
     } catch {
       // Silently fail
