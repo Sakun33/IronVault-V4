@@ -42,7 +42,7 @@ import {
   Repeat,
   ChevronRight
 } from 'lucide-react';
-import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay } from 'date-fns';
+import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 
 export default function Reminders() {
   const { reminders, addReminder, updateReminder, deleteReminder, searchQuery, setSearchQuery } = useVault();
@@ -528,14 +528,21 @@ export default function Reminders() {
             <DialogHeader>
               <DialogTitle>{editingReminder ? 'Edit Reminder' : 'Add New Reminder'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Label htmlFor="title">Title</Label>
                   <Input
                     id="title"
                     value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      const lower = title.toLowerCase();
+                      let priority = formData.priority;
+                      if (/urgent|asap|critical|emergency/.test(lower)) priority = 'urgent';
+                      else if (/important|deadline|submit|exam|due/.test(lower)) priority = 'high';
+                      setFormData(prev => ({ ...prev, title, priority }));
+                    }}
                     placeholder="Enter reminder title"
                     required
                     data-testid="input-title"
@@ -554,7 +561,7 @@ export default function Reminders() {
                   />
                 </div>
                 
-                <div>
+                <div className="col-span-2 space-y-1.5">
                   <Label htmlFor="dueDate">Due Date</Label>
                   <Input
                     id="dueDate"
@@ -564,9 +571,26 @@ export default function Reminders() {
                     required
                     data-testid="input-due-date"
                   />
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { label: 'Today', date: new Date() },
+                      { label: 'Tomorrow', date: addDays(new Date(), 1) },
+                      { label: 'Next Week', date: addWeeks(new Date(), 1) },
+                      { label: 'Next Month', date: addMonths(new Date(), 1) },
+                    ].map(({ label, date }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, dueDate: format(date, 'yyyy-MM-dd') }))}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${formData.dueDate === format(date, 'yyyy-MM-dd') ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                
-                <div>
+
+                <div className="col-span-2 space-y-1.5">
                   <Label htmlFor="dueTime">Due Time (Optional)</Label>
                   <Input
                     id="dueTime"
@@ -575,6 +599,23 @@ export default function Reminders() {
                     onChange={(e) => setFormData(prev => ({ ...prev, dueTime: e.target.value }))}
                     data-testid="input-due-time"
                   />
+                  <div className="flex gap-1.5">
+                    {[
+                      { label: '9 AM', value: '09:00' },
+                      { label: '12 PM', value: '12:00' },
+                      { label: '2 PM', value: '14:00' },
+                      { label: '6 PM', value: '18:00' },
+                    ].map(({ label, value }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, dueTime: value }))}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${formData.dueTime === value ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 
                 <div>
@@ -762,22 +803,50 @@ export default function Reminders() {
                 </div>
               </div>
               
-              <div className="flex justify-end space-x-2">
+              <div className="flex justify-end gap-2 flex-wrap">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setEditingReminder(null);
-                    resetForm();
-                  }}
+                  onClick={() => { setShowAddModal(false); setEditingReminder(null); resetForm(); }}
                   data-testid="button-cancel"
                 >
                   Cancel
                 </Button>
+                {!editingReminder && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      const form = document.querySelector<HTMLFormElement>('form[data-reminder-form]');
+                      if (!formData.title.trim()) return;
+                      try {
+                        const reminderData = {
+                          title: formData.title, description: formData.description || undefined,
+                          dueDate: new Date(formData.dueDate + (formData.dueTime ? `T${formData.dueTime}` : 'T09:00')),
+                          dueTime: formData.dueTime || undefined, priority: formData.priority,
+                          category: formData.category, isCompleted: false, isRecurring: formData.isRecurring,
+                          recurringFrequency: formData.isRecurring ? formData.recurringFrequency : undefined,
+                          tags: formData.tags, color: formData.color,
+                          notificationEnabled: formData.notificationEnabled,
+                          alarmEnabled: formData.alarmEnabled,
+                          alarmTime: formData.alarmEnabled ? formData.alarmTime : undefined,
+                          alertMinutesBefore: formData.alertMinutesBefore,
+                          preAlertEnabled: formData.preAlertEnabled,
+                        };
+                        await addReminder(reminderData);
+                        toast({ title: "Saved", description: "Reminder created. Add another?" });
+                        resetForm();
+                      } catch { toast({ title: "Error", description: "Failed to save", variant: "destructive" }); }
+                    }}
+                    className="text-xs"
+                  >
+                    Save & Add Another
+                  </Button>
+                )}
                 <Button type="submit" data-testid="button-save">
                   {editingReminder ? 'Update' : 'Create'} Reminder
                 </Button>
+                <p className="w-full text-right text-xs text-muted-foreground mt-1">⌘↵ to save</p>
               </div>
             </form>
           </DialogContent>

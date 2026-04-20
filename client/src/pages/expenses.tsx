@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useVault } from '@/contexts/vault-context';
@@ -54,6 +55,7 @@ export default function Expenses() {
   const { expenses, addExpense, updateExpense, deleteExpense, searchQuery, setSearchQuery } = useVault();
   const { formatCurrency, currency, currencies } = useCurrency();
   const { toast } = useToast();
+  const { lastExpenseCategory, saveExpenseCategory } = useFormDefaults();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -125,7 +127,7 @@ export default function Expenses() {
         title: '',
         amount: '',
         currency: currency,
-        category: '',
+        category: lastExpenseCategory,
         date: new Date().toISOString().split('T')[0],
         notes: '',
         isRecurring: false,
@@ -304,13 +306,14 @@ export default function Expenses() {
 
     try {
       await addExpense(newExpense);
-      
+      saveExpenseCategory(formData.category);
+
       // Reset form
       setFormData({
         title: '',
         amount: '',
         currency: currency,
-        category: '',
+        category: lastExpenseCategory,
         date: new Date().toISOString().split('T')[0],
         notes: '',
         isRecurring: false,
@@ -498,7 +501,7 @@ export default function Expenses() {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingExpense ? handleUpdateExpense : handleAddExpense)(); } }}>
           {/* Title and Amount */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -522,6 +525,18 @@ export default function Expenses() {
                 onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                 placeholder="0.00"
               />
+              <div className="flex gap-1.5 flex-wrap">
+                {[10, 50, 100, 500, 1000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, amount: amt.toString() }))}
+                    className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${formData.amount === amt.toString() ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'}`}
+                  >
+                    {amt}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

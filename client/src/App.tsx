@@ -77,6 +77,7 @@ import { SectionCard } from "@/components/StatCard";
 import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
+import { QuickAddFab } from "@/components/quick-add-fab";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -654,6 +655,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           </AnalyticsIntegration>
         </div>
       </main>
+
+      {/* Quick-Add FAB - mobile only, floats above BottomTabs */}
+      <QuickAddFab />
 
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
       <BottomTabs items={bottomTabItems} />

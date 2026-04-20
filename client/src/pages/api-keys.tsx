@@ -12,6 +12,7 @@ const envBrandColor = (env: string) => {
   return '#3b82f6';
 };
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { POPULAR_API_SERVICES } from '@/lib/popular-services';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -552,7 +553,30 @@ export default function APIKeys() {
             <DialogTitle>{editingKey ? 'Edit' : 'Add'} API Key</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingKey ? handleUpdateKey : handleAddKey)(); } }}>
+            <div>
+              <Label htmlFor="service">Service *</Label>
+              <Input
+                id="service"
+                placeholder="e.g., Stripe, AWS, OpenAI"
+                value={formData.service}
+                onChange={(e) => setFormData(prev => ({ ...prev, service: e.target.value, name: e.target.value ? `${e.target.value} Key` : prev.name }))}
+                className=""
+              />
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {POPULAR_API_SERVICES.slice(0, 10).map(svc => (
+                  <button
+                    key={svc}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, service: svc, name: `${svc} Key` }))}
+                    className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${formData.service === svc ? 'bg-primary text-primary-foreground border-primary' : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'}`}
+                  >
+                    {svc}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <Label htmlFor="name">Name *</Label>
               <Input
@@ -560,17 +584,6 @@ export default function APIKeys() {
                 placeholder="e.g., Stripe Production Key"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className=""
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="service">Service *</Label>
-              <Input
-                id="service"
-                placeholder="e.g., Stripe, AWS, OpenAI"
-                value={formData.service}
-                onChange={(e) => setFormData(prev => ({ ...prev, service: e.target.value }))}
                 className=""
               />
             </div>
