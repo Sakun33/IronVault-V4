@@ -656,11 +656,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   const importVault = async (data: string, password?: string): Promise<void> => {
-    await vaultStorage.importVault(data, password);
+    // importVaultBulk suppresses per-item events and fires vault:import:complete
+    // after ALL items are in IndexedDB — the cloud sync hook handles the push immediately.
+    await vaultStorage.importVaultBulk(data, password);
     addLog('Import Vault', 'system', `Imported complete vault data${password ? ' with password protection' : ' (plaintext)'}`);
     await refreshData();
-    // Trigger debounced cloud push so imported data is not lost on app reopen
-    window.dispatchEvent(new CustomEvent('vault:item:saved'));
   };
 
   const getKDFConfig = async (): Promise<CryptoKDFConfig | null> => {
@@ -678,7 +678,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const result = await vaultStorage.importPasswordsFromCSV(csvContent, parserId);
     addLog('Import Passwords', 'password', `Imported ${result.imported} passwords from CSV (${result.skipped} skipped)`);
     await refreshData();
-    window.dispatchEvent(new CustomEvent('vault:item:saved'));
+    // Use vault:import:complete so the cloud push fires immediately (no 3-second debounce).
+    window.dispatchEvent(new CustomEvent('vault:import:complete'));
     return result;
   };
 

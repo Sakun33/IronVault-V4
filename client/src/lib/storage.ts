@@ -631,6 +631,20 @@ export class VaultStorage {
     }
   }
 
+  // User-facing import: suppresses per-item events, fires vault:import:complete
+  // when ALL items are in IndexedDB so the cloud sync hook can do an immediate push.
+  async importVaultBulk(data: string, password?: string): Promise<void> {
+    this.isBulkImporting = true;
+    try {
+      await this.importVault(data, password);
+    } finally {
+      this.isBulkImporting = false;
+    }
+    // Dispatch AFTER finally so isBulkImporting is already false before any
+    // handler runs (prevents re-entry into bulk mode).
+    window.dispatchEvent(new CustomEvent('vault:import:complete'));
+  }
+
   // Save metadata
   private async saveMetadata(metadata: VaultMetadata): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');

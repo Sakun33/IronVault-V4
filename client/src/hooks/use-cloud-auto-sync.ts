@@ -54,6 +54,35 @@ export function useCloudAutoSync(
     };
   }, [vaultId, masterPassword]);
 
+  // ── Immediate push after a bulk import (no debounce) ─────────────────────
+  useEffect(() => {
+    if (!vaultId || !masterPassword) return;
+
+    const handleImportComplete = async () => {
+      if (!isVaultCloudSynced(vaultId)) return;
+      // Cancel any pending debounced push — we're about to push right now
+      pushPendingRef.current = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      try {
+        const blob = await vaultStorage.exportVault(masterPassword);
+        const { vaultManager } = await import('@/lib/vault-manager');
+        const vaultMeta = vaultManager.getLocalVaults().find(v => v.id === vaultId);
+        const vaultName = vaultMeta?.name ?? 'My Vault';
+        console.log('IMPORT: pushing vault to cloud after import');
+        await pushCloudVault(vaultId, vaultName, blob, false);
+        const lastPullKey = `${LAST_PULL_PREFIX}${vaultId}`;
+        localStorage.setItem(lastPullKey, new Date().toISOString());
+      } catch {
+        // Silently fail — next debounced push or manual sync will retry
+      } finally {
+        pushPendingRef.current = false;
+      }
+    };
+
+    window.addEventListener('vault:import:complete', handleImportComplete);
+    return () => window.removeEventListener('vault:import:complete', handleImportComplete);
+  }, [vaultId, masterPassword]);
+
   // ── Pull: poll every 60s for changes from another device ─────────────────
   const doPull = useCallback(async () => {
     if (!vaultId || !masterPassword || !isVaultCloudSynced(vaultId)) return;
