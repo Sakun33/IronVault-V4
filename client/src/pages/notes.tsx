@@ -5,7 +5,6 @@ import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BrandCard } from '@/components/brand-card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,120 +41,40 @@ import {
   PenLine,
   Sparkles
 } from 'lucide-react';
-import { format } from 'date-fns';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import remarkParse from 'remark-parse';
-import remarkRehype from 'remark-rehype';
-import rehypeRaw from 'rehype-raw';
-import rehypeStringify from 'rehype-stringify';
+import { format, formatDistanceToNow } from 'date-fns';
 import RichTextEditor from '@/components/rich-text-editor';
-import 'highlight.js/styles/github-dark.css';
 
-// Custom markdown renderer for enhanced formatting
-const EnhancedMarkdown = ({ content }: { content: string }) => {
-  const processContent = (text: string) => {
-    // Detect and format JSON
-    const jsonRegex = /```json\n([\s\S]*?)\n```/g;
-    text = text.replace(jsonRegex, (match, jsonContent) => {
-      try {
-        const parsed = JSON.parse(jsonContent);
-        const formatted = JSON.stringify(parsed, null, 2);
-        return `\`\`\`json\n${formatted}\n\`\`\``;
-      } catch {
-        return match;
-      }
-    });
-
-    // Detect and format CSV
-    const csvRegex = /```csv\n([\s\S]*?)\n```/g;
-    text = text.replace(csvRegex, (match, csvContent) => {
-      const lines = csvContent.trim().split('\n');
-      const headers = lines[0].split(',');
-      const rows = lines.slice(1).map((line: string) => line.split(','));
-      
-      let formattedCsv = '```csv\n';
-      formattedCsv += headers.join(', ') + '\n';
-      rows.forEach((row: string[]) => {
-        formattedCsv += row.join(', ') + '\n';
-      });
-      formattedCsv += '```';
-      
-      return formattedCsv;
-    });
-
-    // Detect and format XML
-    const xmlRegex = /```xml\n([\s\S]*?)\n```/g;
-    text = text.replace(xmlRegex, (match, xmlContent) => {
-      try {
-        // Simple XML formatting
-        const formatted = xmlContent
-          .replace(/></g, '>\n<')
-          .replace(/^\s+|\s+$/g, '')
-          .split('\n')
-          .map((line: string) => line.trim())
-          .join('\n');
-        return `\`\`\`xml\n${formatted}\n\`\`\``;
-      } catch {
-        return match;
-      }
-    });
-
-    return text;
-  };
-
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeRaw]}
-      components={{
-        code: ({ className, children, ...props }) => {
-          const match = /language-(\w+)/.exec(className || '');
-          const language = match ? match[1] : '';
-          
-          if (language) {
-            return (
-              <div className="relative">
-                <div className="bg-muted px-3 py-1 text-xs font-mono text-muted-foreground border-b">
-                  {language.toUpperCase()}
-                </div>
-                <pre className={`${className} rounded-b-md`} {...props as any}>
-                  <code className={className}>{children}</code>
-                </pre>
-              </div>
-            );
-          }
-          
-          return (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          );
-        },
-        table: ({ children }) => (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600">
-              {children}
-            </table>
-          </div>
-        ),
-        th: ({ children }) => (
-          <th className="border border-border bg-muted px-4 py-2 text-left font-semibold">
-            {children}
-          </th>
-        ),
-        td: ({ children }) => (
-          <td className="border border-gray-300 dark:border-gray-600 px-4 py-2">
-            {children}
-          </td>
-        ),
-      }}
-    >
-      {processContent(content)}
-    </ReactMarkdown>
-  );
+const NOTEBOOK_COLORS: Record<string, string> = {
+  personal:  '#6366f1',
+  work:      '#0ea5e9',
+  ideas:     '#f59e0b',
+  finance:   '#10b981',
+  health:    '#ec4899',
+  travel:    '#8b5cf6',
+  Default:   '#94a3b8',
 };
+const notebookColor = (nb: string) => NOTEBOOK_COLORS[nb] ?? NOTEBOOK_COLORS.Default;
+
+function getPreview(content: string): { text: string; tasks: { done: boolean; label: string }[] } {
+  const tasks: { done: boolean; label: string }[] = [];
+  if (content.includes('data-type="taskItem"') || content.includes('data-checked')) {
+    const taskRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
+    let m;
+    while ((m = taskRe.exec(content)) !== null && tasks.length < 4) {
+      tasks.push({ done: m[1] === 'true', label: m[2].replace(/<[^>]*>/g, '').trim().slice(0, 60) });
+    }
+  }
+  const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 130);
+  return { text, tasks };
+}
+
+function timeAgo(date: Date | string) {
+  try {
+    return formatDistanceToNow(new Date(date), { addSuffix: true });
+  } catch {
+    return '';
+  }
+}
 
 export default function Notes() {
   const { notes, addNote, updateNote, deleteNote } = useVault();
@@ -491,16 +410,10 @@ export default function Notes() {
 
               {/* Content */}
               <div className="prose dark:prose-invert max-w-none">
-                {viewingNote.content.includes('<') ? (
-                  // Rich text content
-                  <div 
-                    className="rich-text-content"
-                    dangerouslySetInnerHTML={{ __html: viewingNote.content }} 
-                  />
-                ) : (
-                  // Markdown content
-                  <EnhancedMarkdown content={viewingNote.content} />
-                )}
+                <div
+                  className="rich-text-content leading-relaxed [&_ul[data-type=taskList]]:pl-0 [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:items-start [&_li[data-type=taskItem]>label]:mr-2"
+                  dangerouslySetInnerHTML={{ __html: viewingNote.content.includes('<') ? viewingNote.content : `<p>${viewingNote.content.replace(/\n/g, '</p><p>')}</p>` }}
+                />
               </div>
             </div>
           </>
@@ -899,105 +812,116 @@ export default function Notes() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 stagger-children">
-          {sortedNotes.map(note => (
-            <BrandCard
-              key={note.id}
-              name={note.notebook || note.title}
-              brandColor={note.isPinned ? '#f59e0b' : undefined}
-              onClick={() => setViewingNote(note)}
-              className="cursor-pointer group"
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base line-clamp-2 flex items-center gap-2 font-semibold">
-                    {note.isPinned && <Pin className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 fill-amber-600 dark:fill-amber-400" />}
-                    <span data-testid={`note-title-${note.id}`} className="text-foreground">{note.title}</span>
-                  </CardTitle>
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`button-pin-${note.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePinNote(note);
-                      }}
-                      className="p-1.5 h-auto hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-md"
-                      title={note.isPinned ? "Unpin note" : "Pin note"}
-                    >
-                      <Pin className={`w-3.5 h-3.5 ${note.isPinned ? 'text-primary fill-primary' : 'text-muted-foreground'}`} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`button-edit-${note.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditNote(note);
-                      }}
-                      className="p-1.5 h-auto hover:bg-primary/10 rounded-md"
-                      title="Edit note"
-                    >
-                      <Edit className="w-3.5 h-3.5 text-primary" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`button-delete-${note.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteNote(note.id, note.title);
-                      }}
-                      className="p-1.5 h-auto hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md"
-                      title="Delete note"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span className="font-medium">{note.notebook}</span>
-                  <span className="text-muted-foreground/50">•</span>
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{format(new Date(note.updatedAt), 'MMM d, yyyy')}</span>
-                </div>
-              </CardHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedNotes.map(note => {
+            const color = notebookColor(note.notebook);
+            const { text: previewText, tasks } = getPreview(note.content || '');
+            return (
+              <div
+                key={note.id}
+                data-testid={`note-card-${note.id}`}
+                onClick={() => setViewingNote(note)}
+                className="group relative rounded-2xl border bg-card cursor-pointer hover:shadow-md transition-all duration-200 overflow-hidden"
+              >
+                {/* Notebook color accent bar */}
+                <div className="h-1 w-full" style={{ background: color }} />
 
-              <CardContent className="pt-2 space-y-3">
-                {note.content && (
-                  <div className="text-sm text-muted-foreground line-clamp-4 mb-3 leading-relaxed" data-testid={`note-content-${note.id}`}>
-                    {/* Strip HTML for preview */}
-                    {note.content.replace(/<[^>]*>/g, '').substring(0, 150)}
-                    {note.content.length > 150 ? '...' : ''}
-                  </div>
-                )}
-                
-                {(note.tags || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {(note.tags || []).slice(0, 3).map(tag => (
-                      <Badge 
-                        key={tag} 
-                        variant="secondary" 
-                        className="text-xs px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/20 transition-colors" 
-                        data-testid={`note-tag-${note.id}-${tag}`}
+                <div className="p-4 space-y-3">
+                  {/* Title row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {note.isPinned && (
+                        <Pin className="w-3.5 h-3.5 flex-shrink-0 fill-amber-400 text-amber-400" />
+                      )}
+                      <h3
+                        data-testid={`note-title-${note.id}`}
+                        className="font-semibold text-sm leading-snug line-clamp-2 text-foreground"
                       >
-                        <Tag className="w-3 h-3 mr-1" />
-                        {tag}
-                      </Badge>
-                    ))}
-                    {(note.tags || []).length > 3 && (
-                      <Badge variant="outline" className="text-xs px-2 py-0.5">
-                        +{(note.tags || []).length - 3} more
-                      </Badge>
+                        {note.title}
+                      </h3>
+                    </div>
+
+                    {/* Action buttons — visible on hover / always on touch */}
+                    <div className="flex gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+                      <button
+                        data-testid={`button-pin-${note.id}`}
+                        onClick={e => { e.stopPropagation(); togglePinNote(note); }}
+                        className="p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                        title={note.isPinned ? 'Unpin' : 'Pin'}
+                      >
+                        <Pin className={`w-3.5 h-3.5 ${note.isPinned ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'}`} />
+                      </button>
+                      <button
+                        data-testid={`button-edit-${note.id}`}
+                        onClick={e => { e.stopPropagation(); handleEditNote(note); }}
+                        className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="w-3.5 h-3.5 text-primary" />
+                      </button>
+                      <button
+                        data-testid={`button-delete-${note.id}`}
+                        onClick={e => { e.stopPropagation(); handleDeleteNote(note.id, note.title); }}
+                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Checklist preview OR text preview */}
+                  {tasks.length > 0 ? (
+                    <ul className="space-y-1" data-testid={`note-content-${note.id}`}>
+                      {tasks.map((t, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center ${t.done ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                            {t.done && <span className="text-primary-foreground text-[9px] leading-none">✓</span>}
+                          </span>
+                          <span className={t.done ? 'line-through opacity-50' : ''}>{t.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : previewText ? (
+                    <p
+                      data-testid={`note-content-${note.id}`}
+                      className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
+                    >
+                      {previewText}
+                    </p>
+                  ) : null}
+
+                  {/* Footer: notebook dot + time + tags */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                      <span>{note.notebook}</span>
+                      <span className="opacity-40">·</span>
+                      <span>{timeAgo(note.updatedAt)}</span>
+                    </div>
+                    {(note.tags || []).length > 0 && (
+                      <div className="flex gap-1">
+                        {(note.tags || []).slice(0, 2).map(tag => (
+                          <span
+                            key={tag}
+                            data-testid={`note-tag-${note.id}-${tag}`}
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {(note.tags || []).length > 2 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            +{(note.tags || []).length - 2}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </BrandCard>
-          ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
