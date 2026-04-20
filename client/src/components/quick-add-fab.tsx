@@ -156,7 +156,7 @@ export function QuickAddFab() {
     position: 'fixed',
     left: pos.x,
     top: pos.y,
-    zIndex: 40,
+    zIndex: 50,
     opacity: dragging ? 0.7 : 1,
     transition: dragging ? 'none' : 'opacity 0.15s ease, left 0.18s ease, top 0.18s ease',
     touchAction: 'none',
@@ -167,7 +167,7 @@ export function QuickAddFab() {
   return (
     <>
       {open && (
-        <div className="lg:hidden fixed inset-0 z-38 bg-black/20" onClick={() => setOpen(false)} />
+        <div className="lg:hidden fixed inset-0 z-[38] bg-black/20" onClick={() => setOpen(false)} />
       )}
 
       {/* Speed-dial options fan out above FAB */}
@@ -199,6 +199,7 @@ export function QuickAddFab() {
         ref={fabRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={onEnd}
+        onTouchCancel={onEnd}
         onMouseDown={handleMouseDown}
         style={fabStyle}
         className={`lg:hidden w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center ${!dragging ? 'active:scale-95 transition-transform' : ''} ${!pos ? 'fixed z-40 right-4 bottom-[calc(72px+env(safe-area-inset-bottom)+8px)]' : ''}`}
