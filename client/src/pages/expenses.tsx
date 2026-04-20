@@ -42,7 +42,7 @@ import {
   Phone,
   Plane
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isSameMonth } from 'date-fns';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 // Color palette for charts
@@ -245,6 +245,28 @@ export default function Expenses() {
       recurringExpenses: filteredExpenses.filter(e => e.isRecurring).length
     };
   }, [filteredExpenses]);
+
+  // Monthly hero stats (always current calendar month regardless of filter)
+  const monthlyHero = useMemo(() => {
+    const now = new Date();
+    const thisMonth = expenses.filter(e => isSameMonth(new Date(e.date), now));
+    const total = thisMonth.reduce((s, e) => s + e.amount, 0);
+    const byCategory: Record<string, number> = {};
+    thisMonth.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + e.amount; });
+    const topCat = Object.entries(byCategory).sort(([, a], [, b]) => b - a)[0];
+    return { total, count: thisMonth.length, topCat: topCat?.[0] ?? null, topCatAmount: topCat?.[1] ?? 0 };
+  }, [expenses]);
+
+  // Daily-grouped list for the filtered expense list
+  const groupedByDay = useMemo(() => {
+    const groups: Record<string, typeof sortedExpenses> = {};
+    sortedExpenses.forEach(e => {
+      const key = format(new Date(e.date), 'yyyy-MM-dd');
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(e);
+    });
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  }, [sortedExpenses]);
 
   // Smart duplicate detection
   const detectPotentialDuplicate = (newExpense: Omit<ExpenseEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -751,6 +773,28 @@ export default function Expenses() {
         </div>
       </div>
 
+      {/* Monthly Hero */}
+      <Card className="rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">{format(new Date(), 'MMMM yyyy')} spending</p>
+              <p className="text-4xl font-bold text-foreground" data-testid="monthly-hero-total">
+                {formatCurrency(monthlyHero.total)}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">{monthlyHero.count} expense{monthlyHero.count !== 1 ? 's' : ''} this month</p>
+            </div>
+            {monthlyHero.topCat && (
+              <div className="flex flex-col items-start sm:items-end gap-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Top category</p>
+                <Badge variant="secondary" className="text-sm px-3 py-1">{monthlyHero.topCat}</Badge>
+                <p className="text-sm font-semibold text-foreground">{formatCurrency(monthlyHero.topCatAmount)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {/* Analytics Tabs */}
       <Tabs value={viewMode} onValueChange={(value: any) => setViewMode(value)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -885,21 +929,22 @@ export default function Expenses() {
               {analytics.pieChartData.length > 0 ? (
                 <div className="space-y-4">
                   {analytics.pieChartData.map((item, index) => (
-                    <div key={item.name} className="flex items-center justify-between p-3 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="font-medium">{item.name}</span>
+                    <div key={item.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                          <span className="font-medium text-foreground">{item.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span>{item.percentage.toFixed(1)}%</span>
+                          <span className="font-semibold text-foreground w-24 text-right">{formatCurrency(item.value)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-muted-foreground">
-                          {item.percentage.toFixed(1)}%
-                        </span>
-                        <span className="font-bold">
-                          {formatCurrency(item.value)}
-                        </span>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${item.percentage}%`, backgroundColor: COLORS[index % COLORS.length] }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -1053,17 +1098,16 @@ export default function Expenses() {
         </CardContent>
       </Card>
 
-      {/* Expenses List */}
+      {/* Daily-grouped expense list */}
       {sortedExpenses.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Archive className="w-12 h-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No Expenses Found</h3>
             <p className="text-muted-foreground text-center mb-4">
-              {expenses.length === 0 
+              {expenses.length === 0
                 ? "Get started by adding your first expense"
-                : "Try adjusting your search or filter criteria"
-              }
+                : "Try adjusting your search or filter criteria"}
             </p>
             {expenses.length === 0 && (
               <Button onClick={() => setShowAddModal(true)} data-testid="button-create-first-expense">
@@ -1074,96 +1118,64 @@ export default function Expenses() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedExpenses.map(expense => (
-            <Card key={expense.id} className="cursor-pointer transition-shadow hover:shadow-md">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base line-clamp-1" data-testid={`expense-title-${expense.id}`}>
-                    {expense.title}
-                  </CardTitle>
-                  <div className="flex gap-1">
-                    {expense.isRecurring && (
-                      <div className="p-1">
-                        <Repeat className="w-3 h-3 text-orange-500" />
-                      </div>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`button-edit-${expense.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditExpense(expense);
-                      }}
-                      className="p-1 h-auto"
-                    >
-                      <Edit className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`button-delete-${expense.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteExpense(expense.id, expense.title);
-                      }}
-                      className="p-1 h-auto text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary" className="text-xs">
-                    {expense.category}
-                  </Badge>
-                  <Calendar className="w-3 h-3" />
-                  {format(new Date(expense.date), 'MMM dd, yyyy')}
-                </div>
-              </CardHeader>
-
-              <CardContent className="pt-2">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg font-bold text-green-600" data-testid={`expense-amount-${expense.id}`}>
-                    {formatCurrency(expense.amount, expense.currency)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {expense.currency}
-                  </span>
-                </div>
-
-                {expense.notes && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-2" data-testid={`expense-notes-${expense.id}`}>
-                    {expense.notes}
+        <div className="space-y-6">
+          {groupedByDay.map(([dateKey, dayExpenses]) => {
+            const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
+            const dayDate = new Date(dateKey + 'T12:00:00');
+            return (
+              <div key={dateKey}>
+                {/* Day header */}
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    {format(dayDate, 'EEEE, MMM d')}
                   </p>
-                )}
-                
-                {(expense.tags || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {(expense.tags || []).slice(0, 3).map(tag => (
-                      <Badge key={tag} variant="outline" className="text-xs" data-testid={`expense-tag-${expense.id}-${tag}`}>
-                        {tag}
-                      </Badge>
+                  <p className="text-sm font-semibold text-muted-foreground">{formatCurrency(dayTotal)}</p>
+                </div>
+                <Card className="rounded-2xl shadow-sm overflow-hidden">
+                  <CardContent className="p-0">
+                    {dayExpenses.map((expense, i) => (
+                      <div
+                        key={expense.id}
+                        className={`group flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${i < dayExpenses.length - 1 ? 'border-b border-border/50' : ''}`}
+                      >
+                        {/* Category dot */}
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
+                          style={{ backgroundColor: COLORS[EXPENSE_CATEGORIES.indexOf(expense.category) % COLORS.length] }}
+                        >
+                          {expense.category.charAt(0)}
+                        </div>
+                        {/* Title + category */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate" data-testid={`expense-title-${expense.id}`}>
+                            {expense.title}
+                            {expense.isRecurring && <Repeat className="w-3 h-3 text-orange-400 inline ml-1.5" />}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{expense.category}</p>
+                        </div>
+                        {/* Amount + actions */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm font-semibold text-foreground" data-testid={`expense-amount-${expense.id}`}>
+                            {formatCurrency(expense.amount, expense.currency)}
+                          </span>
+                          <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
+                            data-testid={`button-edit-${expense.id}`}
+                            onClick={() => handleEditExpense(expense)}>
+                            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
+                            data-testid={`button-delete-${expense.id}`}
+                            onClick={() => handleDeleteExpense(expense.id, expense.title)}>
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
                     ))}
-                    {(expense.tags || []).length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{(expense.tags || []).length - 3} more
-                      </Badge>
-                    )}
-                  </div>
-                )}
-
-                {expense.isRecurring && expense.nextDueDate && (
-                  <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                    <AlertCircle className="w-3 h-3" />
-                    Next: {format(new Date(expense.nextDueDate), 'MMM dd, yyyy')}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })}
         </div>
       )}
 
