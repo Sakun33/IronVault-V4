@@ -88,6 +88,13 @@ function MiniDonut({ segments }: { segments: { pct: number; color: string }[] })
   );
 }
 
+function pwdStrength(pwd: string): 'weak' | 'fair' | 'strong' {
+  if (!pwd || pwd.length < 8) return 'weak';
+  const checks = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(pwd)).length;
+  if (pwd.length < 12 || checks < 3) return 'fair';
+  return 'strong';
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   'Food & Dining': '#f97316',
   'Transportation': '#3b82f6',
@@ -280,8 +287,21 @@ export default function Dashboard() {
     .filter(s => s.isActive)
     .reduce((total, s) => total + (s.cost || 0), 0);
 
-  // Count weak passwords (assuming we'll add strength calculation later)
-  const weakPasswords = 0; // passwords.filter(p => (p.strength || 0) < 3).length;
+  const weakPasswordList = useMemo(() =>
+    passwords.filter(p => pwdStrength(p.password || '') === 'weak'),
+    [passwords]
+  );
+  const weakPasswords = weakPasswordList.length;
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    try {
+      const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
+      const first = (cp.name || '').split(' ')[0] || '';
+      const salute = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+      return first ? `${salute}, ${first}` : salute;
+    } catch { return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
+  }, []);
 
   const securityScore = useMemo(() => {
     if (stats.totalPasswords === 0) return 0;
@@ -359,9 +379,9 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting} 👋</h1>
             <p className="text-sm text-muted-foreground">
-              Overview of your secure vault • Last updated: {format(lastRefresh, 'HH:mm:ss')}
+              Your vault is secure • Last updated: {format(lastRefresh, 'HH:mm:ss')}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -460,6 +480,34 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Weak password alert */}
+        {weakPasswords > 0 && (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-destructive">
+                {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'} detected
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                These passwords are shorter than 8 characters or missing complexity.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {weakPasswordList.slice(0, 6).map(p => (
+                  <Link key={p.id} href="/passwords">
+                    <span className="inline-flex items-center gap-1 text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full hover:bg-destructive/20 transition-colors cursor-pointer">
+                      {p.url ? <Favicon url={p.url} name={p.name} size={12} /> : <Lock className="w-3 h-3" />}
+                      {p.name}
+                    </span>
+                  </Link>
+                ))}
+                {weakPasswords > 6 && (
+                  <span className="text-xs text-muted-foreground px-2 py-0.5">+{weakPasswords - 6} more</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Access Sections */}
         <div>
