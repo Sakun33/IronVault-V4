@@ -82,6 +82,7 @@ import {
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { useVault } from '@/contexts/vault-context';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { useToast } from '@/hooks/use-toast';
 import { format, addDays, addMonths, addYears, isValid } from 'date-fns';
 
@@ -631,9 +632,9 @@ export default function Profile() {
     createdAt: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
     lastLogin: new Date(),
     stats: {
-      totalPasswords: stats.totalPasswords,
-      totalNotes: stats.totalNotes,
-      totalSubscriptions: stats.activeSubscriptions,
+      totalPasswords: stats?.totalPasswords ?? 0,
+      totalNotes: stats?.totalNotes ?? 0,
+      totalSubscriptions: stats?.activeSubscriptions ?? 0,
       totalExpenses: 0,
       totalInvestments: 0,
       vaultSize: 2.5, // MB
@@ -980,6 +981,7 @@ export default function Profile() {
   };
 
   return (
+    <ErrorBoundary>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1145,7 +1147,7 @@ export default function Profile() {
                   <Lock className="w-5 h-5 text-primary" />
                   <div>
                     <div className="text-sm text-muted-foreground">Passwords</div>
-                    <div className="text-lg font-semibold">{userProfile.stats.totalPasswords}</div>
+                    <div className="text-lg font-semibold">{userProfile.stats?.totalPasswords ?? 0}</div>
                   </div>
                 </div>
               </CardContent>
@@ -1156,7 +1158,7 @@ export default function Profile() {
                   <FileText className="w-5 h-5 text-green-500" />
                   <div>
                     <div className="text-sm text-muted-foreground">Notes</div>
-                    <div className="text-lg font-semibold">{userProfile.stats.totalNotes}</div>
+                    <div className="text-lg font-semibold">{userProfile.stats?.totalNotes ?? 0}</div>
                   </div>
                 </div>
               </CardContent>
@@ -1167,7 +1169,7 @@ export default function Profile() {
                   <CreditCard className="w-5 h-5 text-purple-500" />
                   <div>
                     <div className="text-sm text-muted-foreground">Subscriptions</div>
-                    <div className="text-lg font-semibold">{userProfile.stats.totalSubscriptions}</div>
+                    <div className="text-lg font-semibold">{userProfile.stats?.totalSubscriptions ?? 0}</div>
                   </div>
                 </div>
               </CardContent>
@@ -1178,7 +1180,7 @@ export default function Profile() {
                   <Database className="w-5 h-5 text-orange-500" />
                   <div>
                     <div className="text-sm text-muted-foreground">Vault Size</div>
-                    <div className="text-lg font-semibold">{userProfile.stats.vaultSize} MB</div>
+                    <div className="text-lg font-semibold">{userProfile.stats?.vaultSize ?? 0} MB</div>
                   </div>
                 </div>
               </CardContent>
@@ -1202,7 +1204,7 @@ export default function Profile() {
                   <div>
                     <p className="text-sm font-medium">Vault backup completed</p>
                     <p className="text-xs text-muted-foreground">
-                      {userProfile.stats.lastBackup ? safeFormat(userProfile.stats.lastBackup, 'MMM dd, HH:mm') : 'Never'}
+                      {userProfile.stats?.lastBackup ? safeFormat(userProfile.stats?.lastBackup, 'MMM dd, HH:mm') : 'Never'}
                     </p>
                   </div>
                 </div>
@@ -2347,5 +2349,6 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
     </div>
+    </ErrorBoundary>
   );
 }
