@@ -657,11 +657,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   const importVault = async (data: string, password?: string): Promise<void> => {
     await vaultStorage.importVault(data, password);
-    
-    // Log the import activity
     addLog('Import Vault', 'system', `Imported complete vault data${password ? ' with password protection' : ' (plaintext)'}`);
-    
     await refreshData();
+    // Trigger immediate cloud push (handled by use-cloud-auto-sync with master password)
+    window.dispatchEvent(new CustomEvent('vault:import:complete'));
   };
 
   const getKDFConfig = async (): Promise<CryptoKDFConfig | null> => {

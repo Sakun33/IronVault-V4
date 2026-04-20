@@ -12,7 +12,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
-import { listCloudVaults, downloadCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
+import { listCloudVaults, downloadCloudVault, pushCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
@@ -152,48 +152,42 @@ export default function VaultPickerPage() {
     setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: '' }));
     setCloudDownloading(cloudVault.vaultId);
     try {
-      // Pull encrypted blob
+      // Always fetch fresh blob from server — never trust stale local copy
       const full = await downloadCloudVault(cloudVault.vaultId);
       if (!full) throw new Error('Failed to download vault from cloud');
 
-      // Register vault in local registry if not already present
+      vaultManager.setActiveVaultId(cloudVault.vaultId);
+      await vaultStorage.switchToVault(cloudVault.vaultId);
+
       const existing = vaultManager.getExistingVaults().find(v => v.id === cloudVault.vaultId);
       if (!existing) {
-        // New device — add to local registry, initialise the vault encryption, then restore items
-        vaultManager.addToRegistry({
-          id: cloudVault.vaultId,
-          name: cloudVault.vaultName,
-          createdAt: cloudVault.createdAt || new Date().toISOString(),
-          lastAccessedAt: new Date().toISOString(),
-          isDefault: cloudVault.isDefault,
-          biometricEnabled: false,
-          iconColor: '#6366f1',
-        });
-        vaultManager.setActiveVaultId(cloudVault.vaultId);
-        await vaultStorage.switchToVault(cloudVault.vaultId);
-        // Initialise vault encryption before importing items (fixes blank-IndexedDB unlock failure)
+        // New device — DO NOT add to local registry (cloud-first: always unlock from cloud).
+        // Init encryption, clear any stale IndexedDB data, import fresh cloud blob.
         await vaultStorage.createVault(pw);
+        await vaultStorage.clearEncryptedItems();
         await vaultStorage.importVault(full.encryptedBlob, pw);
       } else {
-        // Same device — vault exists locally; re-import from cloud to pick up changes from other devices
-        vaultManager.setActiveVaultId(cloudVault.vaultId);
-        await vaultStorage.switchToVault(cloudVault.vaultId);
-        // Unlock first so encryptionKey is available for re-import
+        // Same device — vault is in local registry; still re-import from cloud for freshness.
         const unlocked = await vaultStorage.unlockVault(pw);
         if (!unlocked) {
           setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: 'Incorrect master password.' }));
           setCloudDownloading(null);
           return;
         }
-        // Replace local items with cloud version
         await vaultStorage.clearEncryptedItems();
         await vaultStorage.importVault(full.encryptedBlob, pw);
       }
 
-      // Now unlock using the master password
       const success = await login(pw);
       if (success) {
         markVaultAsCloudSynced(cloudVault.vaultId);
+        // Stamp lastPull so the 60s poll doesn't immediately re-download what we just imported
+        localStorage.setItem(
+          `iv_last_pull_${cloudVault.vaultId}`,
+          full.serverUpdatedAt || new Date().toISOString(),
+        );
+        // Directly push to cloud (no event, no debounce) — registers this device's sync state
+        void pushCloudVault(cloudVault.vaultId, cloudVault.vaultName, full.encryptedBlob, cloudVault.isDefault || false);
         toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
         setLocation('/');
       } else {
