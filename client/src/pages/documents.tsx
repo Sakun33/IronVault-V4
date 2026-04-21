@@ -278,6 +278,12 @@ export default function Documents() {
   
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   
   // Subscription limits (mock - in real app, get from subscription service)
   const isPaidUser = true; // Mock - should come from subscription context
@@ -673,18 +679,50 @@ export default function Documents() {
     ));
   };
   
-  const handleScanDocument = async () => {
+  const startCamera = async () => {
+    setCameraError(null);
     try {
-      const scanResult = await ocrService.scanDocument();
-      handleScanComplete(scanResult);
-    } catch (error) {
-      console.error('Scan error:', error);
-      toast({
-        title: "Scan Error",
-        description: "Failed to scan document. Please try again.",
-        variant: "destructive"
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setIsCameraActive(true);
+    } catch {
+      setCameraError('Camera access denied. Please allow camera permissions and try again.');
+      setIsCameraActive(false);
     }
+  };
+
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach(t => t.stop());
+    cameraStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setIsCameraActive(false);
+  };
+
+  const captureFrame = async () => {
+    if (!videoRef.current || !isCameraActive) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')!.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    stopCamera();
+    setShowScanModal(false);
+    handleScanComplete({
+      image: dataUrl,
+      ocrResult: { text: '', confidence: 0, words: [], lines: [], blocks: [], processingTime: 0 },
+      documentType: 'image'
+    });
+  };
+
+  const handleScanDocument = () => {
+    setShowScanModal(true);
   };
   
   const handleScanComplete = async (scanResult: ScanResult) => {
@@ -1256,8 +1294,11 @@ export default function Documents() {
       </Dialog>
       
       {/* Scan Document Modal */}
-      <Dialog open={showScanModal} onOpenChange={setShowScanModal}>
-        <DialogContent>
+      <Dialog open={showScanModal} onOpenChange={(open) => {
+        if (!open) stopCamera();
+        setShowScanModal(open);
+      }}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Camera className="w-5 h-5" />
@@ -1265,39 +1306,40 @@ export default function Documents() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="bg-muted rounded-lg p-8 text-center">
-              <Camera className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">
-                Camera scanning will be implemented here
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                In a real implementation, this would open the camera for document scanning
-              </p>
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-video flex items-center justify-center">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${isCameraActive ? 'block' : 'hidden'}`}
+              />
+              {!isCameraActive && !cameraError && (
+                <div className="text-center p-6">
+                  <Camera className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">Press "Start Camera" to begin</p>
+                </div>
+              )}
+              {cameraError && (
+                <div className="text-center p-6">
+                  <p className="text-sm text-destructive">{cameraError}</p>
+                </div>
+              )}
             </div>
-            
+
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowScanModal(false)}
-              >
+              <Button variant="outline" onClick={() => { stopCamera(); setShowScanModal(false); }}>
                 Cancel
               </Button>
-              <Button
-                onClick={() => handleScanComplete({
-                  image: 'scanned_image_data',
-                  ocrResult: {
-                    text: 'Extracted text from document',
-                    confidence: 0.95,
-                    words: [],
-                    lines: [],
-                    blocks: [],
-                    processingTime: 1000
-                  },
-                  documentType: 'text'
-                })}
-              >
-                Complete Scan
-              </Button>
+              {!isCameraActive ? (
+                <Button onClick={startCamera}>
+                  Start Camera
+                </Button>
+              ) : (
+                <Button onClick={captureFrame}>
+                  Capture
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
