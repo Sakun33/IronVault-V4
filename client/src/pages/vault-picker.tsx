@@ -159,9 +159,9 @@ export default function VaultPickerPage() {
       vaultManager.setActiveVaultId(cloudVault.vaultId);
       await vaultStorage.switchToVault(cloudVault.vaultId);
 
+      // Ensure vault is in local registry so VaultSelectionContext can find it after unlock.
       const existing = vaultManager.getExistingVaults().find(v => v.id === cloudVault.vaultId);
       if (!existing) {
-        // New device — register vault locally so VaultSelectionContext finds it after unlock.
         vaultManager.addToRegistry({
           id: cloudVault.vaultId,
           name: cloudVault.vaultName,
@@ -171,20 +171,15 @@ export default function VaultPickerPage() {
           biometricEnabled: false,
           iconColor: '#6366f1',
         });
-        await vaultStorage.createVault(pw);
-        await vaultStorage.clearEncryptedItems();
-        await vaultStorage.importVault(full.encryptedBlob, pw);
-      } else {
-        // Same device — vault is in local registry; still re-import from cloud for freshness.
-        const unlocked = await vaultStorage.unlockVault(pw);
-        if (!unlocked) {
-          setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: 'Incorrect master password.' }));
-          setCloudDownloading(null);
-          return;
-        }
-        await vaultStorage.clearEncryptedItems();
-        await vaultStorage.importVault(full.encryptedBlob, pw);
       }
+
+      // Always derive a fresh key from the cloud blob — never use stale local metadata.
+      // createVault sets a new salt + encryptionKey, then we overwrite the items from
+      // the authoritative cloud blob.  This avoids the "existing device" path where
+      // unlockVault() would fail if local IndexedDB was cleared or the metadata drifted.
+      await vaultStorage.createVault(pw);
+      await vaultStorage.clearEncryptedItems();
+      await vaultStorage.importVault(full.encryptedBlob, pw);
 
       const success = await login(pw);
       if (success) {
