@@ -40,23 +40,23 @@
 <div class="grid grid-cols-4 gap-4 mb-6">
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Fixes Deployed</div>
-    <div class="text-3xl font-bold text-green-400">17</div>
-    <div class="text-xs text-green-500 mt-1">↑ +11 this session</div>
+    <div class="text-3xl font-bold text-green-400">19</div>
+    <div class="text-xs text-green-500 mt-1">↑ +13 this session</div>
   </div>
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Issues Remaining</div>
-    <div class="text-3xl font-bold text-yellow-400">3</div>
-    <div class="text-xs text-slate-500 mt-1">Down from 12 at session start</div>
+    <div class="text-3xl font-bold text-green-400">0</div>
+    <div class="text-xs text-green-500 mt-1">All 12 original issues resolved ✓</div>
   </div>
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Build Status</div>
     <div class="text-xl font-bold text-green-400">✓ CLEAN</div>
-    <div class="text-xs text-slate-500 mt-1">64e03f5 · camera live preview</div>
+    <div class="text-xs text-slate-500 mt-1">7a1c444 · modal viewport fix</div>
   </div>
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Last Deploy</div>
     <div class="text-xl font-bold text-green-400">✓ LIVE</div>
-    <div class="text-xs text-slate-500 mt-1">ironvault-main-n87b2pwg5 · latest</div>
+    <div class="text-xs text-slate-500 mt-1">Deploying 0602cdd + 7a1c444…</div>
   </div>
 </div>
 
@@ -177,31 +177,28 @@
 
   <!-- Pending -->
   <div class="card rounded-xl p-5">
-    <h2 class="text-sm font-semibold text-yellow-400 uppercase tracking-widest mb-4">⏳ Queued — Next Up</h2>
+    <h2 class="text-sm font-semibold text-green-400 uppercase tracking-widest mb-4">🎉 All Issues Resolved</h2>
     <div class="space-y-2 text-sm">
-      <div class="flex items-start gap-2 p-2 rounded-lg bg-yellow-900/20 border border-yellow-800/30">
-        <span class="text-yellow-400 mt-0.5 font-mono flex-shrink-0">→</span>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
         <div>
-          <span class="text-white font-semibold">Dashboard premium full pass</span>
-          <span class="text-yellow-500 text-xs block">6-card stats grid (notes+reminders added), 15s refresh, favicon coverage ✓</span>
+          <span class="text-slate-300">Dashboard premium full pass</span>
+          <span class="text-slate-500 text-xs block">6-card stats (notes+reminders), 15s refresh, favicons everywhere · 0602cdd</span>
         </div>
-        <span class="ml-auto text-yellow-400 text-xs font-bold flex-shrink-0">IN PROGRESS</span>
       </div>
-      <div class="flex items-start gap-2 p-2 rounded-lg bg-yellow-900/20 border border-yellow-800/30">
-        <span class="text-yellow-400 mt-0.5 font-mono flex-shrink-0">→</span>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
         <div>
-          <span class="text-white font-semibold">Cloud vault load performance</span>
-          <span class="text-yellow-500 text-xs block">Serial for-loops → Promise.all parallel decrypt/re-encrypt in storage.ts</span>
+          <span class="text-slate-300">Cloud vault load performance</span>
+          <span class="text-slate-500 text-xs block">Serial for-loops → Promise.all in importVault, parallel crypto · 0602cdd</span>
         </div>
-        <span class="ml-auto text-yellow-400 text-xs font-bold flex-shrink-0">IN PROGRESS</span>
       </div>
-      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
-        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">3</span>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
         <div>
           <span class="text-slate-300">Modals off-screen on small devices</span>
-          <span class="text-slate-500 text-xs block">dvh fix applied but some dialogs still escape viewport on very small phones</span>
+          <span class="text-slate-500 text-xs block">top-4 pin on mobile, sm: centered; overscroll-contain; alert-dialog same · 7a1c444</span>
         </div>
-        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
       </div>
     </div>
   </div>
@@ -277,10 +274,16 @@
           <td class="py-2 status-done font-semibold">✓ Deployed</td>
         </tr>
         <tr>
-          <td class="py-2 pr-3 text-yellow-400 font-mono">next</td>
-          <td class="py-2 pr-3 text-white font-semibold">Dashboard 6-card stats + Cloud import Promise.all parallelization</td>
+          <td class="py-2 pr-3 text-blue-400 font-mono">0602cdd</td>
+          <td class="py-2 pr-3 text-slate-300">Dashboard 6-card stats + Cloud import Promise.all parallelization</td>
           <td class="py-2 pr-3 text-slate-500">dashboard.tsx · storage.ts · this file</td>
-          <td class="py-2 status-wip font-semibold">⏳ Building…</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">7a1c444</td>
+          <td class="py-2 pr-3 text-slate-300">Modals pin to top on mobile — top-4 on xs, centered sm+, overscroll-contain</td>
+          <td class="py-2 pr-3 text-slate-500">dialog.tsx · alert-dialog.tsx</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
         </tr>
       </tbody>
     </table>
