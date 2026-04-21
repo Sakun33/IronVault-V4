@@ -142,12 +142,12 @@ export default function Dashboard() {
     localStorage.setItem('hasSeenCrossBrowserTip', 'true');
   };
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 15 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       refreshData();
       setLastRefresh(new Date());
-    }, 30000); // 30 seconds
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [refreshData]);
@@ -455,24 +455,36 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
-          <StatCard 
-            icon={Lock} 
-            label="Total Passwords" 
-            value={stats.totalPasswords} 
-            color="text-primary" 
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 stagger-children">
+          <StatCard
+            icon={Lock}
+            label="Passwords"
+            value={stats.totalPasswords}
+            color="text-primary"
           />
-          <StatCard 
-            icon={Bookmark} 
-            label="Active Subscriptions" 
-            value={stats.activeSubscriptions} 
-            color="text-primary" 
+          <StatCard
+            icon={Bookmark}
+            label="Subscriptions"
+            value={stats.activeSubscriptions}
+            color="text-primary"
           />
-          <StatCard 
-            icon={CreditCard} 
-            label="Monthly Spend" 
-            value={formatCurrency(monthlySpend, currency)} 
-            color="text-foreground" 
+          <StatCard
+            icon={FileText}
+            label="Notes"
+            value={stats.totalNotes}
+            color="text-foreground"
+          />
+          <StatCard
+            icon={Bell}
+            label="Reminders"
+            value={stats.totalReminders}
+            color="text-foreground"
+          />
+          <StatCard
+            icon={CreditCard}
+            label="Monthly Spend"
+            value={formatCurrency(monthlySpend, currency)}
+            color="text-foreground"
           />
           <Card className="rounded-2xl shadow-sm">
             <CardContent className="p-4 flex items-center h-full">

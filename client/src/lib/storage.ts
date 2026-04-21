@@ -971,68 +971,18 @@ export class VaultStorage {
         throw new Error(`Import Failed: ${diagnosticMessage} JSON parsing error: ${errorMessage}. Please check the file format and try again.`);
       }
 
-      // Import passwords
-      if (importData.passwords) {
-        for (const password of importData.passwords) {
-          await this.savePassword(password);
-        }
-      }
-
-      // Import subscriptions
-      if (importData.subscriptions) {
-        for (const subscription of importData.subscriptions) {
-          await this.saveSubscription(subscription);
-        }
-      }
-
-      // Import notes
-      if (importData.notes) {
-        for (const note of importData.notes) {
-          await this.saveNote(note);
-        }
-      }
-
-      // Import expenses
-      if (importData.expenses) {
-        for (const expense of importData.expenses) {
-          await this.saveExpense(expense);
-        }
-      }
-
-      // Import reminders
-      if (importData.reminders) {
-        for (const reminder of importData.reminders) {
-          await this.saveReminder(reminder);
-        }
-      }
-
-      // Import investments
-      if (importData.investments) {
-        for (const investment of importData.investments) {
-          await this.saveInvestment(investment);
-        }
-      }
-
-      // Import investment goals
-      if (importData.investmentGoals) {
-        for (const goal of importData.investmentGoals) {
-          await this.saveInvestmentGoal(goal);
-        }
-      }
-
-      // Import bank statements
-      if (importData.bankStatements) {
-        for (const statement of importData.bankStatements) {
-          await this.saveBankStatement(statement);
-        }
-      }
-
-      // Import bank transactions
-      if (importData.bankTransactions) {
-        for (const transaction of importData.bankTransactions) {
-          await this.saveBankTransaction(transaction);
-        }
-      }
+      // Parallel import: crypto work runs concurrently, IDB writes are serialized by browser
+      await Promise.all([
+        ...(importData.passwords ?? []).map((p: any) => this.savePassword(p)),
+        ...(importData.subscriptions ?? []).map((s: any) => this.saveSubscription(s)),
+        ...(importData.notes ?? []).map((n: any) => this.saveNote(n)),
+        ...(importData.expenses ?? []).map((e: any) => this.saveExpense(e)),
+        ...(importData.reminders ?? []).map((r: any) => this.saveReminder(r)),
+        ...(importData.investments ?? []).map((i: any) => this.saveInvestment(i)),
+        ...(importData.investmentGoals ?? []).map((g: any) => this.saveInvestmentGoal(g)),
+        ...(importData.bankStatements ?? []).map((s: any) => this.saveBankStatement(s)),
+        ...(importData.bankTransactions ?? []).map((t: any) => this.saveBankTransaction(t)),
+      ]);
 
     } catch (error) {
       if (error instanceof Error && error.message.includes('password')) {
