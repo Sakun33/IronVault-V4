@@ -1,6 +1,5 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
-import { useLogging } from "@/contexts/logging-context";
 import { StatCard } from "@/components/StatCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -175,9 +174,8 @@ function WidgetCard({
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { passwords, subscriptions, expenses, reminders, stats, searchQuery, setSearchQuery, refreshData } = useVault();
+  const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, setSearchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
-  const { getLogsForCurrentVault } = useLogging();
   const { toast } = useToast();
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -354,18 +352,6 @@ export default function Dashboard() {
     [reminders]
   );
 
-  const vaultLogs = getLogsForCurrentVault();
-
-  // TEMP DEBUG — remove after diagnosis
-  console.log('DASHBOARD DEBUG:', {
-    vaultLogsCount: vaultLogs?.length,
-    remindersCount: reminders?.length,
-    dueSoonCount: dueSoonReminders?.length,
-    passwordsCount: passwords?.length,
-    subscriptionsCount: subscriptions?.length,
-    rawLogsInStorage: (() => { try { return JSON.parse(localStorage.getItem('iv_activity_logs') || '[]').length; } catch { return 'error'; } })(),
-  });
-
   const getActivityIcon = (category: string) => {
     switch (category) {
       case 'password': return Lock;
@@ -397,25 +383,56 @@ export default function Dashboard() {
     }
   };
 
-  const recentActivity = useMemo(() =>
-    (vaultLogs || [])
-      .filter((log: any) => log.category !== 'system')
-      .filter((log: any) => {
+  const recentActivity = useMemo(() => {
+    const merged = [
+      ...passwords.map(p => ({
+        id: p.id,
+        description: `Password for ${p.name}`,
+        category: 'password' as const,
+        timestamp: new Date(p.updatedAt || p.createdAt),
+      })),
+      ...subscriptions.map(s => ({
+        id: s.id,
+        description: `Subscription: ${s.name}`,
+        category: 'subscription' as const,
+        timestamp: new Date(s.updatedAt || s.createdAt),
+      })),
+      ...expenses.map(e => ({
+        id: e.id,
+        description: e.description || e.category || 'Expense',
+        category: 'expense' as const,
+        timestamp: new Date((e as any).updatedAt || e.date || e.createdAt),
+      })),
+      ...reminders.map(r => ({
+        id: r.id,
+        description: r.title,
+        category: 'reminder' as const,
+        timestamp: new Date(r.updatedAt || r.createdAt),
+      })),
+      ...notes.map(n => ({
+        id: n.id,
+        description: n.title,
+        category: 'note' as const,
+        timestamp: new Date(n.updatedAt || n.createdAt),
+      })),
+    ];
+    return merged
+      .filter(item => {
         if (!normalizedSearch) return true;
         return (
-          (log.description || '').toLowerCase().includes(normalizedSearch) ||
-          (log.category || '').toLowerCase().includes(normalizedSearch)
+          item.description.toLowerCase().includes(normalizedSearch) ||
+          item.category.toLowerCase().includes(normalizedSearch)
         );
       })
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 5)
-      .map((log: any) => ({
-        ...log,
-        icon: getActivityIcon(log.category),
-        color: getActivityColor(log.category),
-        bg: getActivityBg(log.category),
-      })),
-    [vaultLogs, normalizedSearch]
-  );
+      .map(item => ({
+        ...item,
+        icon: getActivityIcon(item.category),
+        color: getActivityColor(item.category),
+        bg: getActivityBg(item.category),
+      }));
+  }, [passwords, subscriptions, expenses, reminders, notes, normalizedSearch]);
 
   const fmtAmt = (n: number) => formatCurrency(n, currency);
 
@@ -678,7 +695,7 @@ export default function Dashboard() {
             title="Due Soon"
             viewAllHref="/reminders"
             empty={dueSoonReminders.length === 0}
-            emptyText="No reminders due today or tomorrow"
+            emptyText="No reminders due in the next 7 days"
           >
             <div className="space-y-3">
               {dueSoonReminders.map(r => {
@@ -691,10 +708,10 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground capitalize">{r.priority} priority</p>
                     </div>
                     <Badge
-                      variant={daysLeft === 0 ? 'destructive' : 'secondary'}
+                      variant={daysLeft === 0 ? 'destructive' : daysLeft === 1 ? 'secondary' : 'outline'}
                       className="text-[11px] flex-shrink-0"
                     >
-                      {daysLeft === 0 ? 'Today' : 'Tomorrow'}
+                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
                     </Badge>
                   </div>
                 );
