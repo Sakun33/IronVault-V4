@@ -1,34 +1,20 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
 import { useLogging } from "@/contexts/logging-context";
-import { StatCard, SectionCard } from "@/components/StatCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/StatCard";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Lock,
-  Bookmark,
-  FileText,
-  DollarSign,
-  Bell,
-  Plus,
-  CreditCard,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Globe,
-  Copy,
-  Upload,
-  Shield,
-  RefreshCw,
-  Info,
-  BarChart3,
+  Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
+  CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw, Info,
+  BarChart3, ArrowRight,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, addDays, differenceInCalendarDays, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
+import { format, addDays, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
@@ -68,40 +54,68 @@ function SecurityRing({ score, totalPasswords, weakPasswords }: { score: number;
   );
 }
 
-// ── Expense mini donut ────────────────────────────────────────────────────────
-function polarToXY(cx: number, cy: number, r: number, deg: number) {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function MiniDonut({ segments }: { segments: { pct: number; color: string }[] }) {
-  const cx = 44, cy = 44, r = 34, sw = 14;
-  let angle = 0;
-  const arcs = segments.map((seg) => {
-    const start = angle;
-    const sweep = Math.min(seg.pct, 99.9) * 3.6;
-    angle += sweep;
-    const s = polarToXY(cx, cy, r, start);
-    const e = polarToXY(cx, cy, r, angle);
-    const large = sweep > 180 ? 1 : 0;
-    return { ...seg, d: `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}` };
-  });
+// ── Expense horizontal bar chart ──────────────────────────────────────────────
+function ExpenseBarChart({
+  categories,
+  formatAmount,
+}: {
+  categories: { cat: string; amount: number; pct: number; color: string }[];
+  formatAmount: (n: number) => string;
+}) {
+  const top3 = categories.slice(0, 3);
+  const total = categories.reduce((sum, c) => sum + c.amount, 0);
   return (
-    <svg width="88" height="88" viewBox="0 0 88 88" className="flex-shrink-0">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-muted/20" />
-      {arcs.map((arc, i) => (
-        <path key={i} d={arc.d} fill="none" stroke={arc.color} strokeWidth={sw} strokeLinecap="butt" />
+    <div className="space-y-4">
+      {top3.map(c => (
+        <div key={c.cat}>
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="flex items-center gap-2 text-sm">
+              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
+              <span className="text-foreground truncate max-w-[130px]">{c.cat}</span>
+            </span>
+            <span className="text-xs text-muted-foreground font-medium">{formatAmount(c.amount)}</span>
+          </div>
+          <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(c.pct, 100)}%`, background: c.color }}
+            />
+          </div>
+        </div>
       ))}
-    </svg>
+      {total > 0 && (
+        <div className="flex justify-between text-xs font-semibold pt-2 border-t border-border/40 mt-1">
+          <span className="text-muted-foreground">Total</span>
+          <span className="text-foreground">{formatAmount(total)}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function pwdStrength(pwd: string): 'weak' | 'fair' | 'strong' {
   if (!pwd || pwd.length < 8) return 'weak';
   const checks = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(pwd)).length;
   if (pwd.length < 12 || checks < 3) return 'fair';
   return 'strong';
 }
+
+function maskUsername(u: string): string {
+  if (!u) return '•••';
+  if (u.includes('@')) {
+    const [local, domain] = u.split('@');
+    return local.slice(0, 2) + '•••@' + domain;
+  }
+  return u.slice(0, 2) + '•••';
+}
+
+const PRIORITY_DOT: Record<string, string> = {
+  urgent: 'bg-red-500',
+  high: 'bg-orange-500',
+  medium: 'bg-yellow-400',
+  low: 'bg-green-500',
+};
 
 const CATEGORY_COLORS: Record<string, string> = {
   'Food & Dining': '#f97316',
@@ -121,12 +135,51 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other': '#94a3b8',
 };
 
+// ── Glass widget card ─────────────────────────────────────────────────────────
+function WidgetCard({
+  title,
+  viewAllHref,
+  children,
+  empty,
+  emptyText = 'Nothing here yet',
+}: {
+  title: string;
+  viewAllHref?: string;
+  children?: React.ReactNode;
+  empty?: boolean;
+  emptyText?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {viewAllHref && (
+          <Link href={viewAllHref}>
+            <span className="text-xs text-primary hover:text-primary/70 flex items-center gap-1 transition-colors">
+              View all <ArrowRight className="w-3 h-3" />
+            </span>
+          </Link>
+        )}
+      </div>
+      <div className="px-5 pb-5 flex-1">
+        {empty ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <Clock className="w-8 h-8 text-muted-foreground/40 mb-2" />
+            <p className="text-xs text-muted-foreground">{emptyText}</p>
+          </div>
+        ) : children}
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, stats, searchQuery, setSearchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { getLogsForCurrentVault } = useLogging();
   const { toast } = useToast();
-  
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
@@ -134,11 +187,9 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCrossBrowserTip, setShowCrossBrowserTip] = useState(false);
 
-  // Check if we should show the cross-browser tip (first time user or after vault creation)
   useEffect(() => {
     const hasSeenTip = localStorage.getItem('hasSeenCrossBrowserTip');
     const showExportReminder = localStorage.getItem('showExportReminder');
-    
     if (!hasSeenTip || showExportReminder === 'true') {
       setShowCrossBrowserTip(true);
       localStorage.removeItem('showExportReminder');
@@ -150,13 +201,11 @@ export default function Dashboard() {
     localStorage.setItem('hasSeenCrossBrowserTip', 'true');
   };
 
-  // Auto-refresh every 15 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       refreshData();
       setLastRefresh(new Date());
     }, 15000);
-
     return () => clearInterval(interval);
   }, [refreshData]);
 
@@ -165,110 +214,11 @@ export default function Dashboard() {
     try {
       await refreshData();
       setLastRefresh(new Date());
-      toast({
-        title: "Refreshed",
-        description: "Dashboard data updated successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to refresh dashboard",
-        variant: "destructive",
-      });
+      toast({ title: "Refreshed", description: "Dashboard data updated successfully" });
+    } catch {
+      toast({ title: "Error", description: "Failed to refresh dashboard", variant: "destructive" });
     } finally {
       setIsRefreshing(false);
-    }
-  };
-
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-
-  // Get recent passwords (last 5), filtered by global search query when present
-  const recentPasswords = [...passwords]
-    .filter((p) => {
-      if (!normalizedSearch) return true;
-      return (
-        p.name.toLowerCase().includes(normalizedSearch) ||
-        p.username.toLowerCase().includes(normalizedSearch) ||
-        (p.url || '').toLowerCase().includes(normalizedSearch)
-      );
-    })
-    .sort((a, b) => new Date(b.lastUsed || b.updatedAt).getTime() - new Date(a.lastUsed || a.updatedAt).getTime())
-    .slice(0, 5);
-
-  // Get upcoming subscription renewals
-  const upcomingRenewals = subscriptions
-    .filter(s => s.isActive)
-    .filter((s) => {
-      if (!normalizedSearch) return true;
-      return (
-        s.name.toLowerCase().includes(normalizedSearch) ||
-        (s.plan || '').toLowerCase().includes(normalizedSearch) ||
-        (s.category || '').toLowerCase().includes(normalizedSearch)
-      );
-    })
-    .filter(s => {
-      const today = new Date();
-      const reminderDate = addDays(today, s.reminderDays);
-      return s.nextBillingDate <= reminderDate;
-    })
-    .sort((a, b) => (a.nextBillingDate?.getTime?.() ?? 0) - (b.nextBillingDate?.getTime?.() ?? 0))
-    .slice(0, 5);
-
-  // Helper functions for activity display
-  const getActivityIcon = (category: string) => {
-    switch (category) {
-      case 'password': return Lock;
-      case 'subscription': return Bookmark;
-      case 'note': return FileText;
-      case 'expense': return DollarSign;
-      case 'reminder': return Bell;
-      case 'system': return BarChart3;
-      case 'security': return Shield;
-      default: return Clock;
-    }
-  };
-
-  const getActivityColor = (category: string) => {
-    switch (category) {
-      case 'password': return 'text-primary';
-      case 'subscription': return 'text-primary';
-      case 'note': return 'text-foreground';
-      case 'expense': return 'text-foreground';
-      case 'reminder': return 'text-foreground';
-      case 'system': return 'text-muted-foreground';
-      case 'security': return 'text-destructive';
-      default: return 'text-muted-foreground';
-    }
-  };
-
-  // Get recent activity from logs filtered by current vault
-  const vaultLogs = getLogsForCurrentVault();
-  const recentActivity = (vaultLogs || [])
-    .filter((log: any) => {
-      if (!normalizedSearch) return true;
-      return (
-        (log.description || '').toLowerCase().includes(normalizedSearch) ||
-        (log.category || '').toLowerCase().includes(normalizedSearch)
-      );
-    })
-    .slice(-10)
-    .reverse()
-    .map((log: any) => ({
-      ...log,
-      icon: getActivityIcon(log.category),
-      color: getActivityColor(log.category)
-    }));
-
-  const getActivityBgColor = (category: string) => {
-    switch (category) {
-      case 'password': return 'bg-primary/10';
-      case 'subscription': return 'bg-primary/10';
-      case 'note': return 'bg-accent';
-      case 'expense': return 'bg-accent';
-      case 'reminder': return 'bg-accent';
-      case 'system': return 'bg-muted';
-      case 'security': return 'bg-destructive/10';
-      default: return 'bg-muted';
     }
   };
 
@@ -276,30 +226,45 @@ export default function Dashboard() {
     try {
       await navigator.clipboard.writeText(password);
       setCopiedId(id);
-      toast({
-        title: "Copied",
-        description: "Password copied to clipboard",
-      });
+      toast({ title: "Copied", description: "Password copied to clipboard" });
       setTimeout(() => setCopiedId(null), 2000);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to copy password",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to copy password", variant: "destructive" });
     }
   };
 
-  // Calculate monthly spend
-  const monthlySpend = subscriptions
-    .filter(s => s.isActive)
-    .reduce((total, s) => total + (s.cost || 0), 0);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  // ── Derived data ─────────────────────────────────────────────────────────────
 
   const weakPasswordList = useMemo(() =>
     passwords.filter(p => pwdStrength(p.password || '') === 'weak'),
     [passwords]
   );
   const weakPasswords = weakPasswordList.length;
+
+  const monthlySpend = useMemo(() =>
+    subscriptions.filter(s => s.isActive).reduce((t, s) => t + (s.cost || 0), 0),
+    [subscriptions]
+  );
+
+  const thisMonthExpenses = useMemo(() => {
+    const now = new Date();
+    return expenses
+      .filter(e => {
+        const d = new Date(e.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+  }, [expenses]);
+
+  const dueTodayCount = useMemo(() =>
+    reminders.filter(r =>
+      !r.isCompleted && r.dueDate &&
+      differenceInCalendarDays(new Date(r.dueDate), new Date()) === 0
+    ).length,
+    [reminders]
+  );
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -337,73 +302,157 @@ export default function Dashboard() {
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([cat, amount]) => ({
-        cat,
-        amount,
+        cat, amount,
         pct: (amount / total) * 100,
         color: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS['Other'],
       }));
   }, [expenses]);
 
-  const dueReminders = useMemo(() => {
-    const now = new Date();
-    const in7 = addDays(now, 7);
-    return reminders
+  const recentPasswords = useMemo(() =>
+    [...passwords]
+      .filter(p => {
+        if (!normalizedSearch) return true;
+        return (
+          p.name.toLowerCase().includes(normalizedSearch) ||
+          p.username.toLowerCase().includes(normalizedSearch) ||
+          (p.url || '').toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5),
+    [passwords, normalizedSearch]
+  );
+
+  const upcomingRenewals = useMemo(() =>
+    subscriptions
+      .filter(s => s.isActive)
+      .filter(s => {
+        if (!normalizedSearch) return true;
+        return (
+          s.name.toLowerCase().includes(normalizedSearch) ||
+          (s.plan || '').toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .filter(s => {
+        const today = new Date();
+        const reminderDate = addDays(today, s.reminderDays || 7);
+        return s.nextBillingDate <= reminderDate;
+      })
+      .sort((a, b) => (a.nextBillingDate?.getTime?.() ?? 0) - (b.nextBillingDate?.getTime?.() ?? 0))
+      .slice(0, 3),
+    [subscriptions, normalizedSearch]
+  );
+
+  const dueSoonReminders = useMemo(() =>
+    reminders
       .filter(r => !r.isCompleted && r.dueDate)
-      .filter(r => isAfter(r.dueDate, startOfDay(now)) && isBefore(r.dueDate, endOfDay(in7)))
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 5);
-  }, [reminders]);
+      .filter(r => {
+        const days = differenceInCalendarDays(new Date(r.dueDate), new Date());
+        return days >= 0 && days <= 1;
+      })
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
+    [reminders]
+  );
+
+  const vaultLogs = getLogsForCurrentVault();
+
+  const getActivityIcon = (category: string) => {
+    switch (category) {
+      case 'password': return Lock;
+      case 'subscription': return Bookmark;
+      case 'note': return FileText;
+      case 'expense': return DollarSign;
+      case 'reminder': return Bell;
+      case 'system': return BarChart3;
+      case 'security': return Shield;
+      default: return Clock;
+    }
+  };
+
+  const getActivityColor = (category: string) => {
+    switch (category) {
+      case 'password': return 'text-primary';
+      case 'subscription': return 'text-primary';
+      case 'security': return 'text-destructive';
+      default: return 'text-muted-foreground';
+    }
+  };
+
+  const getActivityBg = (category: string) => {
+    switch (category) {
+      case 'password': return 'bg-primary/10';
+      case 'subscription': return 'bg-primary/10';
+      case 'security': return 'bg-destructive/10';
+      default: return 'bg-muted/50';
+    }
+  };
+
+  const recentActivity = useMemo(() =>
+    (vaultLogs || [])
+      .filter((log: any) => log.category !== 'system')
+      .filter((log: any) => {
+        if (!normalizedSearch) return true;
+        return (
+          (log.description || '').toLowerCase().includes(normalizedSearch) ||
+          (log.category || '').toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .slice(0, 5)
+      .map((log: any) => ({
+        ...log,
+        icon: getActivityIcon(log.category),
+        color: getActivityColor(log.category),
+        bg: getActivityBg(log.category),
+      })),
+    [vaultLogs, normalizedSearch]
+  );
+
+  const fmtAmt = (n: number) => formatCurrency(n, currency);
+
+  const quickActions = [
+    { label: 'Add Password', icon: Lock, href: '/passwords?action=add', gradient: 'from-primary/20 to-primary/5' },
+    { label: 'New Note', icon: FileText, href: '/notes?action=add', gradient: 'from-blue-500/20 to-blue-500/5' },
+    { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', gradient: 'from-green-500/20 to-green-500/5' },
+    { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', gradient: 'from-orange-500/20 to-orange-500/5' },
+  ];
 
   return (
     <div>
       <div className="space-y-6">
-        {/* Cross-Browser Access Tip */}
+
+        {/* Cross-Browser Tip */}
         {showCrossBrowserTip && (
           <Alert className="border-primary/30 bg-primary/5 relative">
             <Info className="h-4 w-4 text-primary" />
             <AlertDescription className="text-sm text-foreground">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <strong className="font-semibold">💡 Cross-Browser Access:</strong> Your vault is stored only in <strong>this browser</strong>. 
-                  To access your data in another browser (Chrome, Firefox, Safari, etc.), use the{' '}
-                  <button 
-                    onClick={() => {
-                      setShowImportExport(true);
-                      dismissCrossBrowserTip();
-                    }}
+                  <strong className="font-semibold">💡 Cross-Browser Access:</strong> Your vault is stored only in <strong>this browser</strong>.{' '}
+                  To access your data in another browser, use the{' '}
+                  <button
+                    onClick={() => { setShowImportExport(true); dismissCrossBrowserTip(); }}
                     className="underline font-semibold hover:text-primary"
                   >
                     Import/Export button
                   </button>
-                  {' '}to create a backup and import it in the other browser.
+                  {' '}to create a backup and import it there.
                 </div>
-                <button
-                  onClick={dismissCrossBrowserTip}
-                  className="text-primary hover:text-primary/80 font-bold"
-                >
-                  ✕
-                </button>
+                <button onClick={dismissCrossBrowserTip} className="text-primary hover:text-primary/80 font-bold">✕</button>
               </div>
             </AlertDescription>
           </Alert>
         )}
-        
+
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting}</h1>
             <p className="text-sm text-muted-foreground">
-              Your vault is secure • Last updated: {format(lastRefresh, 'HH:mm:ss')}
+              Your vault is secure · Last updated: {format(lastRefresh, 'HH:mm:ss')}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleManualRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-2"
-            >
+            <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={isRefreshing} className="flex items-center gap-2">
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
@@ -427,25 +476,18 @@ export default function Dashboard() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              onClick={() => setShowImportExport(true)}
-              variant="outline"
-              className="rounded-xl px-4 py-2 whitespace-nowrap"
-            >
+            <Button onClick={() => setShowImportExport(true)} variant="outline" className="rounded-xl px-4 py-2 whitespace-nowrap">
               <Upload className="w-4 h-4 mr-2" />
               Import / Export
             </Button>
-            <Button
-              onClick={() => setShowGenerator(true)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-4 py-3 shadow-sm whitespace-nowrap"
-            >
+            <Button onClick={() => setShowGenerator(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-4 py-3 shadow-sm whitespace-nowrap">
               <Plus className="w-4 h-4 mr-2" />
               Password Generator
             </Button>
           </div>
         </div>
 
-        {/* Onboarding CTA for new users */}
+        {/* Onboarding CTA */}
         {stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && (
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 flex flex-col md:flex-row items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -455,19 +497,17 @@ export default function Dashboard() {
               <h3 className="font-semibold text-foreground mb-1">Welcome to IronVault!</h3>
               <p className="text-sm text-muted-foreground">Your vault is ready. Start by adding a password, tracking a subscription, or creating a note.</p>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <Link href="/passwords">
-                <Button size="sm" className="rounded-xl">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Password
-                </Button>
-              </Link>
-            </div>
+            <Link href="/passwords">
+              <Button size="sm" className="rounded-xl shrink-0">
+                <Plus className="w-4 h-4 mr-1" />
+                Add Password
+              </Button>
+            </Link>
           </div>
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 stagger-children">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard
             icon={Lock}
             label="Passwords"
@@ -480,6 +520,8 @@ export default function Dashboard() {
             label="Subscriptions"
             value={stats.activeSubscriptions}
             color="text-primary"
+            subtitle={monthlySpend > 0 ? `${fmtAmt(monthlySpend)}/mo` : undefined}
+            subtitleColor="text-muted-foreground"
           />
           <StatCard
             icon={FileText}
@@ -488,16 +530,20 @@ export default function Dashboard() {
             color="text-foreground"
           />
           <StatCard
+            icon={DollarSign}
+            label="Expenses"
+            value={stats.totalExpenses}
+            color="text-foreground"
+            subtitle={thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo.` : undefined}
+            subtitleColor="text-muted-foreground"
+          />
+          <StatCard
             icon={Bell}
             label="Reminders"
             value={stats.totalReminders}
             color="text-foreground"
-          />
-          <StatCard
-            icon={CreditCard}
-            label="Monthly Spend"
-            value={formatCurrency(monthlySpend, currency)}
-            color="text-foreground"
+            subtitle={dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined}
+            subtitleColor="text-destructive"
           />
           <Card className="rounded-2xl shadow-sm">
             <CardContent className="p-4 flex items-center h-full">
@@ -534,220 +580,167 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Quick Access Sections */}
+        {/* Quick Actions */}
         <div>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Access</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/passwords">
-              <SectionCard 
-                icon={Lock} 
-                label="Passwords" 
-                count={stats.totalPasswords}
-                color="text-primary"
-              />
-            </Link>
-            <Link href="/subscriptions">
-              <SectionCard 
-                icon={Bookmark} 
-                label="Subscriptions" 
-                count={stats.activeSubscriptions}
-                color="text-primary"
-              />
-            </Link>
-            <Link href="/notes">
-              <SectionCard 
-                icon={FileText} 
-                label="Notes" 
-                count={stats.totalNotes}
-                color="text-foreground"
-              />
-            </Link>
-            <Link href="/expenses">
-              <SectionCard 
-                icon={DollarSign} 
-                label="Expenses" 
-                count={stats.totalExpenses}
-                color="text-foreground"
-              />
-            </Link>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {quickActions.map(({ label, icon: Icon, href, gradient }) => (
+              <Link key={label} href={href}>
+                <div className={`rounded-2xl border border-border/60 bg-gradient-to-br ${gradient} backdrop-blur-sm p-4 flex flex-col items-center gap-2.5 cursor-pointer hover:scale-[1.02] hover:shadow-md transition-all duration-200`}>
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-foreground" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground text-center leading-tight">{label}</span>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
 
-        {/* Expense Donut */}
-        {topExpenseCategories.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-4">Expense Breakdown</h2>
-            <Card className="rounded-2xl shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-6">
-                  <MiniDonut segments={topExpenseCategories.map(c => ({ pct: c.pct, color: c.color }))} />
-                  <div className="flex-1 space-y-2">
-                    {topExpenseCategories.map(c => (
-                      <div key={c.cat} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                          <span className="text-xs text-foreground">{c.cat}</span>
-                        </div>
-                        <span className="text-xs font-medium text-muted-foreground">{c.pct.toFixed(0)}%</span>
-                      </div>
-                    ))}
+        {/* Three-column widgets */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* Upcoming Renewals */}
+          <WidgetCard
+            title="Upcoming Renewals"
+            viewAllHref="/subscriptions"
+            empty={upcomingRenewals.length === 0}
+            emptyText="No renewals due soon"
+          >
+            <div className="space-y-3">
+              {upcomingRenewals.map(s => {
+                const daysLeft = differenceInCalendarDays(s.nextBillingDate, new Date());
+                return (
+                  <div key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
+                    <Favicon url={s.platformLink} name={s.name} className="w-8 h-8 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground">{fmtAmt(s.cost || 0)}</p>
+                    </div>
+                    <Badge variant={daysLeft <= 3 ? 'destructive' : 'secondary'} className="text-[11px] flex-shrink-0">
+                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1d' : `${daysLeft}d`}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </WidgetCard>
+
+          {/* Recent Passwords */}
+          <WidgetCard
+            title="Recent Passwords"
+            viewAllHref="/passwords"
+            empty={recentPasswords.length === 0}
+            emptyText="No passwords saved yet"
+          >
+            <div className="space-y-2">
+              {recentPasswords.map(p => (
+                <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors group">
+                  <Favicon url={p.url} name={p.name} className="w-8 h-8 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{maskUsername(p.username)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyPassword(p.password, p.id)}
+                      className="p-1.5 h-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      {copiedId === p.id ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground/60">
+                      {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+                    </span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              ))}
+            </div>
+          </WidgetCard>
 
-        {/* Due Soon Reminders */}
-        {dueReminders.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-4">Due This Week</h2>
-            <Card className="rounded-2xl shadow-sm">
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {dueReminders.map(r => {
-                    const daysLeft = differenceInCalendarDays(r.dueDate, new Date());
-                    const urgentColor = r.priority === 'high' || r.priority === 'urgent' ? 'text-destructive' : daysLeft <= 1 ? 'text-amber-500' : 'text-foreground';
-                    return (
-                      <div key={r.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Bell className="w-4 h-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{r.title}</p>
-                            <p className="text-xs text-muted-foreground">{format(r.dueDate, 'MMM dd, yyyy')}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className={`text-xs ${urgentColor}`}>
-                          {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Recent Activity */}
-        <div>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
-          <Card className="rounded-2xl shadow-sm">
-            <CardContent className="p-4">
-              <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                {recentActivity.length > 0 ? (
-                  recentActivity.map((log, index) => {
-                    const IconComponent = log.icon;
-                    return (
-                      <div key={log.id || index} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full ${getActivityBgColor(log.category)} flex items-center justify-center`}>
-                            <IconComponent className={`w-4 h-4 ${log.color}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{log.description}</p>
-                            <p className="text-xs text-muted-foreground">{format(log.timestamp, 'MMM dd, HH:mm')}</p>
-                          </div>
-                        </div>
-                        <Badge variant="secondary" className="text-xs capitalize">
-                          {log.category}
-                        </Badge>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No recent activity</p>
+          {/* Due Soon */}
+          <WidgetCard
+            title="Due Soon"
+            viewAllHref="/reminders"
+            empty={dueSoonReminders.length === 0}
+            emptyText="No reminders due today or tomorrow"
+          >
+            <div className="space-y-3">
+              {dueSoonReminders.map(r => {
+                const daysLeft = differenceInCalendarDays(new Date(r.dueDate), new Date());
+                return (
+                  <div key={r.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{r.title}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{r.priority} priority</p>
+                    </div>
+                    <Badge
+                      variant={daysLeft === 0 ? 'destructive' : 'secondary'}
+                      className="text-[11px] flex-shrink-0"
+                    >
+                      {daysLeft === 0 ? 'Today' : 'Tomorrow'}
+                    </Badge>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                );
+              })}
+            </div>
+          </WidgetCard>
         </div>
 
-        {/* Recent Passwords */}
-        {recentPasswords.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-4">Recent Passwords</h2>
-            <Card className="rounded-2xl shadow-sm">
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {recentPasswords.map((password) => (
-                    <div key={password.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
-                      <div className="flex items-center gap-3">
-                        <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{password.name}</p>
-                          <p className="text-xs text-muted-foreground">{password.username}</p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyPassword(password.password, password.id)}
-                        className="p-2"
-                      >
-                        {copiedId === password.id ? (
-                          <CheckCircle className="w-4 h-4 text-primary" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Two-column bottom widgets */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Upcoming Renewals */}
-        {upcomingRenewals.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-4">Upcoming Renewals</h2>
-            <Card className="rounded-2xl shadow-sm">
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {upcomingRenewals.map((subscription) => (
-                    <div key={subscription.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 hover:bg-accent transition-colors">
-                      <div className="flex items-center gap-3">
-                        <Favicon url={subscription.platformLink} name={subscription.name} className="w-8 h-8 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{subscription.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(subscription.nextBillingDate, 'MMM dd, yyyy')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-foreground">
-                          {formatCurrency(subscription.cost || 0, currency)}
-                        </p>
-                        <Badge variant="outline" className="text-xs">
-                          {differenceInCalendarDays(subscription.nextBillingDate, new Date())} days
-                        </Badge>
-                      </div>
+          {/* Expense Summary */}
+          <WidgetCard
+            title="Expense Summary"
+            viewAllHref="/expenses"
+            empty={topExpenseCategories.length === 0}
+            emptyText="No expenses recorded yet"
+          >
+            <ExpenseBarChart categories={topExpenseCategories} formatAmount={fmtAmt} />
+          </WidgetCard>
+
+          {/* Recent Activity */}
+          <WidgetCard
+            title="Recent Activity"
+            viewAllHref="/logging"
+            empty={recentActivity.length === 0}
+            emptyText="No activity recorded yet"
+          >
+            <div className="space-y-2">
+              {recentActivity.map((log: any, index: number) => {
+                const IconComponent = log.icon;
+                return (
+                  <div key={log.id || index} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
+                    <div className={`w-8 h-8 rounded-full ${log.bg} flex items-center justify-center flex-shrink-0`}>
+                      <IconComponent className={`w-3.5 h-3.5 ${log.color}`} />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground truncate">{log.description}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] capitalize flex-shrink-0">
+                      {log.category}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </WidgetCard>
+        </div>
+
       </div>
 
-      <PasswordGeneratorModal
-        open={showGenerator}
-        onOpenChange={setShowGenerator}
-      />
-      
-      <ImportExportModal
-        open={showImportExport}
-        onOpenChange={setShowImportExport}
-      />
+      <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
+      <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
     </div>
   );
 }
