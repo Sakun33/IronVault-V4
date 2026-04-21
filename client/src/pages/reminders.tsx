@@ -5,6 +5,7 @@ import { ReminderEntry, REMINDER_CATEGORIES, REMINDER_COLORS } from '@shared/sch
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BrandCard } from '@/components/brand-card';
+import { Favicon } from '@/components/favicon';
 
 const priorityBrandColor = (priority: string) => {
   if (priority === 'urgent') return '#ef4444';
@@ -45,7 +46,11 @@ import {
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 
 export default function Reminders() {
-  const { reminders, addReminder, updateReminder, deleteReminder } = useVault();
+  const { reminders, addReminder, updateReminder, deleteReminder, subscriptions } = useVault();
+  const subscriptionUrlMap = useMemo(() =>
+    Object.fromEntries((subscriptions || []).map(s => [s.id, s.platformLink || undefined])),
+    [subscriptions]
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -431,6 +436,11 @@ export default function Reminders() {
               )}
             </Button>
             
+            <Favicon
+              url={reminder.subscriptionId ? subscriptionUrlMap[reminder.subscriptionId] : undefined}
+              name={reminder.category || reminder.title}
+              className="w-8 h-8 flex-shrink-0 rounded-lg"
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2 mb-1">
                 <h3 className={`font-medium ${reminder.isCompleted ? 'line-through text-muted-foreground' : ''}`} data-testid={`text-title-${reminder.id}`}>

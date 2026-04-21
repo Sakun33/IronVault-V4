@@ -8,6 +8,7 @@ import { ExpenseEntry, EXPENSE_CATEGORIES } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,6 +63,8 @@ export default function Expenses() {
   const [viewMode, setViewMode] = useState<'overview' | 'categories' | 'trends'>('overview');
   const [dateFilter, setDateFilter] = useState<'all' | 'month' | 'week' | 'year'>('month');
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [deleteExpenseTarget, setDeleteExpenseTarget] = useState<{id: string; title: string} | null>(null);
+  const [pendingDuplicateExpense, setPendingDuplicateExpense] = useState<{expense: any; message: string} | null>(null);
 
   // Expense Templates - More practical with common expenses
   const EXPENSE_TEMPLATES = [
@@ -323,19 +326,22 @@ export default function Expenses() {
       tags: formData.tags,
     };
 
-    // Check for potential duplicates
     const potentialDuplicate = detectPotentialDuplicate(newExpense);
-    if (potentialDuplicate && !confirm(
-      `Similar expense found: "${potentialDuplicate.title}" ($${potentialDuplicate.amount}) on ${format(new Date(potentialDuplicate.date), 'MMM dd, yyyy')}. Add anyway?`
-    )) {
+    if (potentialDuplicate) {
+      setPendingDuplicateExpense({
+        expense: newExpense,
+        message: `Similar expense found: "${potentialDuplicate.title}" ($${potentialDuplicate.amount}) on ${format(new Date(potentialDuplicate.date), 'MMM dd, yyyy')}. Add anyway?`,
+      });
       return;
     }
 
-    try {
-      await addExpense(newExpense);
-      saveExpenseCategory(formData.category);
+    await doAddExpense(newExpense);
+  };
 
-      // Reset form
+  const doAddExpense = async (expense: any) => {
+    try {
+      await addExpense(expense);
+      saveExpenseCategory(expense.category);
       setFormData({
         title: '',
         amount: '',
@@ -349,17 +355,9 @@ export default function Expenses() {
         tags: [],
       });
       setShowAddModal(false);
-
-      toast({
-        title: "Success",
-        description: "Expense added successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add expense",
-        variant: "destructive",
-      });
+      toast({ title: "Success", description: "Expense added successfully" });
+    } catch {
+      toast({ title: "Error", description: "Failed to add expense", variant: "destructive" });
     }
   };
 
@@ -440,23 +438,19 @@ export default function Expenses() {
     }
   };
 
-  const handleDeleteExpense = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) {
-      return;
-    }
+  const handleDeleteExpense = (id: string, title: string) => {
+    setDeleteExpenseTarget({ id, title });
+  };
 
+  const confirmDeleteExpense = async () => {
+    if (!deleteExpenseTarget) return;
     try {
-      await deleteExpense(id);
-      toast({
-        title: "Success",
-        description: "Expense deleted successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete expense",
-        variant: "destructive",
-      });
+      await deleteExpense(deleteExpenseTarget.id);
+      toast({ title: "Success", description: "Expense deleted successfully" });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete expense", variant: "destructive" });
+    } finally {
+      setDeleteExpenseTarget(null);
     }
   };
 
@@ -1221,6 +1215,38 @@ export default function Expenses() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteExpenseTarget} onOpenChange={(o) => !o && setDeleteExpenseTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete "{deleteExpenseTarget?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteExpense} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pendingDuplicateExpense} onOpenChange={(o) => !o && setPendingDuplicateExpense(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Possible Duplicate</AlertDialogTitle>
+            <AlertDialogDescription>{pendingDuplicateExpense?.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (pendingDuplicateExpense) { doAddExpense(pendingDuplicateExpense.expense); setPendingDuplicateExpense(null); } }}>
+              Add Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, ExternalLink, User, Mail, Key, Clock, AlertTriangle, Eye, EyeOff, LogIn, Copy, Check, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { BrandCard } from '@/components/brand-card';
 import { Favicon } from '@/components/favicon';
 import { useVault } from '@/contexts/vault-context';
@@ -38,6 +39,7 @@ export default function Subscriptions() {
   const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [deleteSubTarget, setDeleteSubTarget] = useState<{id: string; name: string} | null>(null);
 
   // Subscription Templates
   const SUBSCRIPTION_TEMPLATES = [
@@ -157,21 +159,19 @@ export default function Subscriptions() {
     });
   }, [subscriptions, searchQuery, categoryFilter, statusFilter]);
 
-  const handleDeleteSubscription = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete the subscription for "${name}"?`)) {
-      try {
-        await deleteSubscription(id);
-        toast({
-          title: "Deleted",
-          description: "Subscription deleted successfully",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to delete subscription",
-          variant: "destructive",
-        });
-      }
+  const handleDeleteSubscription = (id: string, name: string) => {
+    setDeleteSubTarget({ id, name });
+  };
+
+  const confirmDeleteSubscription = async () => {
+    if (!deleteSubTarget) return;
+    try {
+      await deleteSubscription(deleteSubTarget.id);
+      toast({ title: "Deleted", description: "Subscription deleted successfully" });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete subscription", variant: "destructive" });
+    } finally {
+      setDeleteSubTarget(null);
     }
   };
 
@@ -526,6 +526,23 @@ export default function Subscriptions() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteSubTarget} onOpenChange={(o) => !o && setDeleteSubTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Subscription</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete "{deleteSubTarget?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSubscription} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
