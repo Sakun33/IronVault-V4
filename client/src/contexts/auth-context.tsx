@@ -25,6 +25,7 @@ interface AuthContextType {
   accountEmail: string | null;
   login: (masterPassword: string) => Promise<boolean>;
   loginWithKey: (base64Key: string) => Promise<boolean>;
+  loginWithoutVerification: (masterPassword: string) => void;
   createVault: (masterPassword: string) => Promise<void>;
   logout: () => void;
   accountLogin: (email: string, password: string) => Promise<boolean>;
@@ -195,6 +196,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Vault storage already has the encryption key set (e.g. after createVault + importVault).
+  // Just set auth state — skip redundant unlockVault verification.
+  const loginWithoutVerification = (password: string): void => {
+    setIsUnlocked(true);
+    setMasterPassword(password);
+    sessionStorage.setItem(SESSION_KEY, password);
+  };
+
   const loginWithKey = async (base64Key: string): Promise<boolean> => {
     try {
       const success = await vaultStorage.unlockVaultWithKey(base64Key);
@@ -279,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accountEmail,
     login,
     loginWithKey,
+    loginWithoutVerification,
     createVault,
     logout,
     accountLogin,

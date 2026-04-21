@@ -84,10 +84,10 @@ export function getProfileDisplay(profile: ProfileData | null): {
 } {
   if (!profile || !profile.email) {
     return {
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      phone: '+1 (555) 123-4567',
-      initials: 'JD'
+      name: 'User',
+      email: '',
+      phone: '',
+      initials: 'U'
     };
   }
 

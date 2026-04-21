@@ -164,7 +164,8 @@ export default function Profile() {
   const { formatCurrency, currency, currencies } = useCurrency();
   const { stats } = useVault();
   const { toast } = useToast();
-  
+  const { accountEmail, masterPassword } = useAuth();
+
   const [activeTab, setActiveTab] = useState('overview');
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
@@ -173,7 +174,6 @@ export default function Profile() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<string>('fingerprint');
-  const { masterPassword } = useAuth();
   const { changePlan } = useLicense();
   const [, setLocation] = useLocation();
   
@@ -246,9 +246,9 @@ export default function Profile() {
   // User profile data - populated from signup or default mock data
   const [userProfile, setUserProfile] = useState<UserProfile>({
     id: 'user-1',
-    name: customerProfile?.name || 'John Doe',
-    email: customerProfile?.email || 'john.doe@example.com',
-    phone: customerProfile?.phone || '+1 (555) 123-4567',
+    name: customerProfile?.name || accountEmail?.split('@')[0] || 'User',
+    email: customerProfile?.email || accountEmail || '',
+    phone: customerProfile?.phone || '',
     preferences: {
       theme: 'system',
       language: 'en',

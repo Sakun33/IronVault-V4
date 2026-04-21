@@ -19,7 +19,7 @@ import { usePlanFeatures } from '@/hooks/use-plan-features';
 
 export default function VaultPickerPage() {
   const [, setLocation] = useLocation();
-  const { login, loginWithKey, accountEmail, accountLogout } = useAuth();
+  const { login, loginWithKey, loginWithoutVerification, accountEmail, accountLogout } = useAuth();
   const { toast } = useToast();
   const { license } = useLicense();
 
@@ -173,29 +173,24 @@ export default function VaultPickerPage() {
         });
       }
 
-      // Always derive a fresh key from the cloud blob — never use stale local metadata.
-      // createVault sets a new salt + encryptionKey, then we overwrite the items from
-      // the authoritative cloud blob.  This avoids the "existing device" path where
-      // unlockVault() would fail if local IndexedDB was cleared or the metadata drifted.
+      // Derive a fresh key from the cloud blob — never reuse stale local metadata.
+      // createVault sets encryptionKey on vaultStorage; importVault writes items
+      // encrypted with that key.  loginWithoutVerification sets auth state directly
+      // without re-running unlockVault (which would fail if the verification entry
+      // was wiped by clearEncryptedItems).
       await vaultStorage.createVault(pw);
       await vaultStorage.clearEncryptedItems();
       await vaultStorage.importVault(full.encryptedBlob, pw);
 
-      const success = await login(pw);
-      if (success) {
-        markVaultAsCloudSynced(cloudVault.vaultId);
-        // Stamp lastPull so the 60s poll doesn't immediately re-download what we just imported
-        localStorage.setItem(
-          `iv_last_pull_${cloudVault.vaultId}`,
-          full.serverUpdatedAt || new Date().toISOString(),
-        );
-        // Directly push to cloud (no event, no debounce) — registers this device's sync state
-        void pushCloudVault(cloudVault.vaultId, cloudVault.vaultName, full.encryptedBlob, cloudVault.isDefault || false);
-        toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
-        setLocation('/');
-      } else {
-        setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: 'Incorrect master password.' }));
-      }
+      loginWithoutVerification(pw);
+      markVaultAsCloudSynced(cloudVault.vaultId);
+      localStorage.setItem(
+        `iv_last_pull_${cloudVault.vaultId}`,
+        full.serverUpdatedAt || new Date().toISOString(),
+      );
+      void pushCloudVault(cloudVault.vaultId, cloudVault.vaultName, full.encryptedBlob, cloudVault.isDefault || false);
+      toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
+      setLocation('/');
     } catch (err: any) {
       setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: err?.message || 'Failed to unlock cloud vault.' }));
     } finally {
