@@ -327,9 +327,19 @@ export default function Logging() {
                       <p className="text-sm text-foreground mb-2">
                         {log.description}
                       </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        {log.device && <span title={log.userAgent}>{log.device}</span>}
-                        {log.ipAddress && <span>IP: {log.ipAddress}</span>}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        {log.ipAddress && (
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/50 inline-block"/>
+                            {log.ipAddress}
+                          </span>
+                        )}
+                        {log.device && (
+                          <span className="flex items-center gap-1" title={log.userAgent}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 inline-block"/>
+                            {log.device}
+                          </span>
+                        )}
                         {log.location && <span>{log.location}</span>}
                       </div>
                     </div>
