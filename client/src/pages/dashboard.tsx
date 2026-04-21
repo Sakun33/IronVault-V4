@@ -35,14 +35,15 @@ import { Favicon } from "@/components/favicon";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // ── Security score ring ───────────────────────────────────────────────────────
-function SecurityRing({ score }: { score: number }) {
+function SecurityRing({ score, totalPasswords, weakPasswords }: { score: number; totalPasswords: number; weakPasswords: number }) {
   const r = 30, cx = 38, cy = 38, sw = 8;
   const circ = 2 * Math.PI * r;
   const dash = (score / 100) * circ;
-  const color = score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
-  const label = score >= 75 ? 'Strong' : score >= 50 ? 'Fair' : 'Weak';
+  const color = score >= 90 ? '#22c55e' : score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
+  const label = score >= 90 ? 'Excellent' : score >= 75 ? 'Strong' : score >= 50 ? 'Fair' : 'Weak';
+  const strongCount = totalPasswords - weakPasswords;
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 w-full">
       <svg width="76" height="76" viewBox="0 0 76 76" className="flex-shrink-0">
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-muted/20" />
         <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
@@ -50,11 +51,18 @@ function SecurityRing({ score }: { score: number }) {
           strokeLinecap="round"
           transform={`rotate(-90 ${cx} ${cy})`}
         />
-        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="15" fontWeight="700" fill={color}>{score}</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill={color}>{score}</text>
+        <text x={cx} y={cy + 8} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill="#64748b">/100</text>
       </svg>
-      <div>
+      <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground">{label}</p>
         <p className="text-xs text-muted-foreground">Security score</p>
+        {totalPasswords > 0 && (
+          <div className="mt-1.5 space-y-0.5">
+            <p className="text-[11px] text-green-500">Strong {strongCount}/{totalPasswords}</p>
+            {weakPasswords > 0 && <p className="text-[11px] text-red-500">Weak {weakPasswords}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -298,9 +306,13 @@ export default function Dashboard() {
     try {
       const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
       const first = (cp.name || '').split(' ')[0] || '';
+      const emoji = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
       const salute = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      return first ? `${salute}, ${first}` : salute;
-    } catch { return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
+      return first ? `${salute}, ${first} ${emoji}` : `${salute} ${emoji}`;
+    } catch {
+      const emoji = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
+      return (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ' ' + emoji;
+    }
   }, []);
 
   const securityScore = useMemo(() => {
@@ -379,7 +391,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting} 👋</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting}</h1>
             <p className="text-sm text-muted-foreground">
               Your vault is secure • Last updated: {format(lastRefresh, 'HH:mm:ss')}
             </p>
@@ -461,6 +473,7 @@ export default function Dashboard() {
             label="Passwords"
             value={stats.totalPasswords}
             color="text-primary"
+            subtitle={weakPasswords > 0 ? `${weakPasswords} weak` : undefined}
           />
           <StatCard
             icon={Bookmark}
@@ -488,7 +501,7 @@ export default function Dashboard() {
           />
           <Card className="rounded-2xl shadow-sm">
             <CardContent className="p-4 flex items-center h-full">
-              <SecurityRing score={securityScore} />
+              <SecurityRing score={securityScore} totalPasswords={stats.totalPasswords} weakPasswords={weakPasswords} />
             </CardContent>
           </Card>
         </div>

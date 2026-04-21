@@ -8,9 +8,11 @@ interface StatCardProps {
   value: string | number
   color?: string
   className?: string
+  subtitle?: string
+  subtitleColor?: string
 }
 
-export function StatCard({ icon: Icon, label, value, color = "text-primary", className }: StatCardProps) {
+export function StatCard({ icon: Icon, label, value, color = "text-primary", className, subtitle, subtitleColor = "text-destructive" }: StatCardProps) {
   return (
     <Card className={cn("group rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-border/60 bg-card hover:-translate-y-0.5", className)}>
       <CardContent className="p-4 flex flex-col gap-2.5">
@@ -19,6 +21,7 @@ export function StatCard({ icon: Icon, label, value, color = "text-primary", cla
         </div>
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</span>
         <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+        {subtitle && <span className={cn("text-[11px] font-medium -mt-1", subtitleColor)}>{subtitle}</span>}
       </CardContent>
     </Card>
   )
