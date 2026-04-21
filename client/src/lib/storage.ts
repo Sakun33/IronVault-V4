@@ -971,8 +971,9 @@ export class VaultStorage {
         throw new Error(`Import Failed: ${diagnosticMessage} JSON parsing error: ${errorMessage}. Please check the file format and try again.`);
       }
 
-      // Parallel import: crypto work runs concurrently, IDB writes are serialized by browser
-      await Promise.all([
+      // Parallel import: crypto work runs concurrently, IDB writes are serialized by browser.
+      // allSettled so a single bad record never aborts the rest of the import.
+      const results = await Promise.allSettled([
         ...(importData.passwords ?? []).map((p: any) => this.savePassword(p)),
         ...(importData.subscriptions ?? []).map((s: any) => this.saveSubscription(s)),
         ...(importData.notes ?? []).map((n: any) => this.saveNote(n)),
@@ -983,6 +984,8 @@ export class VaultStorage {
         ...(importData.bankStatements ?? []).map((s: any) => this.saveBankStatement(s)),
         ...(importData.bankTransactions ?? []).map((t: any) => this.saveBankTransaction(t)),
       ]);
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed > 0) console.warn(`[importVault] ${failed} item(s) failed to save`);
 
     } catch (error) {
       if (error instanceof Error && error.message.includes('password')) {

@@ -203,7 +203,7 @@ export default function Dashboard() {
       const reminderDate = addDays(today, s.reminderDays);
       return s.nextBillingDate <= reminderDate;
     })
-    .sort((a, b) => a.nextBillingDate.getTime() - b.nextBillingDate.getTime())
+    .sort((a, b) => (a.nextBillingDate?.getTime?.() ?? 0) - (b.nextBillingDate?.getTime?.() ?? 0))
     .slice(0, 5);
 
   // Helper functions for activity display

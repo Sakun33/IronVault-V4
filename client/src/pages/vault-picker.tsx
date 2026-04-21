@@ -161,8 +161,16 @@ export default function VaultPickerPage() {
 
       const existing = vaultManager.getExistingVaults().find(v => v.id === cloudVault.vaultId);
       if (!existing) {
-        // New device — DO NOT add to local registry (cloud-first: always unlock from cloud).
-        // Init encryption, clear any stale IndexedDB data, import fresh cloud blob.
+        // New device — register vault locally so VaultSelectionContext finds it after unlock.
+        vaultManager.addToRegistry({
+          id: cloudVault.vaultId,
+          name: cloudVault.vaultName,
+          createdAt: new Date().toISOString(),
+          lastAccessedAt: new Date().toISOString(),
+          isDefault: cloudVault.isDefault || false,
+          biometricEnabled: false,
+          iconColor: '#6366f1',
+        });
         await vaultStorage.createVault(pw);
         await vaultStorage.clearEncryptedItems();
         await vaultStorage.importVault(full.encryptedBlob, pw);
