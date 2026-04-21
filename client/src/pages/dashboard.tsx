@@ -356,6 +356,16 @@ export default function Dashboard() {
 
   const vaultLogs = getLogsForCurrentVault();
 
+  // TEMP DEBUG — remove after diagnosis
+  console.log('DASHBOARD DEBUG:', {
+    vaultLogsCount: vaultLogs?.length,
+    remindersCount: reminders?.length,
+    dueSoonCount: dueSoonReminders?.length,
+    passwordsCount: passwords?.length,
+    subscriptionsCount: subscriptions?.length,
+    rawLogsInStorage: (() => { try { return JSON.parse(localStorage.getItem('iv_activity_logs') || '[]').length; } catch { return 'error'; } })(),
+  });
+
   const getActivityIcon = (category: string) => {
     switch (category) {
       case 'password': return Lock;
