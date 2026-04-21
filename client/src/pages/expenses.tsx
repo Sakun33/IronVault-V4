@@ -61,7 +61,7 @@ export default function Expenses() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showRecurringOnly, setShowRecurringOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'overview' | 'categories' | 'trends'>('overview');
-  const [dateFilter, setDateFilter] = useState<'all' | 'month' | 'week' | 'year'>('month');
+  const [dateFilter, setDateFilter] = useState<'all' | 'month' | 'week' | 'year'>('all');
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteExpenseTarget, setDeleteExpenseTarget] = useState<{id: string; title: string} | null>(null);
   const [pendingDuplicateExpense, setPendingDuplicateExpense] = useState<{expense: any; message: string} | null>(null);

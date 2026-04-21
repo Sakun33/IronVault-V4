@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claude + Codex — IronVault Dashboard</title>
+<title>Claude — IronVault Live Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>tailwind.config = { darkMode: 'class' }</script>
 <style>
   body { background: #0a0a0f; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; }
   .card { background: #12121a; border: 1px solid #1e1e2e; }
   .pulse-dot { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
-  .tag-claude { background: #1e3a5f; color: #60a5fa; }
-  .tag-codex  { background: #1a3a2a; color: #34d399; }
-  .tag-system { background: #2d1b1b; color: #f87171; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .tag-claude  { background: #1e3a5f; color: #60a5fa; }
+  .tag-system  { background: #2d1b1b; color: #f87171; }
+  .tag-fix     { background: #1a2d1a; color: #4ade80; }
+  .status-done { color: #4ade80; }
+  .status-wip  { color: #fbbf24; }
+  .status-pending { color: #64748b; }
   tr:hover td { background: #1a1a28; }
+  .done-row { opacity: 0.65; }
 </style>
 </head>
 <body class="min-h-screen p-6">
@@ -22,13 +26,13 @@
 <!-- Header -->
 <div class="flex items-center justify-between mb-6">
   <div>
-    <h1 class="text-2xl font-bold text-white tracking-tight">Claude + Codex Collaboration Dashboard</h1>
-    <p class="text-slate-400 text-sm mt-1">IronVault · Main Branch · <span id="live-time" class="text-blue-400"></span></p>
+    <h1 class="text-2xl font-bold text-white tracking-tight">IronVault — Claude Agent Dashboard</h1>
+    <p class="text-slate-400 text-sm mt-1">main branch · ironvault.app · <span id="live-time" class="text-blue-400"></span></p>
   </div>
   <div class="flex items-center gap-3">
-    <span class="pulse-dot w-2 h-2 rounded-full bg-yellow-400 inline-block"></span>
-    <span class="text-yellow-400 font-semibold text-sm uppercase tracking-widest">IN PROGRESS</span>
-    <span class="text-slate-500 text-xs ml-4">Auto-refresh 15s</span>
+    <span class="pulse-dot w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+    <span class="text-green-400 font-semibold text-sm uppercase tracking-widest">ACTIVE</span>
+    <span class="text-slate-500 text-xs ml-4">Last updated: 2026-04-21 · commit 5836b4d</span>
   </div>
 </div>
 
@@ -36,166 +40,232 @@
 <div class="grid grid-cols-4 gap-4 mb-6">
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Fixes Deployed</div>
-    <div class="text-3xl font-bold text-white" id="fixes-deployed">6</div>
-    <div class="text-xs text-green-400 mt-1">BATCH 1 + Profile hardening</div>
+    <div class="text-3xl font-bold text-green-400">14</div>
+    <div class="text-xs text-green-500 mt-1">↑ +8 this session</div>
   </div>
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Issues Remaining</div>
-    <div class="text-3xl font-bold text-yellow-400" id="issues-remaining">12</div>
-    <div class="text-xs text-slate-500 mt-1">Queued for this session</div>
+    <div class="text-3xl font-bold text-yellow-400">6</div>
+    <div class="text-xs text-slate-500 mt-1">Down from 12 at session start</div>
   </div>
   <div class="card rounded-xl p-4">
     <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Build Status</div>
     <div class="text-xl font-bold text-green-400">✓ CLEAN</div>
-    <div class="text-xs text-slate-500 mt-1">Last: 12bc875 · profile guards</div>
+    <div class="text-xs text-slate-500 mt-1">5836b4d · cloud data loss fix</div>
   </div>
   <div class="card rounded-xl p-4">
-    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Codex Review</div>
-    <div class="text-xl font-bold text-yellow-400" id="codex-status">⏳ RUNNING</div>
-    <div class="text-xs text-slate-500 mt-1">gpt-5.4 · xhigh reasoning</div>
+    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Last Deploy</div>
+    <div class="text-xl font-bold text-green-400">✓ LIVE</div>
+    <div class="text-xs text-slate-500 mt-1">ironvault-main-jmxfuaxue · 3min ago</div>
   </div>
 </div>
 
-<!-- Quality Gates -->
-<div class="card rounded-xl p-5 mb-6">
-  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-4">Quality Gates</h2>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" checked class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Build passes (npm run build)</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" checked class="accent-green-500 w-4 h-4"> <span class="text-slate-300">TypeScript no errors</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" checked class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Deployed to ironvault.app</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Codex review clean</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Profile page opens without crash</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Expenses show data (all filter)</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" class="accent-green-500 w-4 h-4"> <span class="text-slate-300">Notes redesign complete</span>
-    </label>
-    <label class="flex items-center gap-3 text-sm cursor-pointer">
-      <input type="checkbox" class="accent-green-500 w-4 h-4"> <span class="text-slate-300">CRUD confirm dialogs on all pages</span>
-    </label>
-  </div>
-</div>
+<!-- Two column: Completed + Pending -->
+<div class="grid grid-cols-2 gap-4 mb-6">
 
-<!-- Issues Backlog -->
-<div class="card rounded-xl p-5 mb-6">
-  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-4">Issue Backlog</h2>
-  <div class="space-y-2" id="issue-list">
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg bg-yellow-900/20 border border-yellow-800/30">
-      <span class="text-yellow-400 font-mono w-6">#1</span>
-      <span class="text-white">Expenses 600 entries invisible — month filter on empty month</span>
-      <span class="ml-auto text-yellow-400 text-xs font-semibold">IN PROGRESS</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#2</span>
-      <span class="text-slate-300">Notes redesign — simple modern personal, not code editor</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#3</span>
-      <span class="text-slate-300">Delete/Save confirmation dialogs on all CRUD operations</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#4</span>
-      <span class="text-slate-300">Cloud vault loading performance</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#5</span>
-      <span class="text-slate-300">Dashboard premium: greeting, favicons, real-time data</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#6</span>
-      <span class="text-slate-300">Activity logs: IP, location, device, no duplicates</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#7</span>
-      <span class="text-slate-300">FAB transparency fix</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#8</span>
-      <span class="text-slate-300">Modal auto-scroll on mobile</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#9</span>
-      <span class="text-slate-300">Camera in Documents section</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#10</span>
-      <span class="text-slate-300">Favicons in subscriptions/reminders</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#11</span>
-      <span class="text-slate-300">Weak password detection on dashboard</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
-    </div>
-    <div class="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-slate-800/30">
-      <span class="text-slate-400 font-mono w-6">#12</span>
-      <span class="text-slate-300">Auto-center when typing in forms</span>
-      <span class="ml-auto text-slate-500 text-xs">QUEUED</span>
+  <!-- Completed -->
+  <div class="card rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-green-400 uppercase tracking-widest mb-4">✓ Completed This Session</h2>
+    <div class="space-y-2 text-sm">
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Expenses 600 entries invisible</span>
+          <span class="text-slate-500 text-xs block">Default month filter → fixed to show data · eaa860f</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Profile page crash guards</span>
+          <span class="text-slate-500 text-xs block">ErrorBoundary + stats?.X + safeFormat · 12bc875</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Cloud vault flicker on re-import</span>
+          <span class="text-slate-500 text-xs block">Blob hash dedup before replaceVaultFromBlob · eaa860f</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Wrong password error message</span>
+          <span class="text-slate-500 text-xs block">multi-vault-login: generic → "Incorrect master password" · eaa860f</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">FAB transparency stuck on drag cancel</span>
+          <span class="text-slate-500 text-xs block">onTouchCancel + z-[38] valid Tailwind class · 4719277</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Modal auto-scroll on mobile keyboard</span>
+          <span class="text-slate-500 text-xs block">max-h-[85dvh] + global focusin scrollIntoView · 4719277</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Notes redesign — personal cards + checklists</span>
+          <span class="text-slate-500 text-xs block">Removed code editor, task items, relative time, notebook colors · df244de</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Dashboard greeting + weak password detection</span>
+          <span class="text-slate-500 text-xs block">pwdStrength() helper, morning/afternoon/evening, banner with favicon pills · a274245</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Confirm dialogs — subscriptions &amp; expenses</span>
+          <span class="text-slate-500 text-xs block">AlertDialog replaces confirm() — delete + duplicate warning · bf10714</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Favicons in reminders</span>
+          <span class="text-slate-500 text-xs block">Favicon component, subscriptionId lookup, letter avatar fallback · bf10714</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">CRITICAL: Cloud data loss on logout</span>
+          <span class="text-slate-500 text-xs block">iv_dirty_ flag survives logout, push-before-pull on re-login · 5836b4d</span>
+        </div>
+      </div>
+      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
+        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <span class="text-slate-300">Cloud sync loading indicator</span>
+          <span class="text-slate-500 text-xs block">isCloudSyncing banner desktop+mobile, vault:cloud:syncing event · 5836b4d</span>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Pending -->
+  <div class="card rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-yellow-400 uppercase tracking-widest mb-4">⏳ Queued — Next Up</h2>
+    <div class="space-y-2 text-sm">
+      <div class="flex items-start gap-2 p-2 rounded-lg bg-yellow-900/20 border border-yellow-800/30">
+        <span class="text-yellow-400 mt-0.5 font-mono flex-shrink-0">→</span>
+        <div>
+          <span class="text-white font-semibold">Expenses still not showing for user</span>
+          <span class="text-yellow-500 text-xs block">Default filter 'month' → need 'all' so past entries show immediately</span>
+        </div>
+        <span class="ml-auto text-yellow-400 text-xs font-bold flex-shrink-0">UP NEXT</span>
+      </div>
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
+        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">2</span>
+        <div>
+          <span class="text-slate-300">Activity logs redesign</span>
+          <span class="text-slate-500 text-xs block">IP, location, device, remove redundant entries</span>
+        </div>
+        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
+      </div>
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
+        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">3</span>
+        <div>
+          <span class="text-slate-300">Camera in Documents section</span>
+          <span class="text-slate-500 text-xs block">Capacitor Camera API, scan/capture → attach to document</span>
+        </div>
+        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
+      </div>
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
+        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">4</span>
+        <div>
+          <span class="text-slate-300">Dashboard premium full pass</span>
+          <span class="text-slate-500 text-xs block">Better stats layout, real-time refresh, more favicon coverage</span>
+        </div>
+        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
+      </div>
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
+        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">5</span>
+        <div>
+          <span class="text-slate-300">Cloud vault load performance</span>
+          <span class="text-slate-500 text-xs block">Spinner exists but decrypt loop still O(n) — lazy decrypt or parallel</span>
+        </div>
+        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
+      </div>
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/30">
+        <span class="text-slate-500 mt-0.5 font-mono flex-shrink-0">6</span>
+        <div>
+          <span class="text-slate-300">Modals off-screen on small devices</span>
+          <span class="text-slate-500 text-xs block">dvh fix applied but some dialogs still escape viewport on very small phones</span>
+        </div>
+        <span class="ml-auto status-pending text-xs flex-shrink-0">QUEUED</span>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Activity Log -->
 <div class="card rounded-xl p-5">
-  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-4">Activity Log</h2>
+  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-4">Activity Log — This Session</h2>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-800">
-          <th class="text-left py-2 pr-4 w-36">Timestamp</th>
-          <th class="text-left py-2 pr-4 w-20">Agent</th>
-          <th class="text-left py-2 pr-4">Action</th>
-          <th class="text-left py-2 pr-4">Details</th>
-          <th class="text-left py-2 w-24">Outcome</th>
+          <th class="text-left py-2 pr-3 w-32">Commit</th>
+          <th class="text-left py-2 pr-3">Fix / Change</th>
+          <th class="text-left py-2 pr-3">Files Changed</th>
+          <th class="text-left py-2 w-28">Status</th>
         </tr>
       </thead>
-      <tbody id="activity-log" class="divide-y divide-slate-800/50">
-        <tr>
-          <td class="py-2 pr-4 text-slate-500 text-xs">2026-04-21 session</td>
-          <td class="py-2 pr-4"><span class="tag-claude text-xs px-2 py-0.5 rounded font-semibold">CLAUDE</span></td>
-          <td class="py-2 pr-4 text-slate-300">Dashboard created</td>
-          <td class="py-2 pr-4 text-slate-500 text-xs">agent-collaboration-dashboard.html</td>
-          <td class="py-2"><span class="text-green-400 font-semibold">✓ Done</span></td>
+      <tbody class="divide-y divide-slate-800/50 text-xs">
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">eaa860f</td>
+          <td class="py-2 pr-3 text-slate-300">BATCH 1 — expenses empty month, profile crash, cloud flicker, login error</td>
+          <td class="py-2 pr-3 text-slate-500">expenses.tsx · multi-vault-login.tsx · use-cloud-auto-sync.ts</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">4719277</td>
+          <td class="py-2 pr-3 text-slate-300">BATCH 2 — FAB drag cancel opacity, modal dvh scroll, form focus centering</td>
+          <td class="py-2 pr-3 text-slate-500">quick-add-fab.tsx · dialog.tsx · main.tsx</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">df244de</td>
+          <td class="py-2 pr-3 text-slate-300">BATCH 3 — Notes full redesign, removed code editor, added checklist cards</td>
+          <td class="py-2 pr-3 text-slate-500">notes.tsx (−217/+141 lines)</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">a274245</td>
+          <td class="py-2 pr-3 text-slate-300">BATCH 4 — Dashboard greeting, real weak-password detection with service pills</td>
+          <td class="py-2 pr-3 text-slate-500">dashboard.tsx</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">bf10714</td>
+          <td class="py-2 pr-3 text-slate-300">BATCH 5 — AlertDialog confirms, Favicon in reminders, dashboard HTML in prod</td>
+          <td class="py-2 pr-3 text-slate-500">subscriptions.tsx · expenses.tsx · reminders.tsx · client/public/</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
+        </tr>
+        <tr class="done-row">
+          <td class="py-2 pr-3 text-blue-400 font-mono">5836b4d</td>
+          <td class="py-2 pr-3 text-slate-300">CRITICAL — Cloud data loss (dirty flag + push-before-pull) + sync spinner</td>
+          <td class="py-2 pr-3 text-slate-500">use-cloud-auto-sync.ts · vault-context.tsx · App.tsx</td>
+          <td class="py-2 status-done font-semibold">✓ Deployed</td>
         </tr>
         <tr>
-          <td class="py-2 pr-4 text-slate-500 text-xs">2026-04-21 12bc875</td>
-          <td class="py-2 pr-4"><span class="tag-claude text-xs px-2 py-0.5 rounded font-semibold">CLAUDE</span></td>
-          <td class="py-2 pr-4 text-slate-300">Profile bulletproof guards</td>
-          <td class="py-2 pr-4 text-slate-500 text-xs">ErrorBoundary + stats?.X + safeFormat on all dates</td>
-          <td class="py-2"><span class="text-green-400 font-semibold">✓ Deployed</span></td>
-        </tr>
-        <tr>
-          <td class="py-2 pr-4 text-slate-500 text-xs">2026-04-21 eaa860f</td>
-          <td class="py-2 pr-4"><span class="tag-claude text-xs px-2 py-0.5 rounded font-semibold">CLAUDE</span></td>
-          <td class="py-2 pr-4 text-slate-300">BATCH 1 — 4 fixes</td>
-          <td class="py-2 pr-4 text-slate-500 text-xs">Expenses empty month · profile crash · cloud flicker · friendly login error</td>
-          <td class="py-2"><span class="text-green-400 font-semibold">✓ Deployed</span></td>
-        </tr>
-        <tr>
-          <td class="py-2 pr-4 text-slate-500 text-xs">2026-04-21 now</td>
-          <td class="py-2 pr-4"><span class="tag-codex text-xs px-2 py-0.5 rounded font-semibold">CODEX</span></td>
-          <td class="py-2 pr-4 text-slate-300">Codebase review</td>
-          <td class="py-2 pr-4 text-slate-500 text-xs">profile.tsx · expenses.tsx · notes.tsx · dashboard.tsx</td>
-          <td class="py-2"><span class="text-yellow-400 font-semibold" id="codex-log-status">⏳ Running</span></td>
+          <td class="py-2 pr-3 text-yellow-400 font-mono">next</td>
+          <td class="py-2 pr-3 text-white font-semibold">Expenses default filter 'month'→'all' + dashboard HTML updated</td>
+          <td class="py-2 pr-3 text-slate-500">expenses.tsx · this file</td>
+          <td class="py-2 status-wip font-semibold">⏳ Building…</td>
         </tr>
       </tbody>
     </table>
@@ -203,15 +273,11 @@
 </div>
 
 <script>
-// Live clock
 function updateTime() {
   document.getElementById('live-time').textContent = new Date().toLocaleTimeString();
 }
 updateTime();
 setInterval(updateTime, 1000);
-
-// Auto-refresh
-setTimeout(() => location.reload(), 15000);
 </script>
 </body>
 </html>
