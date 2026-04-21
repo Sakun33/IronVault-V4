@@ -6,6 +6,8 @@ const DEBOUNCE_MS = 3000;
 const POLL_MS = 60_000;
 const LAST_PULL_PREFIX = 'iv_last_pull_';
 const LAST_BLOB_HASH_PREFIX = 'iv_last_blob_hash_';
+// Survives logout: set when local data changes, cleared only after successful cloud push
+const DIRTY_PREFIX = 'iv_dirty_';
 
 export function useCloudAutoSync(
   vaultId: string | null | undefined,
@@ -14,9 +16,37 @@ export function useCloudAutoSync(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Tracks whether a local push is queued or in-flight.
-  // doPull checks this to avoid replacing freshly-saved local data with a
-  // stale cloud snapshot before the debounced push has a chance to run.
   const pushPendingRef = useRef(false);
+  // Stable refs so cleanup callbacks always read the latest values, not stale closures
+  const vaultIdRef = useRef(vaultId);
+  const masterPasswordRef = useRef(masterPassword);
+  vaultIdRef.current = vaultId;
+  masterPasswordRef.current = masterPassword;
+
+  // ── Core push executor ────────────────────────────────────────────────────
+  // Takes explicit vid/mpwd so it can be called from cleanup with current refs.
+  // Only advances lastPull and clears dirty flag on actual success.
+  const executePush = useCallback(async (vid: string, mpwd: string): Promise<boolean> => {
+    try {
+      const blob = await vaultStorage.exportVault(mpwd);
+      const { vaultManager } = await import('@/lib/vault-manager');
+      const vaultMeta = vaultManager.getLocalVaults().find((v: any) => v.id === vid);
+      const vaultName = vaultMeta?.name ?? 'My Vault';
+      const result = await pushCloudVault(vid, vaultName, blob, false);
+      if (result.success) {
+        localStorage.setItem(`${LAST_PULL_PREFIX}${vid}`, new Date().toISOString());
+        localStorage.removeItem(`${DIRTY_PREFIX}${vid}`);
+        console.log('[SYNC] Cloud push succeeded, dirty flag cleared');
+        return true;
+      }
+      // Don't advance lastPull on failure — let next poll retry
+      console.warn('[SYNC] Cloud push did not succeed', result);
+      return false;
+    } catch (e) {
+      console.error('[SYNC] Cloud push threw:', e);
+      return false;
+    }
+  }, []);
 
   // ── Push: debounce 3s after any local mutation ────────────────────────────
   useEffect(() => {
@@ -24,24 +54,14 @@ export function useCloudAutoSync(
 
     const handleItemSaved = () => {
       if (!isVaultCloudSynced(vaultId)) return;
-
-      // Mark push as pending so concurrent pulls are blocked
+      // Mark dirty immediately — survives if logout races before debounce fires
       pushPendingRef.current = true;
+      localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
       if (timerRef.current) clearTimeout(timerRef.current);
 
       timerRef.current = setTimeout(async () => {
         try {
-          const blob = await vaultStorage.exportVault(masterPassword);
-          const { vaultManager } = await import('@/lib/vault-manager');
-          const vaultMeta = vaultManager.getLocalVaults().find(v => v.id === vaultId);
-          const vaultName = vaultMeta?.name ?? 'My Vault';
-          await pushCloudVault(vaultId, vaultName, blob, false);
-          // After a successful push, advance lastPull so the next poll does
-          // not re-download the data we just uploaded.
-          const lastPullKey = `${LAST_PULL_PREFIX}${vaultId}`;
-          localStorage.setItem(lastPullKey, new Date().toISOString());
-        } catch {
-          // Silently fail — user can manually sync later
+          await executePush(vaultId, masterPassword);
         } finally {
           pushPendingRef.current = false;
         }
@@ -52,23 +72,43 @@ export function useCloudAutoSync(
     return () => {
       window.removeEventListener('vault:item:saved', handleItemSaved);
       if (timerRef.current) clearTimeout(timerRef.current);
+      // Best-effort flush on unmount: fires immediately rather than cancelling.
+      // Primary recovery is the dirty flag (handled at next mount), but this
+      // catches the common case where encryption key is still valid at logout time.
+      if (pushPendingRef.current) {
+        pushPendingRef.current = false;
+        const vid = vaultIdRef.current;
+        const mpwd = masterPasswordRef.current;
+        if (vid && mpwd) executePush(vid, mpwd).catch(() => {});
+      }
     };
-  }, [vaultId, masterPassword]);
+  }, [vaultId, masterPassword, executePush]);
+
+  // ── Post-logout recovery: flush dirty data before any pull ───────────────
+  // Runs on every mount/login. If the previous session ended before the push
+  // debounce fired (logout race), push the local data first so the subsequent
+  // doPull does not overwrite it with the old cloud version.
+  useEffect(() => {
+    if (!vaultId || !masterPassword) return;
+    if (!isVaultCloudSynced(vaultId)) return;
+    const isDirty = localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`);
+    if (!isDirty) return;
+
+    pushPendingRef.current = true;
+    console.log('[SYNC] Dirty flag detected on mount — pushing before first pull');
+    executePush(vaultId, masterPassword).finally(() => {
+      pushPendingRef.current = false;
+    });
+  }, [vaultId, masterPassword, executePush]);
 
   // ── Immediate push after a bulk import (no debounce) ─────────────────────
-  // Uses getCloudToken() instead of isVaultCloudSynced() so this never silently
-  // skips the push due to a race condition: the heal effect in App.tsx marks the
-  // vault as cloud-synced ASYNCHRONOUSLY (after a listCloudVaults() round-trip),
-  // so a user who imports immediately after unlock could beat that write.
   useEffect(() => {
     if (!vaultId || !masterPassword) return;
 
     const handleImportComplete = async () => {
-      // Primary gate: user must have cloud auth. For non-cloud users this is null.
       if (!getCloudToken()) return;
       if (!vaultId || !masterPassword) return;
 
-      // Cancel any pending debounced push — we're about to push right now
       pushPendingRef.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       try {
@@ -79,11 +119,9 @@ export function useCloudAutoSync(
         console.log('[IMPORT] Pushing vault to cloud after import...');
         const result = await pushCloudVault(vaultId, vaultName, blob, false);
         if (result.success) {
-          // Ensure vault is registered as cloud-synced in case the heal effect
-          // hasn't run yet (the race condition this whole fix addresses).
           markVaultAsCloudSynced(vaultId);
-          const lastPullKey = `${LAST_PULL_PREFIX}${vaultId}`;
-          localStorage.setItem(lastPullKey, new Date().toISOString());
+          localStorage.setItem(`${LAST_PULL_PREFIX}${vaultId}`, new Date().toISOString());
+          localStorage.removeItem(`${DIRTY_PREFIX}${vaultId}`);
           console.log('[IMPORT] Cloud push complete — all imported records synced.');
         } else if (result.serverNewer) {
           console.warn('[IMPORT] Server has newer data — skipping push to avoid overwrite.');
@@ -104,14 +142,15 @@ export function useCloudAutoSync(
   // ── Pull: poll every 60s for changes from another device ─────────────────
   const doPull = useCallback(async () => {
     if (!vaultId || !masterPassword || !isVaultCloudSynced(vaultId)) return;
-    // Never pull while a local push is queued or in-flight — doing so would
-    // replace freshly-saved data with a stale cloud snapshot before the push
-    // gets a chance to upload the new item.
+    // Never pull while a local push is queued/in-flight — would overwrite unsaved data
     if (pushPendingRef.current) return;
+    // Never pull while dirty flag is set — unpushed local changes take priority
+    if (localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`)) return;
+
     try {
       const remotes = await listCloudVaults();
-      // Re-check after network round-trip — user may have saved in the meantime
       if (pushPendingRef.current) return;
+      if (localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`)) return;
 
       const meta = remotes.find(v => v.vaultId === vaultId);
       if (!meta?.serverUpdatedAt) return;
@@ -123,11 +162,15 @@ export function useCloudAutoSync(
 
       if (serverTime <= lastPullTime) return; // nothing new
 
-      // Server has a newer version — download and replace
+      // Signal UI that a cloud sync is about to replace local data
+      window.dispatchEvent(new CustomEvent('vault:cloud:syncing'));
       const full = await downloadCloudVault(vaultId);
-      // Re-check after the (potentially slow) blob download
       if (pushPendingRef.current) return;
-      if (!full?.encryptedBlob) return;
+      if (localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`)) return;
+      if (!full?.encryptedBlob) {
+        window.dispatchEvent(new CustomEvent('vault:cloud:replaced')); // clear syncing state
+        return;
+      }
 
       const blobHash = `${full.encryptedBlob.length}_${full.encryptedBlob.slice(-32)}`;
       const hashKey = `${LAST_BLOB_HASH_PREFIX}${vaultId}`;

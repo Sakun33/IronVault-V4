@@ -112,6 +112,7 @@ interface VaultContextType {
   getBackupMetadata: () => Promise<any>;
   
   isLoading: boolean;
+  isCloudSyncing: boolean;
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
@@ -131,6 +132,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   
   // Security state
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -156,9 +158,17 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   // Pull refresh: when cloud-sync hook replaces vault data from a remote device
   useEffect(() => {
-    const handleCloudReplace = () => { if (isUnlocked) refreshData(); };
+    const handleCloudReplace = () => {
+      setIsCloudSyncing(false);
+      if (isUnlocked) refreshData();
+    };
+    const handleCloudSyncing = () => setIsCloudSyncing(true);
     window.addEventListener('vault:cloud:replaced', handleCloudReplace);
-    return () => window.removeEventListener('vault:cloud:replaced', handleCloudReplace);
+    window.addEventListener('vault:cloud:syncing', handleCloudSyncing);
+    return () => {
+      window.removeEventListener('vault:cloud:replaced', handleCloudReplace);
+      window.removeEventListener('vault:cloud:syncing', handleCloudSyncing);
+    };
   }, [isUnlocked]);
 
   // Monitor security state
@@ -799,6 +809,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     getBackupMetadata: async () => await vaultStorage.getBackupMetadata(),
     
     isLoading,
+    isCloudSyncing,
   };
 
   return (

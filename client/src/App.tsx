@@ -82,7 +82,7 @@ import { QuickAddFab } from "@/components/quick-add-fab";
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
   const { logout, masterPassword, isUnlocked } = useAuth();
-  const { searchQuery, setSearchQuery, stats } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   useCloudAutoSync(activeVault?.id, masterPassword);
@@ -603,6 +603,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
         {/* Main Content */}
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
+          {isCloudSyncing && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
+              <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Syncing from cloud…
+            </div>
+          )}
           <div className="p-6 flex-1 min-w-0 animate-fade-in">
             <AnalyticsIntegration>
               {children}
@@ -614,6 +623,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Main Content — no footer on mobile (BottomTabs replace it) */}
       <main className="lg:hidden flex-1 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
+        {isCloudSyncing && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
+            <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            Syncing from cloud…
+          </div>
+        )}
         <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden animate-fade-in">
           <AnalyticsIntegration>
             {children}
