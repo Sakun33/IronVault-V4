@@ -81,6 +81,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
   // Load currency from localStorage on mount, or default based on customer's country
   useEffect(() => {
+    // One-time migration: clear stale 'USD' default set before INR was the default
+    if (!localStorage.getItem('securevault-currency-v2')) {
+      const old = localStorage.getItem('securevault-currency');
+      if (old === 'USD') localStorage.removeItem('securevault-currency');
+      localStorage.setItem('securevault-currency-v2', '1');
+    }
     const savedCurrency = localStorage.getItem('securevault-currency');
     if (savedCurrency && CURRENCIES.find(c => c.code === savedCurrency)) {
       setCurrency(savedCurrency);

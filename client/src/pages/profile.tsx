@@ -226,6 +226,78 @@ export default function Profile() {
     return stored ? new Date(stored) : null;
   });
 
+  // Load customer profile from localStorage (set during signup)
+  const loadCustomerProfile = () => {
+    try {
+      const savedProfile = localStorage.getItem('customerProfile');
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile);
+        console.log('📋 Loaded customer profile:', profile);
+        return profile;
+      }
+    } catch (error) {
+      console.error('Error loading customer profile:', error);
+    }
+    return null;
+  };
+
+  const customerProfile = loadCustomerProfile();
+
+  // User profile data - populated from signup or default mock data
+  const [userProfile, setUserProfile] = useState<UserProfile>({
+    id: 'user-1',
+    name: customerProfile?.name || 'John Doe',
+    email: customerProfile?.email || 'john.doe@example.com',
+    phone: customerProfile?.phone || '+1 (555) 123-4567',
+    preferences: {
+      theme: 'system',
+      language: 'en',
+      currency: currency,
+      notifications: {
+        email: true,
+        push: true,
+        sms: false,
+      },
+      privacy: {
+        analytics: true,
+        crashReports: true,
+        marketing: false,
+      },
+    },
+    subscription: {
+      tier: customerProfile?.subscription || 'free',
+      status: 'active',
+      startDate: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
+      endDate: undefined,
+      billingCycle: 'lifetime',
+      amount: 0,
+      currency: currency,
+      features: ['local_vault', 'unlimited_passwords', 'offline_access'],
+      limits: {
+        passwords: -1,
+        subscriptions: -1,
+        notes: -1,
+        expenses: -1,
+        reminders: -1,
+        bankStatements: -1,
+        investments: -1,
+        vaults: 5,
+        documents: -1,
+      },
+    },
+    createdAt: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
+    lastLogin: new Date(),
+    stats: {
+      totalPasswords: stats?.totalPasswords ?? 0,
+      totalNotes: stats?.totalNotes ?? 0,
+      totalSubscriptions: stats?.activeSubscriptions ?? 0,
+      totalExpenses: 0,
+      totalInvestments: 0,
+      vaultSize: 2.5, // MB
+      lastBackup: new Date(),
+    },
+  });
+
   // Check biometric availability on mount
   useEffect(() => {
     const checkBiometrics = async () => {
@@ -570,78 +642,6 @@ export default function Profile() {
     }
   };
   
-  // Load customer profile from localStorage (set during signup)
-  const loadCustomerProfile = () => {
-    try {
-      const savedProfile = localStorage.getItem('customerProfile');
-      if (savedProfile) {
-        const profile = JSON.parse(savedProfile);
-        console.log('📋 Loaded customer profile:', profile);
-        return profile;
-      }
-    } catch (error) {
-      console.error('Error loading customer profile:', error);
-    }
-    return null;
-  };
-
-  const customerProfile = loadCustomerProfile();
-  
-  // User profile data - populated from signup or default mock data
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    id: 'user-1',
-    name: customerProfile?.name || 'John Doe',
-    email: customerProfile?.email || 'john.doe@example.com',
-    phone: customerProfile?.phone || '+1 (555) 123-4567',
-    preferences: {
-      theme: 'system',
-      language: 'en',
-      currency: currency,
-      notifications: {
-        email: true,
-        push: true,
-        sms: false,
-      },
-      privacy: {
-        analytics: true,
-        crashReports: true,
-        marketing: false,
-      },
-    },
-    subscription: {
-      tier: customerProfile?.subscription || 'free',
-      status: 'active',
-      startDate: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
-      endDate: undefined,
-      billingCycle: 'lifetime',
-      amount: 0,
-      currency: currency,
-      features: ['local_vault', 'unlimited_passwords', 'offline_access'],
-      limits: {
-        passwords: -1,
-        subscriptions: -1,
-        notes: -1,
-        expenses: -1,
-        reminders: -1,
-        bankStatements: -1,
-        investments: -1,
-        vaults: 5,
-        documents: -1,
-      },
-    },
-    createdAt: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
-    lastLogin: new Date(),
-    stats: {
-      totalPasswords: stats?.totalPasswords ?? 0,
-      totalNotes: stats?.totalNotes ?? 0,
-      totalSubscriptions: stats?.activeSubscriptions ?? 0,
-      totalExpenses: 0,
-      totalInvestments: 0,
-      vaultSize: 2.5, // MB
-      lastBackup: new Date(),
-    },
-  });
-
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [ticketFormData, setTicketFormData] = useState({
     title: '',
