@@ -1,28 +1,68 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download, Trash2, Search, Calendar, Filter, Clock, Shield, Key, Bookmark, FileText, DollarSign, Bell, Settings } from 'lucide-react';
+import { Download, Trash2, Search, Shield, Key, Bookmark, FileText, DollarSign, Bell, Settings, Clock, Monitor } from 'lucide-react';
 import { useLogging } from '@/contexts/logging-context';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { isNativeApp } from '@/native/platform';
+
+type TabKey = 'all' | 'login' | 'create' | 'edit' | 'delete';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'login', label: 'Login' },
+  { key: 'create', label: 'Create' },
+  { key: 'edit', label: 'Edit' },
+  { key: 'delete', label: 'Delete' },
+];
+
+function getCategoryIcon(category: string) {
+  switch (category) {
+    case 'password':    return Key;
+    case 'subscription': return Bookmark;
+    case 'note':        return FileText;
+    case 'expense':     return DollarSign;
+    case 'reminder':    return Bell;
+    case 'security':    return Shield;
+    default:            return Settings;
+  }
+}
+
+function getCategoryBg(category: string): string {
+  switch (category) {
+    case 'password':    return 'bg-primary/10 text-primary';
+    case 'subscription': return 'bg-green-500/10 text-green-500';
+    case 'note':        return 'bg-yellow-500/10 text-yellow-500';
+    case 'expense':     return 'bg-purple-500/10 text-purple-500';
+    case 'reminder':    return 'bg-orange-500/10 text-orange-500';
+    case 'security':    return 'bg-red-500/10 text-red-500';
+    default:            return 'bg-muted text-muted-foreground';
+  }
+}
+
+function matchesTab(log: { action: string; category: string }, tab: TabKey): boolean {
+  if (tab === 'all') return true;
+  if (tab === 'login') return log.category === 'security' || /login|unlock|auth/i.test(log.action);
+  if (tab === 'create') return /add|creat|import/i.test(log.action);
+  if (tab === 'edit') return /update|edit|chang/i.test(log.action);
+  if (tab === 'delete') return /delet|remov/i.test(log.action);
+  return true;
+}
 
 export default function Logging() {
   const { logs, clearLogs } = useLogging();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   const handleExportLogs = async () => {
     try {
       const csvContent = [
-        'Timestamp,Action,Category,Description,IP Address',
+        'Timestamp,Action,Category,Description,IP Address,Device',
         ...logs.map(log =>
-          `"${new Date(log.timestamp).toISOString()}","${log.action}","${log.category}","${log.description}","${log.ipAddress || ''}"`
+          `"${new Date(log.timestamp).toISOString()}","${log.action}","${log.category}","${log.description}","${log.ipAddress || ''}","${log.device || ''}"`
         ),
       ].join('\n');
       const filename = `ironvault-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`;
@@ -50,306 +90,136 @@ export default function Logging() {
     }
   };
 
-  // Filter logs
   const filteredLogs = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return logs.filter(log => {
-      // Search filter
-      const matchesSearch = searchQuery === '' || 
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Category filter
-      const matchesCategory = categoryFilter === 'all' || 
-        log.category === categoryFilter;
-
-      // Date filter
-      const matchesDate = (() => {
-        if (dateFilter === 'all') return true;
-        
-        const now = new Date();
-        const logDate = new Date(log.timestamp);
-        
-        switch (dateFilter) {
-          case 'today':
-            return logDate.toDateString() === now.toDateString();
-          case 'week':
-            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            return logDate >= weekAgo;
-          case 'month':
-            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            return logDate >= monthAgo;
-          default:
-            return true;
-        }
-      })();
-
-      return matchesSearch && matchesCategory && matchesDate;
+      const matchesSearch = !q ||
+        log.action.toLowerCase().includes(q) ||
+        log.description.toLowerCase().includes(q) ||
+        (log.device || '').toLowerCase().includes(q);
+      return matchesSearch && matchesTab(log, activeTab);
     });
-  }, [logs, searchQuery, categoryFilter, dateFilter]);
+  }, [logs, searchQuery, activeTab]);
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'password':
-        return <Key className="w-4 h-4" />;
-      case 'subscription':
-        return <Bookmark className="w-4 h-4" />;
-      case 'note':
-        return <FileText className="w-4 h-4" />;
-      case 'expense':
-        return <DollarSign className="w-4 h-4" />;
-      case 'reminder':
-        return <Bell className="w-4 h-4" />;
-      case 'system':
-        return <Settings className="w-4 h-4" />;
-      case 'security':
-        return <Shield className="w-4 h-4" />;
-      default:
-        return <Clock className="w-4 h-4" />;
-    }
-  };
+  const tabCounts = useMemo(() =>
+    Object.fromEntries(
+      TABS.map(t => [t.key, logs.filter(l => matchesTab(l, t.key)).length])
+    ) as Record<TabKey, number>,
+    [logs]
+  );
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'password':
-        return 'bg-primary/10 text-primary';
-      case 'subscription':
-        return 'bg-green-100 text-green-800';
-      case 'note':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'expense':
-        return 'bg-purple-100 text-purple-800';
-      case 'reminder':
-        return 'bg-orange-100 text-orange-800';
-      case 'system':
-        return 'bg-muted text-muted-foreground';
-      case 'security':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const getActionColor = (action: string) => {
-    if (action.toLowerCase().includes('create') || action.toLowerCase().includes('add')) {
-      return 'text-green-600';
-    } else if (action.toLowerCase().includes('update') || action.toLowerCase().includes('edit')) {
-      return 'text-primary';
-    } else if (action.toLowerCase().includes('delete') || action.toLowerCase().includes('remove')) {
-      return 'text-red-600';
-    } else if (action.toLowerCase().includes('login') || action.toLowerCase().includes('auth')) {
-      return 'text-purple-600';
-    } else {
-      return 'text-muted-foreground';
-    }
-  };
+  const todayCount = useMemo(() => {
+    const today = new Date().toDateString();
+    return logs.filter(l => new Date(l.timestamp).toDateString() === today).length;
+  }, [logs]);
 
   return (
-    <div className="p-4 space-y-6 overflow-x-hidden" data-testid="logging-page">
+    <div className="space-y-6" data-testid="logging-page">
+
       {/* Header */}
-      <div className="flex justify-between items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Activity Logs</h1>
-          <p className="text-muted-foreground text-sm">
-            Track vault activities
-          </p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Activity Log</h1>
+          <p className="text-sm text-muted-foreground">{logs.length} events · {todayCount} today</p>
         </div>
-        <div className="flex gap-1 shrink-0">
-          <Button onClick={handleExportLogs} variant="outline" size="icon" className="h-9 w-9" title="Export Logs">
+        <div className="flex gap-2">
+          <Button onClick={handleExportLogs} variant="outline" size="sm" className="gap-2">
             <Download className="w-4 h-4" />
+            Export
           </Button>
-          <Button onClick={clearLogs} variant="outline" size="icon" className="h-9 w-9 text-destructive" title="Clear Logs">
+          <Button onClick={clearLogs} variant="outline" size="sm" className="gap-2 text-destructive hover:text-destructive">
             <Trash2 className="w-4 h-4" />
+            Clear
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Logs</p>
-                <p className="text-xl font-bold">{logs.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Search + Filter Tabs */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Search actions, descriptions, devices…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-10 rounded-xl"
+          />
+        </div>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Security Events</p>
-                <p className="text-xl font-bold">
-                  {logs.filter(log => log.category === 'security').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Key className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Password Actions</p>
-                <p className="text-xl font-bold">
-                  {logs.filter(log => log.category === 'password').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Today's Activity</p>
-                <p className="text-xl font-bold">
-                  {logs.filter(log => {
-                    const today = new Date();
-                    const logDate = new Date(log.timestamp);
-                    return logDate.toDateString() === today.toDateString();
-                  }).length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tab bar */}
+        <div className="flex gap-1 p-1 bg-muted/40 rounded-xl w-fit">
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-1.5 text-[11px] ${activeTab === tab.key ? 'text-primary' : 'text-muted-foreground/60'}`}>
+                {tabCounts[tab.key]}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Search logs..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="password">Passwords</SelectItem>
-                <SelectItem value="subscription">Subscriptions</SelectItem>
-                <SelectItem value="note">Notes</SelectItem>
-                <SelectItem value="expense">Expenses</SelectItem>
-                <SelectItem value="reminder">Reminders</SelectItem>
-                <SelectItem value="system">System</SelectItem>
-                <SelectItem value="security">Security</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Date Range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">Last 7 Days</SelectItem>
-                <SelectItem value="month">Last 30 Days</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Log entries */}
+      <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm overflow-hidden">
+        {filteredLogs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Clock className="w-12 h-12 text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {logs.length === 0 ? 'No activity yet' : 'No events match your filters'}
+            </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Logs List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Activity Logs ({filteredLogs.length} of {logs.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {filteredLogs.length === 0 ? (
-            <div className="p-12 text-center">
-              <Clock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                No logs found
-              </h3>
-              <p className="text-muted-foreground">
-                {logs.length === 0 
-                  ? 'No activity logs yet. Start using the app to see logs here.'
-                  : 'Try adjusting your search terms or filters'
-                }
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {filteredLogs.map((log) => (
-                <div key={log.id} className="p-4 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-                      {getCategoryIcon(log.category)}
+        ) : (
+          <div className="divide-y divide-border/40">
+            {filteredLogs.map((log, index) => {
+              const Icon = getCategoryIcon(log.category);
+              const bgColor = getCategoryBg(log.category);
+              const isLoginEvent = log.category === 'security' || /login|unlock|auth/i.test(log.action);
+              return (
+                <div key={log.id || index} className="flex items-start gap-4 p-4 hover:bg-muted/20 transition-colors">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${bgColor}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-medium text-foreground leading-tight">{log.description}</p>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap flex-shrink-0">
+                        {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-medium ${getActionColor(log.action)}`}>
-                          {log.action}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className={`text-[10px] capitalize px-2 py-0 h-5 ${bgColor}`}>
+                        {log.category}
+                      </Badge>
+                      {log.device && (
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Monitor className="w-3 h-3" />
+                          {log.device}
                         </span>
-                        <Badge variant="outline" className={getCategoryColor(log.category)}>
-                          {log.category}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {format(log.timestamp, 'MMM d, yyyy HH:mm:ss')}
+                      )}
+                      {isLoginEvent && log.ipAddress && (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          {log.ipAddress}
                         </span>
-                      </div>
-                      <p className="text-sm text-foreground mb-2">
-                        {log.description}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {log.ipAddress && (
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary/50 inline-block"/>
-                            {log.ipAddress}
-                          </span>
-                        )}
-                        {log.device && (
-                          <span className="flex items-center gap-1" title={log.userAgent}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 inline-block"/>
-                            {log.device}
-                          </span>
-                        )}
-                        {log.location && <span>{log.location}</span>}
-                      </div>
+                      )}
+                      <span className="text-[11px] text-muted-foreground/50 ml-auto">
+                        {format(new Date(log.timestamp), 'MMM d, HH:mm')}
+                      </span>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

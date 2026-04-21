@@ -271,11 +271,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInvestmentGoals(investmentGoalsData.map(hydrateDates));
       setApiKeys(apiKeysData.map(hydrateDates));
       
-      // Log vault unlock activity
-      addLog('Vault Unlocked', 'system', `Vault data loaded: ${passwordsData.length} passwords, ${subscriptionsData.length} subscriptions`);
     } catch (error) {
       console.error('Failed to refresh vault data:', error);
-      addLog('Data Error', 'system', 'Failed to load vault data');
     } finally {
       setIsLoading(false);
     }

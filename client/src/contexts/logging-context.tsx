@@ -29,12 +29,12 @@ const LoggingContext = createContext<LoggingContextType | undefined>(undefined);
 // ── Device string from userAgent ──────────────────────────────────────────────
 function parseDevice(ua: string): string {
   if (!ua || ua === 'Unknown') return 'Unknown Device';
-  let os = 'Unknown OS';
+  let os = 'Unknown';
   if (/iPad/.test(ua)) os = 'iPad';
   else if (/iPhone/.test(ua)) os = 'iPhone';
   else if (/Android/.test(ua)) os = 'Android';
   else if (/Windows NT/.test(ua)) os = 'Windows';
-  else if (/Macintosh|Mac OS X/.test(ua)) os = 'macOS';
+  else if (/Macintosh|Mac OS X/.test(ua)) os = 'Mac';
   else if (/Linux/.test(ua)) os = 'Linux';
   let browser = 'Browser';
   if (/Edg\//.test(ua)) browser = 'Edge';
@@ -42,7 +42,7 @@ function parseDevice(ua: string): string {
   else if (/Chrome\//.test(ua)) browser = 'Chrome';
   else if (/Firefox\//.test(ua)) browser = 'Firefox';
   else if (/Safari\//.test(ua)) browser = 'Safari';
-  return `${browser} · ${os}`;
+  return `${os} (${browser})`;
 }
 
 // ── IP fetch with 15-min localStorage cache ────────────────────────────────────
