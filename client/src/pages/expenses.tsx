@@ -7,7 +7,7 @@ import { useCurrency } from '@/contexts/currency-context';
 import { ExpenseEntry, EXPENSE_CATEGORIES } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -514,7 +514,7 @@ export default function Expenses() {
         setNewTag('');
       }
     }}>
-      <DialogContent className="max-w-2xl max-h-[80svh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="w-5 h-5" />
@@ -522,7 +522,7 @@ export default function Expenses() {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingExpense ? handleUpdateExpense : handleAddExpense)(); } }}>
+        <DialogBody className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingExpense ? handleUpdateExpense : handleAddExpense)(); } }}>
           {/* Title and Amount */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -717,27 +717,26 @@ export default function Expenses() {
             />
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowAddModal(false);
-                setEditingExpense(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              data-testid="button-save-expense"
-              onClick={editingExpense ? handleUpdateExpense : handleAddExpense}
-            >
-              {editingExpense ? 'Update Expense' : 'Add Expense'}
-            </Button>
-          </div>
-        </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setShowAddModal(false);
+              setEditingExpense(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            data-testid="button-save-expense"
+            onClick={editingExpense ? handleUpdateExpense : handleAddExpense}
+          >
+            {editingExpense ? 'Update Expense' : 'Add Expense'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -1184,19 +1183,19 @@ export default function Expenses() {
 
       {/* Templates Modal */}
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
-        <DialogContent className="max-w-lg max-h-[80svh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <LayoutTemplate className="w-5 h-5" />
               Expense Templates
             </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 mt-4">
+          <DialogBody className="grid grid-cols-2 gap-3">
             {EXPENSE_TEMPLATES.map(template => {
               const IconComponent = template.icon;
               return (
-                <Card 
-                  key={template.id} 
+                <Card
+                  key={template.id}
                   className="cursor-pointer hover:shadow-md transition-shadow p-3"
                   onClick={() => handleUseTemplate(template)}
                 >
@@ -1212,7 +1211,7 @@ export default function Expenses() {
                 </Card>
               );
             })}
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

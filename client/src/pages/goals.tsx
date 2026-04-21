@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -981,7 +981,7 @@ export default function Goals() {
 
       {/* Templates Modal */}
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
-        <DialogContent className="max-w-4xl max-h-[90svh] overflow-y-auto">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="w-5 h-5" />
@@ -989,7 +989,7 @@ export default function Goals() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <DialogBody className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {GOAL_TEMPLATES.map(template => {
               const IconComponent = template.icon;
               return (
@@ -1033,13 +1033,13 @@ export default function Goals() {
                 </Card>
               );
             })}
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 
       {/* Custom Goal Modal */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-2xl max-h-[90svh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5" />
@@ -1047,7 +1047,7 @@ export default function Goals() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <DialogBody className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="goalName">Goal Name *</Label>
@@ -1164,22 +1164,22 @@ export default function Goals() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAddModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateCustomGoal}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Goal
-              </Button>
-            </div>
-          </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateCustomGoal}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Goal
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Calculator Modal */}
       <Dialog open={showCalculatorModal} onOpenChange={setShowCalculatorModal}>
-        <DialogContent className="max-w-4xl max-h-[90svh] overflow-y-auto">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calculator className="w-5 h-5" />
@@ -1187,7 +1187,7 @@ export default function Goals() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6">
+          <DialogBody className="space-y-6">
             {/* Calculator Type Selection */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Calculator Type</Label>
@@ -1340,7 +1340,7 @@ export default function Goals() {
                 )
               ))}
             </div>
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </div>

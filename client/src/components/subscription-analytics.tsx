@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { TrendingUp, Target, AlertTriangle, DollarSign, PieChart as PieIcon, BarChart3, Settings, Globe } from 'lucide-react';
@@ -593,15 +593,15 @@ function BudgetSettingsModal(props: BudgetSettingsModalProps) {
   };
 
   return (
-    <DialogContent className="max-w-2xl max-h-[80svh] overflow-y-auto">
+    <DialogContent className="max-w-2xl">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <Target className="w-5 h-5" />
           Budget Settings
         </DialogTitle>
       </DialogHeader>
-      
-      <div className="space-y-4 py-4">
+
+      <DialogBody className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Set monthly budget limits for each category to track your spending goals.
         </p>
@@ -639,19 +639,19 @@ function BudgetSettingsModal(props: BudgetSettingsModalProps) {
           })}
         </div>
         
-        <div className="flex justify-end gap-2 pt-4">
-          <Button
-            variant="outline" 
-            onClick={() => setLocalBudgets({})}
-            data-testid="clear-budgets-button"
-          >
-            Clear All
-          </Button>
-          <Button onClick={handleSave} data-testid="save-budgets-button">
-            Save Budgets
-          </Button>
-        </div>
-      </div>
+      </DialogBody>
+      <DialogFooter>
+        <Button
+          variant="outline"
+          onClick={() => setLocalBudgets({})}
+          data-testid="clear-budgets-button"
+        >
+          Clear All
+        </Button>
+        <Button onClick={handleSave} data-testid="save-budgets-button">
+          Save Budgets
+        </Button>
+      </DialogFooter>
     </DialogContent>
   );
 }

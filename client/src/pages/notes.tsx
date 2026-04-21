@@ -5,7 +5,7 @@ import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -358,7 +358,7 @@ export default function Notes() {
         setViewingNote(null);
       }
     }}>
-      <DialogContent className="max-w-4xl max-h-[85svh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         {viewingNote && (
           <>
             <DialogHeader className="pr-8">
@@ -395,7 +395,7 @@ export default function Notes() {
               </div>
             </DialogHeader>
 
-            <div className="mt-6 space-y-4">
+            <DialogBody className="space-y-4">
               {/* Tags */}
               {viewingNote.tags && viewingNote.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -415,7 +415,7 @@ export default function Notes() {
                   dangerouslySetInnerHTML={{ __html: viewingNote.content.includes('<') ? viewingNote.content : `<p>${viewingNote.content.replace(/\n/g, '</p><p>')}</p>` }}
                 />
               </div>
-            </div>
+            </DialogBody>
           </>
         )}
       </DialogContent>
@@ -438,7 +438,7 @@ export default function Notes() {
         setNewTag('');
       }
     }}>
-      <DialogContent className="max-w-4xl max-h-[80svh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <StickyNote className="w-5 h-5" />
@@ -446,7 +446,7 @@ export default function Notes() {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (editingNote ? handleUpdateNote : handleAddNote)(); } }}>
+        <DialogBody className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (editingNote ? handleUpdateNote : handleAddNote)(); } }}>
           {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>
@@ -608,27 +608,26 @@ export default function Notes() {
             ) : null}
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowAddModal(false);
-                setEditingNote(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              data-testid="button-save-note"
-              onClick={editingNote ? handleUpdateNote : handleAddNote}
-            >
-              {editingNote ? 'Update Note' : 'Add Note'}
-            </Button>
-          </div>
-        </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setShowAddModal(false);
+              setEditingNote(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            data-testid="button-save-note"
+            onClick={editingNote ? handleUpdateNote : handleAddNote}
+          >
+            {editingNote ? 'Update Note' : 'Add Note'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -930,19 +929,19 @@ export default function Notes() {
 
       {/* Templates Modal */}
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
-        <DialogContent className="max-w-lg max-h-[80svh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <LayoutTemplate className="w-5 h-5" />
               Note Templates
             </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 mt-4">
+          <DialogBody className="grid grid-cols-2 gap-3">
             {NOTE_TEMPLATES.map(template => {
               const IconComponent = template.icon;
               return (
-                <Card 
-                  key={template.id} 
+                <Card
+                  key={template.id}
                   className="cursor-pointer hover:shadow-md transition-shadow p-3"
                   onClick={() => handleUseTemplate(template)}
                 >
@@ -958,7 +957,7 @@ export default function Notes() {
                 </Card>
               );
             })}
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -82,7 +82,7 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
 
   return (
     <Dialog open={open}>
-      <DialogContent className="sm:max-w-md max-h-[90svh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="mx-auto w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
             <Sparkles className="w-6 h-6 text-white" />
@@ -93,7 +93,8 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <DialogBody className="space-y-4">
           {error && (
             <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 py-2 rounded-lg text-sm">
               {error}
@@ -276,18 +277,18 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
             </div>
           </div>
 
-          <div className="pt-2">
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-            >
-              Create My Vault
-            </Button>
-          </div>
-
+        </DialogBody>
+        <DialogFooter className="flex-col gap-2">
+          <Button
+            type="submit"
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+          >
+            Create My Vault
+          </Button>
           <p className="text-xs text-center text-muted-foreground">
             Your data is stored securely and never shared with third parties
           </p>
+        </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

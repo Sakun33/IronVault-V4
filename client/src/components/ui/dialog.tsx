@@ -44,14 +44,11 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {/* Sticky close button — always at top-right, never scrolls away */}
-      <DialogPrimitive.Close className="absolute right-3 top-3 z-10 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      <DialogPrimitive.Close className="absolute right-3 top-3 z-20 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
-      {/* Scrollable content area */}
-      <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
-        {children}
-      </div>
+      {children}
     </DialogPrimitive.Content>
   </DialogPortal>
 ))
@@ -63,7 +60,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left",
+      "flex-shrink-0 flex flex-col space-y-1.5 border-b border-border/50 px-5 pt-5 pb-4 pr-10",
       className
     )}
     {...props}
@@ -71,13 +68,27 @@ const DialogHeader = ({
 )
 DialogHeader.displayName = "DialogHeader"
 
+const DialogBody = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 py-4 space-y-4",
+      className
+    )}
+    {...props}
+  />
+)
+DialogBody.displayName = "DialogBody"
+
 const DialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border/50 px-5 py-4 bg-background",
       className
     )}
     {...props}
@@ -120,6 +131,7 @@ export {
   DialogTrigger,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, ExternalLink, User, Mail, Key, Clock, AlertTriangle, Eye, EyeOff, LogIn, Copy, Check, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, MoreVertical } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { BrandCard } from '@/components/brand-card';
 import { Favicon } from '@/components/favicon';
@@ -495,19 +495,19 @@ export default function Subscriptions() {
 
       {/* Templates Modal */}
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
-        <DialogContent className="max-w-lg max-h-[80svh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <LayoutTemplate className="w-5 h-5" />
               Subscription Templates
             </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 mt-4">
+          <DialogBody className="grid grid-cols-2 gap-3">
             {SUBSCRIPTION_TEMPLATES.map(template => {
               const IconComponent = template.icon;
               return (
-                <Card 
-                  key={template.id} 
+                <Card
+                  key={template.id}
                   className="cursor-pointer hover:shadow-md transition-shadow p-3"
                   onClick={() => handleUseTemplate(template)}
                 >
@@ -523,7 +523,7 @@ export default function Subscriptions() {
                 </Card>
               );
             })}
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

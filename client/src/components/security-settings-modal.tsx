@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -284,7 +286,7 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
       <DialogTrigger asChild data-testid="button-security-settings">
         {trigger}
       </DialogTrigger>
-      <DialogContent className="w-[min(96vw,64rem)] max-w-4xl max-h-[90svh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="w-[min(96vw,64rem)] max-w-4xl overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
@@ -296,6 +298,7 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
           {/* KDF Preset Selection */}
           <div className="space-y-4">
@@ -483,6 +486,7 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
             </div>
           </div>
         </div>
+        {/* end grid */}
 
         {/* Master Password Input */}
         <div className="space-y-3 mt-6 pt-4 border-t">
@@ -532,28 +536,28 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
             </div>
           )}
         </div>
+        </DialogBody>
 
-        {/* Action Buttons */}
-        <div className="flex justify-end gap-3 mt-6">
-          <Button 
-            variant="outline" 
+        <DialogFooter>
+          <Button
+            variant="outline"
             onClick={() => {
               setMasterPassword('');
               setOpen(false);
-            }} 
+            }}
             disabled={isApplying}
             data-testid="button-cancel-security"
           >
             Cancel
           </Button>
-          <Button 
-            onClick={applySettings} 
+          <Button
+            onClick={applySettings}
             disabled={isApplying || !masterPassword.trim()}
             data-testid="button-apply-security"
           >
             {isApplying ? 'Applying...' : 'Apply Settings'}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

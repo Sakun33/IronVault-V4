@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -411,7 +411,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[80svh]" data-testid="import-export-modal">
+      <DialogContent className="sm:max-w-[500px]" data-testid="import-export-modal">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
@@ -427,7 +427,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
             <TabsTrigger value="templates" data-testid="tab-templates">Templates</TabsTrigger>
           </TabsList>
           
-          <div className="max-h-[60svh] overflow-y-auto">
+          <DialogBody>
             <TabsContent value="export" className="space-y-4">
             <div className="rounded-lg bg-muted p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -797,7 +797,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
               </div>
             </div>
           </TabsContent>
-          </div>
+          </DialogBody>
         </Tabs>
       </DialogContent>
     </Dialog>

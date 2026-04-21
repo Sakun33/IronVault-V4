@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useLicense } from '@/contexts/license-context';
 import { useToast } from '@/hooks/use-toast';
 import { Crown, Shield, RotateCcw, ExternalLink, AlertCircle, RefreshCcw, Check, Clock } from 'lucide-react';
@@ -210,7 +210,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90svh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Upgrade Your Plan</DialogTitle>
           <p className="text-muted-foreground">
@@ -218,7 +218,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
           </p>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <DialogBody className="space-y-6">
           {/* Entitled State Banner */}
           {paywallState === 'entitled' && (
             <EntitlementBanner
@@ -450,7 +450,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
               )}
             </>
           )}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

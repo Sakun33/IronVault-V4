@@ -13,7 +13,7 @@ const priorityBrandColor = (priority: string) => {
   if (priority === 'medium') return '#eab308';
   return '#22c55e';
 };
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -543,11 +543,12 @@ export default function Reminders() {
               <Plus className="h-4 w-4 mr-1.5" />New
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90svh] overflow-y-auto">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingReminder ? 'Edit Reminder' : 'Add New Reminder'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }} className="space-y-4">
+            <form id="reminder-form" onSubmit={handleSubmit} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }} className="flex flex-col flex-1 min-h-0">
+              <DialogBody>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Label htmlFor="title">Title</Label>
@@ -821,8 +822,8 @@ export default function Reminders() {
                   </div>
                 </div>
               </div>
-              
-              <div className="flex justify-end gap-2 flex-wrap">
+              </DialogBody>
+              <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
@@ -866,7 +867,7 @@ export default function Reminders() {
                   {editingReminder ? 'Update' : 'Create'} Reminder
                 </Button>
                 <p className="w-full text-right text-xs text-muted-foreground mt-1">⌘↵ to save</p>
-              </div>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -1163,13 +1164,15 @@ export default function Reminders() {
       <Dialog open={!!deleteReminderTarget} onOpenChange={(open) => { if (!open) setDeleteReminderTarget(null); }}>
         <DialogContent className="max-w-sm" data-testid="dialog-delete-reminder">
           <DialogHeader><DialogTitle>Delete Reminder</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete &ldquo;{deleteReminderTarget?.title}&rdquo;? This cannot be undone.
-          </p>
-          <div className="flex gap-3 justify-end mt-2">
+          <DialogBody>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete &ldquo;{deleteReminderTarget?.title}&rdquo;? This cannot be undone.
+            </p>
+          </DialogBody>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteReminderTarget(null)}>Cancel</Button>
             <Button variant="destructive" data-testid="button-confirm-delete-reminder" onClick={handleDeleteReminderConfirmed}>Delete</Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

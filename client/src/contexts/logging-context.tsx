@@ -26,6 +26,26 @@ interface LoggingContextType {
 
 const LoggingContext = createContext<LoggingContextType | undefined>(undefined);
 
+// ── localStorage persistence ───────────────────────────────────────────────────
+const LOGS_KEY = 'iv_activity_logs';
+const MAX_STORED = 150;
+
+function loadStoredLogs(): LogEntry[] {
+  try {
+    const raw = localStorage.getItem(LOGS_KEY);
+    if (!raw) return [];
+    return (JSON.parse(raw) as any[]).map(l => ({ ...l, timestamp: new Date(l.timestamp) }));
+  } catch { return []; }
+}
+
+function persistLogs(logs: LogEntry[]) {
+  try {
+    // Don't store userAgent (large); keep essential fields only
+    const slim = logs.slice(0, MAX_STORED).map(({ userAgent: _ua, ...rest }) => rest);
+    localStorage.setItem(LOGS_KEY, JSON.stringify(slim));
+  } catch {}
+}
+
 // ── Device string from userAgent ──────────────────────────────────────────────
 function parseDevice(ua: string): string {
   if (!ua || ua === 'Unknown') return 'Unknown Device';
@@ -64,7 +84,7 @@ function setCachedIP(ip: string) {
 }
 
 export function LoggingProvider({ children }: { children: ReactNode }) {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>(() => loadStoredLogs());
   const [resolvedIp, setResolvedIp] = useState<string>(getCachedIP() ?? '…');
   // Dedup: prevent the same action+category within 5s
   const lastLogRef = useRef<{ action: string; category: string; ts: number } | null>(null);
@@ -115,11 +135,18 @@ export function LoggingProvider({ children }: { children: ReactNode }) {
       vaultId: currentVaultId || undefined,
     };
 
-    setLogs(prev => [newLog, ...prev].slice(0, 500));
+    setLogs(prev => {
+      const next = [newLog, ...prev].slice(0, 500);
+      persistLogs(next);
+      return next;
+    });
   // resolvedIp in deps means new logs pick up IP once it resolves
   }, [resolvedIp]);
 
-  const clearLogs = useCallback(() => setLogs([]), []);
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+    try { localStorage.removeItem(LOGS_KEY); } catch {}
+  }, []);
 
   const getLogsForCurrentVault = useCallback(() => {
     const currentVaultId = vaultManager.getActiveVaultId();

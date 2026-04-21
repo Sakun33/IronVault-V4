@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { POPULAR_SUBSCRIPTION_SERVICES } from '@/lib/popular-services';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -208,12 +208,13 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90svh] overflow-y-auto" data-testid="add-subscription-modal">
+      <DialogContent className="sm:max-w-lg" data-testid="add-subscription-modal">
         <DialogHeader>
           <DialogTitle>{editingSubscription ? 'Edit Subscription' : 'Add New Subscription'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }}>
+        <form onSubmit={handleSubmit} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as any); } }} className="flex flex-col flex-1 min-h-0">
+        <DialogBody className="space-y-4">
           {!editingSubscription && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Popular services</Label>
@@ -549,25 +550,24 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="flex-1"
-              data-testid="cancel-button"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={isSubmitting}
-              data-testid="save-subscription-button"
-            >
-              {isSubmitting ? "Saving..." : (editingSubscription ? "Update Subscription" : "Save Subscription")}
-            </Button>
-          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            data-testid="cancel-button"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            data-testid="save-subscription-button"
+          >
+            {isSubmitting ? "Saving..." : (editingSubscription ? "Update Subscription" : "Save Subscription")}
+          </Button>
+        </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

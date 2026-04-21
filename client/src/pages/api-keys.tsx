@@ -11,7 +11,7 @@ const envBrandColor = (env: string) => {
   if (env === 'staging') return '#f59e0b';
   return '#3b82f6';
 };
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { POPULAR_API_SERVICES } from '@/lib/popular-services';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -553,7 +553,7 @@ export default function APIKeys() {
             <DialogTitle>{editingKey ? 'Edit' : 'Add'} API Key</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingKey ? handleUpdateKey : handleAddKey)(); } }}>
+          <DialogBody className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingKey ? handleUpdateKey : handleAddKey)(); } }}>
             <div>
               <Label htmlFor="service">Service *</Label>
               <Input
@@ -637,39 +637,38 @@ export default function APIKeys() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                className=""
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingKey(null);
-                  setFormData({
-                    name: '',
-                    service: '',
-                    apiKey: '',
-                    apiSecret: '',
-                    environment: 'production',
-                    category: '',
-                    endpoint: '',
-                    accessToken: '',
-                    refreshToken: '',
-                    clientId: '',
-                    clientSecret: '',
-                    projectId: '',
-                    expiresAt: '',
-                    notes: '',
-                    tags: [],
-                  });
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={editingKey ? handleUpdateKey : handleAddKey}>
-                {editingKey ? 'Update' : 'Add'} API Key
-              </Button>
-            </div>
-          </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAddModal(false);
+                setEditingKey(null);
+                setFormData({
+                  name: '',
+                  service: '',
+                  apiKey: '',
+                  apiSecret: '',
+                  environment: 'production',
+                  category: '',
+                  endpoint: '',
+                  accessToken: '',
+                  refreshToken: '',
+                  clientId: '',
+                  clientSecret: '',
+                  projectId: '',
+                  expiresAt: '',
+                  notes: '',
+                  tags: [],
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={editingKey ? handleUpdateKey : handleAddKey}>
+              {editingKey ? 'Update' : 'Add'} API Key
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

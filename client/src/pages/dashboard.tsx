@@ -348,7 +348,7 @@ export default function Dashboard() {
       .filter(r => !r.isCompleted && r.dueDate)
       .filter(r => {
         const days = differenceInCalendarDays(new Date(r.dueDate), new Date());
-        return days >= 0 && days <= 1;
+        return days >= 0 && days <= 6;
       })
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
     [reminders]

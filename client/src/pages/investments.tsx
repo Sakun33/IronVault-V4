@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { 
   Plus, 
@@ -1062,7 +1062,7 @@ export default function Investments() {
             <DialogHeader>
               <DialogTitle>Add Investment Goal</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <DialogBody className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="goalName">Goal Name</Label>
@@ -1118,45 +1118,29 @@ export default function Investments() {
                   </Select>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowAddGoalModal(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => {
-                  const goalNameInput = document.getElementById('goalName') as HTMLInputElement;
-                  const goalCategorySelect = document.querySelector('#goalCategory') as HTMLSelectElement;
-                  const goalDescriptionTextarea = document.getElementById('goalDescription') as HTMLTextAreaElement;
-                  const targetAmountInput = document.getElementById('targetAmount') as HTMLInputElement;
-                  const currentAmountInput = document.getElementById('currentAmount') as HTMLInputElement;
-                  const targetDateInput = document.getElementById('targetDate') as HTMLInputElement;
-                  const prioritySelect = document.querySelector('#priority') as HTMLSelectElement;
-
-                  if (goalNameInput?.value && targetAmountInput?.value && targetDateInput?.value) {
-                    const goalData = {
-                      name: goalNameInput.value,
-                      category: goalCategorySelect?.value || 'other',
-                      description: goalDescriptionTextarea?.value || '',
-                      targetAmount: parseFloat(targetAmountInput.value),
-                      currentAmount: parseFloat(currentAmountInput?.value || '0'),
-                      targetDate: new Date(targetDateInput.value),
-                      priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high',
-                      currency: 'USD',
-                      investmentIds: [],
-                      isAchieved: false
-                    };
-                    handleAddGoal(goalData);
-                  } else {
-                    toast({
-                      title: "Error",
-                      description: "Please fill in all required fields (Name, Target Amount, Target Date).",
-                      variant: "destructive",
-                    });
-                  }
-                }}>
-                  Add Goal
-                </Button>
-              </div>
-            </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddGoalModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                const goalNameInput = document.getElementById('goalName') as HTMLInputElement;
+                const goalCategorySelect = document.querySelector('#goalCategory') as HTMLSelectElement;
+                const goalDescriptionTextarea = document.getElementById('goalDescription') as HTMLTextAreaElement;
+                const targetAmountInput = document.getElementById('targetAmount') as HTMLInputElement;
+                const currentAmountInput = document.getElementById('currentAmount') as HTMLInputElement;
+                const targetDateInput = document.getElementById('targetDate') as HTMLInputElement;
+                const prioritySelect = document.querySelector('#priority') as HTMLSelectElement;
+                if (goalNameInput?.value && targetAmountInput?.value && targetDateInput?.value) {
+                  const goalData = { name: goalNameInput.value, category: goalCategorySelect?.value || 'other', description: goalDescriptionTextarea?.value || '', targetAmount: parseFloat(targetAmountInput.value), currentAmount: parseFloat(currentAmountInput?.value || '0'), targetDate: new Date(targetDateInput.value), priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high', currency: 'USD', investmentIds: [], isAchieved: false };
+                  handleAddGoal(goalData);
+                } else {
+                  toast({ title: "Error", description: "Please fill in all required fields (Name, Target Amount, Target Date).", variant: "destructive" });
+                }
+              }}>
+                Add Goal
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -1167,7 +1151,7 @@ export default function Investments() {
               <DialogHeader>
                 <DialogTitle>Edit Investment Goal</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <DialogBody className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="editGoalName">Goal Name</Label>
@@ -1227,42 +1211,29 @@ export default function Investments() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setEditingGoal(null)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={() => {
-                    const goalNameInput = document.getElementById('editGoalName') as HTMLInputElement;
-                    const goalCategorySelect = document.querySelector('#editGoalCategory') as HTMLSelectElement;
-                    const goalDescriptionTextarea = document.getElementById('editGoalDescription') as HTMLTextAreaElement;
-                    const targetAmountInput = document.getElementById('editTargetAmount') as HTMLInputElement;
-                    const currentAmountInput = document.getElementById('editCurrentAmount') as HTMLInputElement;
-                    const targetDateInput = document.getElementById('editTargetDate') as HTMLInputElement;
-                    const prioritySelect = document.querySelector('#editPriority') as HTMLSelectElement;
-
-                    if (goalNameInput?.value && targetAmountInput?.value && targetDateInput?.value) {
-                      const goalData = {
-                        name: goalNameInput.value,
-                        category: goalCategorySelect?.value || editingGoal?.category || 'other',
-                        description: goalDescriptionTextarea?.value || '',
-                        targetAmount: parseFloat(targetAmountInput.value),
-                        currentAmount: parseFloat(currentAmountInput?.value || '0'),
-                        targetDate: new Date(targetDateInput.value),
-                        priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high',
-                      };
-                      handleUpdateGoal(goalData);
-                    } else {
-                      toast({
-                        title: "Error",
-                        description: "Please fill in all required fields (Name, Target Amount, Target Date).",
-                        variant: "destructive",
-                      });
-                    }
-                  }}>
-                    Update Goal
-                  </Button>
-                </div>
-              </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingGoal(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  const goalNameInput = document.getElementById('editGoalName') as HTMLInputElement;
+                  const goalCategorySelect = document.querySelector('#editGoalCategory') as HTMLSelectElement;
+                  const goalDescriptionTextarea = document.getElementById('editGoalDescription') as HTMLTextAreaElement;
+                  const targetAmountInput = document.getElementById('editTargetAmount') as HTMLInputElement;
+                  const currentAmountInput = document.getElementById('editCurrentAmount') as HTMLInputElement;
+                  const targetDateInput = document.getElementById('editTargetDate') as HTMLInputElement;
+                  const prioritySelect = document.querySelector('#editPriority') as HTMLSelectElement;
+                  if (goalNameInput?.value && targetAmountInput?.value && targetDateInput?.value) {
+                    const goalData = { name: goalNameInput.value, category: goalCategorySelect?.value || editingGoal?.category || 'other', description: goalDescriptionTextarea?.value || '', targetAmount: parseFloat(targetAmountInput.value), currentAmount: parseFloat(currentAmountInput?.value || '0'), targetDate: new Date(targetDateInput.value), priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high' };
+                    handleUpdateGoal(goalData);
+                  } else {
+                    toast({ title: "Error", description: "Please fill in all required fields (Name, Target Amount, Target Date).", variant: "destructive" });
+                  }
+                }}>
+                  Update Goal
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         )}
