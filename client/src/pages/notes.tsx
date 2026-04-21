@@ -1,48 +1,22 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
-  BookOpen, 
-  Tag, 
-  Pin, 
-  Calendar,
-  Filter,
-  StickyNote,
-  Archive,
-  Eye,
-  FileText,
-  CheckSquare,
-  Square,
-  List,
-  LayoutTemplate,
-  Lightbulb,
-  ListTodo,
-  Users,
-  Target,
-  BookMarked,
-  PenLine,
-  Sparkles
+import {
+  Plus, Edit, Trash2, Search, BookOpen, Tag, Pin, Calendar,
+  StickyNote, Archive, FileText, LayoutTemplate,
+  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import RichTextEditor from '@/components/rich-text-editor';
 
 const NOTEBOOK_COLORS: Record<string, string> = {
   personal:  '#6366f1',
@@ -55,25 +29,18 @@ const NOTEBOOK_COLORS: Record<string, string> = {
 };
 const notebookColor = (nb: string) => NOTEBOOK_COLORS[nb] ?? NOTEBOOK_COLORS.Default;
 
-function getPreview(content: string): { text: string; tasks: { done: boolean; label: string }[] } {
-  const tasks: { done: boolean; label: string }[] = [];
-  if (content.includes('data-type="taskItem"') || content.includes('data-checked')) {
-    const taskRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
-    let m;
-    while ((m = taskRe.exec(content)) !== null && tasks.length < 4) {
-      tasks.push({ done: m[1] === 'true', label: m[2].replace(/<[^>]*>/g, '').trim().slice(0, 60) });
-    }
-  }
-  const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 130);
-  return { text, tasks };
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getPreview(content: string): string {
+  const stripped = content.includes('<') ? stripHtml(content) : content;
+  return stripped.slice(0, 120);
 }
 
 function timeAgo(date: Date | string) {
-  try {
-    return formatDistanceToNow(new Date(date), { addSuffix: true });
-  } catch {
-    return '';
-  }
+  try { return formatDistanceToNow(new Date(date), { addSuffix: true }); }
+  catch { return ''; }
 }
 
 export default function Notes() {
@@ -90,200 +57,99 @@ export default function Notes() {
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [deleteNoteTarget, setDeleteNoteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
-  // Note Templates - More practical and useful templates
   const NOTE_TEMPLATES = [
-    { id: 'grocery', name: 'Grocery List', icon: ListTodo, notebook: 'personal', content: '## 🛒 Grocery List\n\n### Produce\n- [ ] \n\n### Dairy\n- [ ] \n\n### Meat/Protein\n- [ ] \n\n### Pantry\n- [ ] \n\n### Frozen\n- [ ] \n\n### Other\n- [ ] ' },
-    { id: 'meeting', name: 'Meeting Notes', icon: Users, notebook: 'work', content: '## 📋 Meeting Notes\n\n**Date:** ' + new Date().toLocaleDateString() + '\n**Time:** \n**Attendees:** \n**Location:** \n\n### Agenda\n1. \n\n### Key Discussion Points\n- \n\n### Decisions Made\n- \n\n### Action Items\n- [ ] Owner: \n- [ ] Owner: \n\n### Next Meeting: ' },
-    { id: 'todo', name: 'Daily Tasks', icon: ListTodo, notebook: 'personal', content: '## ✅ Tasks for ' + new Date().toLocaleDateString() + '\n\n### Must Do Today\n- [ ] \n- [ ] \n\n### Should Do\n- [ ] \n\n### Nice to Have\n- [ ] \n\n### Notes\n' },
-    { id: 'password', name: 'Account Info', icon: FileText, notebook: 'personal', content: '## 🔐 Account Information\n\n**Service:** \n**Website:** \n**Username:** \n**Email:** \n**Security Questions:**\n1. Q: \n   A: \n2. Q: \n   A: \n\n**Recovery Codes:**\n- \n\n**Notes:**\n' },
-    { id: 'recipe', name: 'Recipe', icon: FileText, notebook: 'personal', content: '## 🍳 Recipe: \n\n**Servings:** \n**Prep Time:** \n**Cook Time:** \n\n### Ingredients\n- \n\n### Instructions\n1. \n2. \n3. \n\n### Notes\n' },
-    { id: 'travel', name: 'Travel Checklist', icon: Target, notebook: 'personal', content: '## ✈️ Travel Packing List\n\n**Destination:** \n**Dates:** \n\n### Documents\n- [ ] Passport\n- [ ] ID\n- [ ] Tickets\n- [ ] Hotel confirmation\n\n### Clothing\n- [ ] \n\n### Toiletries\n- [ ] \n\n### Electronics\n- [ ] Phone charger\n- [ ] \n\n### Other\n- [ ] ' },
-    { id: 'health', name: 'Health Log', icon: FileText, notebook: 'personal', content: '## 🏥 Health Record\n\n**Date:** ' + new Date().toLocaleDateString() + '\n\n### Symptoms\n- \n\n### Medications\n| Name | Dosage | Time |\n|------|--------|------|\n|      |        |      |\n\n### Vitals\n- Blood Pressure: \n- Weight: \n- Temperature: \n\n### Doctor Notes\n' },
-    { id: 'budget', name: 'Budget Planner', icon: FileText, notebook: 'personal', content: '## 💰 Monthly Budget - ' + new Date().toLocaleString('default', { month: 'long', year: 'numeric' }) + '\n\n### Income\n- Salary: $\n- Other: $\n**Total Income:** $\n\n### Fixed Expenses\n- [ ] Rent/Mortgage: $\n- [ ] Utilities: $\n- [ ] Insurance: $\n\n### Variable Expenses\n- [ ] Groceries: $\n- [ ] Transport: $\n- [ ] Entertainment: $\n\n### Savings Goal: $\n' },
-    { id: 'project', name: 'Project Plan', icon: Sparkles, notebook: 'work', content: '## 📊 Project: \n\n**Status:** 🟡 In Progress\n**Start Date:** \n**Due Date:** \n\n### Objective\n\n### Milestones\n- [ ] Phase 1: \n- [ ] Phase 2: \n- [ ] Phase 3: \n\n### Team/Resources\n- \n\n### Risks & Blockers\n- \n\n### Progress Notes\n' },
-    { id: 'journal', name: 'Daily Journal', icon: PenLine, notebook: 'personal', content: '## 📔 Journal - ' + new Date().toLocaleDateString() + '\n\n### How am I feeling?\n\n### What happened today?\n\n### What am I grateful for?\n1. \n2. \n3. \n\n### What could I improve?\n\n### Tomorrow\'s priorities\n- ' },
-    { id: 'contacts', name: 'Contact Info', icon: Users, notebook: 'personal', content: '## 👤 Contact\n\n**Name:** \n**Company:** \n**Role:** \n\n### Contact Details\n- Phone: \n- Email: \n- LinkedIn: \n\n### How we met\n\n### Notes\n' },
-    { id: 'blank', name: 'Blank Note', icon: FileText, notebook: 'personal', content: '' },
+    { id: 'grocery',  name: 'Grocery List',      icon: ListTodo, notebook: 'personal', content: 'Grocery List\n\nProduce:\n- \n\nDairy:\n- \n\nMeat / Protein:\n- \n\nPantry:\n- \n\nOther:\n- ' },
+    { id: 'meeting',  name: 'Meeting Notes',      icon: Users,    notebook: 'work',     content: `Meeting Notes\n\nDate: ${new Date().toLocaleDateString()}\nAttendees: \n\nAgenda:\n1. \n\nKey Points:\n- \n\nAction Items:\n- ` },
+    { id: 'todo',     name: 'Daily Tasks',        icon: ListTodo, notebook: 'personal', content: `Tasks for ${new Date().toLocaleDateString()}\n\nMust Do:\n- \n\nShould Do:\n- \n\nNice to Have:\n- ` },
+    { id: 'journal',  name: 'Daily Journal',      icon: PenLine,  notebook: 'personal', content: `Journal — ${new Date().toLocaleDateString()}\n\nHow I'm feeling:\n\nWhat happened today:\n\nGrateful for:\n1. \n2. \n3. \n\nTomorrow's priorities:\n- ` },
+    { id: 'recipe',   name: 'Recipe',             icon: FileText, notebook: 'personal', content: 'Recipe: \n\nServings: \nPrep Time: \nCook Time: \n\nIngredients:\n- \n\nInstructions:\n1. \n2. \n3. \n\nNotes:\n' },
+    { id: 'travel',   name: 'Travel Checklist',   icon: Target,   notebook: 'travel',   content: 'Travel Packing\n\nDestination: \nDates: \n\nDocuments:\n- Passport\n- ID\n- Tickets\n\nClothing:\n- \n\nToiletries:\n- \n\nElectronics:\n- Charger\n- ' },
+    { id: 'project',  name: 'Project Plan',       icon: Sparkles, notebook: 'work',     content: 'Project: \n\nObjective:\n\nMilestones:\n- Phase 1: \n- Phase 2: \n- Phase 3: \n\nRisks:\n- \n\nNotes:\n' },
+    { id: 'contacts', name: 'Contact Info',       icon: Users,    notebook: 'personal', content: 'Contact\n\nName: \nCompany: \nRole: \nPhone: \nEmail: \n\nNotes:\n' },
+    { id: 'ideas',    name: 'Ideas',              icon: Lightbulb,notebook: 'ideas',    content: 'Ideas\n\n- \n- \n- \n' },
+    { id: 'blank',    name: 'Blank Note',         icon: FileText, notebook: 'personal', content: '' },
   ];
 
   const handleUseTemplate = (template: typeof NOTE_TEMPLATES[0]) => {
-    setFormData({
-      title: '',
-      content: template.content,
-      notebook: template.notebook,
-      tags: [],
-      isPinned: false,
-      noteType: 'rich',
-    });
+    setFormData({ title: '', content: template.content, notebook: template.notebook, tags: [], isPinned: false });
     setShowTemplatesModal(false);
     setShowAddModal(true);
   };
 
-  // Pre-fill last-used notebook when opening add modal
   useEffect(() => {
     if (showAddModal && !editingNote) {
-      setFormData(prev => ({ ...prev, notebook: lastNotebook || 'Default' }));
+      setFormData(prev => ({ ...prev, notebook: lastNotebook || 'personal' }));
     }
   }, [showAddModal]);
 
-  // Form state for add/edit modal
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    notebook: 'Default',
-    tags: [] as string[],
-    isPinned: false,
-    noteType: 'rich' as 'rich' | 'markdown',
-  });
-  
+  const blankForm = { title: '', content: '', notebook: 'personal', tags: [] as string[], isPinned: false };
+  const [formData, setFormData] = useState(blankForm);
   const [newTag, setNewTag] = useState('');
 
-
-  // Get all unique tags from notes
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
-    notes.forEach(note => {
-      if (note.tags && Array.isArray(note.tags)) {
-        note.tags.forEach(tag => tagSet.add(tag));
-      }
-    });
+    notes.forEach(note => (note.tags || []).forEach(tag => tagSet.add(tag)));
     return Array.from(tagSet).sort();
   }, [notes]);
 
-  // Filter notes based on search, notebook, tags, and pinned status
-  const filteredNotes = useMemo(() => {
-    return notes.filter(note => {
-      // Search filter
-      const matchesSearch = !searchQuery || 
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (note.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredNotes = useMemo(() => notes.filter(note => {
+    const matchesSearch = !searchQuery ||
+      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (note.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesNotebook = selectedNotebook === 'all' || note.notebook === selectedNotebook;
+    const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => (note.tags || []).includes(tag));
+    const matchesPinned = !showPinnedOnly || note.isPinned;
+    return matchesSearch && matchesNotebook && matchesTags && matchesPinned;
+  }), [notes, searchQuery, selectedNotebook, selectedTags, showPinnedOnly]);
 
-      // Notebook filter
-      const matchesNotebook = selectedNotebook === 'all' || note.notebook === selectedNotebook;
-      
-      // Tag filter
-      const matchesTags = selectedTags.length === 0 || 
-        selectedTags.some(tag => (note.tags || []).includes(tag));
-
-      // Pinned filter
-      const matchesPinned = !showPinnedOnly || note.isPinned;
-
-      return matchesSearch && matchesNotebook && matchesTags && matchesPinned;
-    });
-  }, [notes, searchQuery, selectedNotebook, selectedTags, showPinnedOnly]);
-
-  // Sort notes: pinned first, then by updated date
-  const sortedNotes = useMemo(() => {
-    return [...filteredNotes].sort((a, b) => {
+  const sortedNotes = useMemo(() =>
+    [...filteredNotes].sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-  }, [filteredNotes]);
+    }), [filteredNotes]);
 
   const handleAddNote = async () => {
     if (!formData.title.trim()) {
-      toast({
-        title: "Error",
-        description: "Title is required",
-        variant: "destructive",
-      });
+      toast({ title: 'Title required', variant: 'destructive' });
       return;
     }
-
     try {
-      await addNote({
-        title: formData.title.trim(),
-        content: formData.content,
-        notebook: formData.notebook,
-        tags: formData.tags,
-        isPinned: formData.isPinned,
-      });
-
+      await addNote({ title: formData.title.trim(), content: formData.content, notebook: formData.notebook, tags: formData.tags, isPinned: formData.isPinned });
       saveNotebook(formData.notebook);
-      setFormData({
-        title: '',
-        content: '',
-        notebook: formData.notebook,
-        tags: [],
-        isPinned: false,
-        noteType: 'rich',
-      });
+      setFormData({ ...blankForm, notebook: formData.notebook });
       setShowAddModal(false);
-
-      toast({
-        title: "Success",
-        description: "Note added successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add note",
-        variant: "destructive",
-      });
+      toast({ title: 'Note saved' });
+    } catch {
+      toast({ title: 'Failed to save', variant: 'destructive' });
     }
   };
 
   const handleEditNote = (note: NoteEntry) => {
     setEditingNote(note);
-    setFormData({
-      title: note.title,
-      content: note.content,
-      notebook: note.notebook,
-      tags: [...note.tags],
-      isPinned: note.isPinned,
-      noteType: 'rich', // Default to text for existing notes
- // Default to empty checklist for existing notes
-    });
+    const content = note.content.includes('<') ? stripHtml(note.content) : note.content;
+    setFormData({ title: note.title, content, notebook: note.notebook, tags: [...note.tags], isPinned: note.isPinned });
   };
 
   const handleUpdateNote = async () => {
     if (!editingNote || !formData.title.trim()) {
-      toast({
-        title: "Error", 
-        description: "Title is required",
-        variant: "destructive",
-      });
+      toast({ title: 'Title required', variant: 'destructive' });
       return;
     }
-
     try {
-      await updateNote(editingNote.id, {
-        title: formData.title.trim(),
-        content: formData.content,
-        notebook: formData.notebook,
-        tags: formData.tags,
-        isPinned: formData.isPinned,
-      });
-
+      await updateNote(editingNote.id, { title: formData.title.trim(), content: formData.content, notebook: formData.notebook, tags: formData.tags, isPinned: formData.isPinned });
       setEditingNote(null);
-    setFormData({
-      title: '',
-      content: '',
-      notebook: 'Default',
-      tags: [],
-      isPinned: false,
-      noteType: 'rich',
-    });
-
-      toast({
-        title: "Success",
-        description: "Note updated successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update note",
-        variant: "destructive",
-      });
+      setFormData(blankForm);
+      toast({ title: 'Note updated' });
+    } catch {
+      toast({ title: 'Failed to update', variant: 'destructive' });
     }
   };
 
-  const handleDeleteNote = (id: string, title: string) => {
-    setDeleteNoteTarget({ id, title });
-  };
+  const handleDeleteNote = (id: string, title: string) => setDeleteNoteTarget({ id, title });
 
   const handleDeleteNoteConfirmed = async () => {
     if (!deleteNoteTarget) return;
@@ -291,129 +157,83 @@ export default function Notes() {
     setDeleteNoteTarget(null);
     try {
       await deleteNote(id);
-      toast({
-        title: "Success",
-        description: "Note deleted successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete note",
-        variant: "destructive",
-      });
+      toast({ title: 'Note deleted' });
+    } catch {
+      toast({ title: 'Failed to delete', variant: 'destructive' });
     }
   };
 
   const togglePinNote = async (note: NoteEntry) => {
     try {
       await updateNote(note.id, { isPinned: !note.isPinned });
-      toast({
-        title: "Success",
-        description: note.isPinned ? "Note unpinned" : "Note pinned",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update note",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: 'Failed to update', variant: 'destructive' });
     }
   };
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()]
-      }));
+      setFormData(prev => ({ ...prev, tags: [...prev.tags, newTag.trim()] }));
       setNewTag('');
     }
   };
 
-  const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
-  };
+  const removeTag = (tag: string) => setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
+  const toggleTagFilter = (tag: string) => setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
 
-  const toggleTagFilter = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
-  };
-
-  const clearFilters = () => {
-    setSelectedNotebook('all');
-    setSelectedTags([]);
-    setShowPinnedOnly(false);
-    setSearchQuery('');
+  const closeModal = () => {
+    setShowAddModal(false);
+    setEditingNote(null);
+    setFormData(blankForm);
+    setNewTag('');
   };
 
   const renderViewModal = () => (
-    <Dialog open={!!viewingNote} onOpenChange={(open) => {
-      if (!open) {
-        setViewingNote(null);
-      }
-    }}>
-      <DialogContent className="max-w-4xl">
+    <Dialog open={!!viewingNote} onOpenChange={open => { if (!open) setViewingNote(null); }}>
+      <DialogContent className="max-w-2xl">
         {viewingNote && (
           <>
             <DialogHeader className="pr-8">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-xl mb-2 flex items-center gap-2 pr-2">
-                    {viewingNote.isPinned && <Pin className="w-5 h-5 text-amber-600 dark:text-amber-400 fill-amber-600 dark:fill-amber-400 flex-shrink-0" />}
+                  <DialogTitle className="text-xl mb-1 flex items-center gap-2">
+                    {viewingNote.isPinned && <Pin className="w-4 h-4 text-amber-400 fill-amber-400 flex-shrink-0" />}
                     <span className="truncate">{viewingNote.title}</span>
                   </DialogTitle>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                    <div className="flex items-center gap-1">
-                      <BookOpen className="w-4 h-4" />
-                      <span>{viewingNote.notebook}</span>
-                    </div>
-                    <span>•</span>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{format(new Date(viewingNote.updatedAt), 'MMM d, yyyy h:mm a')}</span>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: notebookColor(viewingNote.notebook) }}
+                    />
+                    <span>{viewingNote.notebook}</span>
+                    <span>·</span>
+                    <Calendar className="w-3 h-3" />
+                    <span>{format(new Date(viewingNote.updatedAt), 'MMM d, yyyy')}</span>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-shrink-0"
-                  onClick={() => {
-                    setViewingNote(null);
-                    handleEditNote(viewingNote);
-                  }}
-                >
-                  <Edit className="w-4 h-4 mr-1" />
-                  Edit
+                <Button variant="outline" size="sm" className="flex-shrink-0"
+                  onClick={() => { setViewingNote(null); handleEditNote(viewingNote); }}>
+                  <Edit className="w-3.5 h-3.5 mr-1" /> Edit
                 </Button>
               </div>
             </DialogHeader>
 
             <DialogBody className="space-y-4">
-              {/* Tags */}
-              {viewingNote.tags && viewingNote.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+              {(viewingNote.tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
                   {viewingNote.tags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      <Tag className="w-3 h-3 mr-1" />
-                      {tag}
+                    <Badge key={tag} variant="secondary" className="text-xs gap-1">
+                      <Tag className="w-3 h-3" />{tag}
                     </Badge>
                   ))}
                 </div>
               )}
-
-              {/* Content */}
-              <div className="prose dark:prose-invert max-w-none">
-                <div
-                  className="rich-text-content leading-relaxed [&_ul[data-type=taskList]]:pl-0 [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:items-start [&_li[data-type=taskItem]>label]:mr-2"
-                  dangerouslySetInnerHTML={{ __html: viewingNote.content.includes('<') ? viewingNote.content : `<p>${viewingNote.content.replace(/\n/g, '</p><p>')}</p>` }}
-                />
+              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                {viewingNote.content.includes('<')
+                  ? <div className="prose dark:prose-invert max-w-none text-sm"
+                      dangerouslySetInnerHTML={{ __html: viewingNote.content }} />
+                  : viewingNote.content
+                }
               </div>
             </DialogBody>
           </>
@@ -423,209 +243,81 @@ export default function Notes() {
   );
 
   const renderNoteModal = () => (
-    <Dialog open={showAddModal || !!editingNote} onOpenChange={(open) => {
-      if (!open) {
-        setShowAddModal(false);
-        setEditingNote(null);
-    setFormData({
-      title: '',
-      content: '',
-      notebook: 'Default',
-      tags: [],
-      isPinned: false,
-      noteType: 'rich',
-    });
-        setNewTag('');
-      }
-    }}>
-      <DialogContent className="max-w-4xl">
+    <Dialog open={showAddModal || !!editingNote} onOpenChange={open => { if (!open) closeModal(); }}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <StickyNote className="w-5 h-5" />
-            {editingNote ? 'Edit Note' : 'Add New Note'}
-          </DialogTitle>
+          <Input
+            data-testid="input-note-title"
+            value={formData.title}
+            onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            placeholder="Note title…"
+            className="border-0 shadow-none text-xl font-semibold px-0 focus-visible:ring-0 h-auto py-0"
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); contentRef.current?.focus(); } }}
+          />
         </DialogHeader>
 
-        <DialogBody className="space-y-4" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (editingNote ? handleUpdateNote : handleAddNote)(); } }}>
-          {/* Title */}
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              data-testid="input-note-title"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Enter note title..."
-              className="text-lg"
-            />
-          </div>
+        <DialogBody className="space-y-4" onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); (editingNote ? handleUpdateNote : handleAddNote)(); } }}>
+          <Textarea
+            ref={contentRef}
+            data-testid="input-note-content"
+            value={formData.content}
+            onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
+            placeholder="Write something…"
+            className="border-0 shadow-none resize-none min-h-[280px] text-sm leading-relaxed focus-visible:ring-0 px-0"
+          />
 
-          {/* Notebook and Pin */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="notebook">Notebook</Label>
-              <Select 
-                value={formData.notebook} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, notebook: value }))}
-              >
-                <SelectTrigger data-testid="select-note-notebook">
+          <div className="pt-3 border-t space-y-3">
+            {/* Notebook + Pin row */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Select value={formData.notebook} onValueChange={v => setFormData(prev => ({ ...prev, notebook: v }))}>
+                <SelectTrigger className="w-36 h-8 text-xs" data-testid="select-note-notebook">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {NOTE_NOTEBOOKS.map(notebook => (
-                    <SelectItem key={notebook} value={notebook}>{notebook}</SelectItem>
-                  ))}
+                  {NOTE_NOTEBOOKS.map(nb => <SelectItem key={nb} value={nb}>{nb}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Switch
-                  checked={formData.isPinned}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isPinned: checked }))}
-                />
-                <Pin className="w-4 h-4" />
-                Pin this note
-              </Label>
-            </div>
-          </div>
-
-          {/* Tags */}
-          <div className="space-y-2">
-            <Label>Tags</Label>
-            <div className="flex gap-2">
-              <Input
-                data-testid="input-note-tag"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                placeholder="Add a tag..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button 
+              <button
                 type="button"
-                onClick={addTag}
-                data-testid="button-add-tag"
-                variant="outline"
-                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, isPinned: !prev.isPinned }))}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${formData.isPinned ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-600 dark:text-amber-400' : 'border-border text-muted-foreground hover:border-amber-300'}`}
               >
-                <Tag className="w-4 h-4 mr-1" />
-                Add
-              </Button>
+                <Pin className={`w-3 h-3 ${formData.isPinned ? 'fill-amber-400 text-amber-400' : ''}`} />
+                {formData.isPinned ? 'Pinned' : 'Pin'}
+              </button>
             </div>
-            {formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.tags.map(tag => (
-                  <Badge 
-                    key={tag} 
-                    variant="secondary" 
-                    className="cursor-pointer"
-                    onClick={() => removeTag(tag)}
-                    data-testid={`badge-tag-${tag}`}
-                  >
-                    {tag} ×
-                  </Badge>
-                ))}
+
+            {/* Tags */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {formData.tags.map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => removeTag(tag)}
+                  data-testid={`badge-tag-${tag}`}>
+                  {tag} ×
+                </Badge>
+              ))}
+              <div className="flex items-center gap-1">
+                <Input
+                  data-testid="input-note-tag"
+                  value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+                  placeholder="Add tag…"
+                  className="h-7 w-28 text-xs"
+                />
+                <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={addTag}
+                  data-testid="button-add-tag">
+                  <Tag className="w-3 h-3" />
+                </Button>
               </div>
-            )}
+            </div>
           </div>
-
-          {/* Note Type */}
-          <div className="space-y-2">
-            <Label htmlFor="note-type">Note Type</Label>
-            <Select 
-              value={formData.noteType} 
-              onValueChange={(value: 'rich' | 'markdown') => setFormData(prev => ({ ...prev, noteType: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="rich">Rich Text Editor</SelectItem>
-                <SelectItem value="markdown">Markdown</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Content with Rich Text Editor */}
-          <div className="space-y-2">
-            <Label>Content</Label>
-            {formData.noteType === 'rich' ? (
-              <RichTextEditor
-                value={formData.content}
-                onChange={(content) => setFormData(prev => ({ ...prev, content }))}
-                placeholder="Start writing your note..."
-                className="min-h-[400px]"
-                showPreview={true}
-                enableAdvancedFeatures={true}
-                enableAutoSave={false}
-                wordCount={true}
-              />
-            ) : formData.noteType === 'markdown' ? (
-              <Tabs defaultValue="edit" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="edit" className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Edit
-                  </TabsTrigger>
-                  <TabsTrigger value="preview" className="flex items-center gap-2">
-                    <Eye className="w-4 h-4" />
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="edit" className="space-y-2">
-                  <Textarea
-                    value={formData.content}
-                    onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                    placeholder="Write your note content here using Markdown..."
-                    className="min-h-64 font-mono text-sm resize-none"
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    <strong>Enhanced Markdown Support:</strong> Headers (#), **bold**, *italic*, `code`, lists (-, 1.), 
-                    [links](url), &gt; quotes, tables, code blocks ```lang, **JSON/CSV/XML formatting**, and more
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="preview" className="space-y-2">
-                  <div className="min-h-64 p-4 border rounded-md bg-background prose prose-sm dark:prose-invert max-w-none">
-                    {formData.content ? (
-                      <EnhancedMarkdown content={formData.content} />
-                    ) : (
-                      <div className="text-muted-foreground italic">
-                        Nothing to preview. Write some content in the Edit tab.
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            ) : null}
-          </div>
-
         </DialogBody>
+
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setShowAddModal(false);
-              setEditingNote(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            data-testid="button-save-note"
-            onClick={editingNote ? handleUpdateNote : handleAddNote}
-          >
-            {editingNote ? 'Update Note' : 'Add Note'}
+          <Button variant="outline" onClick={closeModal}>Cancel</Button>
+          <Button type="button" data-testid="button-save-note" onClick={editingNote ? handleUpdateNote : handleAddNote}>
+            {editingNote ? 'Save changes' : 'Save note'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -633,188 +325,129 @@ export default function Notes() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-foreground">
-            <BookOpen className="w-6 h-6" />
-            Notes
+            <BookOpen className="w-6 h-6" /> Notes
           </h1>
           <p className="text-muted-foreground text-sm">
-            Organize your thoughts with encrypted notes
+            {notes.length} note{notes.length !== 1 ? 's' : ''}
+            {!isPro && ` · ${notes.length}/${getLimit('notes')} used`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {!isPro && (
-            <span className="text-xs text-muted-foreground">
-              {notes.length}/{getLimit('notes')}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowTemplatesModal(true)}
-            className="rounded-xl"
-          >
-            <LayoutTemplate className="w-4 h-4 mr-1" />
-            Templates
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowTemplatesModal(true)}>
+            <LayoutTemplate className="w-4 h-4 mr-1" /> Templates
           </Button>
           <Button
             size="sm"
             disabled={!isPro && notes.length >= getLimit('notes')}
             onClick={() => {
               if (!isPro && notes.length >= getLimit('notes')) {
-                toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('notes')} notes. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                toast({ title: 'Limit reached', description: `Upgrade to Pro for unlimited notes.`, variant: 'destructive' });
                 return;
               }
-              setFormData({
-                title: '',
-                content: '',
-                notebook: 'personal',
-                tags: [],
-                isPinned: false,
-                noteType: 'rich',
-              });
+              setFormData({ ...blankForm, notebook: lastNotebook || 'personal' });
               setShowAddModal(true);
             }}
             data-testid="button-add-note"
           >
             <Plus className="w-4 h-4 mr-1" />
-            {!isPro && notes.length >= getLimit('notes') ? 'Upgrade to Add' : 'Add'}
+            {!isPro && notes.length >= getLimit('notes') ? 'Upgrade' : 'New note'}
           </Button>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Search & Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              data-testid="input-notes-search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search notes by title, content, or tags..."
-              className="pl-10"
-            />
-          </div>
+      {/* Search + compact filters */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            data-testid="input-notes-search"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search notes…"
+            className="pl-10 rounded-xl"
+          />
+        </div>
 
-          {/* Filter Controls */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Notebook Filter */}
-            <div className="space-y-2">
-              <Label>Notebook</Label>
-              <Select value={selectedNotebook} onValueChange={setSelectedNotebook}>
-                <SelectTrigger data-testid="select-notebook-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Notebooks</SelectItem>
-                  {NOTE_NOTEBOOKS.map(notebook => (
-                    <SelectItem key={notebook} value={notebook}>{notebook}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Quick Filters */}
-            <div className="space-y-2">
-              <Label>Quick Filters</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={showPinnedOnly ? "default" : "outline"}
-                  size="sm"
-                  data-testid="button-filter-pinned"
-                  onClick={() => setShowPinnedOnly(!showPinnedOnly)}
-                >
-                  <Pin className="w-4 h-4 mr-1" />
-                  Pinned
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="button-clear-filters"
-                  onClick={clearFilters}
-                >
-                  Clear All
-                </Button>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <div className="text-sm text-muted-foreground">
-                Showing {sortedNotes.length} of {notes.length} notes
-              </div>
-            </div>
-          </div>
-
-          {/* Tag Filters */}
-          {allTags.length > 0 && (
-            <div className="space-y-2">
-              <Label>Filter by Tags</Label>
-              <div className="flex flex-wrap gap-2">
-                {allTags.map(tag => (
-                  <Badge
-                    key={tag}
-                    variant={selectedTags.includes(tag) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleTagFilter(tag)}
-                    data-testid={`filter-tag-${tag}`}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+        {/* Notebook chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['all', ...NOTE_NOTEBOOKS] as string[]).map(nb => (
+            <button
+              key={nb}
+              onClick={() => setSelectedNotebook(nb)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                selectedNotebook === nb
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-border text-muted-foreground hover:border-primary/50'
+              }`}
+            >
+              {nb === 'all' ? 'All' : nb}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowPinnedOnly(v => !v)}
+            className={`text-xs px-3 py-1 rounded-full border flex items-center gap-1 transition-colors ${
+              showPinnedOnly
+                ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                : 'border-border text-muted-foreground hover:border-amber-300'
+            }`}
+          >
+            <Pin className="w-3 h-3" /> Pinned
+          </button>
+          {(selectedNotebook !== 'all' || showPinnedOnly || selectedTags.length > 0 || searchQuery) && (
+            <button
+              onClick={() => { setSelectedNotebook('all'); setShowPinnedOnly(false); setSelectedTags([]); setSearchQuery(''); }}
+              className="text-xs px-3 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Notes Grid */}
+        {/* Tag filter chips */}
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {allTags.map(tag => (
+              <Badge
+                key={tag}
+                variant={selectedTags.includes(tag) ? 'default' : 'outline'}
+                className="cursor-pointer text-xs"
+                onClick={() => toggleTagFilter(tag)}
+                data-testid={`filter-tag-${tag}`}
+              >
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notes grid */}
       {sortedNotes.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Archive className="w-12 h-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Notes Found</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              {notes.length === 0 
-                ? "Get started by creating your first note"
-                : "Try adjusting your search or filter criteria"
-              }
-            </p>
-            {notes.length === 0 && (
-              <Button onClick={() => {
-                  setFormData({
-                    title: '',
-                    content: '',
-                    notebook: 'personal',
-                    tags: [],
-                    isPinned: false,
-                    noteType: 'rich',
-                  });
-                  setShowAddModal(true);
-                }} data-testid="button-create-first-note">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Note
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Archive className="w-10 h-10 text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground font-medium mb-1">
+            {notes.length === 0 ? 'No notes yet' : 'No notes match your filters'}
+          </p>
+          <p className="text-sm text-muted-foreground/70 mb-4">
+            {notes.length === 0 ? 'Start writing to capture your thoughts' : 'Try a different search or filter'}
+          </p>
+          {notes.length === 0 && (
+            <Button size="sm" onClick={() => { setFormData({ ...blankForm, notebook: 'personal' }); setShowAddModal(true); }}
+              data-testid="button-create-first-note">
+              <Plus className="w-4 h-4 mr-1" /> Write your first note
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedNotes.map(note => {
             const color = notebookColor(note.notebook);
-            const { text: previewText, tasks } = getPreview(note.content || '');
+            const preview = getPreview(note.content || '');
             return (
               <div
                 key={note.id}
@@ -822,76 +455,47 @@ export default function Notes() {
                 onClick={() => setViewingNote(note)}
                 className="group relative rounded-2xl border bg-card cursor-pointer hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                {/* Notebook color accent bar */}
                 <div className="h-1 w-full" style={{ background: color }} />
-
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-2.5">
                   {/* Title row */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {note.isPinned && (
-                        <Pin className="w-3.5 h-3.5 flex-shrink-0 fill-amber-400 text-amber-400" />
-                      )}
-                      <h3
-                        data-testid={`note-title-${note.id}`}
-                        className="font-semibold text-sm leading-snug line-clamp-2 text-foreground"
-                      >
+                      {note.isPinned && <Pin className="w-3.5 h-3.5 flex-shrink-0 fill-amber-400 text-amber-400" />}
+                      <h3 data-testid={`note-title-${note.id}`}
+                        className="font-semibold text-sm leading-snug line-clamp-2 text-foreground">
                         {note.title}
                       </h3>
                     </div>
-
-                    {/* Action buttons — visible on hover / always on touch */}
                     <div className="flex gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
-                      <button
-                        data-testid={`button-pin-${note.id}`}
+                      <button data-testid={`button-pin-${note.id}`}
                         onClick={e => { e.stopPropagation(); togglePinNote(note); }}
                         className="p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                        title={note.isPinned ? 'Unpin' : 'Pin'}
-                      >
+                        title={note.isPinned ? 'Unpin' : 'Pin'}>
                         <Pin className={`w-3.5 h-3.5 ${note.isPinned ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'}`} />
                       </button>
-                      <button
-                        data-testid={`button-edit-${note.id}`}
+                      <button data-testid={`button-edit-${note.id}`}
                         onClick={e => { e.stopPropagation(); handleEditNote(note); }}
-                        className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-                        title="Edit"
-                      >
+                        className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors" title="Edit">
                         <Edit className="w-3.5 h-3.5 text-primary" />
                       </button>
-                      <button
-                        data-testid={`button-delete-${note.id}`}
+                      <button data-testid={`button-delete-${note.id}`}
                         onClick={e => { e.stopPropagation(); handleDeleteNote(note.id, note.title); }}
-                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                        title="Delete"
-                      >
+                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" title="Delete">
                         <Trash2 className="w-3.5 h-3.5 text-red-500" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Checklist preview OR text preview */}
-                  {tasks.length > 0 ? (
-                    <ul className="space-y-1" data-testid={`note-content-${note.id}`}>
-                      {tasks.map((t, i) => (
-                        <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className={`w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center ${t.done ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
-                            {t.done && <span className="text-primary-foreground text-[9px] leading-none">✓</span>}
-                          </span>
-                          <span className={t.done ? 'line-through opacity-50' : ''}>{t.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : previewText ? (
-                    <p
-                      data-testid={`note-content-${note.id}`}
-                      className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                    >
-                      {previewText}
+                  {/* Preview text */}
+                  {preview && (
+                    <p data-testid={`note-content-${note.id}`}
+                      className="text-xs text-muted-foreground line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                      {preview}
                     </p>
-                  ) : null}
+                  )}
 
-                  {/* Footer: notebook dot + time + tags */}
-                  <div className="flex items-center justify-between pt-1">
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-0.5">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
                       <span>{note.notebook}</span>
@@ -901,11 +505,8 @@ export default function Notes() {
                     {(note.tags || []).length > 0 && (
                       <div className="flex gap-1">
                         {(note.tags || []).slice(0, 2).map(tag => (
-                          <span
-                            key={tag}
-                            data-testid={`note-tag-${note.id}-${tag}`}
-                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
-                          >
+                          <span key={tag} data-testid={`note-tag-${note.id}-${tag}`}
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                             {tag}
                           </span>
                         ))}
@@ -932,54 +533,46 @@ export default function Notes() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <LayoutTemplate className="w-5 h-5" />
-              Note Templates
+              <LayoutTemplate className="w-5 h-5" /> Templates
             </DialogTitle>
           </DialogHeader>
           <DialogBody className="grid grid-cols-2 gap-3">
-            {NOTE_TEMPLATES.map(template => {
-              const IconComponent = template.icon;
+            {NOTE_TEMPLATES.map(t => {
+              const Icon = t.icon;
               return (
-                <Card
-                  key={template.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow p-3"
-                  onClick={() => handleUseTemplate(template)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <IconComponent className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{template.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{template.notebook}</p>
-                    </div>
+                <button key={t.id} onClick={() => handleUseTemplate(t)}
+                  className="flex items-center gap-3 p-3 rounded-xl border hover:border-primary/50 hover:bg-primary/5 text-left transition-colors">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4 text-primary" />
                   </div>
-                </Card>
+                  <div>
+                    <p className="font-medium text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{t.notebook}</p>
+                  </div>
+                </button>
               );
             })}
           </DialogBody>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteNoteTarget} onOpenChange={(open) => { if (!open) setDeleteNoteTarget(null); }}>
+      {/* Delete Confirm */}
+      <Dialog open={!!deleteNoteTarget} onOpenChange={open => { if (!open) setDeleteNoteTarget(null); }}>
         <DialogContent className="max-w-sm" data-testid="dialog-delete-note">
           <DialogHeader>
-            <DialogTitle>Delete Note</DialogTitle>
+            <DialogTitle>Delete note?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete &ldquo;{deleteNoteTarget?.title}&rdquo;? This cannot be undone.
-          </p>
-          <div className="flex gap-3 justify-end mt-2">
+          <DialogBody>
+            <p className="text-sm text-muted-foreground">
+              &ldquo;{deleteNoteTarget?.title}&rdquo; will be permanently deleted.
+            </p>
+          </DialogBody>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteNoteTarget(null)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              data-testid="button-confirm-delete-note"
-              onClick={handleDeleteNoteConfirmed}
-            >
+            <Button variant="destructive" data-testid="button-confirm-delete-note" onClick={handleDeleteNoteConfirmed}>
               Delete
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
