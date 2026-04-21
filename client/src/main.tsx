@@ -5,6 +5,27 @@ import "./styles/mobile.css";
 // Initialize PWA service early
 import "./lib/pwa";
 
+// CRASH REPORTER — shows actual error on white screen instead of blank page
+function showCrash(label: string, msg: string, stack?: string) {
+  document.body.innerHTML = `<pre style="color:#ff6b6b;background:#0a0a0f;padding:24px;font-size:13px;line-height:1.6;margin:0;min-height:100dvh;white-space:pre-wrap;word-break:break-word;">
+[IronVault ${label}]
+
+${msg}
+
+${stack ? 'Stack:\n' + stack : ''}
+</pre>`;
+}
+
+window.addEventListener('error', (e) => {
+  showCrash('JS ERROR', `${e.message}\nFile: ${e.filename}:${e.lineno}:${e.colno}`, e.error?.stack);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  const msg = reason?.message || String(reason);
+  showCrash('UNHANDLED PROMISE', msg, reason?.stack);
+});
+
 // Scroll focused inputs into view on mobile (fixes keyboard obscuring inputs in modals)
 document.addEventListener('focusin', (e) => {
   const el = e.target as HTMLElement;
