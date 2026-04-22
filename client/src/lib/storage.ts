@@ -466,6 +466,18 @@ export class VaultStorage {
   async replaceVaultFromBlob(encryptedBlob: string, masterPassword: string): Promise<void> {
     await this.clearEncryptedItems();
     await this.importVault(encryptedBlob, masterPassword);
+    // Recreate the verification entry so unlockVault() can verify on session restore.
+    // clearEncryptedItems() wiped the entry that createVault() made, and importVault()
+    // never recreates it — without this, vaults with no passwords/subscriptions can
+    // never be unlocked after a page reload.
+    await this.ensureVerificationEntry();
+  }
+
+  // Recreate the password verification entry using the current encryption key.
+  // Must be called after any operation that wipes encrypted_data (clearEncryptedItems).
+  async ensureVerificationEntry(): Promise<void> {
+    if (!this.encryptionKey) throw new Error('Encryption key not set');
+    await this.createPasswordVerificationEntry(this.encryptionKey);
   }
 
   // Save metadata

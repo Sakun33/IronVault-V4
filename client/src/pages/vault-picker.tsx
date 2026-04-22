@@ -181,6 +181,7 @@ export default function VaultPickerPage() {
       await vaultStorage.createVault(pw);
       await vaultStorage.clearEncryptedItems();
       await vaultStorage.importVault(full.encryptedBlob, pw);
+      await vaultStorage.ensureVerificationEntry();
 
       loginWithoutVerification(pw);
       markVaultAsCloudSynced(cloudVault.vaultId);
