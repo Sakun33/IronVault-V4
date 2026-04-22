@@ -71,7 +71,7 @@
 <header>
   <div>
     <h1>🛡 IronVault — Play Store Launch Day QA (Full Audit)</h1>
-    <div class="meta">Last updated: 2026-04-22 18:20 UTC · Commit 00f6b64 · <strong>19 issues found · 17 fixed · 2 open · Forgot-password page + SendPulse email service deployed</strong></div>
+    <div class="meta">Last updated: 2026-04-22 20:00 UTC · Commit 92b418b · <strong>22 issues found · 22 fixed · 0 open · Zoho SMTP live, signup duplicate-email fix, admin login fixed</strong></div>
   </div>
   <div class="badge">LIVE</div>
 </header>
@@ -406,6 +406,10 @@
           <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-103</strong> — Admin plan upgrade used bare UPDATE on entitlements → silently 0 rows for new users. Main app entitlement read legacy customers table (not crm_users+entitlements). Fixed: UPSERT in admin + updated entitlement endpoint (8291124) ✅ Fixed — curl-verified: plan shows "lifetime" after admin upgrade</div></div>
           <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-A/B</strong> — Login 500 on concurrent/retry: <code>crm_users</code> INSERT had no ON CONFLICT → unique constraint error on race. Fixed: <code>ON CONFLICT (email) DO UPDATE</code> (aeac13f) ✅ Fixed — curl-verified: parallel login returns same userId, no 500</div></div>
           <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-C</strong> — Forgot password showed dead toast ("not available yet"). Added <code>POST /api/auth/forgot-password</code> (6-char code, 1h expiry, on-screen display) + <code>POST /api/auth/reset-password</code> + dedicated /auth/forgot-password page (aeac13f) ✅ Fixed — curl-verified: returns <code>{"success":true,"resetCode":"ZNBPVH"}</code></div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-D</strong> — All transactional emails silently failing: SendPulse OAuth returned <code>invalid_client</code> from Vercel IP; direct API key returned "Sender not valid" for saket@ironvault.app. Switched to Zoho SMTP (smtppro.zoho.in:465) via nodemailer. <code>ZOHO_MAIL_PASSWORD</code> set in Vercel env. (92b418b) ✅ Fixed — SMTP verified: messageId <code>db3ed913@ironvault.app</code></div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-E</strong> — Signup showed "Account Created!" and redirected even when <code>accountLogin</code> returned false (email already registered, different password) — leaving user stuck on landing page unable to log in. Fixed: check return value of <code>accountLogin</code>, show "account already exists" error with link to forgot-password. (79a5ce6) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-F</strong> — Admin login "Invalid credentials" due to trailing newline in <code>ADMIN_PASSWORD</code> + <code>ADMIN_USERNAME</code> env vars (set via <code>echo</code>). Fixed: re-set with <code>printf '%s'</code>. JWT_SECRET + all SendPulse env vars had same issue — all re-set without trailing newline. ✅ Fixed — curl-verified: admin login returns JWT</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-G</strong> — Admin plan upgrade endpoint: <code>ON CONFLICT (user_id)</code> failed — no UNIQUE constraint on <code>entitlements.user_id</code>. Also <code>tickets.last_reply</code> column missing (PATCH reply endpoint crashed). Fixed: ALTER TABLE to add both. ✅ Fixed — all ticket email flows verified</div></div>
         </div>
       </div>
     </div>
