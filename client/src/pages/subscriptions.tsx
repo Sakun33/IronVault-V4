@@ -412,18 +412,42 @@ export default function Subscriptions() {
 
                         {/* Revealed credentials */}
                         {revealedCredentials.has(subscription.id) && subscription.credentials && (
-                          <div className="mt-2.5 px-3 py-2 bg-muted/60 rounded-lg text-[13px] font-mono space-y-1">
+                          <div className="mt-2.5 rounded-lg bg-muted/60 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                             {subscription.credentials.username && (
-                              <div><span className="text-muted-foreground text-[12px]">user </span>{subscription.credentials.username}</div>
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Username</div>
+                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.username}</div>
+                                </div>
+                                <button onClick={() => copyCredential(subscription.credentials!.username!, 'Username')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              </div>
                             )}
                             {subscription.credentials.email && (
-                              <div><span className="text-muted-foreground text-[12px]">email </span>{subscription.credentials.email}</div>
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Email</div>
+                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.email}</div>
+                                </div>
+                                <button onClick={() => copyCredential(subscription.credentials!.email!, 'Email')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              </div>
                             )}
                             {subscription.credentials.password && (
-                              <div><span className="text-muted-foreground text-[12px]">pass </span>{subscription.credentials.password}</div>
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Password</div>
+                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.password}</div>
+                                </div>
+                                <button onClick={() => copyCredential(subscription.credentials!.password!, 'Password')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              </div>
                             )}
                             {subscription.credentials.accountId && (
-                              <div><span className="text-muted-foreground text-[12px]">id </span>{subscription.credentials.accountId}</div>
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Account ID</div>
+                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.accountId}</div>
+                                </div>
+                                <button onClick={() => copyCredential(subscription.credentials!.accountId!, 'Account ID')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              </div>
                             )}
                           </div>
                         )}

@@ -329,8 +329,17 @@ export default function Passwords() {
 
                     {/* Revealed password (only when visible) */}
                     {isVisible && (
-                      <div className="mt-2.5 px-3 py-2 bg-muted/60 rounded-lg text-[13px] font-mono text-foreground break-all">
-                        {password.password}
+                      <div className="mt-2.5 rounded-lg bg-muted/60 flex items-center gap-2 px-3 py-2">
+                        <span className="text-[13px] font-mono text-foreground break-all flex-1 select-text">{password.password}</span>
+                        <button
+                          onClick={() => copyPassword(password.password, password.id)}
+                          className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
+                          title="Copy password"
+                        >
+                          {copiedId === password.id
+                            ? <CheckCircle className="w-3.5 h-3.5 text-primary" />
+                            : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                        </button>
                       </div>
                     )}
 

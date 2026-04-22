@@ -127,10 +127,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `INSERT INTO customers (email, full_name, country, platform, app_version, plan_type, status)
          VALUES ($1, $2, $3, $4, $5, $6, 'active')
          ON CONFLICT (email) DO UPDATE SET
-           full_name = EXCLUDED.full_name,
-           country = EXCLUDED.country,
-           platform = EXCLUDED.platform,
-           app_version = EXCLUDED.app_version,
+           full_name = CASE WHEN EXCLUDED.full_name IS NOT NULL AND EXCLUDED.full_name != ''
+             THEN EXCLUDED.full_name ELSE customers.full_name END,
+           country = COALESCE(EXCLUDED.country, customers.country),
+           platform = COALESCE(EXCLUDED.platform, customers.platform),
+           app_version = COALESCE(EXCLUDED.app_version, customers.app_version),
            updated_at = NOW()
          RETURNING id, email, plan_type`,
         [email, safeFullName, country || null, platform || null, appVersion || null, planType || "free"]

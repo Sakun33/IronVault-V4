@@ -113,7 +113,7 @@ function WidgetCard({
   emptyText?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col">
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {viewAllHref && (
@@ -586,7 +586,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {quickActions.map(({ label, icon: Icon, href, bgColor }) => (
               <Link key={label} href={href}>
-                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
+                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bgColor}`}>
                     <Icon className="w-[18px] h-[18px] text-white" />
                   </div>

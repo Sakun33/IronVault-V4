@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, Key, StickyNote, DollarSign, Bell } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+import { Plus, X, Key, StickyNote, DollarSign, Bell, Shield, FileText, CreditCard, BarChart3, Files, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { useCurrency } from '@/contexts/currency-context';
 import { PasswordGenerator } from '@/lib/password-generator';
 import { EXPENSE_CATEGORIES, PASSWORD_CATEGORIES } from '@shared/schema';
 import { format, addDays, addWeeks } from 'date-fns';
+import { useLocation } from 'wouter';
 
 type QuickMode = 'password' | 'note' | 'expense' | 'reminder' | null;
 
@@ -19,6 +20,8 @@ const PILL_W = 132;  // approx collapsed pill width
 const PILL_H = 40;   // approx pill height
 const NAV_H = 88;    // bottom nav + safe area estimate
 const MIN_DRAG = 6;  // px threshold to distinguish tap vs drag
+const TRAY_W = 256;  // expanded tray width
+const TRAY_H = 340;  // estimated tray height for positioning
 
 interface FabPos { x: number; y: number }
 
@@ -39,6 +42,7 @@ export function QuickAddFab() {
   const { addPassword, addNote, addExpense, addReminder } = useVault();
   const { toast } = useToast();
   const { currency } = useCurrency();
+  const [, setLocation] = useLocation();
 
   const [pos, setPos] = useState<FabPos | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -155,13 +159,48 @@ export function QuickAddFab() {
     WebkitUserSelect: 'none',
   } : { display: 'none' };
 
+  const navigate = (href: string) => { setOpen(false); setLocation(href); };
+
   return (
     <>
       {open && (
-        <div className="lg:hidden fixed inset-0 z-[48] bg-black/20" onClick={() => setOpen(false)} />
+        <div className="lg:hidden fixed inset-0 z-[48] bg-black/30" onClick={() => setOpen(false)} />
       )}
 
-      {/* Draggable pill — collapses to "Quick Add", expands to action bar */}
+      {/* Apple-style floating tray — appears above the pill when open */}
+      {pos && open && (
+        <div
+          className="lg:hidden fixed z-[49]"
+          style={{
+            top: Math.max(80, pos.y - TRAY_H - 12),
+            left: Math.max(8, Math.min(window.innerWidth - TRAY_W - 8, pos.x - (TRAY_W - PILL_W) / 2)),
+            width: TRAY_W,
+          }}
+        >
+          <div className="backdrop-blur-xl bg-slate-900/85 dark:bg-slate-800/95 rounded-3xl p-4 shadow-2xl">
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-2 px-1">Vault Items</div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <TrayButton icon={<Shield size={20} className="text-blue-400" />} label="Password" onClick={() => openMode('password')} />
+              <TrayButton icon={<FileText size={20} className="text-amber-400" />} label="Note" onClick={() => openMode('note')} />
+              <TrayButton icon={<CreditCard size={20} className="text-purple-400" />} label="Subscription" onClick={() => navigate('/subscriptions?action=add')} />
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-2 px-1">Finance</div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <TrayButton icon={<DollarSign size={20} className="text-emerald-400" />} label="Expense" onClick={() => openMode('expense')} />
+              <TrayButton icon={<Bell size={20} className="text-orange-400" />} label="Reminder" onClick={() => openMode('reminder')} />
+              <TrayButton icon={<BarChart3 size={20} className="text-sky-400" />} label="Investment" onClick={() => navigate('/investments?action=add')} />
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-2 px-1">More</div>
+            <div className="grid grid-cols-3 gap-2">
+              <TrayButton icon={<Files size={20} className="text-rose-400" />} label="Document" onClick={() => navigate('/documents?action=add')} />
+              <TrayButton icon={<Key size={20} className="text-teal-400" />} label="API Key" onClick={() => navigate('/api-keys?action=add')} />
+              <TrayButton icon={<Target size={20} className="text-violet-400" />} label="Goal" onClick={() => navigate('/investments?action=goal')} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draggable pill */}
       <div
         ref={fabRef}
         style={containerStyle}
@@ -171,51 +210,22 @@ export function QuickAddFab() {
         onMouseDown={handleMouseDown}
         className="lg:hidden"
       >
-        {/* Collapsed: pill with label */}
-        {!open && (
+        {open ? (
+          <button
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full backdrop-blur-xl bg-slate-900/70 dark:bg-white/20 shadow-lg text-white dark:text-slate-100 active:scale-95 transition-transform whitespace-nowrap"
+          >
+            <X size={15} />
+            <span className="text-sm font-medium">Close</span>
+          </button>
+        ) : (
           <button
             onClick={() => setOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 dark:bg-white shadow-lg shadow-slate-900/25 dark:shadow-white/10 text-white dark:text-slate-900 active:scale-95 transition-transform whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full backdrop-blur-xl bg-slate-900/70 dark:bg-white/20 shadow-lg text-white dark:text-slate-100 active:scale-95 transition-transform whitespace-nowrap"
           >
             <Plus size={15} />
             <span className="text-sm font-medium">Quick Add</span>
           </button>
-        )}
-
-        {/* Expanded: horizontal action bar — shifts left when on right edge so it stays on-screen */}
-        {open && (
-          <div
-            style={{ transform: isRight ? `translateX(calc(${PILL_W}px - 100%))` : undefined }}
-            className="flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-slate-900 dark:bg-white shadow-xl shadow-slate-900/30 dark:shadow-white/10 whitespace-nowrap"
-          >
-            <button
-              onClick={() => openMode('password')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
-            >
-              <Key size={13} className="text-blue-400 flex-shrink-0" />
-              <span className="text-xs text-white dark:text-slate-900">Password</span>
-            </button>
-            <button
-              onClick={() => openMode('note')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
-            >
-              <StickyNote size={13} className="text-amber-400 flex-shrink-0" />
-              <span className="text-xs text-white dark:text-slate-900">Note</span>
-            </button>
-            <button
-              onClick={() => openMode('expense')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
-            >
-              <DollarSign size={13} className="text-emerald-400 flex-shrink-0" />
-              <span className="text-xs text-white dark:text-slate-900">Expense</span>
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors flex-shrink-0 ml-0.5"
-            >
-              <X size={13} className="text-white/60 dark:text-slate-500" />
-            </button>
-          </div>
         )}
       </div>
 
@@ -224,6 +234,18 @@ export function QuickAddFab() {
       <QuickExpenseSheet open={mode === 'expense'} onClose={closeMode} onSave={addExpense} toast={toast} currency={currency} />
       <QuickReminderSheet open={mode === 'reminder'} onClose={closeMode} onSave={addReminder} toast={toast} />
     </>
+  );
+}
+
+function TrayButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 p-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
+    >
+      {icon}
+      <span className="text-[11px] text-white leading-none">{label}</span>
+    </button>
   );
 }
 
