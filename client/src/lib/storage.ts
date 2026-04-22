@@ -4,7 +4,7 @@ import { PASSWORD_MANAGER_PARSERS, type ParserConfig } from './csv-parsers';
 
 export class VaultStorage {
   private dbName = 'IronVault';
-  private version = 3; // Incremented for new security features
+  private version = 4; // v4: by_store index on encrypted_data for faster per-category loads
   private db: IDBDatabase | undefined = undefined;
   private encryptionKey: CryptoKey | undefined = undefined;
   private failedAttempts: number = 0;
@@ -40,8 +40,9 @@ export class VaultStorage {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const tx = (event.target as IDBOpenDBRequest).transaction!;
         const oldVersion = event.oldVersion;
-        
+
         console.log(`🔄 Database upgrade from version ${oldVersion} to ${this.version}`);
 
         // Create all object stores
@@ -54,9 +55,21 @@ export class VaultStorage {
         objectStores.forEach(storeName => {
           if (!db.objectStoreNames.contains(storeName)) {
             console.log(`📦 Creating object store: ${storeName}`);
-            db.createObjectStore(storeName, { keyPath: 'id' });
+            const store = db.createObjectStore(storeName, { keyPath: 'id' });
+            if (storeName === 'encrypted_data') {
+              store.createIndex('by_store', 'store', { unique: false });
+            }
           }
         });
+
+        // v4: add by_store index to existing encrypted_data store for O(category) lookups
+        if (oldVersion < 4 && db.objectStoreNames.contains('encrypted_data')) {
+          const encStore = tx.objectStore('encrypted_data');
+          if (!encStore.indexNames.contains('by_store')) {
+            encStore.createIndex('by_store', 'store', { unique: false });
+            console.log('📦 Added by_store index to encrypted_data');
+          }
+        }
 
         console.log('✅ Database schema updated successfully');
       };
@@ -548,27 +561,38 @@ export class VaultStorage {
   private async getAllEncrypted(storeName: string): Promise<any[]> {
     if (!this.db || !this.encryptionKey) throw new Error('Database or encryption key not available');
 
-    return new Promise(async (resolve, reject) => {
+    const key = this.encryptionKey;
+
+    return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readonly');
-      const store = transaction.objectStore('encrypted_data');
-      const request = store.getAll();
+      const objStore = transaction.objectStore('encrypted_data');
+
+      // Use the by_store index (added in v4) to fetch only records for this category.
+      // Falls back to getAll+filter for DBs that haven't upgraded yet.
+      const request = objStore.indexNames.contains('by_store')
+        ? objStore.index('by_store').getAll(storeName)
+        : objStore.getAll();
 
       request.onsuccess = async () => {
-        const results = request.result.filter(item => item.store === storeName);
-        const decryptedItems = [];
+        const results: any[] = objStore.indexNames.contains('by_store')
+          ? request.result
+          : request.result.filter((item: any) => item.store === storeName);
 
-        for (const result of results) {
-          try {
+        // Decrypt all items in parallel instead of sequentially
+        const settled = await Promise.allSettled(
+          results.map(async (result: any) => {
             const encrypted = new Uint8Array(CryptoService.base64ToArrayBuffer(result.data));
             const iv = CryptoService.base64ToUint8Array(result.iv);
-            const decrypted = await CryptoService.decrypt(encrypted, this.encryptionKey!, iv);
-            decryptedItems.push(JSON.parse(new TextDecoder().decode(decrypted)));
-          } catch (error) {
-            console.error('Failed to decrypt item:', error);
-          }
-        }
+            const decrypted = await CryptoService.decrypt(encrypted, key, iv);
+            return JSON.parse(new TextDecoder().decode(decrypted));
+          })
+        );
 
-        resolve(decryptedItems);
+        resolve(
+          settled
+            .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+            .map(r => r.value)
+        );
       };
 
       request.onerror = () => reject(request.error);
