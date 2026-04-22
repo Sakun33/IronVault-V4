@@ -108,7 +108,12 @@ export default function SignupPage() {
       );
 
       // Log in to account session (sets isAccountLoggedIn in React state)
-      await accountLogin(email, accountPassword);
+      const loginOk = await accountLogin(email, accountPassword);
+      if (!loginOk) {
+        // 401 = account already exists with a different password
+        setError('An account with this email already exists. Please log in or use "Forgot Password" to reset it.');
+        return;
+      }
 
       toast({
         title: 'Account Created!',

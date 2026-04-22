@@ -107,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: "DATABASE_URL not configured" });
   }
