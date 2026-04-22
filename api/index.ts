@@ -31,7 +31,7 @@ async function createZohoDeskTicket(opts: { email: string; subject: string; desc
       body: JSON.stringify({
         subject: opts.subject,
         description: opts.description,
-        email: opts.email,
+        contact: { email: opts.email },
         departmentId: '189695000000010772',
         priority: opts.priority === 'high' ? 'High' : opts.priority === 'low' ? 'Low' : 'Medium',
         channel: 'Web',
