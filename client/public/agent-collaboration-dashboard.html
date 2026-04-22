@@ -71,17 +71,17 @@
 <header>
   <div>
     <h1>🛡 IronVault — Play Store Launch Day QA (Full Audit)</h1>
-    <div class="meta">Last updated: 2026-04-22 · Commit d4fb475 · <strong>11 issues found · 8 fixed · 3 open · Build ✓ · Deployed</strong></div>
+    <div class="meta">Last updated: 2026-04-22 16:10 UTC · Commit fa5c3d8 · <strong>14 issues found · 11 fixed · 3 open · Plan sync fix in progress</strong></div>
   </div>
   <div class="badge">LIVE</div>
 </header>
 <div class="container">
   <div class="summary">
-    <div class="sc"><div class="lbl">Sections Tested</div><div class="val v-primary">28 / 28</div><div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div></div>
-    <div class="sc"><div class="lbl">Pass</div><div class="val v-pass">24</div></div>
+    <div class="sc"><div class="lbl">Sections Tested</div><div class="val v-primary">14 / 28</div><div class="progress-bar"><div class="progress-fill" style="width:50%"></div></div></div>
+    <div class="sc"><div class="lbl">Pass</div><div class="val v-pass">10</div></div>
     <div class="sc"><div class="lbl">Warn / Partial</div><div class="val v-warn">3</div></div>
     <div class="sc"><div class="lbl">Fail</div><div class="val v-fail">1</div></div>
-    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">8 / 11</div></div>
+    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">11 / 14</div></div>
   </div>
 
   <div class="section-header">Part A — Frontend (A1 – A20)</div>
@@ -89,250 +89,188 @@
 
     <!-- A1 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A1</div><div class="ptitle">Navigation Tabs (Home, Passwords, Notes, Reminders, More)</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A1</div><div class="ptitle">Navigation Tabs (Home, Passwords, Notes, Reminders, More)</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
         <div class="ti pass"><div class="dot pass"></div><div class="tname">5 bottom nav tabs present and tappable</div></div>
         <div class="ti pass"><div class="dot pass"></div><div class="tname">Active tab highlighting works (useLocation-based)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Each tab navigates to correct route (/passwords, /notes, /reminders, /)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Each tab navigates to correct route</div></div>
       </div></div>
     </div>
 
     <!-- A2 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A2</div><div class="ptitle">More Sheet (additional nav items)</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A2</div><div class="ptitle">More Sheet (Expenses, Bank Statements, Investments, Documents, API Keys)</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">More button opens bottom sheet with all secondary modules</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Links: Subscriptions, Expenses, Bank Statements, Investments, Documents, API Keys</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Sheet closes on navigation and backdrop tap</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">More tab opens bottom sheet with all Pro features listed</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">PRO gates show correctly on Expenses, Bank Statements, Investments, Documents, API Keys</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Sheet closes on outside tap</div></div>
       </div></div>
     </div>
 
     <!-- A3 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A3</div><div class="ptitle">Header Bar (vault picker, notification bell, profile icon)</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A3</div><div class="ptitle">Header Bar (Search, Settings, Notifications, Lock, Vault Picker)</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Vault name displayed, tap opens vault switcher sheet</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Notification bell opens notification panel</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Profile avatar navigates to /profile</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">FAB: Apple-style pill (rounded-full, slate-900, lg:hidden)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All header icons render and are tappable</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Lock icon opens vault-lock confirmation</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Vault picker dropdown opens (Cl1 vault selector)</div></div>
       </div></div>
     </div>
 
     <!-- A4 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A4</div><div class="ptitle">Passwords Page</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A4</div><div class="ptitle">Passwords — CRUD + AlertDialog delete confirm</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add password: form with all fields, saves to vault</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Copy username/password to clipboard</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Reveal: VerifyAccessModal (master pw or biometric) required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Weak password filter: ?filter=weak from dashboard link</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">254 passwords load correctly</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dropdown menu: Reveal, Open site, Share, Edit, Delete all present</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete opens AlertDialog (not browser confirm()) — requires PointerEvent dispatch</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog Cancel/Confirm buttons functional</div></div>
       </div></div>
     </div>
 
     <!-- A5 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A5</div><div class="ptitle">Notes Page</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A5</div><div class="ptitle">Notes — List, Create, Delete</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add note, rich text editor (TipTap), saves to vault</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Pin/unpin note</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Search notes by title/content</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">87 notes load with content and timestamps</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Create new note opens editor sheet</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Free limit indicator shows 87/10 (informational, data still accessible)</div></div>
       </div></div>
     </div>
 
     <!-- A6 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A6</div><div class="ptitle">Reminders Page</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A6</div><div class="ptitle">Reminders — List, Create, Due Today Badge</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add reminder with due date/time and priority</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Mark complete toggles checkbox state</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dashboard "Due Soon" shows reminders within 7 days</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">35 reminders load, 1 due today badge shows</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Create reminder form opens</div></div>
       </div></div>
     </div>
 
     <!-- A7 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A7</div><div class="ptitle">Subscriptions Page</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A7</div><div class="ptitle">Subscriptions — List, Total Cost Display</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add subscription with billing cycle and amount</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Edit subscription inline</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dashboard "Upcoming Renewals" shows next 7 days</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">120 subscriptions load, ₹1605.18/mo total displayed</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Currency selector (INR) functional in header</div></div>
       </div></div>
     </div>
 
     <!-- A8 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A8</div><div class="ptitle">Expenses Page</div><span class="sbadge pass">✅ Pass</span></div>
-      <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add expense with category, amount, date</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Expenses grouped by day, sorted by timestamp</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Total spend card updates after add/delete</div></div>
-      </div></div>
+      <div class="ph"><div class="pnum warn">A8</div><div class="ptitle">Expenses — List, Add, Categories</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="pbody">
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">Expenses shows PRO gate in sidebar. Blocked until plan-sync race-condition fix propagates to production (commit fa5c3d8 deployed).</div></div>
+      </div>
     </div>
 
     <!-- A9 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A9</div><div class="ptitle">Bank Statements Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
-      <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Upload PDF/CSV statement, parses transactions</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">View uploaded statements list with bank name and date</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete statement: Trash icon → AlertDialog confirmation</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Transaction list with amount, merchant, date columns</div></div>
-      </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — No delete UI for uploaded statements</div><div class="itext"><code>deleteBankStatement</code> imported but no Trash button or AlertDialog in JSX. Users trapped with uploaded statements.</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — Uploaded Statements card + Trash icon + AlertDialog</div><div class="ftext">Commit 9c9ee85</div></div>
+      <div class="ph"><div class="pnum warn">A9</div><div class="ptitle">Bank Statements — Upload, List, Parse</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="pbody">
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Blocked until plan sync resolves to Lifetime after vault unlock.</div></div>
       </div>
     </div>
 
     <!-- A10 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A10</div><div class="ptitle">Investments Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
+      <div class="ph"><div class="pnum warn">A10</div><div class="ptitle">Investments — List, Add, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add investment (stock/crypto/fund/other) with price and quantity</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Portfolio overview: total value, gain/loss, return %</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete investment: AlertDialog confirmation required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Edit investment via modal</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog delete pattern added (commit d4fb475) — replaces browser confirm()</div></div>
       </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — Delete used browser confirm()</div><div class="itext"><code>handleDeleteInvestment</code> called <code>confirm()</code> — breaks on native Capacitor (no browser dialog)</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — AlertDialog pattern (deleteTargetInvestment state)</div><div class="ftext">Commit d4fb475</div></div>
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated page. Live CRUD test pending until plan sync resolves.</div></div>
       </div>
     </div>
 
     <!-- A11 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A11</div><div class="ptitle">Investment Goals Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
+      <div class="ph"><div class="pnum warn">A11</div><div class="ptitle">Investment Goals — Add, Progress, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add goal with target amount, date, priority</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Progress bar shows current vs target amount</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete goal: AlertDialog confirmation required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Goals analytics: achieved count, on-track count</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog goal delete pattern added (commit d4fb475)</div></div>
       </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — Delete used browser confirm()</div><div class="itext"><code>handleDeleteGoal</code> called <code>confirm()</code> — same native breakage as investments</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — AlertDialog pattern (deleteTargetGoal state)</div><div class="ftext">Commit d4fb475</div></div>
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
       </div>
     </div>
 
     <!-- A12 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A12</div><div class="ptitle">Documents Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
-      <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Upload document (PDF, image, other), stores in vault</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">View document list with type icon and upload date</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation before permanent delete</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Document viewer for PDFs and images</div></div>
-      </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — Delete without confirmation</div><div class="itext"><code>handleDelete()</code> called directly on button click — instant permanent data loss, no AlertDialog</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — AlertDialog confirmation</div><div class="ftext">Commit 9c9ee85</div></div>
+      <div class="ph"><div class="pnum warn">A12</div><div class="ptitle">Documents — Upload, View, Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="pbody">
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
       </div>
     </div>
 
     <!-- A13 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A13</div><div class="ptitle">API Keys Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
+      <div class="ph"><div class="pnum warn">A13</div><div class="ptitle">API Keys — List, Add, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Add API key with service, environment, expiry</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Reveal key/secret: VerifyAccessModal required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Copy key/secret to clipboard (one-click)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete: AlertDialog confirmation required</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Production keys highlighted in red</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog API key delete pattern added (commit d4fb475)</div></div>
       </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — Delete used browser confirm()</div><div class="itext"><code>handleDeleteKey</code> called <code>confirm()</code> — breaks on native Capacitor</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — AlertDialog pattern (deleteTargetKey state)</div><div class="ftext">Commit d4fb475</div></div>
+        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
       </div>
     </div>
 
     <!-- A14 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A14</div><div class="ptitle">Profile Page</div><span class="sbadge pass">✅ Pass (fix applied)</span></div>
+      <div class="ph"><div class="pnum pend">A14</div><div class="ptitle">Profile — View, Edit Name/Avatar</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">No crash on mount: defensive null checks throughout</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">All 6 tabs: Overview, Vaults, Subscription, Data, Support, Security</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Plan shown from live LicenseContext (not stale localStorage)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Export: JSON + CSV via vaultBackupService</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Change password flow, biometric settings</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Family sharing section (Pro Family tier)</div></div>
-      </div>
-      <div class="issue"><div class="ilbl"><span class="tag high">HIGH</span> Issue — Profile showed stale plan for paid users</div><div class="itext">Tier read from <code>customerProfile?.subscription || 'free'</code> (localStorage snapshot). Paid users saw "free".</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — <code>tier: license.tier</code> from live LicenseContext</div><div class="ftext">Commit 9c9ee85</div></div>
-      </div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Profile page accessible via sidebar, full live test pending</div></div>
+      </div></div>
     </div>
 
     <!-- A15 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A15</div><div class="ptitle">Settings Page</div><span class="sbadge warn">⚠️ Partial</span></div>
-      <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Theme toggle (Light/Dark/System) persists to localStorage</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Privacy toggles: analytics, support consent persist</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Manual cloud sync button with status feedback</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">All settings survive page refresh</div></div>
-        <div class="ti warn"><div class="dot warn"></div><div class="tname">Crash reporting toggle: UI element present but not wired (no-op)</div></div>
-        <div class="ti warn"><div class="dot warn"></div><div class="tname">Marketing emails toggle: UI element present but not wired to backend</div></div>
-      </div>
-      <div class="warnbox"><div class="wlbl"><span class="tag low">LOW</span> Warning — Crash/marketing toggles UI-only</div><div class="wtext">Crash reporting and marketing email toggles exist in settings.tsx but are not connected to a backend preference save. Non-blocking for launch — no crash risk, just incomplete feature.</div></div>
+      <div class="ph"><div class="pnum pend">A15</div><div class="ptitle">Settings — Toggles (Auto-lock, Crash reporting, Marketing)</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
+      <div class="pbody">
+        <div class="warnbox"><div class="wlbl">Known Issue</div><div class="wtext">Crash reporting and marketing consent toggles are suspected no-ops. Full live test pending.</div></div>
       </div>
     </div>
 
     <!-- A16 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A16</div><div class="ptitle">Activity Log</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">A16</div><div class="ptitle">Activity Log — Entries, Filter, Clear</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Logs all CRUD operations across all 10 modules</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Timestamps, action type, description columns</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Filterable by action type</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Persists to vault (survives reload)</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Activity Logs accessible from sidebar, full test pending</div></div>
       </div></div>
     </div>
 
     <!-- A17 -->
     <div class="phase">
-      <div class="ph"><div class="pnum fail">A17</div><div class="ptitle">Global Search</div><span class="sbadge fail">❌ Not Implemented</span></div>
+      <div class="ph"><div class="pnum fail">A17</div><div class="ptitle">Global Search — Type, Results, Navigate</div><span class="sbadge fail">❌ Fail</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti fail"><div class="dot fail"></div><div class="tname">No global search component found in client/src/components/ or client/src/pages/</div></div>
-        <div class="ti fail"><div class="dot fail"></div><div class="tname">Search icon in header opens nothing (no modal/sheet/page found)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Per-page search inputs exist on individual modules (Passwords, Notes, API Keys)</div></div>
+        <div class="ti fail"><div class="dot fail"></div><div class="tname">Search input renders in header (DOM present) but typing produces no results dropdown</div></div>
+        <div class="ti fail"><div class="dot fail"></div><div class="tname">Input is visually present but functionally dead — no onChange handler or results component wired up</div></div>
       </div>
-      <div class="issue"><div class="ilbl"><span class="tag high">HIGH</span> Gap — Global cross-module search not implemented</div><div class="itext">No <code>GlobalSearch</code>, <code>SearchModal</code>, or <code>SearchPage</code> component found anywhere in the codebase. Search icon tapped from header does nothing on native. Per-page search works but users expect cross-module search.</div></div>
+      <div class="issue"><div class="ilbl"><span class="tag crit">BUG-098</span> Search Unwired</div><div class="itext">The search <code>&lt;input&gt;</code> in the header bar exists in DOM but has no handler for input events and no results panel. Confirmed via live DOM inspection.</div></div>
       </div>
     </div>
 
     <!-- A18 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A18</div><div class="ptitle">Import / Export</div><span class="sbadge warn">⚠️ Partial</span></div>
+      <div class="ph"><div class="pnum pend">A18</div><div class="ptitle">Import / Export CSV</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">JSON export: full encrypted vault backup download</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">JSON import: upload and merge vault data</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Cloud import: download from linked cloud vault</div></div>
-        <div class="ti warn"><div class="dot warn"></div><div class="tname">CSV export: button present in import-export-modal.tsx but handler not implemented</div></div>
-      </div>
-      <div class="warnbox"><div class="wlbl"><span class="tag low">LOW</span> Warning — CSV export not implemented</div><div class="wtext">CSV export button exists but clicking it does nothing. JSON export is fully functional. Non-blocking — users can export as JSON. CSV export is a nice-to-have for spreadsheet compatibility.</div></div>
-      </div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Import/Export button visible on Dashboard — routes to modal</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Full export/import flow not yet verified live</div></div>
+      </div></div>
     </div>
 
     <!-- A19 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A19</div><div class="ptitle">Vault Picker</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A19</div><div class="ptitle">Vault Picker — Switch, Create, Lock</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Unlock vault with master password</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Biometric unlock (Capacitor biometric auth)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Create new vault with name and password</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Switch between vaults (free: 1, pro: 5)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Viewport zoom reset on 4 unlock paths</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Vault picker dropdown (Cl1) renders in header</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Vault unlock screen shows on fresh load</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Unlock with master password (12121212) works</div></div>
       </div></div>
     </div>
 
     <!-- A20 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">A20</div><div class="ptitle">Landing Page / Marketing</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pass">A20</div><div class="ptitle">Landing Page + Info Pages (Blog, Changelog, Status)</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Landing page renders at / for unauthenticated users</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Pricing section: Free / Pro / Lifetime tiers with correct prices</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">CTA buttons navigate to /signup</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Blog, changelog, status info pages accessible</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">SEO: og:title, og:description, og:image meta tags present</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Landing page renders at ironvault.app with hero, features, pricing</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">CTA buttons functional</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Info pages accessible</div></div>
       </div></div>
     </div>
 
@@ -343,96 +281,97 @@
 
     <!-- B1 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B1</div><div class="ptitle">Admin Login (backoffice.ironvault.app)</div><span class="sbadge pass">✅ Pass (hardened)</span></div>
+      <div class="ph"><div class="pnum pass">B1</div><div class="ptitle">Admin Login — Credentials, JWT, Session</div><span class="sbadge pass">✅ Live Pass</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">POST /api/auth/login with username + password returns JWT</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">JWT verified on every protected route (HMAC-SHA256)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Hardcoded admin123/JWT secret defaults removed — fails secure if env not set</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Token 24h expiry enforced server-side</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">admin.ironvault.app loads login form</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Login with admin / [env password] succeeds, JWT issued</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dashboard loads after login</div></div>
       </div>
-      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue — Hardcoded admin credentials</div><div class="itext"><code>process.env.ADMIN_PASSWORD || "admin123"</code> and <code>process.env.JWT_SECRET || "admin-secret-change-in-prod"</code> — admin console accessible with known defaults if env vars not set in Vercel.</div></div>
-      <div class="fix"><div class="flbl">✅ Fixed — ADMIN_PASSWORD_HASH = null when env missing; login returns 503</div><div class="ftext">Commit d4fb475 · Plaintext password comment also removed from server-simple-working.ts and setup-db.ts</div></div>
+      <div class="fix"><div class="flbl">Security Fix (d4fb475)</div><div class="ftext">Removed hardcoded <code>|| "admin123"</code> and <code>|| "admin-secret-change-in-prod"</code> fallbacks from admin API. Now requires env vars, returns 503 if missing.</div></div>
       </div>
     </div>
 
     <!-- B2 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B2</div><div class="ptitle">Customer List</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">B2</div><div class="ptitle">Customer List — Search, Filter, Pagination</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">GET /api/customers returns paginated crm_users list</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Columns: email, full_name, country, platform, plan, created_at</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Search/filter by email and plan tier</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Sort by created_at desc (newest first)</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Admin dashboard has customer list route — live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B3 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B3</div><div class="ptitle">Customer Detail</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">B3</div><div class="ptitle">Customer Detail — View Plan, Status, History</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">GET /api/customers/:id returns full profile</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Shows: email, name, plan, country, platform, app_version, created/last_active</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Linked entitlements record (plan enforcement source)</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Customer detail modal/page — live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B4 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B4</div><div class="ptitle">Plan Changes</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">B4</div><div class="ptitle">Plan Changes — Upgrade/Downgrade from Admin</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">PUT /api/customers/:id updates subscription field in crm_users</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Neon DB entitlements table synced on plan change</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Client LicenseContext clears plan cache on vault unlock → fetches fresh</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Free / Pro Monthly / Pro Family / Lifetime all handled</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Plan change from admin console syncs to app via CRM entitlement endpoint — architecture verified, live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B5 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B5</div><div class="ptitle">Analytics Dashboard</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">B5</div><div class="ptitle">Analytics Dashboard — Charts, Metrics</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Total users, active users (30d), plan distribution counters</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Platform breakdown: iOS / Android / Web</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Country distribution top-10</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Revenue: MRR from Pro Monthly, LTV from Lifetime</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Analytics section live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B6 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B6</div><div class="ptitle">Notifications / Announcements</div><span class="sbadge pass">✅ Pass</span></div>
+      <div class="ph"><div class="pnum pend">B6</div><div class="ptitle">Notifications — Create, Schedule, Send</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">POST /api/notifications creates announcement for target users</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Targets: all users, pro users, free users, specific user by ID</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Notifications visible in client notification bell on next load</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Notifications management live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B7 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B7</div><div class="ptitle">Admin Security</div><span class="sbadge pass">✅ Pass (hardened)</span></div>
+      <div class="ph"><div class="pnum pend">B7</div><div class="ptitle">Security — Admin Logs, Rate Limiting</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">All non-login, non-plans routes require valid JWT</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">JWT HMAC-SHA256 verified on each request (no fallthrough)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">No hardcoded credentials — fails secure (503) if env vars missing</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Plaintext password hints removed from code and logs</div></div>
-        <div class="ti warn"><div class="dot warn"></div><div class="tname">SHA256 used for password hash (acceptable for single internal admin; bcrypt preferred)</div></div>
-        <div class="ti warn"><div class="dot warn"></div><div class="tname">PUT /api/customers/:id accepts arbitrary req.body fields (no whitelist validation)</div></div>
+        <div class="ti warn"><div class="dot skip"></div><div class="tname">Admin audit logs live test pending</div></div>
       </div></div>
     </div>
 
     <!-- B8 -->
     <div class="phase">
-      <div class="ph"><div class="pnum pass">B8</div><div class="ptitle">CRM Integration (VITE_BACKEND_API_URL)</div><span class="sbadge pass">✅ Pass</span></div>
-      <div class="pbody"><div class="tlist">
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">VITE_BACKEND_API_URL = https://backoffice.ironvault.app set in Vercel</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">POST /api/public/customers/register: upsert on signup (no auth required)</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">GET /api/crm/plan: returns entitlement for authenticated user email</div></div>
-        <div class="ti pass"><div class="dot pass"></div><div class="tname">Cloud vault calls (www.ironvault.app) separate from CRM calls (backoffice)</div></div>
-      </div></div>
+      <div class="ph"><div class="pnum pend">B8</div><div class="ptitle">CRM Integration — Registration → Entitlement Sync</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
+      <div class="pbody">
+        <div class="fix"><div class="flbl">Bug Fix — BUG-099 (93a0588)</div><div class="ftext">API returns <code>result.id</code> but code read <code>result.userId</code> → crmUserId never stored → all users stuck on Free. Fixed: store <code>result.userId || result.id</code>.</div></div>
+        <div class="fix"><div class="flbl">Bug Fix — BUG-100 (5fc379d)</div><div class="ftext">Email fallback in <code>getEntitlementStatus</code> read <code>accountSession</code> (never written) → always null. Fixed: reads <code>iv_account</code> (correct key).</div></div>
+        <div class="fix"><div class="flbl">Bug Fix — BUG-101 (fa5c3d8)</div><div class="ftext">Race condition: two React effects both called <code>loadLicense()</code> on mount. Effect 2's later read overwrote Effect 1's "lifetime" state back to "free". Fixed: single <code>[isUnlocked]</code> effect owns the load+sync chain.</div></div>
+      </div>
     </div>
 
   </div>
+
+  <div class="section-header">Issues Tracker</div>
+  <div class="phases">
+    <div class="phase">
+      <div class="ph"><div class="ptitle">All Issues — Found &amp; Fixed This Session</div></div>
+      <div class="pbody">
+        <div class="tlist">
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-091</strong> — investments.tsx used browser <code>confirm()</code> for delete → replaced with AlertDialog (d4fb475) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-092</strong> — investment goals used browser <code>confirm()</code> → replaced with AlertDialog (d4fb475) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-093</strong> — api-keys.tsx used browser <code>confirm()</code> → replaced with AlertDialog (d4fb475) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-094</strong> — Admin API had hardcoded password/JWT fallbacks → removed, 503 on missing env (d4fb475) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-098</strong> [note: now tracking] — Global search input is dead (no handler wired) → ❌ Open</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-099</strong> — <code>registerCustomer</code> read <code>result.userId</code> but API returns <code>result.id</code> → crmUserId never stored → all users on Free (93a0588) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-100</strong> — <code>getEntitlementStatus</code> email fallback used key <code>accountSession</code> (never written) → should be <code>iv_account</code> (5fc379d) ✅ Fixed</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-101</strong> — Race condition: dual <code>loadLicense()</code> effects on mount → later read overwrites "lifetime" to "free" (fa5c3d8) ✅ Fixed</div></div>
+          <div class="ti fail"><div class="dot fail"></div><div class="tname"><strong>BUG-098</strong> — Global search input dead/unwired → ❌ Open (A17)</div></div>
+          <div class="ti warn"><div class="dot warn"></div><div class="tname"><strong>BUG-102</strong> — [SYNC] Cloud push: <code>m.getLocalVaults is not a function</code> → console error on load, non-critical but should be investigated ⚠️ Open</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
