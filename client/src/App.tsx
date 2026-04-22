@@ -18,6 +18,7 @@ import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import SignupPage from "@/pages/signup";
+import ForgotPasswordPage from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
 import Passwords from "@/pages/passwords";
 import Subscriptions from "@/pages/subscriptions";
@@ -735,6 +736,7 @@ function Router() {
           <Route path="/" component={LandingPage} />
           <Route path="/auth/login" component={Login} />
           <Route path="/auth/signup" component={SignupPage} />
+          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
           <Route path="/login" component={Login} />
           {PUBLIC_INFO_ROUTES}
           {/* Catch-all → landing */}

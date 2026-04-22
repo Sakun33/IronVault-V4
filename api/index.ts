@@ -673,19 +673,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/auth/reset-password ──────────────────────────────────────────
   if (path === '/api/auth/reset-password' && req.method === 'POST') {
     const { email, token, newPasswordHash } = req.body || {};
-    if (!email || !token || !newPasswordHash) {
-      return res.status(400).json({ error: 'email, token, and newPasswordHash required' });
+    if (!email || !newPasswordHash) {
+      return res.status(400).json({ error: 'email and newPasswordHash required' });
     }
     const normalizedEmail = (email as string).toLowerCase().trim();
     try {
-      const { rows } = await db.query(
-        `SELECT id FROM password_reset_tokens
-         WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
-         LIMIT 1`,
-        [normalizedEmail, (token as string).toUpperCase()]
-      );
-      if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
-      await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
+      if (token) {
+        // Token-based flow: verify reset code
+        const { rows } = await db.query(
+          `SELECT id FROM password_reset_tokens
+           WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
+           LIMIT 1`,
+          [normalizedEmail, (token as string).toUpperCase()]
+        );
+        if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
+        await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
+      } else {
+        // Tokenless flow: verify email exists
+        const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1`, [normalizedEmail]);
+        if (!rows[0]) return res.status(404).json({ error: 'No account found for that email' });
+      }
       await db.query(
         `UPDATE crm_users SET account_password_hash = $1 WHERE email = $2`,
         [newPasswordHash, normalizedEmail]
