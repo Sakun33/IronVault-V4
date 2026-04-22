@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
 import { createHmac } from "crypto";
+import { sendEmail, smtpConfigured, welcomeEmail, passwordResetEmail, ticketConfirmationEmail } from './email';
 
 let pool: Pool | null = null;
 
@@ -78,6 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [email, safeFullName, country || null, platform || null, appVersion || null, planType || "free"]
       );
       const row = rows[0];
+      // Send welcome email (fire-and-forget — non-critical)
+      if (row) {
+        const tmpl = welcomeEmail(safeFullName || email.split('@')[0]);
+        sendEmail({ to: email, ...tmpl }).catch(() => {});
+      }
       return res.json({ success: true, message: "Registration received", email, plan: row.plan_type, id: row.id });
     } catch (err: any) {
       console.error("register error:", err.message);
@@ -165,7 +171,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          RETURNING *`,
         [customerId, email, safeSubject, safeDescription, priority || "normal"]
       );
-      return res.json({ success: true, ticket: rows[0] });
+      const ticket = rows[0];
+      // Send ticket confirmation email (fire-and-forget)
+      const tmpl = ticketConfirmationEmail(safeSubject, ticket.id);
+      sendEmail({ to: email, ...tmpl }).catch(() => {});
+      return res.json({ success: true, ticket });
     } catch (err: any) {
       console.error("ticket create error:", err.message);
       return res.status(500).json({ error: err.message });
@@ -634,11 +644,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/auth/forgot-password ─────────────────────────────────────────
-  // No email sending — returns the reset code in the response for on-screen display.
   if (path === '/api/auth/forgot-password' && req.method === 'POST') {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'email required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
+    const APP_URL = process.env.APP_URL || 'https://www.ironvault.app';
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -653,8 +663,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { rows } = await db.query(
         `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]
       );
+      // Always return success (don't reveal if email exists)
       if (!rows[0]) {
-        return res.json({ success: true, message: 'If that email has an account, a reset code was generated.' });
+        return res.json({ success: true, emailSent: smtpConfigured });
       }
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       const token = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -663,7 +674,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
         [normalizedEmail, token]
       );
-      return res.json({ success: true, resetCode: token, message: 'Use this code within 1 hour.' });
+      const resetLink = `${APP_URL}/auth/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
+      if (smtpConfigured) {
+        const tmpl = passwordResetEmail(resetLink);
+        sendEmail({ to: normalizedEmail, ...tmpl }).catch(() => {});
+        return res.json({ success: true, emailSent: true });
+      } else {
+        // SMTP not configured — return token for in-app display (dev/demo fallback)
+        return res.json({ success: true, emailSent: false, resetCode: token, resetLink });
+      }
     } catch (err: any) {
       console.error('forgot-password error:', err.message);
       return res.status(500).json({ error: 'Failed to generate reset code' });
