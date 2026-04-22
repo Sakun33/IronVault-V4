@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,13 +7,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Eye, EyeOff, Mail, User, Globe, Phone,
-  Sparkles, Crown, Infinity, Users, ChevronRight, KeyRound,
+  Sparkles, Crown, Infinity, Users, KeyRound, MailCheck,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
-import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { saveAccountCredentials, markOnboardingShown } from '@/lib/account-auth';
-import { autoRegisterOnVaultCreation } from '@/lib/customer-registration';
+import { sha256 } from '@/lib/account-auth';
 import { PLANS, planPriceLabel } from '@/lib/plans';
 
 const COUNTRIES = [
@@ -46,8 +44,6 @@ const PLAN_CARD_STYLE = {
 } as const;
 
 export default function SignupPage() {
-  const [, setLocation] = useLocation();
-  const { accountLogin } = useAuth();
   const { toast } = useToast();
 
   // Stage 1 fields — account identity + security
@@ -65,6 +61,9 @@ export default function SignupPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
 
   const handleCountryChange = (code: string) => {
     setCountry(code);
@@ -83,69 +82,103 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
-      // Check if account already exists before creating anything
-      try {
-        const checkResp = await fetch(`/api/auth/check?email=${encodeURIComponent(email.toLowerCase().trim())}`);
-        const checkData = await checkResp.json();
-        if (checkData.exists) {
-          setError('An account with this email already exists. Please log in or use "Forgot Password" to reset it.');
-          return;
-        }
-      } catch {
-        // Network error — don't block signup, the token call below will handle auth
-      }
-
-      // Stage 1: save account credentials + create session
-      await saveAccountCredentials(email, accountPassword);
-      markOnboardingShown();
-
-      // Save customer profile
-      const customerProfile = {
-        email,
-        name: name || email.split('@')[0],
-        country: country || 'IN',
-        phone: phone ? `${phoneCode}${phone}` : '',
-        registeredAt: new Date().toISOString(),
-        subscription: selectedPlan,
-        trialActive: false,
-        marketingConsent,
-      };
-      localStorage.setItem('customerProfile', JSON.stringify(customerProfile));
-
-      // CRM registration (non-blocking)
-      autoRegisterOnVaultCreation(
-        email, name, country,
-        phone ? `${phoneCode}${phone}` : '',
-        marketingConsent, selectedPlan
-      );
-
-      // Log in to account session (sets isAccountLoggedIn in React state)
-      const loginOk = await accountLogin(email, accountPassword);
-      if (!loginOk) {
-        // 401 = account already exists with a different password
+      const passwordHash = await sha256(accountPassword);
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          accountPasswordHash: passwordHash,
+          fullName: name.trim(),
+          country,
+          phone: phone ? `${phoneCode}${phone}` : '',
+          planType: selectedPlan,
+          marketingConsent,
+        }),
+      });
+      const data = await res.json();
+      if (res.status === 409) {
         setError('An account with this email already exists. Please log in or use "Forgot Password" to reset it.');
         return;
       }
+      if (!res.ok) {
+        setError(data.error || 'Failed to create account. Please try again.');
+        return;
+      }
+
+      // Store plan selection for later (after verification + login)
+      localStorage.setItem('signup_selected_plan', selectedPlan);
 
       toast({
-        title: 'Account Created!',
-        description: selectedPlan === 'family' || selectedPlan === 'lifetime'
-          ? 'Now create your vault. You can manage your subscription after.'
-          : 'Now create your vault to get started.',
+        title: 'Account created!',
+        description: 'Check your email for a verification link.',
       });
-
-      // Stage 2: redirect to vault creation
-      // Plan-gated routing: non-free plans are routed to /upgrade after vault creation,
-      // handled by create-vault.tsx. Store plan selection for reference.
-      localStorage.setItem('signup_selected_plan', selectedPlan);
-      setLocation('/auth/create-vault');
+      setEmailSent(true);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create account. Please try again.';
-      setError(msg);
+      setError('Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleResend = async () => {
+    setResendLoading(true);
+    try {
+      await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+      });
+      setResendSent(true);
+    } catch {
+      // ignore
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="flex items-center px-6 py-4 border-b border-border/50">
+          <Link href="/"><a className="flex items-center gap-2"><AppLogo size={28} /><span className="font-bold text-lg">IronVault</span></a></Link>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm text-center">
+            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+              <MailCheck className="w-7 h-7 text-green-600 dark:text-green-400" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight mb-2">Check your inbox</h1>
+            <p className="text-muted-foreground mb-2">
+              We sent a verification link to:
+            </p>
+            <p className="font-semibold text-foreground mb-6">{email}</p>
+            <p className="text-sm text-muted-foreground mb-6">
+              Click the link in the email to activate your account, then come back to log in.
+            </p>
+            <Link href="/auth/login">
+              <a className="block w-full">
+                <Button className="w-full h-11">Go to Login</Button>
+              </a>
+            </Link>
+            <div className="mt-4">
+              {resendSent ? (
+                <p className="text-sm text-green-600 dark:text-green-400 font-medium">Email resent! Check your inbox.</p>
+              ) : (
+                <button
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  className="text-sm text-primary hover:underline disabled:opacity-50"
+                >
+                  {resendLoading ? 'Sending…' : "Didn't receive it? Resend"}
+                </button>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

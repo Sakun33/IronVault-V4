@@ -20,6 +20,7 @@ import Login from "@/pages/login";
 import SignupPage from "@/pages/signup";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPage from "@/pages/verify-email";
 import Dashboard from "@/pages/dashboard";
 import Passwords from "@/pages/passwords";
 import Subscriptions from "@/pages/subscriptions";
@@ -773,6 +774,7 @@ function Router() {
           <Route path="/auth/signup" component={SignupPage} />
           <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
           <Route path="/auth/reset-password" component={ResetPasswordPage} />
+          <Route path="/auth/verify" component={VerifyEmailPage} />
           <Route path="/login" component={Login} />
           {PUBLIC_INFO_ROUTES}
           {/* Catch-all → landing */}
@@ -790,6 +792,7 @@ function Router() {
           <Route path="/auth/create-vault" component={CreateVaultPage} />
           <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
           <Route path="/auth/reset-password" component={ResetPasswordPage} />
+          <Route path="/auth/verify" component={VerifyEmailPage} />
           {/* Redirect signup/login to vault picker (already logged in) */}
           <Route path="/auth/signup" component={VaultPickerPage} />
           <Route path="/auth/login" component={VaultPickerPage} />

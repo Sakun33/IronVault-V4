@@ -29,19 +29,43 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
     return true;
   } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
 }
-function _emailLayout(icon: string, bg: string, body: string) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:24px;background:#0f0f13;font-family:-apple-system,sans-serif"><div style="max-width:480px;margin:0 auto;background:#1a1a24;border-radius:16px;padding:36px;border:1px solid #2a2a3a"><div style="text-align:center;margin-bottom:24px"><div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:${bg}"><span style="font-size:26px">${icon}</span></div></div>${body}<hr style="border:none;border-top:1px solid #2a2a3a;margin:28px 0 18px"><p style="margin:0;text-align:center;font-size:11px;color:#475569">© 2026 IronVault &nbsp;·&nbsp;<a href="mailto:saket@ironvault.app" style="color:#6366f1;text-decoration:none">saket@ironvault.app</a></p></div></body></html>`;
+function _emailLayout(body: string) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 20px 60px"><div style="text-align:center;margin-bottom:28px"><div style="display:inline-flex;align-items:center;gap:10px"><div style="width:38px;height:38px;background:#4f46e5;border-radius:9px;display:inline-flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:20px">🛡</span></div><span style="font-size:21px;font-weight:700;color:#111827;letter-spacing:-0.3px">IronVault</span></div></div><div style="background:#ffffff;border-radius:16px;padding:40px 36px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.04)">${body}</div><div style="text-align:center;padding:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.7"><p style="margin:0">© 2026 IronVault — Secure Password Manager</p><p style="margin:4px 0 0"><a href="mailto:saket@ironvault.app" style="color:#6366f1;text-decoration:none">saket@ironvault.app</a></p></div></div></body></html>`;
 }
-function _eh1(t: string) { return `<h1 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#f1f5f9;text-align:center">${t}</h1>`; }
-function _ep(t: string)  { return `<p style="margin:0 0 22px;font-size:14px;line-height:1.7;color:#94a3b8;text-align:center">${t}</p>`; }
-function _ebtn(u: string, l: string) { return `<a href="${u}" style="display:block;text-align:center;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px">${l}</a>`; }
-function _ecard(i: string) { return `<div style="background:rgba(255,255,255,.04);border:1px solid #2a2a3a;border-radius:12px;padding:16px;margin-bottom:22px">${i}</div>`; }
-function welcomeEmail(name: string) { return { subject: 'Welcome to IronVault 🛡', html: _emailLayout('🛡','rgba(99,102,241,.15)',`${_eh1(`Welcome to IronVault, ${name||'there'}!`)}${_ep('Your secure vault is ready. All your data is AES-256 encrypted and stored locally.')}${_ecard(`<p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Getting started</p><ul style="margin:0;padding-left:18px;color:#e2e8f0;font-size:13px;line-height:2.2"><li>Create your vault and master password</li><li>Add passwords, notes, reminders</li><li>Track subscriptions and expenses</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}`)}; }
-function passwordResetEmail(link: string) { return { subject: 'Reset your IronVault password', html: _emailLayout('🔑','rgba(239,68,68,.1)',`${_eh1('Reset your password')}${_ep('Click below to set a new password. This link expires in <strong style="color:#e2e8f0">1 hour</strong>.')}${_ebtn(link,'Reset Password')}<p style="margin:14px 0 0;text-align:center;font-size:12px;color:#64748b">If you didn't request this, ignore this email.</p><p style="margin:6px 0 0;text-align:center;font-size:11px;word-break:break-all"><a href="${link}" style="color:#6366f1">${link}</a></p>`)}; }
-function ticketConfirmationEmail(sub: string, id: string|number) { return { subject: `[IronVault Support] Ticket received: ${sub}`, html: _emailLayout('✅','rgba(34,197,94,.1)',`${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;color:#64748b">Ticket #${id}</p><p style="margin:0;font-size:14px;font-weight:600;color:#f1f5f9">${sub}</p>`)}<a href="mailto:saket@ironvault.app" style="display:block;text-align:center;background:rgba(99,102,241,.12);color:#6366f1;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px;border:1px solid rgba(99,102,241,.25)">Reply via Email</a>`)}; }
-function ticketReplyEmail(id: string|number, preview: string) { return { subject: `[IronVault Support] Update on ticket #${id}`, html: _emailLayout('💬','rgba(99,102,241,.15)',`${_eh1('New reply on your ticket')}${_ep(`New response on ticket <strong style="color:#e2e8f0">#${id}</strong>.`)}${_ecard(`<p style="margin:0;font-size:13px;color:#94a3b8;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}<a href="mailto:saket@ironvault.app" style="display:block;text-align:center;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px">Reply</a>`)}; }
-function ticketClosedEmail(id: string|number) { return { subject: `[IronVault Support] Ticket #${id} resolved`, html: _emailLayout('✔️','rgba(34,197,94,.1)',`${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#e2e8f0">#${id}</strong> has been resolved. Reply to this email if you need further help.`)}<a href="mailto:saket@ironvault.app" style="display:block;text-align:center;background:rgba(99,102,241,.12);color:#6366f1;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px;border:1px solid rgba(99,102,241,.25)">Contact Support Again</a>`)}; }
-function planUpgradeEmail(plan: string) { const label = plan==='lifetime'?'Lifetime':plan==='family'?'Family':'Pro'; return { subject: `You're now on IronVault ${label} ⭐`, html: _emailLayout('⭐','rgba(245,158,11,.1)',`${_eh1(`Welcome to ${label}!`)}${_ep(`Your account has been upgraded to <strong style="color:#e2e8f0">${label}</strong>. All premium features are now unlocked.`)}${_ebtn(_APP_URL,'Open IronVault')}`)}; }
+function _eh1(t: string) { return `<h1 style="margin:0 0 10px;font-size:24px;font-weight:700;color:#111827;text-align:center;letter-spacing:-0.4px">${t}</h1>`; }
+function _ep(t: string)  { return `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#6b7280;text-align:center">${t}</p>`; }
+function _ebtn(u: string, l: string) { return `<div style="text-align:center;margin:8px 0 24px"><a href="${u}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;border-radius:10px;padding:14px 32px;font-weight:600;font-size:15px;letter-spacing:-0.1px">${l}</a></div>`; }
+function _ecard(i: string) { return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin:0 0 24px">${i}</div>`; }
+function _edivider() { return `<hr style="border:none;border-top:1px solid #f0f0f0;margin:24px 0">`; }
+function welcomeEmail(name: string) {
+  const body = `${_eh1(`Welcome to IronVault, ${name||'there'}!`)}${_ep('Your secure vault account has been created. Everything you store is AES-256 encrypted.')}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Getting started</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Create your vault and master password</li><li>Add passwords, notes, reminders</li><li>Track subscriptions and expenses</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You're receiving this because you created an IronVault account.</p>`;
+  return { subject: 'Welcome to IronVault 🛡', html: _emailLayout(body) };
+}
+function passwordResetEmail(link: string) {
+  const body = `${_eh1('Reset your password')}${_ep('Click below to set a new password. This link expires in <strong style="color:#111827">1 hour</strong>.')}${_ebtn(link,'Reset Password')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${link}" style="color:#6366f1;text-decoration:none">${link}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you didn't request this, you can safely ignore this email.</p>`;
+  return { subject: 'Reset your IronVault password', html: _emailLayout(body) };
+}
+function verificationEmail(name: string, link: string) {
+  const body = `${_eh1('Verify your email address')}${_ep(`Hi ${name||'there'}, please confirm your email to activate your IronVault account.`)}${_ebtn(link,'Verify Email Address')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${link}" style="color:#6366f1;text-decoration:none">${link}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">This link expires in 24 hours. If you didn't sign up, you can safely ignore this email.</p>`;
+  return { subject: 'Verify your IronVault email address', html: _emailLayout(body) };
+}
+function ticketConfirmationEmail(sub: string, id: string|number) {
+  const body = `${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Ticket #${id}</p><p style="margin:0;font-size:15px;font-weight:600;color:#111827">${sub}</p>`)}${_ebtn('mailto:saket@ironvault.app','Reply via Email')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You can also reply directly to this email to update your ticket.</p>`;
+  return { subject: `[IronVault Support] Ticket received: ${sub}`, html: _emailLayout(body) };
+}
+function ticketReplyEmail(id: string|number, preview: string) {
+  const body = `${_eh1('New reply on your ticket')}${_ep(`Our support team has responded to ticket <strong style="color:#111827">#${id}</strong>.`)}${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}${_ebtn('mailto:saket@ironvault.app','Reply')}`;
+  return { subject: `[IronVault Support] Update on ticket #${id}`, html: _emailLayout(body) };
+}
+function ticketClosedEmail(id: string|number) {
+  const body = `${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#111827">#${id}</strong> has been marked as resolved.`)}${_ecard(`<p style="margin:0;font-size:14px;color:#374151">We hope your issue was resolved. If you need further help, feel free to reach out — we're always here.</p>`)}${_ebtn('mailto:saket@ironvault.app','Contact Support Again')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Reply to this email if you need further assistance.</p>`;
+  return { subject: `[IronVault Support] Ticket #${id} resolved`, html: _emailLayout(body) };
+}
+function planUpgradeEmail(plan: string) {
+  const label = plan==='lifetime'?'Lifetime':plan==='family'?'Family':'Pro';
+  const body = `${_eh1(`You're now on ${label}!`)}${_ep(`Your IronVault account has been upgraded to <strong style="color:#111827">${label}</strong>. All premium features are now unlocked.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What's included</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Unlimited vaults</li><li>Cloud sync across devices</li><li>Priority support</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}`;
+  return { subject: `You're now on IronVault ${label} ⭐`, html: _emailLayout(body) };
+}
 // ── End email service ──────────────────────────────────────────────────────────
 
 let pool: Pool | null = null;
@@ -362,6 +386,112 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/auth/register ────────────────────────────────────────────────
+  // Creates a new account with pending_verification status and sends a verification email.
+  if (path === '/api/auth/register' && req.method === 'POST') {
+    const { email, accountPasswordHash, fullName, country, phone, planType, marketingConsent } = req.body || {};
+    if (!email || !accountPasswordHash) return res.status(400).json({ error: 'email and accountPasswordHash required' });
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    const safeFullName = fullName ? stripHtml(String(fullName)) : normalizedEmail.split('@')[0];
+    try {
+      const { rows: existing } = await db.query(
+        `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]
+      );
+      if (existing[0]) return res.status(409).json({ error: 'An account with this email already exists.' });
+
+      const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const verifyToken = Array.from({ length: 64 }, () => tokenChars[Math.floor(Math.random() * tokenChars.length)]).join('');
+
+      const { rows: newUser } = await db.query(
+        `INSERT INTO crm_users (email, full_name, country, marketing_consent, support_consent, account_password_hash, account_status, verification_token, verification_token_expires_at)
+         VALUES ($1, $2, $3, $4, true, $5, 'pending_verification', $6, NOW() + INTERVAL '24 hours')
+         RETURNING id`,
+        [normalizedEmail, safeFullName, country || 'US', marketingConsent || false, accountPasswordHash, verifyToken]
+      );
+      const userId = newUser[0].id;
+
+      // Mirror in customers + entitlements (non-blocking)
+      db.query(
+        `INSERT INTO customers (email, full_name, country, platform, plan_type, status, marketing_consent)
+         VALUES ($1, $2, $3, 'web', $4, 'active', $5) ON CONFLICT (email) DO NOTHING`,
+        [normalizedEmail, safeFullName, country || 'US', planType || 'free', marketingConsent || false]
+      ).catch(() => {});
+      db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($1, $2, 'active', false, false, false) ON CONFLICT DO NOTHING`,
+        [userId, planType || 'free']
+      ).catch(() => {});
+
+      const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
+      const verifyLink = `${APP_URL_REG}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
+      const tmpl = verificationEmail(safeFullName, verifyLink);
+      const emailSent = await sendEmail({ to: normalizedEmail, ...tmpl });
+
+      return res.status(201).json({ success: true, emailSent, message: 'Account created. Please check your email to verify.' });
+    } catch (err: any) {
+      console.error('auth/register error:', err.message);
+      return res.status(500).json({ error: 'Failed to create account' });
+    }
+  }
+
+  // ── POST /api/auth/verify-email ────────────────────────────────────────────
+  if (path === '/api/auth/verify-email' && req.method === 'POST') {
+    const { email, token } = req.body || {};
+    if (!email || !token) return res.status(400).json({ error: 'email and token required' });
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    try {
+      const { rows } = await db.query(
+        `SELECT id, verification_token, verification_token_expires_at, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+        [normalizedEmail]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
+      const user = rows[0];
+      if (user.account_status === 'active') return res.json({ success: true, message: 'Email already verified. You can log in.' });
+      if (user.verification_token !== token) return res.status(400).json({ error: 'Invalid verification link.' });
+      if (!user.verification_token_expires_at || new Date(user.verification_token_expires_at) < new Date()) {
+        return res.status(400).json({ error: 'Verification link has expired. Please request a new one.' });
+      }
+      await db.query(
+        `UPDATE crm_users SET account_status = 'active', verification_token = NULL, verification_token_expires_at = NULL WHERE id = $1`,
+        [user.id]
+      );
+      return res.json({ success: true, message: 'Email verified! You can now log in.' });
+    } catch (err: any) {
+      console.error('verify-email error:', err.message);
+      return res.status(500).json({ error: 'Verification failed' });
+    }
+  }
+
+  // ── POST /api/auth/resend-verification ─────────────────────────────────────
+  if (path === '/api/auth/resend-verification' && req.method === 'POST') {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email required' });
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    try {
+      const { rows } = await db.query(
+        `SELECT id, full_name, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+        [normalizedEmail]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
+      if (rows[0].account_status === 'active') return res.json({ success: true, message: 'Email already verified.' });
+
+      const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const verifyToken = Array.from({ length: 64 }, () => tokenChars[Math.floor(Math.random() * tokenChars.length)]).join('');
+      await db.query(
+        `UPDATE crm_users SET verification_token = $1, verification_token_expires_at = NOW() + INTERVAL '24 hours' WHERE id = $2`,
+        [verifyToken, rows[0].id]
+      );
+      const APP_URL_RES = process.env.APP_URL || 'https://www.ironvault.app';
+      const verifyLink = `${APP_URL_RES}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
+      const tmpl = verificationEmail(rows[0].full_name || normalizedEmail.split('@')[0], verifyLink);
+      const emailSent = await sendEmail({ to: normalizedEmail, ...tmpl });
+      return res.json({ success: true, emailSent });
+    } catch (err: any) {
+      console.error('resend-verification error:', err.message);
+      return res.status(500).json({ error: 'Failed to resend verification' });
+    }
+  }
+
   // ── GET /api/auth/check ─────────────────────────────────────────────────────
   if (path === '/api/auth/check' && req.method === 'GET') {
     const qEmail = ((req.query?.email as string) || '').toLowerCase().trim();
@@ -384,7 +514,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       // Look up user in crm_users table (Drizzle schema)
       const { rows: userRows } = await db.query(
-        `SELECT id, account_password_hash FROM crm_users WHERE email = $1 LIMIT 1`,
+        `SELECT id, account_password_hash, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
       let userId: string;
@@ -432,6 +562,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [accountPasswordHash, userId]);
         } else if (storedHash !== accountPasswordHash) {
           return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        // Block login if email not yet verified
+        if (userRows[0].account_status === 'pending_verification') {
+          return res.status(403).json({ error: 'email_not_verified' });
         }
       }
       const token = signCloudToken(userId, normalizedEmail);

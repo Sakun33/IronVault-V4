@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Mail, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, Mail, KeyRound, MailCheck } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
 
   const hasCredentials = hasAccountCredentials();
 
@@ -39,8 +42,6 @@ export default function Login() {
     try {
       const success = await accountLogin(email, password);
       if (success) {
-        // Router will re-render and show vault picker (isAccountLoggedIn && !isUnlocked tier)
-        // Navigate explicitly so wouter picks up the new route state
         setLocation('/');
       } else {
         setError('Incorrect email or password. Please try again.');
@@ -50,12 +51,74 @@ export default function Login() {
           variant: 'destructive',
         });
       }
-    } catch {
-      setError('An error occurred. Please try again.');
+    } catch (err) {
+      if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true);
+      } else {
+        setError('An error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleResend = async () => {
+    setResendLoading(true);
+    try {
+      await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      setResendSent(true);
+    } catch {
+      // ignore
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  if (emailNotVerified) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+          <Link href="/"><a className="flex items-center gap-2"><AppLogo size={28} /><span className="font-bold text-lg">IronVault</span></a></Link>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+              <MailCheck className="w-7 h-7 text-amber-500" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight mb-2">Verify your email</h1>
+            <p className="text-muted-foreground mb-6">
+              Your account is registered but your email hasn't been verified yet. Please check your inbox for a verification link.
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Sent to: <span className="font-medium text-foreground">{email}</span>
+            </p>
+            {resendSent ? (
+              <p className="text-sm text-green-600 dark:text-green-400 font-medium">Verification email resent! Check your inbox.</p>
+            ) : (
+              <Button
+                onClick={handleResend}
+                disabled={resendLoading}
+                variant="outline"
+                className="w-full h-11"
+              >
+                {resendLoading ? 'Sending…' : 'Resend verification email'}
+              </Button>
+            )}
+            <button
+              onClick={() => { setEmailNotVerified(false); setResendSent(false); }}
+              className="mt-4 text-sm text-primary hover:underline block w-full text-center"
+            >
+              Back to login
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

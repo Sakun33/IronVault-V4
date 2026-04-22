@@ -153,9 +153,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       // 401 from server means wrong password — don't fall back to local
       if (res.status === 401) return false;
+      // 403 means email not yet verified
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error === 'email_not_verified') throw new Error('EMAIL_NOT_VERIFIED');
+        return false;
+      }
       // 5xx or unexpected: fall through to localStorage fallback below
       console.error('[auth] /api/auth/token returned', res.status, '— falling back to local');
     } catch (err) {
+      // Re-throw EMAIL_NOT_VERIFIED — do not swallow it
+      if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') throw err;
       // Network error — fall back to localStorage so offline still works
       console.error('[auth] /api/auth/token network error:', err);
     }
