@@ -1,7 +1,57 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
 import { createHmac } from "crypto";
-import { sendEmail, emailConfigured, welcomeEmail, passwordResetEmail, ticketConfirmationEmail, ticketReplyEmail, ticketClosedEmail, planUpgradeEmail } from './email';
+
+// ── SendPulse email service (inlined — no external module) ─────────────────────
+const _SP_CLIENT_ID = process.env.SENDPULSE_CLIENT_ID;
+const _SP_API_KEY   = process.env.SENDPULSE_API_KEY;
+const _FROM_ADDR    = process.env.EMAIL_FROM_ADDRESS || 'noreply@ironvault.app';
+const _FROM_NAME    = process.env.EMAIL_FROM_NAME    || 'IronVault';
+const _APP_URL      = process.env.APP_URL            || 'https://www.ironvault.app';
+const emailConfigured = !!(_SP_CLIENT_ID && _SP_API_KEY);
+let _spToken: string | null = null;
+let _spTokenExp = 0;
+async function _getSpToken(): Promise<string | null> {
+  if (!_SP_CLIENT_ID || !_SP_API_KEY) return null;
+  if (_spToken && Date.now() < _spTokenExp) return _spToken;
+  try {
+    const r = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: _SP_CLIENT_ID, client_secret: _SP_API_KEY }),
+    });
+    if (!r.ok) { console.warn('[email] SP OAuth failed', r.status); return null; }
+    const d = await r.json() as { access_token: string; expires_in?: number };
+    _spToken = d.access_token; _spTokenExp = Date.now() + ((d.expires_in || 3600) - 60) * 1000;
+    return _spToken;
+  } catch (e: any) { console.error('[email] OAuth error', e.message); return null; }
+}
+async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
+  const tok = await _getSpToken();
+  if (!tok) { console.warn('[email] not configured, skip →', to); return false; }
+  try {
+    const r = await fetch('https://api.sendpulse.com/smtp/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${tok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: { subject, from: { name: _FROM_NAME, email: _FROM_ADDR }, to: [{ email: to }], html } }),
+    });
+    if (!r.ok) { console.error('[email] SP send failed', r.status, await r.text()); return false; }
+    console.log('[email] sent:', subject, '→', to); return true;
+  } catch (e: any) { console.error('[email] send error', e.message); return false; }
+}
+function _emailLayout(icon: string, bg: string, body: string) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:24px;background:#0f0f13;font-family:-apple-system,sans-serif"><div style="max-width:480px;margin:0 auto;background:#1a1a24;border-radius:16px;padding:36px;border:1px solid #2a2a3a"><div style="text-align:center;margin-bottom:24px"><div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:${bg}"><span style="font-size:26px">${icon}</span></div></div>${body}<hr style="border:none;border-top:1px solid #2a2a3a;margin:28px 0 18px"><p style="margin:0;text-align:center;font-size:11px;color:#475569">© 2026 IronVault &nbsp;·&nbsp;<a href="mailto:subsafeironvault@gmail.com" style="color:#6366f1;text-decoration:none">subsafeironvault@gmail.com</a></p></div></body></html>`;
+}
+function _eh1(t: string) { return `<h1 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#f1f5f9;text-align:center">${t}</h1>`; }
+function _ep(t: string)  { return `<p style="margin:0 0 22px;font-size:14px;line-height:1.7;color:#94a3b8;text-align:center">${t}</p>`; }
+function _ebtn(u: string, l: string) { return `<a href="${u}" style="display:block;text-align:center;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px">${l}</a>`; }
+function _ecard(i: string) { return `<div style="background:rgba(255,255,255,.04);border:1px solid #2a2a3a;border-radius:12px;padding:16px;margin-bottom:22px">${i}</div>`; }
+function welcomeEmail(name: string) { return { subject: 'Welcome to IronVault 🛡', html: _emailLayout('🛡','rgba(99,102,241,.15)',`${_eh1(`Welcome to IronVault, ${name||'there'}!`)}${_ep('Your secure vault is ready. All your data is AES-256 encrypted and stored locally.')}${_ecard(`<p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Getting started</p><ul style="margin:0;padding-left:18px;color:#e2e8f0;font-size:13px;line-height:2.2"><li>Create your vault and master password</li><li>Add passwords, notes, reminders</li><li>Track subscriptions and expenses</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}`)}; }
+function passwordResetEmail(link: string) { return { subject: 'Reset your IronVault password', html: _emailLayout('🔑','rgba(239,68,68,.1)',`${_eh1('Reset your password')}${_ep('Click below to set a new password. This link expires in <strong style="color:#e2e8f0">1 hour</strong>.')}${_ebtn(link,'Reset Password')}<p style="margin:14px 0 0;text-align:center;font-size:12px;color:#64748b">If you didn't request this, ignore this email.</p><p style="margin:6px 0 0;text-align:center;font-size:11px;word-break:break-all"><a href="${link}" style="color:#6366f1">${link}</a></p>`)}; }
+function ticketConfirmationEmail(sub: string, id: string|number) { return { subject: `[IronVault Support] Ticket received: ${sub}`, html: _emailLayout('✅','rgba(34,197,94,.1)',`${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;color:#64748b">Ticket #${id}</p><p style="margin:0;font-size:14px;font-weight:600;color:#f1f5f9">${sub}</p>`)}<a href="mailto:subsafeironvault@gmail.com" style="display:block;text-align:center;background:rgba(99,102,241,.12);color:#6366f1;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px;border:1px solid rgba(99,102,241,.25)">Reply via Email</a>`)}; }
+function ticketReplyEmail(id: string|number, preview: string) { return { subject: `[IronVault Support] Update on ticket #${id}`, html: _emailLayout('💬','rgba(99,102,241,.15)',`${_eh1('New reply on your ticket')}${_ep(`New response on ticket <strong style="color:#e2e8f0">#${id}</strong>.`)}${_ecard(`<p style="margin:0;font-size:13px;color:#94a3b8;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}<a href="mailto:subsafeironvault@gmail.com" style="display:block;text-align:center;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px">Reply</a>`)}; }
+function ticketClosedEmail(id: string|number) { return { subject: `[IronVault Support] Ticket #${id} resolved`, html: _emailLayout('✔️','rgba(34,197,94,.1)',`${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#e2e8f0">#${id}</strong> has been resolved. Reply to this email if you need further help.`)}<a href="mailto:subsafeironvault@gmail.com" style="display:block;text-align:center;background:rgba(99,102,241,.12);color:#6366f1;text-decoration:none;border-radius:10px;padding:13px 24px;font-weight:600;font-size:14px;border:1px solid rgba(99,102,241,.25)">Contact Support Again</a>`)}; }
+function planUpgradeEmail(plan: string) { const label = plan==='lifetime'?'Lifetime':plan==='family'?'Family':'Pro'; return { subject: `You're now on IronVault ${label} ⭐`, html: _emailLayout('⭐','rgba(245,158,11,.1)',`${_eh1(`Welcome to ${label}!`)}${_ep(`Your account has been upgraded to <strong style="color:#e2e8f0">${label}</strong>. All premium features are now unlocked.`)}${_ebtn(_APP_URL,'Open IronVault')}`)}; }
+// ── End email service ──────────────────────────────────────────────────────────
 
 let pool: Pool | null = null;
 
