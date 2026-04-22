@@ -250,15 +250,15 @@ export default function VaultPickerPage() {
             </Button>
           )}
 
-          {/* Local vaults */}
-          {vaults.length === 0 ? (
+          {/* Local vaults — cloud-cached entries are hidden (they appear under Cloud Vaults) */}
+          {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <ShieldCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No vaults yet. Create your first vault below.</p>
             </div>
           ) : (
             <div className="space-y-4 mb-6">
-              {vaults.map(vault => (
+              {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).map(vault => (
                 <div key={vault.id} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <ShieldCheck className="w-5 h-5 text-primary" />

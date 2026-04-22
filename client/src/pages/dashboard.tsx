@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
-  CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw, Info,
+  CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw,
   BarChart3, ArrowRight,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
@@ -16,7 +16,6 @@ import { format, addDays, differenceInCalendarDays, formatDistanceToNow } from "
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // ── Expense horizontal bar chart ──────────────────────────────────────────────
 function ExpenseBarChart({
@@ -157,8 +156,16 @@ function getTimeEmoji(): string {
 function getUserName(): string {
   try {
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-    return (cp.name || '').split(' ')[0] || '';
-  } catch { return ''; }
+    const name = (cp.name || '').trim();
+    if (name && !name.includes('@')) return name.split(' ')[0];
+    // Fall back to email prefix from account session
+    const session = localStorage.getItem('iv_account_session');
+    if (session) {
+      const { email } = JSON.parse(session);
+      if (email) return (email as string).split('@')[0];
+    }
+  } catch {}
+  return '';
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -172,21 +179,6 @@ export default function Dashboard() {
   const [showImportExport, setShowImportExport] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showCrossBrowserTip, setShowCrossBrowserTip] = useState(false);
-
-  useEffect(() => {
-    const hasSeenTip = localStorage.getItem('hasSeenCrossBrowserTip');
-    const showExportReminder = localStorage.getItem('showExportReminder');
-    if (!hasSeenTip || showExportReminder === 'true') {
-      setShowCrossBrowserTip(true);
-      localStorage.removeItem('showExportReminder');
-    }
-  }, []);
-
-  const dismissCrossBrowserTip = () => {
-    setShowCrossBrowserTip(false);
-    localStorage.setItem('hasSeenCrossBrowserTip', 'true');
-  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -424,28 +416,6 @@ export default function Dashboard() {
     <div>
       <div className="space-y-6">
 
-        {/* Cross-Browser Tip */}
-        {showCrossBrowserTip && (
-          <Alert className="border-primary/30 bg-primary/5 relative">
-            <Info className="h-4 w-4 text-primary" />
-            <AlertDescription className="text-sm text-foreground">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <strong className="font-semibold">💡 Cross-Browser Access:</strong> Your vault is stored only in <strong>this browser</strong>.{' '}
-                  To access your data in another browser, use the{' '}
-                  <button
-                    onClick={() => { setShowImportExport(true); dismissCrossBrowserTip(); }}
-                    className="underline font-semibold hover:text-primary"
-                  >
-                    Import/Export button
-                  </button>
-                  {' '}to create a backup and import it there.
-                </div>
-                <button onClick={dismissCrossBrowserTip} className="text-primary hover:text-primary/80 font-bold">✕</button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* Greeting Card — white in light mode, gradient in dark */}
         <div className="relative overflow-hidden rounded-2xl p-6

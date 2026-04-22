@@ -14,7 +14,7 @@ interface StatCardProps {
 
 export function StatCard({ icon: Icon, label, value, color = "text-primary", className, subtitle, subtitleColor = "text-destructive" }: StatCardProps) {
   return (
-    <Card className={cn("group rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-border/60 bg-card hover:-translate-y-0.5", className)}>
+    <Card className={cn("group rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 bg-white/80 dark:bg-slate-800/80 backdrop-blur border border-slate-200 dark:border-slate-700 hover:-translate-y-0.5", className)}>
       <CardContent className="p-4 flex flex-col gap-2.5">
         <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center bg-current/10", color.replace('text-', 'bg-') + '/10')}>
           <Icon className={cn("w-[18px] h-[18px]", color)} />

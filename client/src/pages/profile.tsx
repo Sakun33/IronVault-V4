@@ -1101,7 +1101,9 @@ export default function Profile() {
             </div>
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold">{userProfile.name}</h2>
+                <h2 className="text-xl font-semibold">
+                  {userProfile.name.includes('@') ? userProfile.name.split('@')[0] : userProfile.name}
+                </h2>
                 <Badge variant="outline" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
                   <Shield className="w-3 h-3 mr-1" />
                   <span className="capitalize">{userProfile.subscription.tier} Plan</span>

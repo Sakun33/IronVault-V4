@@ -242,8 +242,20 @@ export default function Passwords() {
                         </p>
                       </div>
 
-                      {/* Inline actions: copy username + copy password + kebab */}
+                      {/* Inline actions: reveal + copy username + copy password + kebab */}
                       <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => togglePasswordVisibility(password.id)}
+                          data-testid={`reveal-inline-${password.id}`}
+                          title={isVisible ? 'Hide password' : 'Reveal password'}
+                        >
+                          {isVisible
+                            ? <EyeOff className="w-4 h-4 text-primary" />
+                            : <Eye className="w-4 h-4 text-muted-foreground" />}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

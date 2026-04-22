@@ -348,6 +348,20 @@ export default function Subscriptions() {
                               {subscription.plan || subscription.category || subscription.billingCycle}
                             </p>
                           </div>
+                          {/* Inline reveal toggle (only if credentials exist) */}
+                          {subscription.credentials && (subscription.credentials.username || subscription.credentials.email || subscription.credentials.password) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 flex-shrink-0"
+                              onClick={() => toggleCredentialVisibility(subscription.id)}
+                              title={revealedCredentials.has(subscription.id) ? 'Hide credentials' : 'Reveal credentials'}
+                            >
+                              {revealedCredentials.has(subscription.id)
+                                ? <EyeOff className="w-4 h-4 text-primary" />
+                                : <Eye className="w-4 h-4 text-muted-foreground" />}
+                            </Button>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
