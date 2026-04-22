@@ -333,6 +333,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return verifyCloudToken(auth.substring(7));
   }
 
+  // ── POST /api/test-email ────────────────────────────────────────────────────
+  if (path === '/api/test-email' && req.method === 'POST') {
+    const { type, to, name, plan } = req.body || {};
+    const email = (to as string) || 'saketsuman1312@gmail.com';
+    const displayName = (name as string) || 'Saket';
+    try {
+      let tmpl: { subject: string; html: string };
+      if (type === 'welcome') {
+        tmpl = welcomeEmail(displayName);
+      } else if (type === 'plan_upgrade') {
+        tmpl = planUpgradeEmail((plan as string) || 'lifetime');
+      } else if (type === 'ticket_confirmation') {
+        tmpl = ticketConfirmationEmail('Email Template Test', 'TEST-001');
+      } else if (type === 'ticket_reply') {
+        tmpl = ticketReplyEmail('TEST-001', 'Thank you for reaching out. We are looking into your request.');
+      } else if (type === 'ticket_closed') {
+        tmpl = ticketClosedEmail('TEST-001');
+      } else if (type === 'password_reset') {
+        tmpl = passwordResetEmail(`${process.env.APP_URL || 'https://www.ironvault.app'}/auth/reset-password?token=PREVIEW&email=${encodeURIComponent(email)}`);
+      } else {
+        return res.status(400).json({ error: 'type required: welcome|plan_upgrade|ticket_confirmation|ticket_reply|ticket_closed|password_reset' });
+      }
+      const sent = await sendEmail({ to: email, ...tmpl });
+      return res.json({ success: sent, type, to: email, subject: tmpl.subject });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── GET /api/auth/check ─────────────────────────────────────────────────────
   if (path === '/api/auth/check' && req.method === 'GET') {
     const qEmail = ((req.query?.email as string) || '').toLowerCase().trim();
