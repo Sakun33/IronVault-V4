@@ -3,23 +3,27 @@ import { Pool } from "pg";
 import { createHmac } from "crypto";
 
 // ── SendPulse email service (inlined — no external module) ─────────────────────
-const _SP_CLIENT_ID = process.env.SENDPULSE_CLIENT_ID;
-const _SP_API_KEY   = process.env.SENDPULSE_API_KEY;
+const _SP_CLIENT_ID     = process.env.SENDPULSE_CLIENT_ID;
+const _SP_CLIENT_SECRET = process.env.SENDPULSE_CLIENT_SECRET || process.env.SENDPULSE_API_KEY;
 const _FROM_ADDR    = process.env.EMAIL_FROM_ADDRESS || 'noreply@ironvault.app';
 const _FROM_NAME    = process.env.EMAIL_FROM_NAME    || 'IronVault';
 const _APP_URL      = process.env.APP_URL            || 'https://www.ironvault.app';
-const emailConfigured = !!(_SP_CLIENT_ID && _SP_API_KEY);
+const emailConfigured = !!(_SP_CLIENT_ID && _SP_CLIENT_SECRET);
 let _spToken: string | null = null;
 let _spTokenExp = 0;
 async function _getSpToken(): Promise<string | null> {
-  if (!_SP_CLIENT_ID || !_SP_API_KEY) return null;
+  if (!_SP_CLIENT_ID || !_SP_CLIENT_SECRET) return null;
   if (_spToken && Date.now() < _spTokenExp) return _spToken;
   try {
     const r = await fetch('https://api.sendpulse.com/oauth/access_token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'client_credentials', client_id: _SP_CLIENT_ID, client_secret: _SP_API_KEY }),
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: _SP_CLIENT_ID, client_secret: _SP_CLIENT_SECRET }),
     });
-    if (!r.ok) { console.warn('[email] SP OAuth failed', r.status); return null; }
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => '');
+      console.warn('[email] SP OAuth failed', r.status, errBody);
+      return null;
+    }
     const d = await r.json() as { access_token: string; expires_in?: number };
     _spToken = d.access_token; _spTokenExp = Date.now() + ((d.expires_in || 3600) - 60) * 1000;
     return _spToken;
