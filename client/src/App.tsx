@@ -752,6 +752,7 @@ function Router() {
       <PublicPageWrapper>
         <Switch>
           <Route path="/auth/create-vault" component={CreateVaultPage} />
+          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
           {/* Redirect signup/login to vault picker (already logged in) */}
           <Route path="/auth/signup" component={VaultPickerPage} />
           <Route path="/auth/login" component={VaultPickerPage} />
