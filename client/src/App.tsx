@@ -64,7 +64,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
-import { BottomTabs, MoreSheet, type TabItem, type SectionItem } from "@/components/mobile";
+import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
@@ -84,7 +84,7 @@ import { QuickAddFab } from "@/components/quick-add-fab";
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
   const { logout, masterPassword, isUnlocked } = useAuth();
-  const { searchQuery, setSearchQuery, stats, isCloudSyncing } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing, passwords, subscriptions, notes, expenses, reminders } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   useCloudAutoSync(activeVault?.id, masterPassword);
@@ -126,7 +126,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
-  // Search removed from mobile header - individual pages have their own search
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
 
@@ -277,6 +277,14 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right side: always visible, shrink-0 */}
           <div className="flex items-center gap-0.5 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSearchModal(true)}
+              className="h-9 w-9 rounded-xl"
+            >
+              <Search className="w-4 h-4" />
+            </Button>
             <NotificationBell userId="current-user" />
             <SimpleThemeToggle />
             <Button
@@ -654,7 +662,33 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         sections={allSections}
       />
 
-      {/* Search removed from mobile header - individual pages have their own search */}
+      {/* Global Search Modal - mobile */}
+      <SearchModal
+        open={showSearchModal}
+        onOpenChange={(open) => {
+          setShowSearchModal(open);
+          if (!open) { setSearchQuery(''); setLocalSearchQuery(''); }
+        }}
+        searchQuery={localSearchQuery}
+        onSearchChange={(q) => { setLocalSearchQuery(q); setSearchQuery(q); }}
+        results={{
+          passwords: passwords
+            .filter(p => p.name?.toLowerCase().includes(localSearchQuery.toLowerCase()) || p.username?.toLowerCase().includes(localSearchQuery.toLowerCase()))
+            .map(p => ({ id: p.id, type: 'password' as const, title: p.name, subtitle: p.username, href: '/passwords' })),
+          subscriptions: subscriptions
+            .filter(s => s.name?.toLowerCase().includes(localSearchQuery.toLowerCase()))
+            .map(s => ({ id: s.id, type: 'subscription' as const, title: s.name, subtitle: s.category, href: '/subscriptions' })),
+          notes: notes
+            .filter(n => n.title?.toLowerCase().includes(localSearchQuery.toLowerCase()) || n.content?.toLowerCase().includes(localSearchQuery.toLowerCase()))
+            .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: '/notes' })),
+          expenses: expenses
+            .filter(e => e.title?.toLowerCase().includes(localSearchQuery.toLowerCase()) || e.category?.toLowerCase().includes(localSearchQuery.toLowerCase()))
+            .map(e => ({ id: e.id, type: 'expense' as const, title: e.title, subtitle: e.category, href: '/expenses' })),
+          reminders: reminders
+            .filter(r => r.title?.toLowerCase().includes(localSearchQuery.toLowerCase()))
+            .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: '/reminders' })),
+        }}
+      />
 
       <PasswordGeneratorModal
         open={showGenerator}

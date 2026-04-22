@@ -30,7 +30,7 @@ export function useCloudAutoSync(
     try {
       const blob = await vaultStorage.exportVault(mpwd);
       const { vaultManager } = await import('@/lib/vault-manager');
-      const vaultMeta = vaultManager.getLocalVaults().find((v: any) => v.id === vid);
+      const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vid);
       const vaultName = vaultMeta?.name ?? 'My Vault';
       const result = await pushCloudVault(vid, vaultName, blob, false);
       if (result.success) {
@@ -114,7 +114,7 @@ export function useCloudAutoSync(
       try {
         const blob = await vaultStorage.exportVault(masterPassword);
         const { vaultManager } = await import('@/lib/vault-manager');
-        const vaultMeta = vaultManager.getLocalVaults().find((v: any) => v.id === vaultId);
+        const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
         const vaultName = vaultMeta?.name ?? 'My Vault';
         console.log('[IMPORT] Pushing vault to cloud after import...');
         const result = await pushCloudVault(vaultId, vaultName, blob, false);
