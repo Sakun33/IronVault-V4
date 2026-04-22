@@ -866,6 +866,25 @@ function App() {
     }
   }, []);
 
+  // Auto-center focused inputs on mobile (keeps field visible above virtual keyboard)
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const handler = (e: FocusEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    };
+    document.addEventListener('focus', handler, true);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('focus', handler, true);
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
