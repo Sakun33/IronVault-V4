@@ -17,6 +17,13 @@ import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 
+function resetViewportZoom() {
+  setTimeout(() => {
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) vp.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+  }, 100);
+}
+
 export default function VaultPickerPage() {
   const [, setLocation] = useLocation();
   const { login, loginWithKey, loginWithoutVerification, accountEmail, accountLogout } = useAuth();
@@ -93,6 +100,7 @@ export default function VaultPickerPage() {
       const success = await login(pw);
       if (success) {
         await vaultManager.resetFailedAttempts();
+        resetViewportZoom();
         toast({ title: 'Vault Unlocked', description: `Welcome back! Opened "${vaultName}"` });
         setLocation('/');
       } else {
@@ -119,6 +127,7 @@ export default function VaultPickerPage() {
         // Try master password stored for biometric
         const success = await login(storedKey);
         if (success) {
+          resetViewportZoom();
           toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
           setLocation('/');
           return;
@@ -130,6 +139,7 @@ export default function VaultPickerPage() {
       if (result.success && result.vaultUnlockKey) {
         const success = await loginWithKey(result.vaultUnlockKey);
         if (success) {
+          resetViewportZoom();
           toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
           setLocation('/');
           return;
@@ -190,6 +200,7 @@ export default function VaultPickerPage() {
         full.serverUpdatedAt || new Date().toISOString(),
       );
       void pushCloudVault(cloudVault.vaultId, cloudVault.vaultName, full.encryptedBlob, cloudVault.isDefault || false);
+      resetViewportZoom();
       toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
       setLocation('/');
     } catch (err: any) {

@@ -406,10 +406,10 @@ export default function Dashboard() {
   const fmtAmt = (n: number) => formatCurrency(n, currency);
 
   const quickActions = [
-    { label: 'Add Password', icon: Lock, href: '/passwords?action=add', gradient: 'from-primary/20 to-primary/5' },
-    { label: 'New Note', icon: FileText, href: '/notes?action=add', gradient: 'from-blue-500/20 to-blue-500/5' },
-    { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', gradient: 'from-green-500/20 to-green-500/5' },
-    { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', gradient: 'from-orange-500/20 to-orange-500/5' },
+    { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bgColor: 'bg-blue-500' },
+    { label: 'New Note', icon: FileText, href: '/notes?action=add', bgColor: 'bg-amber-500' },
+    { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bgColor: 'bg-emerald-500' },
+    { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bgColor: 'bg-purple-500' },
   ];
 
   return (
@@ -417,64 +417,62 @@ export default function Dashboard() {
       <div className="space-y-6">
 
 
-        {/* Greeting Card — white in light mode, gradient in dark */}
-        <div className="relative overflow-hidden rounded-2xl p-6
-          bg-white dark:bg-gradient-to-br dark:from-indigo-600/20 dark:via-purple-600/10 dark:to-blue-600/20
-          border border-slate-200 dark:border-white/10
-          shadow-sm dark:shadow-none">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 dark:animate-pulse pointer-events-none" />
-          <div className="relative z-10">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
-              {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
-              <button
-                onClick={handleManualRefresh}
-                disabled={isRefreshing}
-                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition disabled:opacity-50
-                  bg-slate-100 hover:bg-slate-200 text-slate-700
-                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-              <Select value={currency} onValueChange={setCurrency}>
-                <SelectTrigger className="h-auto py-1.5 px-3 rounded-full border-0 text-sm gap-1.5 w-auto shadow-none focus:ring-0
-                  bg-slate-100 hover:bg-slate-200 text-slate-700
-                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80">
-                  <Globe className="w-3.5 h-3.5" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((curr) => (
-                    <SelectItem key={curr.code} value={curr.code}>
-                      {curr.symbol} {curr.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                onClick={() => setShowImportExport(true)}
-                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition
-                  bg-slate-100 hover:bg-slate-200 text-slate-700
-                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Import / Export
-              </button>
-              <button
-                onClick={() => setShowGenerator(true)}
-                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition
-                  bg-slate-100 hover:bg-slate-200 text-slate-700
-                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Generator
-              </button>
-            </div>
+        {/* Greeting Card — solid colors, always readable in both modes */}
+        <div className="rounded-2xl p-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+            {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+            {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition disabled:opacity-50
+                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
+                border border-slate-200 dark:border-slate-600
+                text-slate-700 dark:text-slate-200"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger className="h-auto py-2 px-3 rounded-xl text-sm gap-2 w-auto shadow-none focus:ring-0
+                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
+                border border-slate-200 dark:border-slate-600
+                text-slate-700 dark:text-slate-200">
+                <Globe className="w-3.5 h-3.5" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {currencies.map((curr) => (
+                  <SelectItem key={curr.code} value={curr.code}>
+                    {curr.symbol} {curr.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <button
+              onClick={() => setShowImportExport(true)}
+              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition
+                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
+                border border-slate-200 dark:border-slate-600
+                text-slate-700 dark:text-slate-200"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Import / Export
+            </button>
+            <button
+              onClick={() => setShowGenerator(true)}
+              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition
+                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
+                border border-slate-200 dark:border-slate-600
+                text-slate-700 dark:text-slate-200"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Generator
+            </button>
           </div>
         </div>
 
@@ -621,13 +619,13 @@ export default function Dashboard() {
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {quickActions.map(({ label, icon: Icon, href, gradient }) => (
+            {quickActions.map(({ label, icon: Icon, href, bgColor }) => (
               <Link key={label} href={href}>
-                <div className={`rounded-2xl border border-border/60 bg-gradient-to-br ${gradient} backdrop-blur-sm p-4 flex flex-col items-center gap-2.5 cursor-pointer hover:scale-[1.02] hover:shadow-md transition-all duration-200`}>
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-foreground" />
+                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bgColor}`}>
+                    <Icon className="w-[18px] h-[18px] text-white" />
                   </div>
-                  <span className="text-sm font-medium text-foreground text-center leading-tight">{label}</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight">{label}</span>
                 </div>
               </Link>
             ))}
