@@ -41,29 +41,21 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   const hasSyncedFromServer = useRef(false);
 
   useEffect(() => {
-    // Vault starts locked — loadLicense will get null from encrypted storage and use
-    // default free plan. The second effect (below) re-runs after unlock with real data.
-    // Only attempt the initial load if vault is already unlocked (e.g. biometric resume).
-    if (isUnlocked) {
-      loadLicense().then(() => {
-        syncFromServer();
-      });
-    } else {
-      // Vault is locked — skip encrypted read, just mark loading done.
-      setIsLoading(false);
-    }
-
     if (isNativePlatform()) {
       syncEntitlements();
     }
   }, []);
 
-  // Re-load license whenever the vault unlocks so we can decrypt the stored license
-  // (LicenseProvider mounts while vault is locked → getPersistentData returns null)
+  // Single owner of loadLicense + syncFromServer — fires on mount and on unlock.
+  // Having two effects both call loadLicense races: Effect 1 upgrades vault to "lifetime"
+  // then Effect 2's later loadLicense read overwrites React state back to "free".
   useEffect(() => {
-    if (!isUnlocked) return;
-    hasSyncedFromServer.current = false; // allow server re-sync with the newly unlocked vault
-    clearPlanCache(); // force fresh CRM fetch — prevents stale 'free' cache overriding paid entitlement
+    if (!isUnlocked) {
+      setIsLoading(false);
+      return;
+    }
+    hasSyncedFromServer.current = false;
+    clearPlanCache();
     loadLicense().then(() => syncFromServer());
   }, [isUnlocked]);
 
