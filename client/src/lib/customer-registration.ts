@@ -134,8 +134,10 @@ export async function getEntitlementStatus(): Promise<CustomerRegistrationRespon
   if (!lookupId) return null;
 
   try {
-    const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-    const endpoint = apiUrl ? `${apiUrl}/api/crm/entitlement/${lookupId}` : `/api/crm/entitlement/${lookupId}`;
+    // Always use the main Vercel API for entitlement lookup (customers table).
+    // VITE_BACKEND_API_URL points to backoffice.ironvault.app which uses a
+    // different table (crm_users) and would return 404 for most users.
+    const endpoint = `/api/crm/entitlement/${lookupId}`;
 
     const response = await fetch(endpoint);
     if (!response.ok) return null;
