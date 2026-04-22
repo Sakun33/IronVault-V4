@@ -550,6 +550,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [old[0].email, old[0].plan_type, dbPlan, reason || null]
       ).catch(() => {});
       const rows = await queryCrmCustomers(`WHERE u.id = $1`, [id]);
+      // Fire plan upgrade email via main app notify endpoint (fire-and-forget)
+      const jwtSecret = process.env.JWT_SECRET;
+      if (jwtSecret && old[0].email && dbPlan !== 'free') {
+        fetch('https://www.ironvault.app/api/crm/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-notify-secret': jwtSecret },
+          body: JSON.stringify({ type: 'plan_upgrade', email: old[0].email, data: { plan: dbPlan } }),
+        }).catch(() => {});
+      }
       return res.json({ success: true, customer: rows[0] });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
