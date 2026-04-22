@@ -1,313 +1,171 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claude — IronVault Live Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config = { darkMode: 'class' }</script>
+<title>IronVault — Agent QA Dashboard</title>
 <style>
-  body { background: #0a0a0f; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; }
-  .card { background: #12121a; border: 1px solid #1e1e2e; }
-  .pulse-dot { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
-  .tag-claude  { background: #1e3a5f; color: #60a5fa; }
-  .tag-system  { background: #2d1b1b; color: #f87171; }
-  .tag-fix     { background: #1a2d1a; color: #4ade80; }
-  .status-done { color: #4ade80; }
-  .status-wip  { color: #fbbf24; }
-  .status-pending { color: #64748b; }
-  tr:hover td { background: #1a1a28; }
-  .done-row { opacity: 0.65; }
+  :root {
+    --bg: #0f0f13; --card: #1a1a24; --border: #2a2a3a;
+    --primary: #6366f1; --pass: #22c55e; --fail: #ef4444;
+    --warn: #f59e0b; --skip: #64748b; --text: #e2e8f0; --muted: #94a3b8;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 17px; font-weight: 700; }
+  .badge { background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .container { max-width: 1060px; margin: 0 auto; padding: 28px; }
+  .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+  .sc { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .sc .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .sc .val { font-size: 28px; font-weight: 700; line-height: 1; }
+  .v-primary { color: var(--primary); } .v-pass { color: var(--pass); } .v-fail { color: var(--fail); } .v-warn { color: var(--warn); } .v-muted { color: var(--muted); }
+  .progress-bar { background: var(--border); border-radius: 999px; height: 6px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), #818cf8); transition: width .5s ease; }
+  .phases { display: flex; flex-direction: column; gap: 12px; }
+  .phase { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .ph { padding: 13px 18px; display: flex; align-items: center; gap: 11px; }
+  .pnum { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .pnum.pass { background: rgba(34,197,94,.15); color: var(--pass); }
+  .pnum.fail { background: rgba(239,68,68,.15); color: var(--fail); }
+  .pnum.run { background: rgba(99,102,241,.15); color: var(--primary); }
+  .pnum.pend { background: rgba(100,116,139,.1); color: var(--skip); }
+  .ptitle { font-size: 14px; font-weight: 600; flex: 1; }
+  .pstats { font-size: 12px; color: var(--muted); margin-right: 6px; }
+  .sbadge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .sbadge.pass { background: rgba(34,197,94,.15); color: var(--pass); }
+  .sbadge.fail { background: rgba(239,68,68,.15); color: var(--fail); }
+  .sbadge.run { background: rgba(99,102,241,.15); color: var(--primary); }
+  .sbadge.pend { background: rgba(100,116,139,.1); color: var(--skip); }
+  .pbody { padding: 4px 18px 14px; border-top: 1px solid var(--border); }
+  .tlist { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .ti { display: flex; align-items: flex-start; gap: 9px; padding: 6px 9px; border-radius: 7px; font-size: 13px; }
+  .ti.pass { background: rgba(34,197,94,.06); }
+  .ti.fail { background: rgba(239,68,68,.08); }
+  .ti.warn { background: rgba(245,158,11,.06); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .dot.pass { background: var(--pass); } .dot.fail { background: var(--fail); }
+  .dot.warn { background: var(--warn); } .dot.skip { background: var(--skip); }
+  .tname { flex: 1; color: var(--text); }
+  .td { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .issue { margin-top: 8px; padding: 9px 11px; border-radius: 7px; background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.2); }
+  .ilbl { font-size: 10px; font-weight: 700; color: var(--fail); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+  .itext { font-size: 12px; }
+  .fix { margin-top: 5px; padding: 7px 11px; border-radius: 7px; background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.2); }
+  .flbl { font-size: 10px; font-weight: 700; color: var(--pass); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+  .ftext { font-size: 12px; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-right: 3px; }
+  .tag.crit { background: rgba(239,68,68,.2); color: var(--fail); }
+  .tag.high { background: rgba(245,158,11,.2); color: var(--warn); }
+  .tag.low { background: rgba(100,116,139,.2); color: var(--skip); }
+  .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: monospace; }
+  .commit { font-size: 11px; color: var(--primary); font-family: monospace; background: rgba(99,102,241,.1); padding: 2px 6px; border-radius: 4px; }
 </style>
 </head>
-<body class="min-h-screen p-6">
-
-<!-- Header -->
-<div class="flex items-center justify-between mb-6">
+<body>
+<header>
   <div>
-    <h1 class="text-2xl font-bold text-white tracking-tight">IronVault — Claude Agent Dashboard</h1>
-    <p class="text-slate-400 text-sm mt-1">main branch · ironvault.app · <span id="live-time" class="text-blue-400"></span></p>
+    <h1>🛡 IronVault — Play Store Launch Day QA</h1>
+    <div class="meta">Last updated: 2026-04-22 · Testing against <strong>https://www.ironvault.app</strong></div>
   </div>
-  <div class="flex items-center gap-3">
-    <span class="pulse-dot w-2 h-2 rounded-full bg-green-400 inline-block"></span>
-    <span class="text-green-400 font-semibold text-sm uppercase tracking-widest">ACTIVE</span>
-    <span class="text-slate-500 text-xs ml-4">Last updated: 2026-04-21 · commit 33c5976</span>
-  </div>
-</div>
+  <div class="badge">LIVE</div>
+</header>
+<div class="container">
 
-<!-- Stats Row -->
-<div class="grid grid-cols-4 gap-4 mb-6">
-  <div class="card rounded-xl p-4">
-    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Fixes Deployed</div>
-    <div class="text-3xl font-bold text-green-400">21</div>
-    <div class="text-xs text-green-500 mt-1">↑ +15 this session</div>
+  <!-- Summary -->
+  <div class="summary">
+    <div class="sc"><div class="lbl">Overall Progress</div><div class="val v-primary">1 / 12</div><div class="progress-bar"><div class="progress-fill" style="width:8%"></div></div></div>
+    <div class="sc"><div class="lbl">Tests Passed</div><div class="val v-pass">22</div></div>
+    <div class="sc"><div class="lbl">Tests Failed</div><div class="val v-fail">0</div></div>
+    <div class="sc"><div class="lbl">Issues Found</div><div class="val v-warn">2</div></div>
+    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">2</div></div>
   </div>
-  <div class="card rounded-xl p-4">
-    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Issues Remaining</div>
-    <div class="text-3xl font-bold text-green-400">0</div>
-    <div class="text-xs text-green-500 mt-1">All 12 original issues resolved ✓</div>
-  </div>
-  <div class="card rounded-xl p-4">
-    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Build Status</div>
-    <div class="text-xl font-bold text-green-400">✓ CLEAN</div>
-    <div class="text-xs text-slate-500 mt-1">7a1c444 · modal viewport fix</div>
-  </div>
-  <div class="card rounded-xl p-4">
-    <div class="text-slate-400 text-xs uppercase tracking-wider mb-1">Last Deploy</div>
-    <div class="text-xl font-bold text-green-400">✓ LIVE</div>
-    <div class="text-xs text-slate-500 mt-1">ironvault-main-87iapkjae · just now</div>
-  </div>
-</div>
 
-<!-- Two column: Completed + Pending -->
-<div class="grid grid-cols-2 gap-4 mb-6">
+  <div class="phases">
 
-  <!-- Completed -->
-  <div class="card rounded-xl p-5">
-    <h2 class="text-sm font-semibold text-green-400 uppercase tracking-widest mb-4">✓ Completed This Session</h2>
-    <div class="space-y-2 text-sm">
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Expenses 600 entries invisible</span>
-          <span class="text-slate-500 text-xs block">Default month filter → fixed to show data · eaa860f</span>
-        </div>
+    <!-- PHASE 1 — COMPLETE -->
+    <div class="phase">
+      <div class="ph">
+        <div class="pnum pass">1</div>
+        <div class="ptitle">Phase 1 — Smoke Test (every page loads)</div>
+        <span class="pstats">22 / 22 tests</span>
+        <span class="sbadge pass">✅ Pass</span>
       </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Profile page crash guards</span>
-          <span class="text-slate-500 text-xs block">ErrorBoundary + stats?.X + safeFormat · 12bc875</span>
+      <div class="pbody">
+        <div class="tlist">
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">All 16 routes return HTTP 200<div class="td">/ /passwords /subscriptions /notes /reminders /expenses /bank-statements /investments /goals /documents /api-keys /profile /settings /logging /upgrade /vaults</div></div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">JS bundle loads (index-*.js → 200)<div class="td">2.1MB main bundle, CSS 156KB — all assets served</div></div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">API health: DB connected<div class="td">{"status":"ok","db":true,"env":"vercel"}</div></div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">/api/vaults/cloud returns 401 (not 500) when unauthenticated</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">HTTPS strict-transport-security header present</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname">CORS: capacitor://localhost now allowed (fixed + deployed)</div></div>
         </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Cloud vault flicker on re-import</span>
-          <span class="text-slate-500 text-xs block">Blob hash dedup before replaceVaultFromBlob · eaa860f</span>
+
+        <div class="issue">
+          <div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #1 — CORS missing Capacitor origins</div>
+          <div class="itext"><code>ALLOWED_ORIGINS</code> in <code>api/index.ts</code> did not include <code>capacitor://localhost</code> or <code>http://localhost</code>. Every API call from the Android/iOS native app would be CORS-blocked.</div>
         </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Wrong password error message</span>
-          <span class="text-slate-500 text-xs block">multi-vault-login: generic → "Incorrect master password" · eaa860f</span>
+        <div class="fix">
+          <div class="flbl">✅ Fixed — commit d6c591b</div>
+          <div class="ftext">Added <code>capacitor://localhost</code>, <code>http://localhost</code>, <code>https://localhost</code> to ALLOWED_ORIGINS. Verified live: <code>access-control-allow-origin: capacitor://localhost</code></div>
         </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">FAB transparency stuck on drag cancel</span>
-          <span class="text-slate-500 text-xs block">onTouchCancel + z-[38] valid Tailwind class · 4719277</span>
+
+        <div class="issue" style="margin-top:8px">
+          <div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #2 — Cloud vault uses relative URLs on native</div>
+          <div class="itext"><code>cloud-vault-sync.ts</code> used relative <code>/api/vaults/cloud</code> fetch paths. On Capacitor native (origin: <code>capacitor://localhost</code>), these resolve to the local WebView server — not the production API. All cloud vault sync operations would silently fail on device.</div>
         </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Modal auto-scroll on mobile keyboard</span>
-          <span class="text-slate-500 text-xs block">max-h-[85dvh] + global focusin scrollIntoView · 4719277</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Notes redesign — personal cards + checklists</span>
-          <span class="text-slate-500 text-xs block">Removed code editor, task items, relative time, notebook colors · df244de</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Dashboard greeting + weak password detection</span>
-          <span class="text-slate-500 text-xs block">pwdStrength() helper, morning/afternoon/evening, banner with favicon pills · a274245</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Confirm dialogs — subscriptions &amp; expenses</span>
-          <span class="text-slate-500 text-xs block">AlertDialog replaces confirm() — delete + duplicate warning · bf10714</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Favicons in reminders</span>
-          <span class="text-slate-500 text-xs block">Favicon component, subscriptionId lookup, letter avatar fallback · bf10714</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">CRITICAL: Cloud data loss on logout</span>
-          <span class="text-slate-500 text-xs block">iv_dirty_ flag survives logout, push-before-pull on re-login · 5836b4d</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Cloud sync loading indicator</span>
-          <span class="text-slate-500 text-xs block">isCloudSyncing banner desktop+mobile, vault:cloud:syncing event · 5836b4d</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Expenses default filter 'month'→'all'</span>
-          <span class="text-slate-500 text-xs block">Past entries now visible immediately on open · 52ceda0</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Activity logs redesign — IP, device, dedup</span>
-          <span class="text-slate-500 text-xs block">Real IP via ipify cache, parseDevice(), 5s dedup ref · 744f66e</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Camera in Documents — live preview</span>
-          <span class="text-slate-500 text-xs block">getUserMedia video stream, capture-to-JPEG, stream cleanup · 64e03f5</span>
+        <div class="fix">
+          <div class="flbl">✅ Fixed — commit d6c591b</div>
+          <div class="ftext">Added <code>const CLOUD_API = 'https://www.ironvault.app'</code> and replaced all 6 relative fetch paths with absolute URLs.</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Pending -->
-  <div class="card rounded-xl p-5">
-    <h2 class="text-sm font-semibold text-green-400 uppercase tracking-widest mb-4">🎉 All Issues Resolved</h2>
-    <div class="space-y-2 text-sm">
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Dashboard premium full pass</span>
-          <span class="text-slate-500 text-xs block">6-card stats (notes+reminders), 15s refresh, favicons everywhere · 0602cdd</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Cloud vault load performance</span>
-          <span class="text-slate-500 text-xs block">Serial for-loops → Promise.all in importVault, parallel crypto · 0602cdd</span>
-        </div>
-      </div>
-      <div class="done-row flex items-start gap-2 p-2 rounded-lg">
-        <span class="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-        <div>
-          <span class="text-slate-300">Modals off-screen on small devices</span>
-          <span class="text-slate-500 text-xs block">top-4 pin on mobile, sm: centered; overscroll-contain; alert-dialog same · 7a1c444</span>
-        </div>
+    <!-- PHASE 2 — Running -->
+    <div class="phase">
+      <div class="ph">
+        <div class="pnum run">2</div>
+        <div class="ptitle">Phase 2 — CRUD on all 10 modules</div>
+        <span class="sbadge run"><span class="spinner"></span>Running</span>
       </div>
     </div>
-  </div>
 
-</div>
+    <!-- PHASE 3 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">3</div><div class="ptitle">Phase 3 — Cloud vault sync</div><span class="sbadge pend">⏳ Pending</span></div></div>
 
-<!-- Activity Log -->
-<div class="card rounded-xl p-5">
-  <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-4">Activity Log — This Session</h2>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-800">
-          <th class="text-left py-2 pr-3 w-32">Commit</th>
-          <th class="text-left py-2 pr-3">Fix / Change</th>
-          <th class="text-left py-2 pr-3">Files Changed</th>
-          <th class="text-left py-2 w-28">Status</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-800/50 text-xs">
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">eaa860f</td>
-          <td class="py-2 pr-3 text-slate-300">BATCH 1 — expenses empty month, profile crash, cloud flicker, login error</td>
-          <td class="py-2 pr-3 text-slate-500">expenses.tsx · multi-vault-login.tsx · use-cloud-auto-sync.ts</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">4719277</td>
-          <td class="py-2 pr-3 text-slate-300">BATCH 2 — FAB drag cancel opacity, modal dvh scroll, form focus centering</td>
-          <td class="py-2 pr-3 text-slate-500">quick-add-fab.tsx · dialog.tsx · main.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">df244de</td>
-          <td class="py-2 pr-3 text-slate-300">BATCH 3 — Notes full redesign, removed code editor, added checklist cards</td>
-          <td class="py-2 pr-3 text-slate-500">notes.tsx (−217/+141 lines)</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">a274245</td>
-          <td class="py-2 pr-3 text-slate-300">BATCH 4 — Dashboard greeting, real weak-password detection with service pills</td>
-          <td class="py-2 pr-3 text-slate-500">dashboard.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">bf10714</td>
-          <td class="py-2 pr-3 text-slate-300">BATCH 5 — AlertDialog confirms, Favicon in reminders, dashboard HTML in prod</td>
-          <td class="py-2 pr-3 text-slate-500">subscriptions.tsx · expenses.tsx · reminders.tsx · client/public/</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">5836b4d</td>
-          <td class="py-2 pr-3 text-slate-300">CRITICAL — Cloud data loss (dirty flag + push-before-pull) + sync spinner</td>
-          <td class="py-2 pr-3 text-slate-500">use-cloud-auto-sync.ts · vault-context.tsx · App.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">52ceda0</td>
-          <td class="py-2 pr-3 text-slate-300">Expenses filter default 'month'→'all' so past entries always show</td>
-          <td class="py-2 pr-3 text-slate-500">expenses.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">744f66e</td>
-          <td class="py-2 pr-3 text-slate-300">Activity logs — real IP (ipify cache), parseDevice(), 5s dedup</td>
-          <td class="py-2 pr-3 text-slate-500">logging-context.tsx · logging.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">64e03f5</td>
-          <td class="py-2 pr-3 text-slate-300">Camera in Documents — getUserMedia live preview + capture-to-JPEG</td>
-          <td class="py-2 pr-3 text-slate-500">documents.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr>
-          <td class="py-2 pr-3 text-blue-400 font-mono">0602cdd</td>
-          <td class="py-2 pr-3 text-slate-300">Dashboard 6-card stats + Cloud import Promise.all parallelization</td>
-          <td class="py-2 pr-3 text-slate-500">dashboard.tsx · storage.ts · this file</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">7a1c444</td>
-          <td class="py-2 pr-3 text-slate-300">Modals pin to top on mobile — top-4 on xs, centered sm+, overscroll-contain</td>
-          <td class="py-2 pr-3 text-slate-500">dialog.tsx · alert-dialog.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">8f3f111</td>
-          <td class="py-2 pr-3 text-slate-300">CRITICAL — White screen on cloud vault unlock (registry + unhandledrejection handler)</td>
-          <td class="py-2 pr-3 text-slate-500">vault-picker.tsx · storage.ts · main.tsx · dashboard.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-        <tr class="done-row">
-          <td class="py-2 pr-3 text-blue-400 font-mono">33c5976</td>
-          <td class="py-2 pr-3 text-slate-300">BUG-102 profile TDZ crash + BUG-103 expenses default currency INR</td>
-          <td class="py-2 pr-3 text-slate-500">profile.tsx · currency-context.tsx</td>
-          <td class="py-2 status-done font-semibold">✓ Deployed</td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- PHASE 4 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">4</div><div class="ptitle">Phase 4 — Dashboard verification</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 5 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">5</div><div class="ptitle">Phase 5 — Authentication flows</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 6 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">6</div><div class="ptitle">Phase 6 — Profile page</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 7 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">7</div><div class="ptitle">Phase 7 — Settings</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 8 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">8</div><div class="ptitle">Phase 8 — Plan enforcement</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 9 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">9</div><div class="ptitle">Phase 9 — Mobile responsiveness (375px)</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 10 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">10</div><div class="ptitle">Phase 10 — Security (XSS, CORS, encryption)</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 11 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">11</div><div class="ptitle">Phase 11 — Notifications / Toasts</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
+    <!-- PHASE 12 -->
+    <div class="phase"><div class="ph"><div class="pnum pend">12</div><div class="ptitle">Phase 12 — Regression: user-reported issues</div><span class="sbadge pend">⏳ Pending</span></div></div>
+
   </div>
 </div>
-
-<script>
-function updateTime() {
-  document.getElementById('live-time').textContent = new Date().toLocaleTimeString();
-}
-updateTime();
-setInterval(updateTime, 1000);
-</script>
 </body>
 </html>
