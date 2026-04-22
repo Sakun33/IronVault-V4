@@ -133,12 +133,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            platform = COALESCE(EXCLUDED.platform, customers.platform),
            app_version = COALESCE(EXCLUDED.app_version, customers.app_version),
            updated_at = NOW()
-         RETURNING id, email, plan_type`,
+         RETURNING id, email, plan_type, (xmax = 0) AS is_new_insert`,
         [email, safeFullName, country || null, platform || null, appVersion || null, planType || "free"]
       );
       const row = rows[0];
-      // Send welcome email (fire-and-forget — non-critical)
-      if (row) {
+      // Only send welcome email for truly new registrations (not ON CONFLICT updates)
+      if (row?.is_new_insert) {
         const tmpl = welcomeEmail(safeFullName || email.split('@')[0]);
         sendEmail({ to: email, ...tmpl }).catch(() => {});
       }
@@ -333,6 +333,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return verifyCloudToken(auth.substring(7));
   }
 
+  // ── GET /api/auth/check ─────────────────────────────────────────────────────
+  if (path === '/api/auth/check' && req.method === 'GET') {
+    const qEmail = ((req.query?.email as string) || '').toLowerCase().trim();
+    if (!qEmail) return res.json({ exists: false });
+    try {
+      const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [qEmail]);
+      return res.json({ exists: rows.length > 0 });
+    } catch {
+      return res.json({ exists: false }); // fail open — don't block signup on DB error
+    }
+  }
+
   // ── POST /api/auth/token ────────────────────────────────────────────────────
   if (path === '/api/auth/token' && req.method === 'POST') {
     const { email, accountPasswordHash } = req.body || {};
@@ -380,6 +392,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         // Store hash (trust-on-first-use)
         await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [accountPasswordHash, userId]);
+        // Send welcome email for genuinely new accounts
+        const welcomeTmpl = welcomeEmail(fullName);
+        sendEmail({ to: normalizedEmail, ...welcomeTmpl }).catch(() => {});
       } else {
         userId = userRows[0].id;
         const storedHash = userRows[0].account_password_hash;

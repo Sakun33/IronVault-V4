@@ -684,18 +684,18 @@ export default function Profile() {
       .catch(err => console.log('Entitlement fetch failed (non-critical):', err));
   }, []);
 
-  // Fetch real tickets from backend on mount
+  // Fetch real tickets from backend on mount — use email (tickets are keyed by email, not UUID)
   useEffect(() => {
-    const crmUserId = localStorage.getItem('crmUserId');
-    if (!crmUserId) return;
-    const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-    const endpoint = apiUrl ? `${apiUrl}/api/crm/tickets/${crmUserId}` : `/api/crm/tickets/${crmUserId}`;
-    fetch(endpoint)
+    let email = '';
+    try { email = JSON.parse(localStorage.getItem('iv_account') || '{}').email || ''; } catch {}
+    if (!email) try { email = JSON.parse(localStorage.getItem('iv_account_session') || '{}').email || ''; } catch {}
+    if (!email) return;
+    fetch(`/api/crm/tickets/${encodeURIComponent(email)}`)
       .then(res => res.json())
       .then(data => {
-        if (data.success && data.tickets) {
+        if (Array.isArray(data.tickets)) {
           setSupportTickets(data.tickets.map((t: any) => ({
-            id: String(t.ticket_id || t.id),
+            id: String(t.id),
             title: t.subject,
             description: t.description || '',
             category: 'other' as const,
@@ -765,11 +765,7 @@ export default function Profile() {
 
   const handleCreateSupportTicket = async (ticketData: Partial<SupportTicket>) => {
     try {
-      const crmUserId = localStorage.getItem('crmUserId');
-      const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-      const endpoint = apiUrl ? `${apiUrl}/api/crm/tickets` : '/api/crm/tickets';
-
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/crm/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

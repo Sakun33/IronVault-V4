@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAccountLoggedIn, setIsAccountLoggedIn] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { clearLogs } = useLogging();
+  const { clearLogs, addLog } = useLogging();
 
   useEffect(() => {
     initializeAuth();
@@ -135,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccountEmail(normalizedEmail);
       // Clear stale plan cache so the plan hook re-fetches on next render
       clearPlanCache();
+      addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
       acquireCloudToken(normalizedEmail, passwordHash).catch(() => {});
     };
 
@@ -188,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsUnlocked(true);
         setMasterPassword(password);
         sessionStorage.setItem(SESSION_KEY, password);
+        addLog('Vault Unlock', 'security', 'Vault unlocked successfully');
       }
       return success;
     } catch (error) {

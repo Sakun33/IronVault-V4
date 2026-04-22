@@ -83,6 +83,18 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
+      // Check if account already exists before creating anything
+      try {
+        const checkResp = await fetch(`/api/auth/check?email=${encodeURIComponent(email.toLowerCase().trim())}`);
+        const checkData = await checkResp.json();
+        if (checkData.exists) {
+          setError('An account with this email already exists. Please log in or use "Forgot Password" to reset it.');
+          return;
+        }
+      } catch {
+        // Network error — don't block signup, the token call below will handle auth
+      }
+
       // Stage 1: save account credentials + create session
       await saveAccountCredentials(email, accountPassword);
       markOnboardingShown();
