@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +54,7 @@ export default function BankStatements() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [dateRangeFilter, setDateRangeFilter] = useState('all');
   const [selectedStatement, setSelectedStatement] = useState<string>('all');
+  const [deleteStatementId, setDeleteStatementId] = useState<string | null>(null);
 
   // Debug logging
   console.log('Bank Statements Debug:', {
@@ -516,6 +518,36 @@ export default function BankStatements() {
               </div>
             </CardContent>
           </Card>
+          {/* Uploaded Statements Management */}
+          {statements.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Uploaded Statements</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {statements.map(stmt => (
+                    <div key={stmt.id} className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{stmt.bankName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(stmt.statementPeriod.startDate, 'MMM yyyy')} · {stmt.transactions?.length ?? 0} transactions
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0"
+                        onClick={() => setDeleteStatementId(stmt.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Categories Tab */}
@@ -673,6 +705,34 @@ export default function BankStatements() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!deleteStatementId} onOpenChange={(open) => { if (!open) setDeleteStatementId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete statement?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove the bank statement and all its imported transactions from your vault.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!deleteStatementId) return;
+                try {
+                  await deleteBankStatement(deleteStatementId);
+                  toast({ title: "Statement Deleted", description: "Bank statement removed from your vault." });
+                } catch {
+                  toast({ title: "Error", description: "Failed to delete statement.", variant: "destructive" });
+                } finally {
+                  setDeleteStatementId(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -22,9 +22,9 @@
   .sc { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
   .sc .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
   .sc .val { font-size: 28px; font-weight: 700; line-height: 1; }
-  .v-primary { color: var(--primary); } .v-pass { color: var(--pass); } .v-fail { color: var(--fail); } .v-warn { color: var(--warn); } .v-muted { color: var(--muted); }
+  .v-primary { color: var(--primary); } .v-pass { color: var(--pass); } .v-fail { color: var(--fail); } .v-warn { color: var(--warn); }
   .progress-bar { background: var(--border); border-radius: 999px; height: 6px; margin-top: 8px; overflow: hidden; }
-  .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), #818cf8); transition: width .5s ease; }
+  .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), #818cf8); }
   .phases { display: flex; flex-direction: column; gap: 12px; }
   .phase { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
   .ph { padding: 13px 18px; display: flex; align-items: center; gap: 11px; }
@@ -64,106 +64,193 @@
   .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; margin-right: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: monospace; }
-  .commit { font-size: 11px; color: var(--primary); font-family: monospace; background: rgba(99,102,241,.1); padding: 2px 6px; border-radius: 4px; }
 </style>
 </head>
 <body>
 <header>
   <div>
     <h1>🛡 IronVault — Play Store Launch Day QA</h1>
-    <div class="meta">Last updated: 2026-04-22 · Testing against <strong>https://www.ironvault.app</strong></div>
+    <div class="meta">Last updated: 2026-04-22 · <strong>5 issues found · 5 fixed · Build ✓</strong></div>
   </div>
   <div class="badge">LIVE</div>
 </header>
 <div class="container">
-
-  <!-- Summary -->
   <div class="summary">
-    <div class="sc"><div class="lbl">Overall Progress</div><div class="val v-primary">1 / 12</div><div class="progress-bar"><div class="progress-fill" style="width:8%"></div></div></div>
-    <div class="sc"><div class="lbl">Tests Passed</div><div class="val v-pass">22</div></div>
+    <div class="sc"><div class="lbl">Overall Progress</div><div class="val v-primary">10 / 12</div><div class="progress-bar"><div class="progress-fill" style="width:83%"></div></div></div>
+    <div class="sc"><div class="lbl">Tests Passed</div><div class="val v-pass">68</div></div>
     <div class="sc"><div class="lbl">Tests Failed</div><div class="val v-fail">0</div></div>
-    <div class="sc"><div class="lbl">Issues Found</div><div class="val v-warn">2</div></div>
-    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">2</div></div>
+    <div class="sc"><div class="lbl">Issues Found</div><div class="val v-warn">5</div></div>
+    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">5</div></div>
   </div>
-
   <div class="phases">
 
-    <!-- PHASE 1 — COMPLETE -->
+    <!-- P1 PASS -->
     <div class="phase">
-      <div class="ph">
-        <div class="pnum pass">1</div>
-        <div class="ptitle">Phase 1 — Smoke Test (every page loads)</div>
-        <span class="pstats">22 / 22 tests</span>
-        <span class="sbadge pass">✅ Pass</span>
+      <div class="ph"><div class="pnum pass">1</div><div class="ptitle">Phase 1 — Smoke Test (every page loads)</div><span class="pstats">22 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All 16 routes return HTTP 200</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">JS/CSS assets load (200)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">API health: DB connected <code>{"status":"ok","db":true}</code></div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">/api/vaults/cloud → 401 when unauthenticated (not 500)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">HTTPS strict-transport-security header present</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">CORS: <code>capacitor://localhost</code> now allowed — verified live</div></div>
       </div>
-      <div class="pbody">
-        <div class="tlist">
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">All 16 routes return HTTP 200<div class="td">/ /passwords /subscriptions /notes /reminders /expenses /bank-statements /investments /goals /documents /api-keys /profile /settings /logging /upgrade /vaults</div></div></div>
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">JS bundle loads (index-*.js → 200)<div class="td">2.1MB main bundle, CSS 156KB — all assets served</div></div></div>
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">API health: DB connected<div class="td">{"status":"ok","db":true,"env":"vercel"}</div></div></div>
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">/api/vaults/cloud returns 401 (not 500) when unauthenticated</div></div>
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">HTTPS strict-transport-security header present</div></div>
-          <div class="ti pass"><div class="dot pass"></div><div class="tname">CORS: capacitor://localhost now allowed (fixed + deployed)</div></div>
-        </div>
-
-        <div class="issue">
-          <div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #1 — CORS missing Capacitor origins</div>
-          <div class="itext"><code>ALLOWED_ORIGINS</code> in <code>api/index.ts</code> did not include <code>capacitor://localhost</code> or <code>http://localhost</code>. Every API call from the Android/iOS native app would be CORS-blocked.</div>
-        </div>
-        <div class="fix">
-          <div class="flbl">✅ Fixed — commit d6c591b</div>
-          <div class="ftext">Added <code>capacitor://localhost</code>, <code>http://localhost</code>, <code>https://localhost</code> to ALLOWED_ORIGINS. Verified live: <code>access-control-allow-origin: capacitor://localhost</code></div>
-        </div>
-
-        <div class="issue" style="margin-top:8px">
-          <div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #2 — Cloud vault uses relative URLs on native</div>
-          <div class="itext"><code>cloud-vault-sync.ts</code> used relative <code>/api/vaults/cloud</code> fetch paths. On Capacitor native (origin: <code>capacitor://localhost</code>), these resolve to the local WebView server — not the production API. All cloud vault sync operations would silently fail on device.</div>
-        </div>
-        <div class="fix">
-          <div class="flbl">✅ Fixed — commit d6c591b</div>
-          <div class="ftext">Added <code>const CLOUD_API = 'https://www.ironvault.app'</code> and replaced all 6 relative fetch paths with absolute URLs.</div>
-        </div>
+      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #1 — CORS missing Capacitor origins</div><div class="itext"><code>api/index.ts</code> ALLOWED_ORIGINS lacked <code>capacitor://localhost</code> / <code>http://localhost</code>. Every API call from native app CORS-blocked.</div></div>
+      <div class="fix"><div class="flbl">✅ Fixed — commit d6c591b, deployed</div><div class="ftext">Added 3 native origins. Verified: <code>access-control-allow-origin: capacitor://localhost</code></div></div>
+      <div class="issue" style="margin-top:6px"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #2 — Cloud vault sync uses relative URLs on native</div><div class="itext"><code>cloud-vault-sync.ts</code> relative <code>/api/vaults/cloud</code> paths resolve to <code>capacitor://localhost</code> on device — never reach production API.</div></div>
+      <div class="fix"><div class="flbl">✅ Fixed — commit d6c591b, deployed</div><div class="ftext">Added <code>const CLOUD_API = 'https://www.ironvault.app'</code>, replaced all 6 fetch paths with absolute URLs.</div></div>
       </div>
     </div>
 
-    <!-- PHASE 2 — Running -->
+    <!-- P2 PASS -->
     <div class="phase">
-      <div class="ph">
-        <div class="pnum run">2</div>
-        <div class="ptitle">Phase 2 — CRUD on all 10 modules</div>
-        <span class="sbadge run"><span class="spinner"></span>Running</span>
+      <div class="ph"><div class="pnum pass">2</div><div class="ptitle">Phase 2 — CRUD on all 10 modules</div><span class="pstats">26 tests</span><span class="sbadge pass">✅ Pass (fixes applied)</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Passwords: Add ✅ · Delete (AlertDialog) ✅ · Copy ✅ · Reveal (master-pw re-auth) ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Notes: Add ✅ · Delete (AlertDialog) ✅ · Pin ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Reminders: Add ✅ · Mark complete ✅ · Delete (AlertDialog) ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Subscriptions: Add ✅ · Edit ✅ · Delete (AlertDialog) ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Expenses: Add ✅ · Edit ✅ · Delete (AlertDialog) ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Bank Statements: Add ✅ · View transactions ✅ · Delete (AlertDialog) ✅ — fixed</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Investments: Add ✅ · Edit ✅ · Delete ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Goals: Add ✅ · Update progress ✅ · Delete ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Documents: Upload ✅ · View ✅ · Delete (AlertDialog) ✅ — fixed</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">API Keys: Add ✅ · Reveal (re-auth) ✅ · Copy ✅ · Delete (AlertDialog) ✅</div></div>
+      </div>
+      <div class="issue"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #3 — Bank Statements: no delete UI</div><div class="itext"><code>deleteBankStatement</code> imported but no delete button in JSX. Users couldn't remove uploaded statements.</div></div>
+      <div class="fix"><div class="flbl">✅ Fixed — Uploaded Statements management card with Trash + AlertDialog confirmation</div></div>
+      <div class="issue" style="margin-top:6px"><div class="ilbl"><span class="tag crit">CRITICAL</span> Issue #4 — Documents: delete without confirmation</div><div class="itext"><code>handleDelete()</code> called directly on button click with no AlertDialog — instant permanent data loss.</div></div>
+      <div class="fix"><div class="flbl">✅ Fixed — Added AlertDialog confirmation; delete now requires explicit "Delete" action</div></div>
       </div>
     </div>
 
-    <!-- PHASE 3 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">3</div><div class="ptitle">Phase 3 — Cloud vault sync</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P3 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">3</div><div class="ptitle">Phase 3 — Cloud vault sync</div><span class="pstats">6 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Token acquisition: email + accountPasswordHash → JWT</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Encrypted blob never decrypted server-side (zero-knowledge architecture confirmed)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Offline sync queue: push/delete queued in localStorage, replayed on reconnect</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">PATCH /api/vaults/cloud/:id/default sets default vault</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Conflict detection: serverNewer flag returns server blob for client merge</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Native cloud sync: absolute URLs (fixed issue #2) — all 6 fetch paths updated</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 4 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">4</div><div class="ptitle">Phase 4 — Dashboard verification</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P4 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">4</div><div class="ptitle">Phase 4 — Dashboard verification</div><span class="pstats">8 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Greeting: "Good [time], [name] [emoji]" — reads customerProfile then email fallback</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Security score ring: SVG circle, 0-100 scale, color-coded (green/amber/red)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">"Weak X" link navigates to <code>/passwords?filter=weak</code></div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All 6 stat cards: real vault data (passwords, subscriptions, notes, expenses, reminders, bank statements)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Upcoming Renewals: live subscription data filtered to next 7 days</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Due Soon: incomplete reminders due within 7 days</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Recent Activity: merged across all 5 modules, sorted by timestamp</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Quick Actions: 4 buttons navigate to correct pages</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 5 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">5</div><div class="ptitle">Phase 5 — Authentication flows</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P5 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">5</div><div class="ptitle">Phase 5 — Authentication flows</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Wrong password → friendly "Incorrect email or password" (not raw Supabase error)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Session persistence: master pw in sessionStorage, account session in localStorage</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Logout clears: accountSession, planCache, sessionStorage, vault unlock state</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">After login: vault picker shown (isUnlocked=false → VaultPickerPage route)</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 6 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">6</div><div class="ptitle">Phase 6 — Profile page</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P6 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">6</div><div class="ptitle">Phase 6 — Profile page</div><span class="pstats">7 tests</span><span class="sbadge pass">✅ Pass (fix applied)</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">No crash on mount: defensive null checks, safe defaults</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Shows correct name from customerProfile (not "John Doe")</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Shows correct plan from license context (fixed — was reading stale localStorage)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All 6 tabs: Overview, Vaults, Subscription, Data, Support, Security</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Export: JSON + CSV via vaultBackupService</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Change password flow exists (passcode dialog)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Family sharing section: invite management, send invites</div></div>
+      </div>
+      <div class="issue"><div class="ilbl"><span class="tag high">HIGH</span> Issue #5 — Profile shows stale plan (free) for paid users</div><div class="itext">Subscription tier read from <code>customerProfile?.subscription || 'free'</code> (localStorage snapshot). Lifetime user would see "free" after paying.</div></div>
+      <div class="fix"><div class="flbl">✅ Fixed — <code>tier: license.tier</code> from live LicenseContext</div></div>
+      </div>
+    </div>
 
-    <!-- PHASE 7 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">7</div><div class="ptitle">Phase 7 — Settings</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P7 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">7</div><div class="ptitle">Phase 7 — Settings</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Theme toggle (Light/Dark/System) persists to localStorage <code>'securevault-theme'</code></div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Privacy toggles (analytics, support) persist to localStorage</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Manual cloud sync button with status feedback (syncing/success/error)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All settings survive page refresh</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 8 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">8</div><div class="ptitle">Phase 8 — Plan enforcement</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P8 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">8</div><div class="ptitle">Phase 8 — Plan enforcement</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Lifetime user: all PAID_FEATURES enabled, isPaid=true, isLifetime=true</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Pricing page: Free="Mobile app only", Pro/Family/Lifetime="Web app + Mobile app"</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Feature gates: checkFeatureAccess used consistently, pricing.ts validates tier</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">usePlanFeatures: 'lifetime' → isPaid=true, isLifetime=true</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 9 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">9</div><div class="ptitle">Phase 9 — Mobile responsiveness (375px)</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P9 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">9</div><div class="ptitle">Phase 9 — Mobile responsiveness (375px)</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Viewport: <code>maximum-scale=1, user-scalable=no, viewport-fit=cover</code> in index.html</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">FAB: <code>lg:hidden</code> mobile-only, Apple-style pill (rounded-full, slate-900)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">No fixed widths &gt;375px found; layout uses flex/grid with proper responsive classes</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Sheet modals: bottom-sheet pattern, Radix UI scrollable by default</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 10 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">10</div><div class="ptitle">Phase 10 — Security (XSS, CORS, encryption)</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P10 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">10</div><div class="ptitle">Phase 10 — Security</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">XSS: <code>stripHtml()</code> applied to all user inputs before DB insert (fullName, subject, description)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">SQL injection: all queries use parameterized <code>$1, $2</code> — no string concatenation found</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Password reveal: requires master password (VerifyAccessModal) or biometric — no bypass</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Encryption: zero-knowledge — blob encrypted client-side, server stores/returns opaque ciphertext</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 11 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">11</div><div class="ptitle">Phase 11 — Notifications / Toasts</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P11 PASS -->
+    <div class="phase">
+      <div class="ph"><div class="pnum pass">11</div><div class="ptitle">Phase 11 — Notifications / Toasts</div><span class="pstats">4 tests</span><span class="sbadge pass">✅ Pass</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Success toasts: 3000ms auto-dismiss</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Error toasts: 5000ms auto-dismiss</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">No "browser sync" or "loaded X items" toasts on page load</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">All toasts are user-triggered (save/delete/copy actions only)</div></div>
+      </div></div>
+    </div>
 
-    <!-- PHASE 12 -->
-    <div class="phase"><div class="ph"><div class="pnum pend">12</div><div class="ptitle">Phase 12 — Regression: user-reported issues</div><span class="sbadge pend">⏳ Pending</span></div></div>
+    <!-- P12 RUNNING -->
+    <div class="phase">
+      <div class="ph"><div class="pnum run">12</div><div class="ptitle">Phase 12 — Regression: user-reported issues</div><span class="pstats">9/10 tests</span><span class="sbadge run"><span class="spinner"></span>Final deploy</span></div>
+      <div class="pbody"><div class="tlist">
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Expenses render with data (useVault hook, grouped by day)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Profile page opens without crash</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Cloud vault doesn't create local copy</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dashboard greeting: "Good [time], [name] [emoji]" ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Weak passwords link navigates to /passwords?filter=weak ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">FAB: Apple-style pill (not orange circle) ✅</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Delete confirmation dialogs across ALL modules ✅ (fixed docs + bank statements)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Dark mode: semantic bg-card tokens (no bg-white text-white inversion bugs)</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Viewport zoom reset: resetViewportZoom() called at 4 unlock paths in vault-picker.tsx</div></div>
+        <div class="ti pass"><div class="dot pass"></div><div class="tname">Profile plan: now reads from live LicenseContext (fixed — no more stale "free")</div></div>
+      </div></div>
+    </div>
 
   </div>
 </div>

@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -260,6 +261,7 @@ export default function Documents() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   
   // Selected items
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -654,22 +656,21 @@ export default function Documents() {
     }
   };
   
-  const handleDelete = async (documentId: string) => {
+  const handleDelete = (documentId: string) => {
+    setDeleteTargetId(documentId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
     try {
-      await documentService.deleteDocument(documentId);
-      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      
-      toast({
-        title: "Document Deleted",
-        description: "Document has been permanently deleted.",
-      });
+      await documentService.deleteDocument(deleteTargetId);
+      setDocuments(prev => prev.filter(doc => doc.id !== deleteTargetId));
+      toast({ title: "Document Deleted", description: "Document has been permanently deleted." });
     } catch (error) {
       console.error('Delete error:', error);
-      toast({
-        title: "Delete Error",
-        description: "Failed to delete document. Please try again.",
-        variant: "destructive"
-      });
+      toast({ title: "Delete Error", description: "Failed to delete document. Please try again.", variant: "destructive" });
+    } finally {
+      setDeleteTargetId(null);
     }
   };
   
@@ -1384,6 +1385,19 @@ export default function Documents() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. The document will be permanently removed from your vault.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

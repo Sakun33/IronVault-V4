@@ -174,7 +174,7 @@ export default function Profile() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<string>('fingerprint');
-  const { changePlan } = useLicense();
+  const { changePlan, license } = useLicense();
   const [, setLocation] = useLocation();
   
   // 2FA persistent state
@@ -265,7 +265,7 @@ export default function Profile() {
       },
     },
     subscription: {
-      tier: customerProfile?.subscription || 'free',
+      tier: license.tier,
       status: 'active',
       startDate: customerProfile?.registeredAt ? new Date(customerProfile.registeredAt) : new Date(),
       endDate: undefined,
