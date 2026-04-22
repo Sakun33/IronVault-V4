@@ -18,40 +18,6 @@ import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// ── Security score ring ───────────────────────────────────────────────────────
-function SecurityRing({ score, totalPasswords, weakPasswords }: { score: number; totalPasswords: number; weakPasswords: number }) {
-  const r = 30, cx = 38, cy = 38, sw = 8;
-  const circ = 2 * Math.PI * r;
-  const dash = (score / 100) * circ;
-  const color = score >= 90 ? '#22c55e' : score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
-  const label = score >= 90 ? 'Excellent' : score >= 75 ? 'Strong' : score >= 50 ? 'Fair' : 'Weak';
-  const strongCount = totalPasswords - weakPasswords;
-  return (
-    <div className="flex items-center gap-3 w-full">
-      <svg width="76" height="76" viewBox="0 0 76 76" className="flex-shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-muted/20" />
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${cx} ${cy})`}
-        />
-        <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill={color}>{score}</text>
-        <text x={cx} y={cy + 8} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill="#64748b">/100</text>
-      </svg>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground">Security score</p>
-        {totalPasswords > 0 && (
-          <div className="mt-1.5 space-y-0.5">
-            <p className="text-[11px] text-green-500">Strong {strongCount}/{totalPasswords}</p>
-            {weakPasswords > 0 && <p className="text-[11px] text-red-500">Weak {weakPasswords}</p>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Expense horizontal bar chart ──────────────────────────────────────────────
 function ExpenseBarChart({
   categories,
@@ -174,6 +140,7 @@ function WidgetCard({
 // ── Greeting helpers ──────────────────────────────────────────────────────────
 function getGreeting(): string {
   const h = new Date().getHours();
+  if (h < 5) return 'Good night';
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
@@ -181,10 +148,9 @@ function getGreeting(): string {
 
 function getTimeEmoji(): string {
   const h = new Date().getHours();
-  if (h < 6) return '🌙';
-  if (h < 12) return '☀️';
-  if (h < 17) return '🌤️';
-  if (h < 20) return '🌅';
+  if (h >= 5 && h < 12) return '☀️';
+  if (h >= 12 && h < 17) return '🌤️';
+  if (h >= 17 && h < 21) return '🌅';
   return '🌙';
 }
 
@@ -481,60 +447,109 @@ export default function Dashboard() {
           </Alert>
         )}
 
-        {/* Greeting Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-blue-600/20 border border-white/10 p-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 animate-pulse pointer-events-none" />
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-5">
-            {/* Left: greeting + date + action pills */}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-white mb-1">
-                {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
-              </h1>
-              <p className="text-sm text-slate-400 mb-4">
-                {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={isRefreshing}
-                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-auto py-1.5 px-3 rounded-full bg-white/10 hover:bg-white/20 border-0 text-sm text-white/80 gap-1.5 w-auto shadow-none focus:ring-0">
-                    <Globe className="w-3.5 h-3.5" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currencies.map((curr) => (
-                      <SelectItem key={curr.code} value={curr.code}>
-                        {curr.symbol} {curr.code}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button
-                  onClick={() => setShowImportExport(true)}
-                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Import / Export
-                </button>
-                <button
-                  onClick={() => setShowGenerator(true)}
-                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Generator
-                </button>
+        {/* Greeting Card — white in light mode, gradient in dark */}
+        <div className="relative overflow-hidden rounded-2xl p-6
+          bg-white dark:bg-gradient-to-br dark:from-indigo-600/20 dark:via-purple-600/10 dark:to-blue-600/20
+          border border-slate-200 dark:border-white/10
+          shadow-sm dark:shadow-none">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 dark:animate-pulse pointer-events-none" />
+          <div className="relative z-10">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+              {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
+              <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition disabled:opacity-50
+                  bg-slate-100 hover:bg-slate-200 text-slate-700
+                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger className="h-auto py-1.5 px-3 rounded-full border-0 text-sm gap-1.5 w-auto shadow-none focus:ring-0
+                  bg-slate-100 hover:bg-slate-200 text-slate-700
+                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80">
+                  <Globe className="w-3.5 h-3.5" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencies.map((curr) => (
+                    <SelectItem key={curr.code} value={curr.code}>
+                      {curr.symbol} {curr.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => setShowImportExport(true)}
+                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition
+                  bg-slate-100 hover:bg-slate-200 text-slate-700
+                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Import / Export
+              </button>
+              <button
+                onClick={() => setShowGenerator(true)}
+                className="px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition
+                  bg-slate-100 hover:bg-slate-200 text-slate-700
+                  dark:bg-white/10 dark:hover:bg-white/20 dark:text-white/80"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Generator
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Score — own centered card */}
+        <div className="rounded-2xl p-5 text-center
+          bg-white dark:bg-white/5
+          border border-slate-200 dark:border-white/10
+          shadow-sm dark:shadow-none">
+          <div className="flex flex-col items-center gap-1">
+            <svg width="96" height="96" viewBox="0 0 76 76" className="mb-1">
+              {(() => {
+                const r = 30, cx = 38, cy = 38, sw = 8;
+                const circ = 2 * Math.PI * r;
+                const dash = (securityScore / 100) * circ;
+                const color = securityScore >= 90 ? '#22c55e' : securityScore >= 75 ? '#22c55e' : securityScore >= 50 ? '#f59e0b' : '#ef4444';
+                return (
+                  <>
+                    <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-slate-200 dark:text-muted/20" />
+                    <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
+                      strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
+                      strokeLinecap="round"
+                      transform={`rotate(-90 ${cx} ${cy})`}
+                    />
+                    <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill={color}>{securityScore}</text>
+                    <text x={cx} y={cy + 8} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill="#64748b">/100</text>
+                  </>
+                );
+              })()}
+            </svg>
+            <p className={`text-lg font-bold ${securityScore >= 90 ? 'text-emerald-500' : securityScore >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+              {securityScore >= 90 ? 'Excellent' : securityScore >= 75 ? 'Strong' : securityScore >= 50 ? 'Fair' : 'Weak'}
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Security Score</p>
+            {stats.totalPasswords > 0 && (
+              <div className="flex justify-center gap-6 mt-2 text-sm">
+                <span className="text-slate-600 dark:text-slate-300">
+                  Strong <span className="text-emerald-500 font-semibold">{stats.totalPasswords - weakPasswords}/{stats.totalPasswords}</span>
+                </span>
+                {weakPasswords > 0 && (
+                  <span className="text-slate-600 dark:text-slate-300">
+                    Weak <span className="text-red-500 font-semibold">{weakPasswords}</span>
+                  </span>
+                )}
               </div>
-            </div>
-            {/* Right: security score ring */}
-            <div className="bg-white/5 rounded-2xl p-3 flex-shrink-0 self-start sm:self-center">
-              <SecurityRing score={securityScore} totalPasswords={stats.totalPasswords} weakPasswords={weakPasswords} />
-            </div>
+            )}
           </div>
         </div>
 
