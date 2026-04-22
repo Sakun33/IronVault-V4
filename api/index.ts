@@ -1007,5 +1007,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/admin/set-plan ────────────────────────────────────────────────
+  // Protected by JWT_SECRET header. Updates plan in both customers + entitlements.
+  if (path === '/api/admin/set-plan' && req.method === 'POST') {
+    const adminKey = req.headers['x-admin-key'] as string;
+    if (!adminKey || adminKey !== JWT_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    const { email, plan } = req.body || {};
+    if (!email || !plan) return res.status(400).json({ error: 'email and plan required' });
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    try {
+      const { rowCount: cRows } = await db.query(
+        `UPDATE customers SET plan_type = $1, updated_at = NOW() WHERE email = $2`,
+        [plan, normalizedEmail]
+      );
+      const { rowCount: eRows } = await db.query(
+        `UPDATE entitlements SET plan = $1, updated_at = NOW()
+         WHERE user_id = (SELECT id FROM crm_users WHERE email = $2 LIMIT 1)`,
+        [plan, normalizedEmail]
+      );
+      return res.json({ success: true, email: normalizedEmail, plan, customersUpdated: cRows, entitlementsUpdated: eRows });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   return res.status(404).json({ error: "endpoint not found", path });
 }
