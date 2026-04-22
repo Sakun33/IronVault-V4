@@ -539,7 +539,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id=$1`, [id]);
       if (!old[0]) return res.status(404).json({ error: "Customer not found" });
       await db.query(
-        `UPDATE entitlements SET plan=$1, updated_at=NOW() WHERE user_id=$2`,
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($2, $1, 'active', false, false, true)
+         ON CONFLICT (user_id) DO UPDATE SET plan=$1, status='active', updated_at=NOW()`,
         [dbPlan, id]
       );
       await db.query(

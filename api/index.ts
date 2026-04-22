@@ -148,12 +148,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       const isUuid = /^[0-9a-f-]{36}$/i.test(userId);
-      const col = isUuid ? "id" : "email";
+      const col = isUuid ? "u.id" : "u.email";
+      // Check entitlements table (joined with crm_users) — this is the authoritative source
+      // after admin plan changes. Falls back to legacy customers table if not found.
       const { rows } = await db.query(
-        `SELECT id, email, plan_type, status FROM customers WHERE ${col} = $1 LIMIT 1`,
+        `SELECT u.id, u.email, COALESCE(e.plan, 'free') AS plan_type, COALESCE(e.status, 'active') AS status
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id
+         WHERE ${col} = $1 LIMIT 1`,
         [userId]
       );
-      if (!rows[0]) return res.json({ plan: "free", status: "active", trial_active: false, entitlement: { plan: "free", status: "active", trial_active: false } });
+      if (!rows[0]) {
+        // Legacy fallback: check old customers table
+        const legacyCol = isUuid ? "id" : "email";
+        const { rows: legacyRows } = await db.query(
+          `SELECT id, email, plan_type, status FROM customers WHERE ${legacyCol} = $1 LIMIT 1`,
+          [userId]
+        );
+        if (!legacyRows[0]) return res.json({ plan: "free", status: "active", trial_active: false, entitlement: { plan: "free", status: "active", trial_active: false } });
+        const lr = legacyRows[0];
+        const legacyData = { plan: lr.plan_type, status: lr.status, trial_active: lr.plan_type === "trial", id: lr.id, email: lr.email };
+        return res.json({ ...legacyData, entitlement: legacyData });
+      }
       const row = rows[0];
       const entitlementData = {
         plan: row.plan_type,
