@@ -3,6 +3,10 @@ const SYNC_QUEUE_KEY = 'iv_sync_queue';
 const DEVICE_ID_KEY = 'iv_device_id';
 const CLOUD_SYNCED_VAULTS_KEY = 'iv_cloud_synced_vaults';
 
+// Cloud vault API lives at www.ironvault.app — use absolute URL so native
+// Capacitor apps (origin: capacitor://localhost) can reach it over the network.
+const CLOUD_API = 'https://www.ironvault.app';
+
 export interface CloudVaultMeta {
   vaultId: string;
   vaultName: string;
@@ -41,7 +45,7 @@ export function clearCloudToken(): void {
 // ── Auth: exchange email+accountPasswordHash for JWT ──────────────────────────
 export async function acquireCloudToken(email: string, accountPasswordHash: string): Promise<string | null> {
   try {
-    const res = await fetch('/api/auth/token', {
+    const res = await fetch(`${CLOUD_API}/api/auth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, accountPasswordHash }),
@@ -63,7 +67,7 @@ function authHeaders(): Record<string, string> {
 // ── List cloud vaults (metadata only) ────────────────────────────────────────
 export async function listCloudVaults(): Promise<CloudVaultMeta[]> {
   try {
-    const res = await fetch('/api/vaults/cloud', { headers: authHeaders() });
+    const res = await fetch(`${CLOUD_API}/api/vaults/cloud`, { headers: authHeaders() });
     if (!res.ok) return [];
     const { vaults } = await res.json();
     return vaults ?? [];
@@ -73,7 +77,7 @@ export async function listCloudVaults(): Promise<CloudVaultMeta[]> {
 // ── Download vault blob ───────────────────────────────────────────────────────
 export async function downloadCloudVault(vaultId: string): Promise<CloudVaultFull | null> {
   try {
-    const res = await fetch(`/api/vaults/cloud/${vaultId}`, { headers: authHeaders() });
+    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, { headers: authHeaders() });
     if (!res.ok) return null;
     const data = await res.json();
     // API returns fields at top level (not nested under `vault`)
@@ -102,14 +106,14 @@ export async function pushCloudVault(
   const sourceDeviceId = getOrCreateDeviceId();
   try {
     // Try PUT first (update existing)
-    const putRes = await fetch(`/api/vaults/cloud/${vaultId}`, {
+    const putRes = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ encryptedBlob, vaultName, isDefault, clientModifiedAt }),
     });
     if (putRes.status === 404) {
       // Not in cloud yet — create it
-      const postRes = await fetch('/api/vaults/cloud', {
+      const postRes = await fetch(`${CLOUD_API}/api/vaults/cloud`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ vaultId, vaultName, encryptedBlob, isDefault, clientModifiedAt, sourceDeviceId }),
@@ -138,7 +142,7 @@ export async function pushCloudVault(
 // ── Delete ────────────────────────────────────────────────────────────────────
 export async function deleteCloudVault(vaultId: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/vaults/cloud/${vaultId}`, {
+    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
       method: 'DELETE', headers: authHeaders(),
     });
     return res.ok;
@@ -148,7 +152,7 @@ export async function deleteCloudVault(vaultId: string): Promise<boolean> {
 // ── Set default ───────────────────────────────────────────────────────────────
 export async function setCloudDefault(vaultId: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/vaults/cloud/${vaultId}/default`, {
+    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}/default`, {
       method: 'PATCH', headers: authHeaders(),
     });
     return res.ok;

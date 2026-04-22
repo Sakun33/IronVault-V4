@@ -18,6 +18,9 @@ function getPool(): Pool {
 const ALLOWED_ORIGINS = [
   'https://www.ironvault.app',
   'https://ironvault.app',
+  'capacitor://localhost',   // Capacitor iOS native
+  'http://localhost',        // Capacitor Android native
+  'https://localhost',       // Capacitor Android (HTTPS mode)
 ];
 
 function stripHtml(str: string): string {
