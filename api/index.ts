@@ -3,6 +3,47 @@ import { Pool } from "pg";
 import { createHmac } from "crypto";
 import nodemailer from "nodemailer";
 
+// ── Zoho Desk API ─────────────────────────────────────────────────────────────
+let _zdToken: string | null = null;
+let _zdTokenExpiry = 0;
+
+async function getZohoAccessToken(): Promise<string | null> {
+  if (_zdToken && Date.now() < _zdTokenExpiry - 60_000) return _zdToken;
+  const { ZOHO_DESK_CLIENT_ID: cid, ZOHO_DESK_CLIENT_SECRET: csec, ZOHO_DESK_REFRESH_TOKEN: rt } = process.env;
+  if (!cid || !csec || !rt) return null;
+  try {
+    const r = await fetch(`https://accounts.zoho.in/oauth/v2/token?grant_type=refresh_token&client_id=${cid}&client_secret=${csec}&refresh_token=${rt}`, { method: 'POST' });
+    const d = await r.json() as any;
+    if (d.access_token) { _zdToken = d.access_token; _zdTokenExpiry = Date.now() + (d.expires_in ?? 3600) * 1000; return _zdToken; }
+    console.error('[zoho] token refresh error:', JSON.stringify(d));
+  } catch (e: any) { console.error('[zoho] token refresh failed:', e.message); }
+  return null;
+}
+
+async function createZohoDeskTicket(opts: { email: string; subject: string; description: string; priority?: string }): Promise<{ id: string; ticketNumber: string } | null> {
+  const token = await getZohoAccessToken();
+  if (!token) return null;
+  const orgId = process.env.ZOHO_DESK_ORG_ID || '60070327163';
+  try {
+    const r = await fetch('https://desk.zoho.in/api/v1/tickets', {
+      method: 'POST',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}`, 'orgId': orgId, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: opts.subject,
+        description: opts.description,
+        email: opts.email,
+        departmentId: '189695000000010772',
+        priority: opts.priority === 'high' ? 'High' : opts.priority === 'low' ? 'Low' : 'Medium',
+        channel: 'Web',
+      }),
+    });
+    const d = await r.json() as any;
+    if (d.id) return { id: String(d.id), ticketNumber: String(d.ticketNumber ?? d.id) };
+    console.error('[zoho] ticket create failed:', JSON.stringify(d));
+  } catch (e: any) { console.error('[zoho] create ticket error:', e.message); }
+  return null;
+}
+
 // ── Zoho SMTP email service ────────────────────────────────────────────────────
 const _FROM_ADDR = 'saket@ironvault.app';
 const _FROM_NAME = 'IronVault';
@@ -255,24 +296,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { email, subject, description, priority } = req.body || {};
     if (!email || !subject) return res.status(400).json({ error: "email and subject required" });
     const safeSubject = stripHtml(String(subject));
-    const safeDescription = description ? stripHtml(String(description)) : null;
+    const safeDescription = description ? stripHtml(String(description)) : '';
     try {
-      // Look up customer_id (optional — ticket can exist without a customer row)
-      const { rows: cRows } = await db.query(
+      // Primary: create ticket in Zoho Desk
+      const zdTicket = await createZohoDeskTicket({ email, subject: safeSubject, description: safeDescription, priority });
+      const ticketId = zdTicket?.ticketNumber ?? zdTicket?.id ?? 'N/A';
+
+      // Secondary: also persist locally for audit trail (fire-and-forget)
+      db.query(
         `SELECT id FROM customers WHERE email = $1 LIMIT 1`, [email]
-      );
-      const customerId = cRows[0]?.id || null;
-      const { rows } = await db.query(
-        `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [customerId, email, safeSubject, safeDescription, priority || "normal"]
-      );
-      const ticket = rows[0];
-      // Send ticket confirmation email (fire-and-forget)
-      const tmpl = ticketConfirmationEmail(safeSubject, ticket.id);
-      sendEmail({ to: email, ...tmpl }).catch(() => {});
-      return res.json({ success: true, ticket });
+      ).then(({ rows: cRows }) => {
+        const customerId = cRows[0]?.id || null;
+        return db.query(
+          `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [customerId, email, safeSubject, safeDescription || null, priority || 'normal']
+        );
+      }).catch(() => {});
+
+      // Send confirmation email with Zoho ticket number
+      sendEmail({ to: email, ...ticketConfirmationEmail(safeSubject, ticketId) }).catch(() => {});
+      return res.json({ success: true, ticket: { id: ticketId, zoho: !!zdTicket } });
     } catch (err: any) {
       console.error("ticket create error:", err.message);
       return res.status(500).json({ error: err.message });
