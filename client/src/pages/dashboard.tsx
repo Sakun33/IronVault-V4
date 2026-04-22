@@ -1,7 +1,6 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
 import { StatCard } from "@/components/StatCard";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -172,6 +171,30 @@ function WidgetCard({
   );
 }
 
+// ── Greeting helpers ──────────────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getTimeEmoji(): string {
+  const h = new Date().getHours();
+  if (h < 6) return '🌙';
+  if (h < 12) return '☀️';
+  if (h < 17) return '🌤️';
+  if (h < 20) return '🌅';
+  return '🌙';
+}
+
+function getUserName(): string {
+  try {
+    const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
+    return (cp.name || '').split(' ')[0] || '';
+  } catch { return ''; }
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, setSearchQuery, refreshData } = useVault();
@@ -264,19 +287,7 @@ export default function Dashboard() {
     [reminders]
   );
 
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    try {
-      const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-      const first = (cp.name || '').split(' ')[0] || '';
-      const emoji = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
-      const salute = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      return first ? `${salute}, ${first} ${emoji}` : `${salute} ${emoji}`;
-    } catch {
-      const emoji = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
-      return (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ' ' + emoji;
-    }
-  }, []);
+  const userName = getUserName();
 
   const securityScore = useMemo(() => {
     if (stats.totalPasswords === 0) return 0;
@@ -470,47 +481,60 @@ export default function Dashboard() {
           </Alert>
         )}
 
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting}</h1>
-            <p className="text-sm text-muted-foreground">
-              Your vault is secure · Last updated: {format(lastRefresh, 'HH:mm:ss')}
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={isRefreshing} className="flex items-center gap-2">
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="w-full sm:w-32 rounded-xl">
-                <SelectValue>
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    {currency}
-                  </div>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {currencies.map((curr) => (
-                  <SelectItem key={curr.code} value={curr.code}>
-                    <div className="flex items-center gap-2">
-                      <span>{curr.symbol}</span>
-                      <span>{curr.code}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => setShowImportExport(true)} variant="outline" className="rounded-xl px-4 py-2 whitespace-nowrap">
-              <Upload className="w-4 h-4 mr-2" />
-              Import / Export
-            </Button>
-            <Button onClick={() => setShowGenerator(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-4 py-3 shadow-sm whitespace-nowrap">
-              <Plus className="w-4 h-4 mr-2" />
-              Password Generator
-            </Button>
+        {/* Greeting Card */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-blue-600/20 border border-white/10 p-6">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 animate-pulse pointer-events-none" />
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-5">
+            {/* Left: greeting + date + action pills */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-white mb-1">
+                {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
+              </h1>
+              <p className="text-sm text-slate-400 mb-4">
+                {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="h-auto py-1.5 px-3 rounded-full bg-white/10 hover:bg-white/20 border-0 text-sm text-white/80 gap-1.5 w-auto shadow-none focus:ring-0">
+                    <Globe className="w-3.5 h-3.5" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} {curr.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  onClick={() => setShowImportExport(true)}
+                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Import / Export
+                </button>
+                <button
+                  onClick={() => setShowGenerator(true)}
+                  className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80 flex items-center gap-1.5 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Generator
+                </button>
+              </div>
+            </div>
+            {/* Right: security score ring */}
+            <div className="bg-white/5 rounded-2xl p-3 flex-shrink-0 self-start sm:self-center">
+              <SecurityRing score={securityScore} totalPasswords={stats.totalPasswords} weakPasswords={weakPasswords} />
+            </div>
           </div>
         </div>
 
@@ -572,11 +596,12 @@ export default function Dashboard() {
             subtitle={dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined}
             subtitleColor="text-destructive"
           />
-          <Card className="rounded-2xl shadow-sm">
-            <CardContent className="p-4 flex items-center h-full">
-              <SecurityRing score={securityScore} totalPasswords={stats.totalPasswords} weakPasswords={weakPasswords} />
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={BarChart3}
+            label="Documents"
+            value={stats.totalBankStatements}
+            color="text-foreground"
+          />
         </div>
 
         {/* Weak password alert */}
