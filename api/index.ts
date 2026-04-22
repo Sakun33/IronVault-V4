@@ -241,10 +241,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ).catch(() => ({ rows: [] as any[] }));
         const legacyPlan = legacyRows[0]?.plan_type || 'free';
         const fullName = legacyRows[0]?.full_name || normalizedEmail.split('@')[0];
-        // Auto-register minimal CRM user and inherit plan from legacy table
+        // Auto-register minimal CRM user and inherit plan from legacy table.
+        // ON CONFLICT handles the race condition where two simultaneous logins
+        // both see "not found" and attempt INSERT at the same time.
         const { rows: newUser } = await db.query(
           `INSERT INTO crm_users (email, full_name, country, marketing_consent, support_consent)
-           VALUES ($1, $2, 'US', false, true) RETURNING id`,
+           VALUES ($1, $2, 'US', false, true)
+           ON CONFLICT (email) DO UPDATE SET full_name = COALESCE(EXCLUDED.full_name, crm_users.full_name)
+           RETURNING id`,
           [normalizedEmail, fullName]
         );
         userId = newUser[0].id;
@@ -626,6 +630,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ success: true, vaultCount: count, limit, flagged });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/auth/forgot-password ─────────────────────────────────────────
+  // No email sending — returns the reset code in the response for on-screen display.
+  if (path === '/api/auth/forgot-password' && req.method === 'POST') {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email required' });
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          email VARCHAR(255) NOT NULL,
+          token VARCHAR(10) NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          used BOOLEAN DEFAULT false,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      const { rows } = await db.query(
+        `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]
+      );
+      if (!rows[0]) {
+        return res.json({ success: true, message: 'If that email has an account, a reset code was generated.' });
+      }
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const token = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      await db.query(`UPDATE password_reset_tokens SET used = true WHERE email = $1`, [normalizedEmail]);
+      await db.query(
+        `INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [normalizedEmail, token]
+      );
+      return res.json({ success: true, resetCode: token, message: 'Use this code within 1 hour.' });
+    } catch (err: any) {
+      console.error('forgot-password error:', err.message);
+      return res.status(500).json({ error: 'Failed to generate reset code' });
+    }
+  }
+
+  // ── POST /api/auth/reset-password ──────────────────────────────────────────
+  if (path === '/api/auth/reset-password' && req.method === 'POST') {
+    const { email, token, newPasswordHash } = req.body || {};
+    if (!email || !token || !newPasswordHash) {
+      return res.status(400).json({ error: 'email, token, and newPasswordHash required' });
+    }
+    const normalizedEmail = (email as string).toLowerCase().trim();
+    try {
+      const { rows } = await db.query(
+        `SELECT id FROM password_reset_tokens
+         WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
+         LIMIT 1`,
+        [normalizedEmail, (token as string).toUpperCase()]
+      );
+      if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
+      await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
+      await db.query(
+        `UPDATE crm_users SET account_password_hash = $1 WHERE email = $2`,
+        [newPasswordHash, normalizedEmail]
+      );
+      return res.json({ success: true, message: 'Password reset successfully. Please log in.' });
+    } catch (err: any) {
+      console.error('reset-password error:', err.message);
+      return res.status(500).json({ error: 'Failed to reset password' });
     }
   }
 
