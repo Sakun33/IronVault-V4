@@ -62,9 +62,10 @@ export async function registerCustomer(data: CustomerRegistrationData): Promise<
     const result = await response.json();
     console.log('✅ Customer registered with CRM:', result);
     
-    // Store userId locally for future API calls
-    if (result.userId) {
-      localStorage.setItem('crmUserId', result.userId);
+    // Store userId locally for future API calls (API returns `id` or `userId`)
+    const storedId = result.userId || result.id;
+    if (storedId) {
+      localStorage.setItem('crmUserId', String(storedId));
     }
     
     return result;
@@ -119,16 +120,30 @@ export async function autoRegisterOnVaultCreation(
  * Get user's entitlement status
  */
 export async function getEntitlementStatus(): Promise<CustomerRegistrationResponse['entitlement'] | null> {
-  const userId = localStorage.getItem('crmUserId');
-  if (!userId) return null;
+  let lookupId = localStorage.getItem('crmUserId');
+
+  // Fall back to email from account session for users who registered before
+  // crmUserId was stored (key mismatch bug: API returned `id`, code read `userId`)
+  if (!lookupId) {
+    try {
+      const session = JSON.parse(localStorage.getItem('accountSession') || '{}');
+      if (session.email) lookupId = encodeURIComponent(session.email);
+    } catch { /* ignore */ }
+  }
+
+  if (!lookupId) return null;
 
   try {
     const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-    const endpoint = apiUrl ? `${apiUrl}/api/crm/entitlement/${userId}` : `/api/crm/entitlement/${userId}`;
-    
+    const endpoint = apiUrl ? `${apiUrl}/api/crm/entitlement/${lookupId}` : `/api/crm/entitlement/${lookupId}`;
+
     const response = await fetch(endpoint);
     if (!response.ok) return null;
     const data = await response.json();
+    // Cache the canonical UUID so future calls skip the email lookup
+    if (data.id && !localStorage.getItem('crmUserId')) {
+      localStorage.setItem('crmUserId', String(data.id));
+    }
     return data.entitlement;
   } catch (error) {
     console.error('Failed to fetch entitlement:', error);
