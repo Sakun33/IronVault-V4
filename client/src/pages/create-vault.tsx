@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Shield, Lock, Zap } from 'lucide-react';
+import { Eye, EyeOff, Shield, Lock, Zap, Cloud } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -11,6 +11,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager } from '@/lib/vault-manager';
 import { pushCloudVault, queueOfflineSync, markVaultAsCloudSynced } from '@/lib/cloud-vault-sync';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
+import { isNativeApp } from '@/native/platform';
 
 export default function CreateVaultPage() {
   const [, setLocation] = useLocation();
@@ -26,8 +27,9 @@ export default function CreateVaultPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const onWeb = !isNativeApp();
   const currentVaultCount = vaultManager.getLocalVaultCount();
-  const atLimit = !planLoading && currentVaultCount >= localVaultLimit;
+  const atLimit = !planLoading && !onWeb && currentVaultCount >= localVaultLimit;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,8 +46,8 @@ export default function CreateVaultPage() {
       await vaultStorage.switchToVault(newVault.id);
       await createVault(password);
 
-      // If creating as cloud vault, push to server
-      const isCloud = new URLSearchParams(window.location.search).get('type') === 'cloud';
+      // On web, always create as cloud vault (web = cloud only)
+      const isCloud = onWeb || new URLSearchParams(window.location.search).get('type') === 'cloud';
       if (isCloud) {
         try {
           const blob = await vaultStorage.exportVault(password);
@@ -101,8 +103,28 @@ export default function CreateVaultPage() {
             </p>
           </div>
 
+          {/* Web upgrade gate — free users on web cannot create vaults */}
+          {onWeb && !isPaid && !planLoading && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Cloud className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">Pro plan required for web access</h2>
+              <p className="text-sm text-muted-foreground mb-1">
+                Creating vaults on the web requires a Pro, Family, or Lifetime plan.
+              </p>
+              <p className="text-sm text-muted-foreground mb-6">
+                Free plan users can create local vaults on the mobile app.
+              </p>
+              <Button onClick={() => setLocation('/pricing')} className="gap-2">
+                <Zap className="w-4 h-4" />
+                Upgrade to Pro
+              </Button>
+            </div>
+          )}
+
           {/* Plan limit upgrade prompt */}
-          {atLimit && (
+          {!onWeb && atLimit && (
             <div className="mb-6 p-4 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-center">
               <Zap className="w-6 h-6 text-amber-500 mx-auto mb-2" />
               <p className="font-semibold text-sm mb-1">
@@ -120,7 +142,8 @@ export default function CreateVaultPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Hide form for free users on web — they see the upgrade gate above */}
+          <form onSubmit={handleSubmit} className={`space-y-5 ${onWeb && !isPaid && !planLoading ? 'hidden' : ''}`}>
             {error && (
               <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm">
                 {error}

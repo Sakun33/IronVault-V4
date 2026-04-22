@@ -58,6 +58,8 @@ export interface PlanFeatures {
   isPaid: boolean;
   /** True for lifetime plan */
   isLifetime: boolean;
+  /** Whether web app access is enabled (paid plans only — web requires cloud/paid) */
+  webAppEnabled: boolean;
   /** Loading state while fetching from server */
   isLoading: boolean;
   /** Refetch the plan from the server */
@@ -74,6 +76,7 @@ const FREE_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refre
   prioritySupportEnabled: false,
   isPaid: false,
   isLifetime: false,
+  webAppEnabled: false,
 };
 
 const PAID_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refresh' | 'isLifetime'> = {
@@ -85,6 +88,7 @@ const PAID_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refre
   biometricEnabled: true,
   prioritySupportEnabled: true,
   isPaid: true,
+  webAppEnabled: true,
 };
 
 function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refresh'> {

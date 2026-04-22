@@ -43,7 +43,7 @@ export const PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'All the essentials, free forever.',
+    description: 'All the essentials — mobile app only.',
     priceMonthly: 0,
     priceYearly: 0,
     priceOneTime: null,
@@ -57,16 +57,17 @@ export const PLANS: Plan[] = [
       '10 secure notes',
       '10 reminders',
       '5 documents',
-      '1 vault per device',
+      '1 vault (mobile only)',
       'Local storage only',
       'Basic support',
+      'Mobile app only',
     ],
-    notIncluded: ['Cloud sync', 'Bank statement import', 'Expense tracking'],
+    notIncluded: ['Cloud sync', 'Bank statement import', 'Expense tracking', 'Web app access'],
   },
   {
     id: 'pro',
     name: 'Pro Monthly',
-    description: 'Full access. 14-day free trial.',
+    description: 'Full access on web and mobile. 14-day free trial.',
     priceMonthly: 149,
     priceYearly: 1499,
     priceOneTime: null,
@@ -76,6 +77,7 @@ export const PLANS: Plan[] = [
     badge: 'Most Popular',
     features: [
       '14-day free trial',
+      'Web app + Mobile app',
       'Unlimited passwords',
       'Unlimited subscriptions',
       'Unlimited notes & reminders',
@@ -102,6 +104,7 @@ export const PLANS: Plan[] = [
     badge: 'Coming Soon',
     features: [
       'Everything in Pro',
+      'Web app + Mobile app',
       'Up to 6 family members',
       'Shared family vault',
       'Individual private vaults',
@@ -112,7 +115,7 @@ export const PLANS: Plan[] = [
   {
     id: 'lifetime',
     name: 'Lifetime',
-    description: 'Pay once, use forever. No recurring fees.',
+    description: 'Pay once, use forever on web and mobile.',
     priceMonthly: null,
     priceYearly: null,
     priceOneTime: 9999,
@@ -122,6 +125,7 @@ export const PLANS: Plan[] = [
     badge: null,
     features: [
       'Everything in Pro',
+      'Web app + Mobile app',
       'Up to 5 vaults per device',
       'Lifetime access',
       'No recurring payments',

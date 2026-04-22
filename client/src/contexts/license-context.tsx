@@ -5,6 +5,7 @@ import { billingService } from '@/billing/billing-service';
 import { isNativePlatform } from '@/billing/platform';
 import { ENTITLEMENT_IDS } from '@/billing/billing-types';
 import { getEntitlementStatus } from '@/lib/customer-registration';
+import { clearPlanCache } from '@/hooks/use-plan-features';
 import { useAuth } from '@/contexts/auth-context';
 
 interface LicenseContextType {
@@ -62,6 +63,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isUnlocked) return;
     hasSyncedFromServer.current = false; // allow server re-sync with the newly unlocked vault
+    clearPlanCache(); // force fresh CRM fetch — prevents stale 'free' cache overriding paid entitlement
     loadLicense().then(() => syncFromServer());
   }, [isUnlocked]);
 
