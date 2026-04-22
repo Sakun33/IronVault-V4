@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
 import { createHmac } from "crypto";
-import { sendEmail, smtpConfigured, welcomeEmail, passwordResetEmail, ticketConfirmationEmail } from './email';
+import { sendEmail, emailConfigured, welcomeEmail, passwordResetEmail, ticketConfirmationEmail, ticketReplyEmail, ticketClosedEmail, planUpgradeEmail } from './email';
 
 let pool: Pool | null = null;
 
@@ -178,6 +178,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ success: true, ticket });
     } catch (err: any) {
       console.error("ticket create error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── PATCH /api/crm/tickets/:id ──────────────────────────────────────────────
+  if (path.match(/^\/api\/crm\/tickets\/[^/]+$/) && req.method === "PATCH") {
+    const ticketId = path.replace("/api/crm/tickets/", "");
+    const { status, reply } = req.body || {};
+    try {
+      const updates: string[] = ['updated_at = NOW()'];
+      const vals: any[] = [ticketId];
+      if (status) { updates.push(`status = $${vals.length + 1}`); vals.push(status); }
+      if (reply)  { updates.push(`last_reply = $${vals.length + 1}`); vals.push(String(reply).slice(0, 1000)); }
+      const { rows } = await db.query(
+        `UPDATE tickets SET ${updates.join(', ')} WHERE id = $1 RETURNING *`, vals
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
+      const ticket = rows[0];
+      // Send email notification (fire-and-forget)
+      if (ticket.customer_email) {
+        if (status === 'closed' || status === 'resolved') {
+          const tmpl = ticketClosedEmail(ticketId);
+          sendEmail({ to: ticket.customer_email, ...tmpl }).catch(() => {});
+        } else if (reply) {
+          const tmpl = ticketReplyEmail(ticketId, reply);
+          sendEmail({ to: ticket.customer_email, ...tmpl }).catch(() => {});
+        }
+      }
+      return res.json({ success: true, ticket });
+    } catch (err: any) {
+      console.error('ticket update error:', err.message);
       return res.status(500).json({ error: err.message });
     }
   }
@@ -665,7 +696,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       // Always return success (don't reveal if email exists)
       if (!rows[0]) {
-        return res.json({ success: true, emailSent: smtpConfigured });
+        return res.json({ success: true, emailSent: emailConfigured });
       }
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       const token = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -675,7 +706,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [normalizedEmail, token]
       );
       const resetLink = `${APP_URL}/auth/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
-      if (smtpConfigured) {
+      if (emailConfigured) {
         const tmpl = passwordResetEmail(resetLink);
         sendEmail({ to: normalizedEmail, ...tmpl }).catch(() => {});
         return res.json({ success: true, emailSent: true });
