@@ -376,8 +376,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tmpl = ticketClosedEmail('TEST-001');
       } else if (type === 'password_reset') {
         tmpl = passwordResetEmail(`${process.env.APP_URL || 'https://www.ironvault.app'}/auth/reset-password?token=PREVIEW&email=${encodeURIComponent(email)}`);
+      } else if (type === 'verification') {
+        tmpl = verificationEmail(displayName, `${process.env.APP_URL || 'https://www.ironvault.app'}/auth/verify?token=PREVIEW&email=${encodeURIComponent(email)}`);
       } else {
-        return res.status(400).json({ error: 'type required: welcome|plan_upgrade|ticket_confirmation|ticket_reply|ticket_closed|password_reset' });
+        return res.status(400).json({ error: 'type required: welcome|verification|plan_upgrade|ticket_confirmation|ticket_reply|ticket_closed|password_reset' });
       }
       const sent = await sendEmail({ to: email, ...tmpl });
       return res.json({ success: sent, type, to: email, subject: tmpl.subject });
