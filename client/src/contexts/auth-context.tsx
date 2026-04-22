@@ -13,7 +13,7 @@ import {
   getAccountPasswordHash,
   sha256,
 } from '@/lib/account-auth';
-import { acquireCloudToken } from '@/lib/cloud-vault-sync';
+import { acquireCloudToken, clearCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 
@@ -127,16 +127,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const passwordHash = await sha256(password);
 
     const onSuccess = async () => {
+      // SECURITY: wipe any cloud token from a previous user's session BEFORE
+      // setting isAccountLoggedIn. Without this, the old token stays in
+      // localStorage and vault listing runs with it, leaking another user's vaults.
+      clearCloudToken();
       // Persist credentials locally for offline access
       await saveAccountCredentials(email, password);
       saveAccountSession(normalizedEmail);
       vaultManager.setAccountEmail(normalizedEmail);
-      setIsAccountLoggedIn(true);
-      setAccountEmail(normalizedEmail);
       // Clear stale plan cache so the plan hook re-fetches on next render
       clearPlanCache();
       addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
-      acquireCloudToken(normalizedEmail, passwordHash).catch(() => {});
+      // Acquire new token first so the app renders with the correct identity.
+      // Falls back gracefully on network error (offline mode).
+      await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
+      setIsAccountLoggedIn(true);
+      setAccountEmail(normalizedEmail);
     };
 
     // Server is the primary source of truth for cross-device auth.
@@ -179,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const accountLogout = () => {
     clearAccountSession();
     clearPlanCache();
+    clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
     vaultManager.clearAccountEmail();
     vaultManager.clearInternalState();
     setIsAccountLoggedIn(false);
