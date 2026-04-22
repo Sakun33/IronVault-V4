@@ -780,8 +780,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const resetLink = `${APP_URL}/auth/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
       if (emailConfigured) {
         const tmpl = passwordResetEmail(resetLink);
-        sendEmail({ to: normalizedEmail, ...tmpl }).catch(() => {});
-        return res.json({ success: true, emailSent: true });
+        const sent = await sendEmail({ to: normalizedEmail, ...tmpl });
+        return res.json({ success: true, emailSent: sent });
       } else {
         // SMTP not configured — return token for in-app display (dev/demo fallback)
         return res.json({ success: true, emailSent: false, resetCode: token, resetLink });
