@@ -169,7 +169,7 @@ async function setupDatabase() {
       VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (username) DO UPDATE SET password_hash = $3
     `, ['admin', 'admin@ironvault.app', passwordHash, 'super_admin', true]);
-    console.log('✅ Admin user created (username: admin, password: admin123)');
+    console.log('✅ Admin user created (username: admin)');
 
     // Insert plans
     console.log('\n📦 Creating subscription plans...');

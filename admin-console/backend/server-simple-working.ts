@@ -222,7 +222,7 @@ let admins: Admin[] = [
     id: 1,
     username: 'admin',
     email: 'admin@securevault.com',
-    password_hash: '$2b$10$zxD4TzxZ2mJ9LGA3qJQy4uKus6wa.6nv8JTiTbZBJt52APQDmqUDi', // admin123
+    password_hash: '$2b$10$zxD4TzxZ2mJ9LGA3qJQy4uKus6wa.6nv8JTiTbZBJt52APQDmqUDi',
     role: 'super_admin',
     is_active: true
   }

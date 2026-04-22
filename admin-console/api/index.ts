@@ -3,12 +3,13 @@ import * as crypto from "crypto";
 import { Pool } from "pg";
 
 // ── Auth config ──────────────────────────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || "admin-secret-change-in-prod";
+const JWT_SECRET = process.env.JWT_SECRET;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
-const ADMIN_PASSWORD_HASH = crypto
-  .createHash("sha256")
-  .update(process.env.ADMIN_PASSWORD || "admin123")
-  .digest("hex");
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+// Computed only when env var is present; null signals misconfiguration
+const ADMIN_PASSWORD_HASH = ADMIN_PASSWORD
+  ? crypto.createHash("sha256").update(ADMIN_PASSWORD).digest("hex")
+  : null;
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
 let pool: Pool | null = null;
@@ -25,6 +26,7 @@ function getPool(): Pool {
 
 // ── JWT helpers ───────────────────────────────────────────────────────────────
 function createJWT(payload: object): string {
+  if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
   const h = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const b = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() / 1000 + 86400 })).toString("base64url");
   const s = crypto.createHmac("sha256", JWT_SECRET).update(`${h}.${b}`).digest("base64url");
@@ -32,6 +34,7 @@ function createJWT(payload: object): string {
 }
 
 function verifyJWT(token: string): object | null {
+  if (!JWT_SECRET) return null;
   try {
     const [h, b, s] = token.split(".");
     const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${h}.${b}`).digest("base64url");
@@ -78,6 +81,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── Auth login (public) ─────────────────────────────────────────────────────
   if (path === "/api/auth/login" && method === "POST") {
+    if (!ADMIN_PASSWORD_HASH || !JWT_SECRET) {
+      return res.status(503).json({ error: "Admin credentials not configured" });
+    }
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
     const hash = crypto.createHash("sha256").update(password || "").digest("hex");
     if (username === ADMIN_USERNAME && hash === ADMIN_PASSWORD_HASH) {

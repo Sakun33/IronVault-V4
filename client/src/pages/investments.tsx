@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { 
   Plus, 
@@ -96,6 +97,8 @@ export default function Investments() {
     const [showAddGoalModal, setShowAddGoalModal] = useState(false);
     const [editingGoal, setEditingGoal] = useState<InvestmentGoal | null>(null);
     const [activeTab, setActiveTab] = useState('overview');
+    const [deleteTargetInvestment, setDeleteTargetInvestment] = useState<{ id: string; name: string } | null>(null);
+    const [deleteTargetGoal, setDeleteTargetGoal] = useState<{ id: string; name: string } | null>(null);
 
     // Calculate portfolio analytics
     const portfolioAnalytics = useMemo(() => {
@@ -207,24 +210,21 @@ export default function Investments() {
       });
     };
 
-    const handleDeleteInvestment = async (id: string, name: string) => {
-      console.log('🔍 Deleting investment:', name);
-      if (confirm(`Are you sure you want to delete the investment "${name}"?`)) {
-        try {
-          await deleteInvestment(id);
-          addLog('Investment deleted', 'system', `Deleted investment: ${name}`);
-          toast({
-            title: "Investment Deleted",
-            description: `"${name}" has been removed from your portfolio.`,
-          });
-        } catch (error) {
-          console.error('Failed to delete investment:', error);
-          toast({
-            title: "Error",
-            description: "Failed to delete investment. Please try again.",
-            variant: "destructive",
-          });
-        }
+    const handleDeleteInvestment = (id: string, name: string) => {
+      setDeleteTargetInvestment({ id, name });
+    };
+
+    const confirmDeleteInvestment = async () => {
+      if (!deleteTargetInvestment) return;
+      const { id, name } = deleteTargetInvestment;
+      setDeleteTargetInvestment(null);
+      try {
+        await deleteInvestment(id);
+        addLog('Investment deleted', 'system', `Deleted investment: ${name}`);
+        toast({ title: "Investment Deleted", description: `"${name}" has been removed from your portfolio.` });
+      } catch (error) {
+        console.error('Failed to delete investment:', error);
+        toast({ title: "Error", description: "Failed to delete investment. Please try again.", variant: "destructive" });
       }
     };
 
@@ -437,24 +437,21 @@ export default function Investments() {
       }
     };
 
-    const handleDeleteGoal = async (id: string, name: string) => {
-      if (!confirm(`Are you sure you want to delete the goal "${name}"?`)) {
-        return;
-      }
+    const handleDeleteGoal = (id: string, name: string) => {
+      setDeleteTargetGoal({ id, name });
+    };
+
+    const confirmDeleteGoal = async () => {
+      if (!deleteTargetGoal) return;
+      const { id, name } = deleteTargetGoal;
+      setDeleteTargetGoal(null);
       try {
         await deleteInvestmentGoal(id);
         addLog(`Goal deleted: ${name}`, 'system', 'User deleted investment goal');
-        toast({
-          title: "Goal Deleted",
-          description: `Successfully deleted goal: ${name}`,
-        });
+        toast({ title: "Goal Deleted", description: `Successfully deleted goal: ${name}` });
       } catch (error) {
         console.error('Error deleting goal:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete goal. Please try again.",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: "Failed to delete goal. Please try again.", variant: "destructive" });
       }
     };
 
@@ -1238,7 +1235,6 @@ export default function Investments() {
           </Dialog>
         )}
 
-        {/* Edit Investment Modal */}
         <EditInvestmentModal
           investment={editingInvestment}
           isOpen={isEditModalOpen}
@@ -1246,7 +1242,35 @@ export default function Investments() {
           onInvestmentUpdated={handleInvestmentUpdated}
         />
 
-        {/* Edit Investment Modal */}
+        <AlertDialog open={!!deleteTargetInvestment} onOpenChange={(open) => { if (!open) setDeleteTargetInvestment(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete investment?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{deleteTargetInvestment?.name}" will be permanently removed from your portfolio. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteInvestment} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!deleteTargetGoal} onOpenChange={(open) => { if (!open) setDeleteTargetGoal(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete goal?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{deleteTargetGoal?.name}" will be permanently deleted. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteGoal} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
 }

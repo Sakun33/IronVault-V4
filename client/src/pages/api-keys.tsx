@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface APIKey {
   id: string;
@@ -72,6 +73,7 @@ export default function APIKeys() {
   const [selectedEnv, setSelectedEnv] = useState<string>('all');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
+  const [deleteTargetKey, setDeleteTargetKey] = useState<{ id: string; name: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -179,14 +181,16 @@ export default function APIKeys() {
     });
   };
 
-  const handleDeleteKey = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete "${name}"?`)) {
-      await deleteApiKey(id);
-      toast({
-        title: "Deleted",
-        description: "API key deleted successfully",
-      });
-    }
+  const handleDeleteKey = (id: string, name: string) => {
+    setDeleteTargetKey({ id, name });
+  };
+
+  const confirmDeleteKey = async () => {
+    if (!deleteTargetKey) return;
+    const { id, name } = deleteTargetKey;
+    setDeleteTargetKey(null);
+    await deleteApiKey(id);
+    toast({ title: "Deleted", description: `"${name}" has been deleted.` });
   };
 
   const handleEditKey = (key: APIKey) => {
@@ -679,6 +683,21 @@ export default function APIKeys() {
         title="Reveal API Key"
         description="Verify your identity to view API key details."
       />
+
+      <AlertDialog open={!!deleteTargetKey} onOpenChange={(open) => { if (!open) setDeleteTargetKey(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete API key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteTargetKey?.name}" will be permanently deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteKey} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
