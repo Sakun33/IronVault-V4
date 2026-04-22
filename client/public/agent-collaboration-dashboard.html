@@ -71,7 +71,7 @@
 <header>
   <div>
     <h1>🛡 IronVault — Play Store Launch Day QA (Full Audit)</h1>
-    <div class="meta">Last updated: 2026-04-22 16:10 UTC · Commit fa5c3d8 · <strong>14 issues found · 11 fixed · 3 open · Plan sync fix in progress</strong></div>
+    <div class="meta">Last updated: 2026-04-22 17:45 UTC · Commit aeac13f · <strong>17 issues found · 15 fixed · 2 open · Auth + forgot-password fixed + deployed</strong></div>
   </div>
   <div class="badge">LIVE</div>
 </header>
@@ -81,7 +81,7 @@
     <div class="sc"><div class="lbl">Pass</div><div class="val v-pass">10</div></div>
     <div class="sc"><div class="lbl">Warn / Partial</div><div class="val v-warn">3</div></div>
     <div class="sc"><div class="lbl">Fail</div><div class="val v-fail">1</div></div>
-    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">11 / 14</div></div>
+    <div class="sc"><div class="lbl">Issues Fixed</div><div class="val v-pass">15 / 17</div></div>
   </div>
 
   <div class="section-header">Part A — Frontend (A1 – A20)</div>
@@ -158,55 +158,55 @@
 
     <!-- A8 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A8</div><div class="ptitle">Expenses — List, Add, Categories</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A8</div><div class="ptitle">Expenses — List, Add, Categories</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody">
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">Expenses shows PRO gate in sidebar. Blocked until plan-sync race-condition fix propagates to production (commit fa5c3d8 deployed).</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync race condition fixed (fa5c3d8). Lifetime tier now resolves correctly after vault unlock. Live CRUD test pending.</div></div>
       </div>
     </div>
 
     <!-- A9 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A9</div><div class="ptitle">Bank Statements — Upload, List, Parse</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A9</div><div class="ptitle">Bank Statements — Upload, List, Parse</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody">
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Blocked until plan sync resolves to Lifetime after vault unlock.</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync fixed. Live upload + parse test pending.</div></div>
       </div>
     </div>
 
     <!-- A10 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A10</div><div class="ptitle">Investments — List, Add, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A10</div><div class="ptitle">Investments — List, Add, AlertDialog Delete</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
         <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog delete pattern added (commit d4fb475) — replaces browser confirm()</div></div>
       </div>
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated page. Live CRUD test pending until plan sync resolves.</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync fixed. Live CRUD test pending.</div></div>
       </div>
     </div>
 
     <!-- A11 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A11</div><div class="ptitle">Investment Goals — Add, Progress, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A11</div><div class="ptitle">Investment Goals — Add, Progress, AlertDialog Delete</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
         <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog goal delete pattern added (commit d4fb475)</div></div>
       </div>
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync fixed. Live goal progress + delete test pending.</div></div>
       </div>
     </div>
 
     <!-- A12 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A12</div><div class="ptitle">Documents — Upload, View, Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A12</div><div class="ptitle">Documents — Upload, View, Delete</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody">
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync fixed. Live upload + viewer test pending.</div></div>
       </div>
     </div>
 
     <!-- A13 -->
     <div class="phase">
-      <div class="ph"><div class="pnum warn">A13</div><div class="ptitle">API Keys — List, Add, AlertDialog Delete</div><span class="sbadge warn">⏳ Pending Plan Sync</span></div>
+      <div class="ph"><div class="pnum pend">A13</div><div class="ptitle">API Keys — List, Add, AlertDialog Delete</div><span class="sbadge pend">⏳ Not Yet Tested</span></div>
       <div class="pbody"><div class="tlist">
         <div class="ti pass"><div class="dot pass"></div><div class="tname">AlertDialog API key delete pattern added (commit d4fb475)</div></div>
       </div>
-        <div class="warnbox"><div class="wlbl">Blocked</div><div class="wtext">PRO-gated. Pending plan sync.</div></div>
+        <div class="fix"><div class="flbl">Unblocked</div><div class="ftext">Plan sync fixed. Live CRUD test pending.</div></div>
       </div>
     </div>
 
@@ -366,6 +366,8 @@
           <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-100</strong> — <code>getEntitlementStatus</code> email fallback used key <code>accountSession</code> (never written) → should be <code>iv_account</code> (5fc379d) ✅ Fixed</div></div>
           <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-101</strong> — Race condition: dual <code>loadLicense()</code> effects on mount → later read overwrites "lifetime" to "free" (fa5c3d8) ✅ Fixed</div></div>
           <div class="ti fail"><div class="dot fail"></div><div class="tname"><strong>BUG-098</strong> — Global search input dead/unwired → ❌ Open (A17)</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-A/B</strong> — Login 500 on concurrent/retry: <code>crm_users</code> INSERT had no ON CONFLICT → unique constraint error on race. Fixed: <code>ON CONFLICT (email) DO UPDATE</code> (aeac13f) ✅ Fixed — curl-verified: parallel login returns same userId, no 500</div></div>
+          <div class="ti pass"><div class="dot pass"></div><div class="tname"><strong>BUG-C</strong> — Forgot password showed dead toast ("not available yet"). Added <code>POST /api/auth/forgot-password</code> (6-char code, 1h expiry, on-screen display) + <code>POST /api/auth/reset-password</code> + full 2-step UI in login.tsx (aeac13f) ✅ Fixed — curl-verified: returns <code>{"success":true,"resetCode":"ZNBPVH"}</code></div></div>
           <div class="ti warn"><div class="dot warn"></div><div class="tname"><strong>BUG-102</strong> — [SYNC] Cloud push: <code>m.getLocalVaults is not a function</code> → console error on load, non-critical but should be investigated ⚠️ Open</div></div>
         </div>
       </div>
