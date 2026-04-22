@@ -1,46 +1,33 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
 import { createHmac } from "crypto";
+import nodemailer from "nodemailer";
 
-// ── SendPulse email service (inlined — no external module) ─────────────────────
-const _SP_CLIENT_ID     = process.env.SENDPULSE_CLIENT_ID;
-const _SP_CLIENT_SECRET = process.env.SENDPULSE_CLIENT_SECRET || process.env.SENDPULSE_API_KEY;
-const _FROM_ADDR    = process.env.EMAIL_FROM_ADDRESS || 'noreply@ironvault.app';
-const _FROM_NAME    = process.env.EMAIL_FROM_NAME    || 'IronVault';
-const _APP_URL      = process.env.APP_URL            || 'https://www.ironvault.app';
-const emailConfigured = !!(_SP_CLIENT_ID && _SP_CLIENT_SECRET);
-let _spToken: string | null = null;
-let _spTokenExp = 0;
-async function _getSpToken(): Promise<string | null> {
-  if (!_SP_CLIENT_ID || !_SP_CLIENT_SECRET) return null;
-  if (_spToken && Date.now() < _spTokenExp) return _spToken;
-  try {
-    const r = await fetch('https://api.sendpulse.com/oauth/access_token', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'client_credentials', client_id: _SP_CLIENT_ID, client_secret: _SP_CLIENT_SECRET }),
-    });
-    if (!r.ok) {
-      const errBody = await r.text().catch(() => '');
-      console.warn('[email] SP OAuth failed', r.status, errBody);
-      return null;
-    }
-    const d = await r.json() as { access_token: string; expires_in?: number };
-    _spToken = d.access_token; _spTokenExp = Date.now() + ((d.expires_in || 3600) - 60) * 1000;
-    return _spToken;
-  } catch (e: any) { console.error('[email] OAuth error', e.message); return null; }
+// ── Zoho SMTP email service ────────────────────────────────────────────────────
+const _FROM_ADDR = 'saket@ironvault.app';
+const _FROM_NAME = 'IronVault';
+const _APP_URL   = process.env.APP_URL || 'https://www.ironvault.app';
+const emailConfigured = !!process.env.ZOHO_MAIL_PASSWORD;
+
+function _getTransporter() {
+  return nodemailer.createTransport({
+    host: 'smtppro.zoho.in',
+    port: 465,
+    secure: true,
+    auth: { user: _FROM_ADDR, pass: process.env.ZOHO_MAIL_PASSWORD },
+  });
 }
+
 async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
-  const tok = await _getSpToken();
-  if (!tok) { console.warn('[email] not configured, skip →', to); return false; }
+  if (!emailConfigured) { console.warn('[email] ZOHO_MAIL_PASSWORD not set, skip →', to); return false; }
   try {
-    const r = await fetch('https://api.sendpulse.com/smtp/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${tok}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: { subject, from: { name: _FROM_NAME, email: _FROM_ADDR }, to: [{ email: to }], html } }),
+    const result = await _getTransporter().sendMail({
+      from: `"${_FROM_NAME}" <${_FROM_ADDR}>`,
+      to, subject, html,
     });
-    if (!r.ok) { console.error('[email] SP send failed', r.status, await r.text()); return false; }
-    console.log('[email] sent:', subject, '→', to); return true;
-  } catch (e: any) { console.error('[email] send error', e.message); return false; }
+    console.log('[email] sent:', subject, '→', to, result.messageId);
+    return true;
+  } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
 }
 function _emailLayout(icon: string, bg: string, body: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:24px;background:#0f0f13;font-family:-apple-system,sans-serif"><div style="max-width:480px;margin:0 auto;background:#1a1a24;border-radius:16px;padding:36px;border:1px solid #2a2a3a"><div style="text-align:center;margin-bottom:24px"><div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:${bg}"><span style="font-size:26px">${icon}</span></div></div>${body}<hr style="border:none;border-top:1px solid #2a2a3a;margin:28px 0 18px"><p style="margin:0;text-align:center;font-size:11px;color:#475569">© 2026 IronVault &nbsp;·&nbsp;<a href="mailto:saket@ironvault.app" style="color:#6366f1;text-decoration:none">saket@ironvault.app</a></p></div></body></html>`;
