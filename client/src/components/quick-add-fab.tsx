@@ -15,16 +15,17 @@ import { format, addDays, addWeeks } from 'date-fns';
 type QuickMode = 'password' | 'note' | 'expense' | 'reminder' | null;
 
 const FAB_KEY = 'iv_fab_pos';
-const FAB_SIZE = 48; // w-12 h-12
-const NAV_H = 88;   // bottom nav + safe area estimate
-const MIN_DRAG = 6; // px threshold to distinguish tap vs drag
+const PILL_W = 132;  // approx collapsed pill width
+const PILL_H = 40;   // approx pill height
+const NAV_H = 88;    // bottom nav + safe area estimate
+const MIN_DRAG = 6;  // px threshold to distinguish tap vs drag
 
 interface FabPos { x: number; y: number }
 
 function defaultPos(): FabPos {
   return {
-    x: window.innerWidth - FAB_SIZE - 16,
-    y: window.innerHeight - NAV_H - FAB_SIZE - 16,
+    x: window.innerWidth - PILL_W - 16,
+    y: window.innerHeight - NAV_H - PILL_H - 16,
   };
 }
 
@@ -41,7 +42,7 @@ export function QuickAddFab() {
 
   const [pos, setPos] = useState<FabPos | null>(null);
   const [dragging, setDragging] = useState(false);
-  const fabRef = useRef<HTMLButtonElement>(null);
+  const fabRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     startClientX: number; startClientY: number;
     startFabX: number; startFabY: number;
@@ -69,11 +70,10 @@ export function QuickAddFab() {
     const dy = clientY - d.startClientY;
     if (!d.moved && (Math.abs(dx) > MIN_DRAG || Math.abs(dy) > MIN_DRAG)) {
       d.moved = true;
-      setOpen(false); // dismiss speed dial when drag is confirmed
     }
     if (!d.moved) return;
-    const newX = Math.max(8, Math.min(window.innerWidth - FAB_SIZE - 8, d.startFabX + dx));
-    const newY = Math.max(80, Math.min(window.innerHeight - NAV_H - FAB_SIZE - 8, d.startFabY + dy));
+    const newX = Math.max(8, Math.min(window.innerWidth - PILL_W - 8, d.startFabX + dx));
+    const newY = Math.max(80, Math.min(window.innerHeight - NAV_H - PILL_H - 8, d.startFabY + dy));
     setPos({ x: newX, y: newY });
   }, []);
 
@@ -86,33 +86,33 @@ export function QuickAddFab() {
       setOpen(v => !v); // tap = toggle
       return;
     }
-    // Snap FAB to nearest left/right edge
+    // Snap pill to nearest left/right edge
     setPos(prev => {
       if (!prev) return prev;
-      const snappedX = (prev.x + FAB_SIZE / 2) > window.innerWidth / 2
-        ? window.innerWidth - FAB_SIZE - 16
+      const snappedX = (prev.x + PILL_W / 2) > window.innerWidth / 2
+        ? window.innerWidth - PILL_W - 16
         : 16;
-      const clampedY = Math.max(80, Math.min(window.innerHeight - NAV_H - FAB_SIZE - 8, prev.y));
+      const clampedY = Math.max(80, Math.min(window.innerHeight - NAV_H - PILL_H - 8, prev.y));
       const np = { x: snappedX, y: clampedY };
       localStorage.setItem(FAB_KEY, JSON.stringify(np));
       return np;
     });
   }, []);
 
-  // Register non-passive touchmove so e.preventDefault() actually blocks scroll
+  // Register non-passive touchmove so e.preventDefault() blocks scroll during drag
   useEffect(() => {
-    const btn = fabRef.current;
-    if (!btn) return;
+    const el = fabRef.current;
+    if (!el) return;
     const tm = (e: TouchEvent) => {
       if (dragRef.current) e.preventDefault();
       onMoveRaw(e.touches[0].clientX, e.touches[0].clientY);
     };
-    btn.addEventListener('touchmove', tm, { passive: false });
-    return () => btn.removeEventListener('touchmove', tm);
+    el.addEventListener('touchmove', tm, { passive: false });
+    return () => el.removeEventListener('touchmove', tm);
   }, [onMoveRaw]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (!pos) return;
+    if (open || !pos) return; // don't drag when expanded
     dragRef.current = {
       startClientX: e.touches[0].clientX, startClientY: e.touches[0].clientY,
       startFabX: pos.x, startFabY: pos.y, moved: false,
@@ -121,7 +121,7 @@ export function QuickAddFab() {
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!pos) return;
+    if (open || !pos) return; // don't drag when expanded
     dragRef.current = {
       startClientX: e.clientX, startClientY: e.clientY,
       startFabX: pos.x, startFabY: pos.y, moved: false,
@@ -135,78 +135,89 @@ export function QuickAddFab() {
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
-  }, [pos, onMoveRaw, onEnd]);
+  }, [open, pos, onMoveRaw, onEnd]);
 
   const openMode = (m: QuickMode) => { setOpen(false); setMode(m); };
   const closeMode = () => setMode(null);
 
-  const isRight = !pos || (pos.x + FAB_SIZE / 2) >= window.innerWidth / 2;
+  // True when pill is snapped to (or near) the right edge
+  const isRight = !pos || (pos.x + PILL_W / 2) >= window.innerWidth / 2;
 
-  // Position speed dial above the FAB
-  const dialStyle: React.CSSProperties = pos ? {
-    position: 'fixed',
-    zIndex: 39,
-    bottom: window.innerHeight - pos.y + 8,
-    ...(isRight
-      ? { right: Math.max(0, window.innerWidth - pos.x - FAB_SIZE) }
-      : { left: pos.x }),
-  } : {};
-
-  const fabStyle: React.CSSProperties = pos ? {
+  const containerStyle: React.CSSProperties = pos ? {
     position: 'fixed',
     left: pos.x,
     top: pos.y,
     zIndex: 50,
-    opacity: dragging ? 0.7 : 1,
+    opacity: dragging ? 0.6 : 1,
     transition: dragging ? 'none' : 'opacity 0.15s ease, left 0.18s ease, top 0.18s ease',
     touchAction: 'none',
     userSelect: 'none',
     WebkitUserSelect: 'none',
-  } : {};
+  } : { display: 'none' };
 
   return (
     <>
       {open && (
-        <div className="lg:hidden fixed inset-0 z-[38] bg-black/20" onClick={() => setOpen(false)} />
+        <div className="lg:hidden fixed inset-0 z-[48] bg-black/20" onClick={() => setOpen(false)} />
       )}
 
-      {/* Speed-dial options fan out above FAB */}
-      {open && (
-        <div
-          className={`lg:hidden flex flex-col gap-2 ${isRight ? 'items-end' : 'items-start'}`}
-          style={dialStyle}
-        >
-          {[
-            { mode: 'password' as QuickMode, icon: Key, label: 'Password', color: 'bg-primary' },
-            { mode: 'note' as QuickMode, icon: StickyNote, label: 'Note', color: 'bg-amber-500' },
-            { mode: 'expense' as QuickMode, icon: DollarSign, label: 'Expense', color: 'bg-red-500' },
-            { mode: 'reminder' as QuickMode, icon: Bell, label: 'Reminder', color: 'bg-green-500' },
-          ].reverse().map(({ mode: m, icon: Icon, label, color }) => (
-            <button
-              key={m}
-              onClick={() => openMode(m)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-full ${color} text-white text-sm font-medium shadow-md active:scale-95 transition-transform animate-fade-in`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Draggable FAB — tap toggles speed dial, drag repositions + snaps to edge */}
-      <button
+      {/* Draggable pill — collapses to "Quick Add", expands to action bar */}
+      <div
         ref={fabRef}
+        style={containerStyle}
         onTouchStart={handleTouchStart}
         onTouchEnd={onEnd}
         onTouchCancel={onEnd}
         onMouseDown={handleMouseDown}
-        style={fabStyle}
-        className={`lg:hidden w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center ${!dragging ? 'active:scale-95 transition-transform' : ''} ${!pos ? 'fixed z-40 right-4 bottom-[calc(72px+env(safe-area-inset-bottom)+8px)]' : ''}`}
-        aria-label="Quick Add"
+        className="lg:hidden"
       >
-        {open ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-      </button>
+        {/* Collapsed: pill with label */}
+        {!open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 dark:bg-white shadow-lg shadow-slate-900/25 dark:shadow-white/10 text-white dark:text-slate-900 active:scale-95 transition-transform whitespace-nowrap"
+          >
+            <Plus size={15} />
+            <span className="text-sm font-medium">Quick Add</span>
+          </button>
+        )}
+
+        {/* Expanded: horizontal action bar — shifts left when on right edge so it stays on-screen */}
+        {open && (
+          <div
+            style={{ transform: isRight ? `translateX(calc(${PILL_W}px - 100%))` : undefined }}
+            className="flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-slate-900 dark:bg-white shadow-xl shadow-slate-900/30 dark:shadow-white/10 whitespace-nowrap"
+          >
+            <button
+              onClick={() => openMode('password')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
+            >
+              <Key size={13} className="text-blue-400 flex-shrink-0" />
+              <span className="text-xs text-white dark:text-slate-900">Password</span>
+            </button>
+            <button
+              onClick={() => openMode('note')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
+            >
+              <StickyNote size={13} className="text-amber-400 flex-shrink-0" />
+              <span className="text-xs text-white dark:text-slate-900">Note</span>
+            </button>
+            <button
+              onClick={() => openMode('expense')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors"
+            >
+              <DollarSign size={13} className="text-emerald-400 flex-shrink-0" />
+              <span className="text-xs text-white dark:text-slate-900">Expense</span>
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 dark:hover:bg-slate-100 transition-colors flex-shrink-0 ml-0.5"
+            >
+              <X size={13} className="text-white/60 dark:text-slate-500" />
+            </button>
+          </div>
+        )}
+      </div>
 
       <QuickPasswordSheet open={mode === 'password'} onClose={closeMode} onSave={addPassword} toast={toast} />
       <QuickNoteSheet open={mode === 'note'} onClose={closeMode} onSave={addNote} toast={toast} />

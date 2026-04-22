@@ -10,7 +10,7 @@ import {
   BarChart3, ArrowRight,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
@@ -170,6 +170,7 @@ function getUserName(): string {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, setSearchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
@@ -417,14 +418,49 @@ export default function Dashboard() {
       <div className="space-y-6">
 
 
-        {/* Greeting Card — solid colors, always readable in both modes */}
-        <div className="rounded-2xl p-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+        {/* Greeting Card — solid colors, security score inline */}
+        <div className="rounded-2xl p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-0.5">
             {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
           </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
             {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
           </p>
+
+          {/* Compact inline security score */}
+          {(() => {
+            const r = 20, cx = 24, cy = 24, sw = 4;
+            const circ = 2 * Math.PI * r;
+            const dash = (securityScore / 100) * circ;
+            const color = securityScore >= 75 ? '#22c55e' : securityScore >= 50 ? '#f59e0b' : '#ef4444';
+            const label = securityScore >= 90 ? 'Excellent' : securityScore >= 75 ? 'Strong' : securityScore >= 50 ? 'Fair' : 'Weak';
+            return (
+              <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600">
+                <svg width="48" height="48" viewBox="0 0 48 48" className="flex-shrink-0">
+                  <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-slate-200 dark:text-slate-600" />
+                  <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
+                    strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
+                    strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`} />
+                  <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fill={color}>{securityScore}</text>
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold" style={{ color }}>{label}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {stats.totalPasswords > 0 ? (
+                      <>
+                        Strong <span className="font-medium">{stats.totalPasswords - weakPasswords}/{stats.totalPasswords}</span>
+                        {weakPasswords > 0 && (
+                          <> · <button onClick={() => setLocation('/passwords?filter=weak')} className="text-red-500 hover:underline font-medium">Weak {weakPasswords}</button></>
+                        )}
+                      </>
+                    ) : 'Add passwords to see your score'}
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 flex-shrink-0">Security</span>
+              </div>
+            );
+          })()}
+
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
             <button
               onClick={handleManualRefresh}
@@ -476,51 +512,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Security Score — own centered card */}
-        <div className="rounded-2xl p-5 text-center
-          bg-white dark:bg-white/5
-          border border-slate-200 dark:border-white/10
-          shadow-sm dark:shadow-none">
-          <div className="flex flex-col items-center gap-1">
-            <svg width="96" height="96" viewBox="0 0 76 76" className="mb-1">
-              {(() => {
-                const r = 30, cx = 38, cy = 38, sw = 8;
-                const circ = 2 * Math.PI * r;
-                const dash = (securityScore / 100) * circ;
-                const color = securityScore >= 90 ? '#22c55e' : securityScore >= 75 ? '#22c55e' : securityScore >= 50 ? '#f59e0b' : '#ef4444';
-                return (
-                  <>
-                    <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-slate-200 dark:text-muted/20" />
-                    <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
-                      strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-                      strokeLinecap="round"
-                      transform={`rotate(-90 ${cx} ${cy})`}
-                    />
-                    <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill={color}>{securityScore}</text>
-                    <text x={cx} y={cy + 8} textAnchor="middle" dominantBaseline="middle" fontSize="9" fill="#64748b">/100</text>
-                  </>
-                );
-              })()}
-            </svg>
-            <p className={`text-lg font-bold ${securityScore >= 90 ? 'text-emerald-500' : securityScore >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-              {securityScore >= 90 ? 'Excellent' : securityScore >= 75 ? 'Strong' : securityScore >= 50 ? 'Fair' : 'Weak'}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Security Score</p>
-            {stats.totalPasswords > 0 && (
-              <div className="flex justify-center gap-6 mt-2 text-sm">
-                <span className="text-slate-600 dark:text-slate-300">
-                  Strong <span className="text-emerald-500 font-semibold">{stats.totalPasswords - weakPasswords}/{stats.totalPasswords}</span>
-                </span>
-                {weakPasswords > 0 && (
-                  <span className="text-slate-600 dark:text-slate-300">
-                    Weak <span className="text-red-500 font-semibold">{weakPasswords}</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Onboarding CTA */}
         {stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && (
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 flex flex-col md:flex-row items-center gap-4">
@@ -540,51 +531,25 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard
-            icon={Lock}
-            label="Passwords"
-            value={stats.totalPasswords}
-            color="text-primary"
-            subtitle={weakPasswords > 0 ? `${weakPasswords} weak` : undefined}
-          />
-          <StatCard
-            icon={Bookmark}
-            label="Subscriptions"
-            value={stats.activeSubscriptions}
-            color="text-primary"
-            subtitle={monthlySpend > 0 ? `${fmtAmt(monthlySpend)}/mo` : undefined}
-            subtitleColor="text-muted-foreground"
-          />
-          <StatCard
-            icon={FileText}
-            label="Notes"
-            value={stats.totalNotes}
-            color="text-foreground"
-          />
-          <StatCard
-            icon={DollarSign}
-            label="Expenses"
-            value={stats.totalExpenses}
-            color="text-foreground"
-            subtitle={thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo.` : undefined}
-            subtitleColor="text-muted-foreground"
-          />
-          <StatCard
-            icon={Bell}
-            label="Reminders"
-            value={stats.totalReminders}
-            color="text-foreground"
-            subtitle={dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined}
-            subtitleColor="text-destructive"
-          />
-          <StatCard
-            icon={BarChart3}
-            label="Documents"
-            value={stats.totalBankStatements}
-            color="text-foreground"
-          />
+        {/* Stats Grid — compact 2-column, 3-row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {[
+            { icon: Lock,     label: 'Passwords',     value: stats.totalPasswords,      sub: weakPasswords > 0 ? `${weakPasswords} weak` : undefined,                    subColor: 'text-red-500' },
+            { icon: Bookmark, label: 'Subscriptions', value: stats.activeSubscriptions,  sub: monthlySpend > 0 ? `${fmtAmt(monthlySpend)}/mo` : undefined,               subColor: 'text-slate-500' },
+            { icon: FileText, label: 'Notes',         value: stats.totalNotes,           sub: undefined,                                                                  subColor: '' },
+            { icon: DollarSign,label: 'Expenses',     value: stats.totalExpenses,        sub: thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo.` : undefined, subColor: 'text-slate-500' },
+            { icon: Bell,     label: 'Reminders',     value: stats.totalReminders,       sub: dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined,               subColor: 'text-red-500' },
+            { icon: BarChart3, label: 'Documents',    value: stats.totalBankStatements,  sub: undefined,                                                                  subColor: '' },
+          ].map(s => (
+            <div key={s.label} className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-1.5 mb-1">
+                <s.icon size={13} className="text-slate-400 flex-shrink-0" />
+                <span className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 truncate">{s.label}</span>
+              </div>
+              <div className="text-xl font-bold text-slate-900 dark:text-white">{s.value}</div>
+              {s.sub && <div className={`text-[11px] mt-0.5 ${s.subColor || 'text-slate-500'}`}>{s.sub}</div>}
+            </div>
+          ))}
         </div>
 
         {/* Weak password alert */}
