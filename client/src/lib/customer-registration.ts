@@ -126,8 +126,8 @@ export async function getEntitlementStatus(): Promise<CustomerRegistrationRespon
   // crmUserId was stored (key mismatch bug: API returned `id`, code read `userId`)
   if (!lookupId) {
     try {
-      const session = JSON.parse(localStorage.getItem('accountSession') || '{}');
-      if (session.email) lookupId = encodeURIComponent(session.email);
+      const account = JSON.parse(localStorage.getItem('iv_account') || '{}');
+      if (account.email) lookupId = encodeURIComponent(account.email);
     } catch { /* ignore */ }
   }
 
