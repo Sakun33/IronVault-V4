@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  IronVault Autofill Service configuration.
+  Declares the settings activity and compatibility mode.
+  See: https://developer.android.com/guide/topics/text/autofill-services
+-->
+<autofill-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.ironvault.app.MainActivity"
+    android:supportsInlineSuggestions="true" />

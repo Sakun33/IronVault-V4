@@ -33,66 +33,41 @@
 
   <div class="grid">
 
-    <!-- TASK 1: Clean UI — COMPLETE -->
+    <!-- TASK 1: DONE -->
     <div class="card">
-      <div class="card-title">Task 1 &mdash; 1Password-Style UI Redesign <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="card-title">Task 1 &mdash; 1Password-Style UI <span class="deployed-tag">DEPLOYED</span></div>
       <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
-      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#34d399">100% complete &mdash; All 4 pages redesigned and live at ironvault.app</p>
+      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#34d399">100% &mdash; All 4 pages live at ironvault.app</p>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Passwords</div><div class="task-detail">Rows + detail modal (reveal/copy/edit/delete)</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Notes</div><div class="task-detail">List rows with color dot + title + preview + chevron</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Subscriptions</div><div class="task-detail">List rows + detail modal with credentials reveal</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Expenses</div><div class="task-detail">Already had daily-grouped list rows</div></div></div>
+    </div>
 
+    <!-- TASK 2: DONE -->
+    <div class="card">
+      <div class="card-title">Task 2 &mdash; Biometric / Face ID Unlock <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
+      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#34d399">100% &mdash; Deployed to ironvault.app</p>
       <div class="task">
         <span class="badge done">DONE</span>
         <div class="task-body">
-          <div class="task-name">Passwords page</div>
-          <div class="task-detail">Clean rows: favicon 32px + name + lock+username + chevron. Tap &rarr; detail modal with reveal/copy/edit/delete.</div>
-        </div>
-      </div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Notes page</div>
-          <div class="task-detail">Grid cards &rarr; list rows: notebook color dot + title + preview + date + chevron. Tap opens view modal.</div>
-        </div>
-      </div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Subscriptions page</div>
-          <div class="task-detail">BrandCard &rarr; list rows: favicon + name + cost + next date + status + chevron. Tap &rarr; detail dialog with credentials reveal/copy.</div>
-        </div>
-      </div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Expenses page</div>
-          <div class="task-detail">Already had daily-grouped clean list rows &mdash; no change needed.</div>
+          <div class="task-name">BiometricSetupPrompt component</div>
+          <div class="task-detail">Fires 800ms after first password unlock on native. Checks: isNativeApp + biometric available + not already enabled + not asked this session. Derives vault unlock key (CryptoService salt + keystore), calls enableBiometricUnlock, stores salt. Wired into MainLayout in App.tsx. Renders null on web.</div>
         </div>
       </div>
     </div>
 
-    <!-- TASK 2: Biometric -->
+    <!-- TASK 3: IN PROGRESS -->
     <div class="card">
-      <div class="card-title">Task 2 &mdash; Biometric / Face ID Unlock</div>
+      <div class="card-title">Task 3 &mdash; Android Autofill Service</div>
       <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
       <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#60a5fa">0% &mdash; Starting now</p>
       <div class="task">
         <span class="badge active">IN PROGRESS</span>
         <div class="task-body">
-          <div class="task-name">@aparajita/capacitor-biometric-auth wiring</div>
-          <div class="task-detail">After first MP unlock &rarr; prompt to enable biometric. Store MP in keychain. Subsequent opens use biometric. Settings toggle. Web: hidden.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TASK 3: Android Autofill -->
-    <div class="card">
-      <div class="card-title">Task 3 &mdash; Android Autofill Service</div>
-      <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
-      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#475569">0% &mdash; Pending Task 2</p>
-      <div class="task">
-        <span class="badge pending">PENDING</span>
-        <div class="task-body">
           <div class="task-name">IronVaultAutofillService.java</div>
-          <div class="task-detail">Native Android AutofillService + AndroidManifest.xml + autofill_service_config.xml + Capacitor bridge to JS.</div>
+          <div class="task-detail">Native Android AutofillService extending android.service.autofill.AutofillService. AndroidManifest.xml registration + autofill_service_config.xml + Capacitor JS bridge.</div>
         </div>
       </div>
     </div>
@@ -100,27 +75,9 @@
     <!-- PREVIOUS FIXES -->
     <div class="card">
       <div class="card-title">Previous Fixes &mdash; Deployed</div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Cloud sync race condition (BUG-096)</div>
-          <div class="task-detail">Replaced vault:force-cloud-push event with inline pushToCloud() in vault-context.tsx. Dirty flag set before push, cleared on success only.</div>
-        </div>
-      </div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Upgrade button broken on web</div>
-          <div class="task-detail">Root cause: native PlanCard rendered disabled on web. Fixed by gating all native paywall UI behind isNative. Web shows Razorpay only.</div>
-        </div>
-      </div>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">Wrong price &mdash; &curren;199 &rarr; &curren;149</div>
-          <div class="task-detail">Fixed in pricing.ts, currency-resolver.ts, info/pricing.tsx, schema-markup.tsx. Live bundle verified.</div>
-        </div>
-      </div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Cloud sync race condition (BUG-096)</div><div class="task-detail">Inline pushToCloud() in vault-context.tsx. Dirty flag set before push, cleared on success only.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Upgrade button broken on web</div><div class="task-detail">Native PlanCard gated behind isNative. Web uses Razorpay only.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Wrong price &curren;199 &rarr; &curren;149</div><div class="task-detail">Fixed in all 4 files. Live verified.</div></div></div>
     </div>
 
   </div>

@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         registerPlugin(ScreenProtectionPlugin.class);
+        registerPlugin(AutofillPlugin.class);
 
         // Enable edge-to-edge so the WebView fills the full screen including
         // status bar and navigation bar.  env(safe-area-inset-*) CSS variables
