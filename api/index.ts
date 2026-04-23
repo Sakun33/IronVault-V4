@@ -1224,5 +1224,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/admin/migrate-to-crm ──────────────────────────────────────────
+  // One-shot migration: push all crm_users to Zoho CRM. Protected by x-admin-key.
+  if (path === '/api/admin/migrate-to-crm' && req.method === 'POST') {
+    const adminKey = (req.headers['x-admin-key'] as string) || req.body?.adminKey;
+    if (!adminKey || adminKey !== JWT_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const { rows: users } = await db.query(
+        `SELECT u.id, u.email, u.full_name, u.phone, u.country, u.company,
+                e.plan
+         FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id`
+      );
+      const results: { email: string; action: string; error?: string }[] = [];
+      let succeeded = 0;
+      let failed = 0;
+      for (const u of users) {
+        try {
+          const nameParts = ((u.full_name as string) || (u.email as string).split('@')[0]).split(' ');
+          const firstName = nameParts.length > 1 ? nameParts[0] : '';
+          const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+          const id = await createCrmContact({
+            email: u.email,
+            firstName,
+            lastName,
+            phone: u.phone,
+            country: u.country,
+            company: u.company,
+            plan: u.plan || 'free',
+            source: 'IronVault App',
+          });
+          results.push({ email: u.email, action: id ? 'upserted' : 'no-id' });
+          succeeded++;
+        } catch (e: any) {
+          results.push({ email: u.email, action: 'error', error: e.message });
+          failed++;
+        }
+      }
+      return res.json({ success: true, total: users.length, succeeded, failed, results });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   return res.status(404).json({ error: "endpoint not found", path });
 }
