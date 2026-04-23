@@ -227,11 +227,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         const { vaultManager } = await import('@/lib/vault-manager');
         const vaultId = vaultManager.getActiveVaultId();
         if (!vaultId) return;
+        localStorage.setItem(`iv_dirty_${vaultId}`, '1');
         const blob = await vaultStorage.exportVault(mp);
         const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
         const vaultName = vaultMeta?.name ?? 'My Vault';
         const clientModifiedAt = new Date().toISOString();
         const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        let ok = false;
         const res = await fetch(`https://www.ironvault.app/api/vaults/cloud/${vaultId}`, {
           method: 'PUT',
           headers,
@@ -239,14 +241,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         });
         if (res.status === 404) {
           const { getOrCreateDeviceId } = await import('@/lib/cloud-vault-sync');
-          await fetch(`https://www.ironvault.app/api/vaults/cloud`, {
+          const postRes = await fetch(`https://www.ironvault.app/api/vaults/cloud`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ vaultId, vaultName, encryptedBlob: blob, isDefault: false, clientModifiedAt, sourceDeviceId: getOrCreateDeviceId() }),
           });
+          ok = postRes.ok;
+        } else {
+          ok = res.ok;
         }
-        localStorage.setItem(`iv_dirty_${vaultId}`, '');
-        localStorage.removeItem(`iv_dirty_${vaultId}`);
+        if (ok) localStorage.removeItem(`iv_dirty_${vaultId}`);
       } catch (e) {
         console.error('[CLOUD-PUSH]', e);
       }
