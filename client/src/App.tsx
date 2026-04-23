@@ -82,6 +82,7 @@ import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
 import { QuickAddFab } from "@/components/quick-add-fab";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
+import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -707,6 +708,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Vault switcher is now handled inline via Radix DropdownMenu in both
           the mobile chip and desktop button — no portal needed. */}
+
+      {/* Biometric setup prompt — shown once per session after password unlock on native */}
+      <BiometricSetupPrompt masterPassword={masterPassword} vaultId={activeVault?.id ?? null} />
     </div>
   );
 }
