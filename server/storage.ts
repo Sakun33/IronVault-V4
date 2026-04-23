@@ -11,6 +11,7 @@ export interface IStorage {
   // CRM operations
   getCrmUser(id: string): Promise<CrmUser | undefined>;
   getCrmUserByEmail(email: string): Promise<CrmUser | undefined>;
+  getAllCrmUsers(): Promise<CrmUser[]>;
   createCrmUser(data: InsertCrmUser): Promise<CrmUser>;
   updateCrmUser(id: string, data: Partial<InsertCrmUser>): Promise<CrmUser | undefined>;
   
@@ -87,6 +88,11 @@ export class DatabaseStorage implements IStorage {
     await this.ensureReady();
     const result = await this.db.select().from(crmUsers).where(eq(crmUsers.email, email.toLowerCase())).limit(1);
     return result[0];
+  }
+
+  async getAllCrmUsers(): Promise<CrmUser[]> {
+    await this.ensureReady();
+    return this.db.select().from(crmUsers);
   }
 
   async createCrmUser(data: InsertCrmUser): Promise<CrmUser> {

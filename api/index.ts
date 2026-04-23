@@ -61,19 +61,29 @@ async function getCrmAccessToken(): Promise<string | null> {
   return null;
 }
 
-async function createCrmContact(opts: { email: string; firstName: string; lastName: string; source?: string }): Promise<string | null> {
+async function createCrmContact(opts: { email: string; firstName: string; lastName: string; source?: string; phone?: string; country?: string; plan?: string; company?: string }): Promise<string | null> {
   const token = await getCrmAccessToken();
   if (!token) return null;
   try {
-    const r = await fetch('https://www.zohoapis.in/crm/v7/Contacts', {
+    const contact: Record<string, unknown> = {
+      Email: opts.email,
+      First_Name: opts.firstName,
+      Last_Name: opts.lastName || opts.email,
+      Lead_Source: opts.source || 'Web Site',
+    };
+    if (opts.phone) contact.Phone = opts.phone;
+    if (opts.country) contact.Mailing_Country = opts.country;
+    if (opts.company) contact.Account_Name = opts.company;
+    if (opts.plan) contact.Description = `Plan: ${opts.plan}`;
+    const r = await fetch('https://www.zohoapis.in/crm/v7/Contacts/upsert', {
       method: 'POST',
       headers: { 'Authorization': `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: [{ Email: opts.email, First_Name: opts.firstName, Last_Name: opts.lastName || opts.email, Lead_Source: opts.source || 'Web Site' }] }),
+      body: JSON.stringify({ data: [contact], duplicate_check_fields: ['Email'] }),
     });
     const d = await r.json() as any;
     const id = d.data?.[0]?.details?.id;
     if (id) return String(id);
-    console.error('[crm] contact create failed:', JSON.stringify(d));
+    console.error('[crm] contact upsert failed:', JSON.stringify(d));
   } catch (e: any) { console.error('[crm] create contact error:', e.message); }
   return null;
 }
@@ -489,7 +499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/auth/register ────────────────────────────────────────────────
   // Creates a new account with pending_verification status and sends a verification email.
   if (path === '/api/auth/register' && req.method === 'POST') {
-    const { email, accountPasswordHash, fullName, country, phone, planType, marketingConsent } = req.body || {};
+    const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent } = req.body || {};
     if (!email || !accountPasswordHash) return res.status(400).json({ error: 'email and accountPasswordHash required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
     const safeFullName = fullName ? stripHtml(String(fullName)) : normalizedEmail.split('@')[0];
@@ -522,13 +532,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [userId, planType || 'free']
       ).catch(() => {});
 
-      // Fire-and-forget: sync new signup to Zoho CRM
+      // Fire-and-forget: sync new signup to Zoho CRM with all collected fields
       const nameParts = safeFullName.split(' ');
       createCrmContact({
         email: normalizedEmail,
         firstName: nameParts[0] || safeFullName,
         lastName: nameParts.slice(1).join(' ') || normalizedEmail,
         source: 'Web Site',
+        phone: phone || undefined,
+        country: country || 'US',
+        plan: planType || 'free',
+        company: company || undefined,
       }).catch(() => {});
 
       const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
@@ -1149,6 +1163,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!plan) return res.status(400).json({ error: 'plan required' });
     const dealId = await createOrUpdateCrmDeal({ contactId: null, email: user.email, plan, amount }).catch(() => null);
     return res.json({ success: true, dealId });
+  }
+
+  // ── POST /api/webhooks/zoho-billing ─────────────────────────────────────────
+  // Handles subscription.created, subscription.reactivated, payment.success from Zoho Billing.
+  // Zoho Billing sends a webhook secret in the X-Zoho-Billing-Secret header.
+  if (path === '/api/webhooks/zoho-billing' && req.method === 'POST') {
+    const secret = req.headers['x-zoho-billing-secret'];
+    const expectedSecret = process.env.ZOHO_BILLING_WEBHOOK_SECRET;
+    if (expectedSecret && secret !== expectedSecret) {
+      return res.status(401).json({ error: 'Invalid webhook secret' });
+    }
+
+    try {
+      const payload = req.body || {};
+      const eventType: string = payload.event_type || payload.eventType || '';
+      const subscription = payload.data?.subscription || payload.subscription || {};
+      const email: string = (
+        subscription.customer?.email ||
+        subscription.email ||
+        payload.data?.customer?.email ||
+        ''
+      ).toLowerCase().trim();
+
+      if (!email) return res.status(400).json({ error: 'No email in payload' });
+
+      // Map Zoho Billing plan code to IronVault plan name
+      const rawPlan: string = (subscription.plan?.code || subscription.planCode || '').toLowerCase();
+      const plan = rawPlan.includes('lifetime') ? 'lifetime'
+        : rawPlan.includes('family') ? 'family'
+        : rawPlan.includes('pro') ? 'pro'
+        : 'free';
+
+      const handledEvents = ['subscription_created', 'subscription_activated', 'subscription_reactivated', 'payment_success', 'invoice_payment_success'];
+      if (!handledEvents.includes(eventType)) {
+        return res.json({ received: true, skipped: true, eventType });
+      }
+
+      // Update entitlement in DB
+      const { rows } = await db.query(
+        `SELECT u.id FROM crm_users u WHERE u.email = $1 LIMIT 1`, [email]
+      );
+      if (!rows[0]) {
+        console.warn(`[zoho-billing webhook] No user found for email: ${email}`);
+        return res.json({ received: true, warning: 'user not found' });
+      }
+      const userId = rows[0].id;
+      await db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override, updated_at)
+         VALUES ($1, $2, 'active', false, true, false, NOW())
+         ON CONFLICT (user_id) DO UPDATE SET plan = $2, status = 'active', trial_active = false, will_renew = true, updated_at = NOW()`,
+        [userId, plan]
+      );
+
+      console.log(`[zoho-billing] ${eventType} → ${email} → ${plan}`);
+      return res.json({ received: true, email, plan, eventType });
+    } catch (err: any) {
+      console.error('[zoho-billing webhook] error:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   return res.status(404).json({ error: "endpoint not found", path });

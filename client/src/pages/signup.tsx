@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Eye, EyeOff, Mail, User, Globe, Phone,
+  Eye, EyeOff, Mail, User, Globe, Phone, Building2,
   Sparkles, Crown, Infinity, Users, KeyRound, MailCheck,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
@@ -59,6 +59,7 @@ export default function SignupPage() {
   const [showConfirmAccountPassword, setShowConfirmAccountPassword] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
 
+  const [company, setCompany] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -92,6 +93,7 @@ export default function SignupPage() {
           fullName: name.trim(),
           country,
           phone: phone ? `${phoneCode}${phone}` : '',
+          company: company.trim() || undefined,
           planType: selectedPlan,
           marketingConsent,
         }),
@@ -263,6 +265,25 @@ export default function SignupPage() {
                   onChange={e => setName(e.target.value)}
                   className="pl-10"
                   required
+                />
+              </div>
+            </div>
+
+            {/* Company (optional) */}
+            <div>
+              <Label htmlFor="signup-company" className="text-sm font-medium">
+                Company <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <div className="relative mt-1.5">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="signup-company"
+                  data-testid="signup-company"
+                  type="text"
+                  placeholder="Your company or organization"
+                  value={company}
+                  onChange={e => setCompany(e.target.value)}
+                  className="pl-10"
                 />
               </div>
             </div>

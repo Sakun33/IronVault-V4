@@ -4,7 +4,16 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Crown, Zap, Users, Shield, Infinity as InfinityIcon } from 'lucide-react';
 import { useLicense } from '@/contexts/license-context';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 import { PLANS, planPriceLabel, type PlanId } from '@/lib/plans';
+
+// Zoho Billing hosted payment page URLs — set these in Vercel env vars after
+// creating hosted pages in billing.zoho.in → Hosted Pages
+const ZOHO_BILLING_URLS: Partial<Record<PlanId, string>> = {
+  pro: import.meta.env.VITE_ZOHO_BILLING_PRO_URL || '',
+  family: import.meta.env.VITE_ZOHO_BILLING_FAMILY_URL || '',
+  lifetime: import.meta.env.VITE_ZOHO_BILLING_LIFETIME_URL || '',
+};
 
 const PLAN_ICONS: Record<PlanId, typeof Crown> = {
   free: Shield,
@@ -30,11 +39,22 @@ const PLAN_ICON_BG: Record<PlanId, string> = {
 export default function PricingPage() {
   const { license, changePlan, isLoading } = useLicense();
   const { toast } = useToast();
+  const { accountEmail } = useAuth();
 
   const currentTier = license.tier;
 
   const handleSelectPlan = async (id: PlanId) => {
     if (id === currentTier) return;
+
+    // For paid upgrades, redirect to Zoho Billing hosted payment page
+    const billingUrl = ZOHO_BILLING_URLS[id];
+    if (id !== 'free' && billingUrl) {
+      const url = new URL(billingUrl);
+      if (accountEmail) url.searchParams.set('email', accountEmail);
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      toast({ title: 'Redirecting to payment…', description: 'Complete your purchase in the new tab.' });
+      return;
+    }
 
     try {
       await changePlan(id);
@@ -126,7 +146,7 @@ export default function PricingPage() {
       </div>
 
       <p className="text-center text-sm text-muted-foreground">
-        All prices in Indian Rupees (INR). Pro Family launches Q3 2026. Billing via Stripe/RevenueCat coming soon.
+        All prices in Indian Rupees (INR). Pro Family launches Q3 2026. Secure payments via Zoho Billing.
       </p>
     </div>
   );

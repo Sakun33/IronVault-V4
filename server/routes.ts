@@ -459,6 +459,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: one-time migration — push all existing IronVault users to Zoho CRM
+  app.post("/api/admin/migrate-to-crm", async (req, res) => {
+    const adminKey = req.headers['x-admin-key'] || req.body?.adminKey;
+    if (adminKey !== (process.env.ADMIN_SECRET_KEY || 'admin')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { createCrmContact } = await import('./lib/zoho-crm');
+
+    try {
+      const users = await storage.getAllCrmUsers();
+      const results: { email: string; action?: string; error?: string }[] = [];
+
+      for (const user of users) {
+        try {
+          const entitlement = await storage.getEntitlement(user.id);
+          const result = await createCrmContact({
+            email: user.email,
+            fullName: user.fullName,
+            phone: user.phone,
+            country: user.country,
+            plan: entitlement?.plan ?? 'free',
+            createdAt: user.createdAt,
+          });
+          results.push({ email: user.email, action: result.action });
+        } catch (err: any) {
+          results.push({ email: user.email, error: err.message });
+        }
+      }
+
+      const succeeded = results.filter(r => !r.error).length;
+      const failed = results.filter(r => r.error).length;
+      res.json({ success: true, total: users.length, succeeded, failed, results });
+    } catch (error: any) {
+      console.error('CRM migration error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
   // Admin: update user's entitlement/plan by email
   app.post("/api/crm/admin/set-plan", async (req, res) => {
     try {

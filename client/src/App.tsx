@@ -81,6 +81,7 @@ import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
 import { QuickAddFab } from "@/components/quick-add-fab";
+import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -940,6 +941,7 @@ function App() {
                     <LicenseProvider>
                       <VaultSelectionProvider>
                         <Toaster />
+                        <ZohoSalesIQIdentity />
                         <Router />
                         {/* PWA Components */}
                         <PWAOfflineIndicator />
