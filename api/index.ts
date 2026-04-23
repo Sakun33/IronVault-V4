@@ -44,6 +44,60 @@ async function createZohoDeskTicket(opts: { email: string; subject: string; desc
   return null;
 }
 
+// ── Zoho CRM API ──────────────────────────────────────────────────────────────
+let _crmToken: string | null = null;
+let _crmTokenExpiry = 0;
+
+async function getCrmAccessToken(): Promise<string | null> {
+  if (_crmToken && Date.now() < _crmTokenExpiry - 60_000) return _crmToken;
+  const { ZOHO_DESK_CLIENT_ID: cid, ZOHO_DESK_CLIENT_SECRET: csec, ZOHO_CRM_REFRESH_TOKEN: rt } = process.env;
+  if (!cid || !csec || !rt) return null;
+  try {
+    const r = await fetch(`https://accounts.zoho.in/oauth/v2/token?grant_type=refresh_token&client_id=${cid}&client_secret=${csec}&refresh_token=${rt}`, { method: 'POST' });
+    const d = await r.json() as any;
+    if (d.access_token) { _crmToken = d.access_token; _crmTokenExpiry = Date.now() + (d.expires_in ?? 3600) * 1000; return _crmToken; }
+    console.error('[crm] token refresh error:', JSON.stringify(d));
+  } catch (e: any) { console.error('[crm] token refresh failed:', e.message); }
+  return null;
+}
+
+async function createCrmContact(opts: { email: string; firstName: string; lastName: string; source?: string }): Promise<string | null> {
+  const token = await getCrmAccessToken();
+  if (!token) return null;
+  try {
+    const r = await fetch('https://www.zohoapis.in/crm/v7/Contacts', {
+      method: 'POST',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [{ Email: opts.email, First_Name: opts.firstName, Last_Name: opts.lastName || opts.email, Lead_Source: opts.source || 'Web Site' }] }),
+    });
+    const d = await r.json() as any;
+    const id = d.data?.[0]?.details?.id;
+    if (id) return String(id);
+    console.error('[crm] contact create failed:', JSON.stringify(d));
+  } catch (e: any) { console.error('[crm] create contact error:', e.message); }
+  return null;
+}
+
+async function createOrUpdateCrmDeal(opts: { contactId: string | null; email: string; plan: string; amount?: number }): Promise<string | null> {
+  const token = await getCrmAccessToken();
+  if (!token) return null;
+  try {
+    const dealName = `IronVault ${opts.plan.charAt(0).toUpperCase() + opts.plan.slice(1)} — ${opts.email}`;
+    const body: any = { Deal_Name: dealName, Stage: 'Closed Won', Amount: opts.amount ?? (opts.plan === 'pro' ? 9.99 : opts.plan === 'lifetime' ? 49.99 : 0), Lead_Source: 'Web Site' };
+    if (opts.contactId) body.Contact_Id = opts.contactId;
+    const r = await fetch('https://www.zohoapis.in/crm/v7/Deals', {
+      method: 'POST',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [body] }),
+    });
+    const d = await r.json() as any;
+    const id = d.data?.[0]?.details?.id;
+    if (id) return String(id);
+    console.error('[crm] deal create failed:', JSON.stringify(d));
+  } catch (e: any) { console.error('[crm] create deal error:', e.message); }
+  return null;
+}
+
 // ── Zoho SMTP email service ────────────────────────────────────────────────────
 const _FROM_ADDR = 'saket@ironvault.app';
 const _FROM_NAME = 'IronVault';
@@ -467,6 +521,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          VALUES ($1, $2, 'active', false, false, false) ON CONFLICT DO NOTHING`,
         [userId, planType || 'free']
       ).catch(() => {});
+
+      // Fire-and-forget: sync new signup to Zoho CRM
+      const nameParts = safeFullName.split(' ');
+      createCrmContact({
+        email: normalizedEmail,
+        firstName: nameParts[0] || safeFullName,
+        lastName: nameParts.slice(1).join(' ') || normalizedEmail,
+        source: 'Web Site',
+      }).catch(() => {});
 
       const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
       const verifyLink = `${APP_URL_REG}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
@@ -1069,10 +1132,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          WHERE user_id = (SELECT id FROM crm_users WHERE email = $2 LIMIT 1)`,
         [plan, normalizedEmail]
       );
+      // Fire-and-forget: sync plan upgrade to Zoho CRM
+      createOrUpdateCrmDeal({ contactId: null, email: normalizedEmail, plan }).catch(() => {});
       return res.json({ success: true, email: normalizedEmail, plan, customersUpdated: cRows, entitlementsUpdated: eRows });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
+  }
+
+  // ── POST /api/crm/upgrade ──────────────────────────────────────────────────
+  // Called by the client after a successful plan upgrade to sync a Deal to Zoho CRM.
+  if (path === '/api/crm/upgrade' && req.method === 'POST') {
+    const user = getCloudUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const { plan, amount } = req.body || {};
+    if (!plan) return res.status(400).json({ error: 'plan required' });
+    const dealId = await createOrUpdateCrmDeal({ contactId: null, email: user.email, plan, amount }).catch(() => null);
+    return res.json({ success: true, dealId });
   }
 
   return res.status(404).json({ error: "endpoint not found", path });
