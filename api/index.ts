@@ -1268,5 +1268,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/payments/create-order ─────────────────────────────────────────
+  if (path === '/api/payments/create-order' && req.method === 'POST') {
+    const RAZORPAY_PLANS: Record<string, { amount: number; currency: string }> = {
+      pro_monthly:       { amount: 14900,  currency: 'INR' },
+      pro_yearly:        { amount: 149900, currency: 'INR' },
+      pro_family:        { amount: 29900,  currency: 'INR' },
+      pro_family_yearly: { amount: 299900, currency: 'INR' },
+      lifetime:          { amount: 999900, currency: 'INR' },
+    };
+    const { plan, email } = req.body || {};
+    const planCfg = RAZORPAY_PLANS[plan as string];
+    if (!planCfg) return res.status(400).json({ error: 'Invalid plan' });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const RazorpayClient = require('razorpay');
+      const rzp = new RazorpayClient({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+      const order = await rzp.orders.create({
+        amount: planCfg.amount,
+        currency: planCfg.currency,
+        receipt: `iv_${plan}_${Date.now()}`,
+        notes: { email: email || '', plan },
+      });
+      return res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID });
+    } catch (err: any) {
+      console.error('[Razorpay] create-order error:', err.message);
+      return res.status(500).json({ error: err.message || 'Failed to create order' });
+    }
+  }
+
+  // ── POST /api/payments/verify ────────────────────────────────────────────────
+  if (path === '/api/payments/verify' && req.method === 'POST') {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, email } = req.body || {};
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !plan || !email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const RAZORPAY_TIERS: Record<string, { tier: string; isLifetime: boolean; periodMonths: number }> = {
+      pro_monthly:       { tier: 'pro',      isLifetime: false, periodMonths: 1  },
+      pro_yearly:        { tier: 'pro',      isLifetime: false, periodMonths: 12 },
+      pro_family:        { tier: 'family',   isLifetime: false, periodMonths: 1  },
+      pro_family_yearly: { tier: 'family',   isLifetime: false, periodMonths: 12 },
+      lifetime:          { tier: 'lifetime', isLifetime: true,  periodMonths: 0  },
+    };
+    const tierCfg = RAZORPAY_TIERS[plan as string];
+    if (!tierCfg) return res.status(400).json({ error: 'Invalid plan' });
+
+    const expectedSig = createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+    if (expectedSig !== razorpay_signature) {
+      console.warn('[Razorpay] Signature mismatch:', razorpay_payment_id);
+      return res.status(400).json({ error: 'Invalid payment signature' });
+    }
+
+    try {
+      const db = getPool();
+      const normalizedEmail = (email as string).toLowerCase().trim();
+      const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]);
+      if (!rows[0]) {
+        console.warn('[Razorpay] No user found for email:', normalizedEmail);
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const userId = rows[0].id;
+
+      const now = new Date();
+      let periodEndsAt: Date | null = null;
+      if (!tierCfg.isLifetime) {
+        periodEndsAt = new Date(now);
+        periodEndsAt.setMonth(periodEndsAt.getMonth() + tierCfg.periodMonths);
+      }
+
+      await db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, subscription_platform, subscription_id, current_period_ends_at, admin_override, updated_at)
+         VALUES ($1, $2, 'active', false, $3, 'razorpay', $4, $5, false, NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           plan = $2, status = 'active', trial_active = false, will_renew = $3,
+           subscription_platform = 'razorpay', subscription_id = $4,
+           current_period_ends_at = $5, updated_at = NOW()`,
+        [userId, tierCfg.tier, !tierCfg.isLifetime, razorpay_payment_id, periodEndsAt]
+      );
+
+      createOrUpdateCrmDeal({ contactId: null, email: normalizedEmail, plan: tierCfg.tier }).catch(() => {});
+      sendEmail({ to: normalizedEmail, ...planUpgradeEmail(tierCfg.tier) }).catch(() => {});
+
+      console.log(`[Razorpay] Payment verified: ${normalizedEmail} → ${tierCfg.tier} (${plan})`);
+      return res.json({ success: true, plan: tierCfg.tier });
+    } catch (err: any) {
+      console.error('[Razorpay] verify error:', err.message);
+      return res.status(500).json({ error: err.message || 'Verification failed' });
+    }
+  }
+
   return res.status(404).json({ error: "endpoint not found", path });
 }
