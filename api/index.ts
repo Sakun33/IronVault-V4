@@ -1233,7 +1233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     try {
       const { rows: users } = await db.query(
-        `SELECT u.id, u.email, u.full_name, u.phone, u.country, u.company,
+        `SELECT u.id, u.email, u.full_name, u.phone, u.country,
                 e.plan
          FROM crm_users u
          LEFT JOIN entitlements e ON e.user_id = u.id`
@@ -1252,7 +1252,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             lastName,
             phone: u.phone,
             country: u.country,
-            company: u.company,
             plan: u.plan || 'free',
             source: 'IronVault App',
           });
