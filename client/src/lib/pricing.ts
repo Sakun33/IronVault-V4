@@ -69,10 +69,10 @@ export interface LicenseInfo {
 }
 
 // Base pricing in INR - will be converted to user's currency
-// Monthly: ₹199, Yearly: ₹1,999
+// Monthly: ₹149, Yearly: ₹1,499
 const BASE_PRICING_TIERS_INR = {
-  monthly: 199,
-  yearly: 1999,
+  monthly: 149,
+  yearly: 1499,
   lifetime: 9999, // Lifetime one-time payment
 };
 

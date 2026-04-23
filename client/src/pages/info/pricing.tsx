@@ -12,8 +12,8 @@ export default function PricingPage() {
   // Base prices in INR (as requested)
   const basePricesINR = {
     free: 0,
-    monthly: 199,
-    yearly: 1999,
+    monthly: 149,
+    yearly: 1499,
   };
 
   // Helper function to format price with proper rounding

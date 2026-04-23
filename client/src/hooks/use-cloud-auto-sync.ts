@@ -53,7 +53,8 @@ export function useCloudAutoSync(
     if (!vaultId || !masterPassword) return;
 
     const handleItemSaved = () => {
-      if (!isVaultCloudSynced(vaultId)) return;
+      if (!getCloudToken()) return;
+      if (!isVaultCloudSynced(vaultId)) markVaultAsCloudSynced(vaultId);
       // Mark dirty immediately — survives if logout races before debounce fires
       pushPendingRef.current = true;
       localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
@@ -138,6 +139,27 @@ export function useCloudAutoSync(
     window.addEventListener('vault:import:complete', handleImportComplete);
     return () => window.removeEventListener('vault:import:complete', handleImportComplete);
   }, [vaultId, masterPassword]);
+
+  // ── Immediate push on explicit CRUD save (no debounce) ────────────────────
+  useEffect(() => {
+    if (!vaultId || !masterPassword) return;
+
+    const handleForcePush = async () => {
+      if (!getCloudToken()) return;
+      if (!isVaultCloudSynced(vaultId)) markVaultAsCloudSynced(vaultId);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      pushPendingRef.current = true;
+      localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
+      try {
+        await executePush(vaultId, masterPassword);
+      } finally {
+        pushPendingRef.current = false;
+      }
+    };
+
+    window.addEventListener('vault:force-cloud-push', handleForcePush);
+    return () => window.removeEventListener('vault:force-cloud-push', handleForcePush);
+  }, [vaultId, masterPassword, executePush]);
 
   // ── Pull: poll every 60s for changes from another device ─────────────────
   const doPull = useCallback(async () => {

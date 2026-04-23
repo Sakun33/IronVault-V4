@@ -103,14 +103,14 @@ interface VaultContextType {
   getAvailableCSVParsers: () => ParserConfig[];
   getKDFConfig: () => Promise<CryptoKDFConfig | null>;
   updateKDFConfig: (masterPassword: string, newKdfConfig: CryptoKDFConfig, onProgress?: (progress: number) => void) => Promise<void>;
-  
+
   // Security features
   failedAttempts: number;
   isLockedOut: boolean;
   lockoutTimeRemaining: number;
   hasRecentBackup: boolean;
   getBackupMetadata: () => Promise<any>;
-  
+
   isLoading: boolean;
   isCloudSyncing: boolean;
 }
@@ -133,7 +133,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
-  
+
   // Security state
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isLockedOut, setIsLockedOut] = useState(false);
@@ -178,7 +178,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         setFailedAttempts(0);
         setIsLockedOut(false);
         setLockoutTimeRemaining(0);
-        
+
         // Check for recent backup
         const hasBackup = await vaultStorage.hasRecentBackup();
         setHasRecentBackup(hasBackup);
@@ -186,7 +186,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         // Check lockout status
         const lockedOut = vaultStorage.isLockedOut();
         setIsLockedOut(lockedOut);
-        
+
         if (lockedOut) {
           const remaining = vaultStorage.getLockoutTimeRemaining();
           setLockoutTimeRemaining(remaining);
@@ -195,14 +195,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     };
 
     updateSecurityState();
-    
+
     // Update lockout timer every second when locked out
     let interval: NodeJS.Timeout | null = null;
     if (isLockedOut) {
       interval = setInterval(() => {
         const remaining = vaultStorage.getLockoutTimeRemaining();
         setLockoutTimeRemaining(remaining);
-        
+
         if (remaining === 0) {
           setIsLockedOut(false);
         }
@@ -216,13 +216,50 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isUnlocked, isLockedOut]);
 
+  // Fire-and-forget cloud push after every vault mutation.
+  // Bypasses the event system — directly exports and PUTs the encrypted blob.
+  const pushToCloud = () => {
+    const token = localStorage.getItem('iv_cloud_token');
+    if (!token || !masterPassword) return;
+    const mp = masterPassword;
+    (async () => {
+      try {
+        const { vaultManager } = await import('@/lib/vault-manager');
+        const vaultId = vaultManager.getActiveVaultId();
+        if (!vaultId) return;
+        const blob = await vaultStorage.exportVault(mp);
+        const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
+        const vaultName = vaultMeta?.name ?? 'My Vault';
+        const clientModifiedAt = new Date().toISOString();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        const res = await fetch(`https://www.ironvault.app/api/vaults/cloud/${vaultId}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ encryptedBlob: blob, vaultName, isDefault: false, clientModifiedAt }),
+        });
+        if (res.status === 404) {
+          const { getOrCreateDeviceId } = await import('@/lib/cloud-vault-sync');
+          await fetch(`https://www.ironvault.app/api/vaults/cloud`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ vaultId, vaultName, encryptedBlob: blob, isDefault: false, clientModifiedAt, sourceDeviceId: getOrCreateDeviceId() }),
+          });
+        }
+        localStorage.setItem(`iv_dirty_${vaultId}`, '');
+        localStorage.removeItem(`iv_dirty_${vaultId}`);
+      } catch (e) {
+        console.error('[CLOUD-PUSH]', e);
+      }
+    })();
+  };
+
   const refreshData = async () => {
     if (!isUnlocked) return;
 
     setIsLoading(true);
     try {
       console.log('VaultContext: Starting data refresh...');
-      
+
       // Check if database schema is correct
       const schemaValid = await vaultStorage.checkSchema();
       if (!schemaValid) {
@@ -230,10 +267,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         await vaultStorage.recreateDatabase();
         console.log('✅ Database recreated successfully');
       }
-      
+
       // Always refresh data to ensure we have the latest from storage
       console.log('VaultContext: Refreshing all data from storage...');
-      
+
       const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
@@ -270,7 +307,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInvestments(investmentsData.map(hydrateDates));
       setInvestmentGoals(investmentGoalsData.map(hydrateDates));
       setApiKeys(apiKeysData.map(hydrateDates));
-      
+
     } catch (error) {
       console.error('Failed to refresh vault data:', error);
     } finally {
@@ -289,9 +326,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.savePassword(password);
     // Update state directly instead of refreshing all data
     setPasswords(prev => [...prev, password]);
-    
+
     // Log the activity
     addLog('Add Password', 'password', `Added password for "${passwordData.name}"`);
+    pushToCloud();
   };
 
   const updatePassword = async (id: string, updates: Partial<PasswordEntry>) => {
@@ -307,9 +345,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.savePassword(updated);
     // Update state directly instead of refreshing all data
     setPasswords(prev => prev.map(p => p.id === id ? updated : p));
-    
+
     // Log the activity
     addLog('Update Password', 'password', `Updated password for "${existing.name}"`);
+    pushToCloud();
   };
 
   const deletePassword = async (id: string) => {
@@ -317,11 +356,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.deletePassword(id);
     // Update state directly instead of refreshing all data
     setPasswords(prev => prev.filter(p => p.id !== id));
-    
+
     // Log the activity
     if (existing) {
       addLog('Delete Password', 'password', `Deleted password for "${existing.name}"`);
     }
+    pushToCloud();
   };
 
   const addSubscription = async (subscriptionData: Omit<SubscriptionEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -335,9 +375,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveSubscription(subscription);
     // Update state directly instead of refreshing all data
     setSubscriptions(prev => [...prev, subscription]);
-    
+
     // Log the activity
     addLog('Add Subscription', 'subscription', `Added subscription "${subscriptionData.name}"`);
+    pushToCloud();
   };
 
   const updateSubscription = async (id: string, updates: Partial<SubscriptionEntry>) => {
@@ -353,9 +394,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveSubscription(updated);
     // Update state directly instead of refreshing all data
     setSubscriptions(prev => prev.map(s => s.id === id ? updated : s));
-    
+
     // Log the activity
     addLog('Update Subscription', 'subscription', `Updated subscription "${existing.name}"`);
+    pushToCloud();
   };
 
   const deleteSubscription = async (id: string) => {
@@ -363,11 +405,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.deleteSubscription(id);
     // Update state directly instead of refreshing all data
     setSubscriptions(prev => prev.filter(s => s.id !== id));
-    
+
     // Log the activity
     if (existing) {
       addLog('Delete Subscription', 'subscription', `Deleted subscription "${existing.name}"`);
     }
+    pushToCloud();
   };
 
   const addNote = async (noteData: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -381,9 +424,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveNote(note);
     // Update state directly instead of refreshing all data
     setNotes(prev => [...prev, note]);
-    
+
     // Log the activity
     addLog('Add Note', 'note', `Added note "${noteData.title}"`);
+    pushToCloud();
   };
 
   const updateNote = async (id: string, updates: Partial<NoteEntry>) => {
@@ -399,9 +443,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveNote(updated);
     // Update state directly instead of refreshing all data
     setNotes(prev => prev.map(n => n.id === id ? updated : n));
-    
+
     // Log the activity
     addLog('Update Note', 'note', `Updated note "${existing.title}"`);
+    pushToCloud();
   };
 
   const deleteNote = async (id: string) => {
@@ -409,11 +454,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.deleteNote(id);
     // Update state directly instead of refreshing all data
     setNotes(prev => prev.filter(n => n.id !== id));
-    
+
     // Log the activity
     if (existing) {
       addLog('Delete Note', 'note', `Deleted note "${existing.title}"`);
     }
+    pushToCloud();
   };
 
   const addExpense = async (expenseData: Omit<ExpenseEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -427,6 +473,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveExpense(expense);
     // Update state directly instead of refreshing all data
     setExpenses(prev => [...prev, expense]);
+    pushToCloud();
   };
 
   const updateExpense = async (id: string, updates: Partial<ExpenseEntry>) => {
@@ -442,12 +489,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveExpense(updated);
     // Update state directly instead of refreshing all data
     setExpenses(prev => prev.map(e => e.id === id ? updated : e));
+    pushToCloud();
   };
 
   const deleteExpense = async (id: string) => {
     await vaultStorage.deleteExpense(id);
     // Update state directly instead of refreshing all data
     setExpenses(prev => prev.filter(e => e.id !== id));
+    pushToCloud();
   };
 
   const addReminder = async (reminderData: Omit<ReminderEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -461,6 +510,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveReminder(reminder);
     // Update state directly instead of refreshing all data
     setReminders(prev => [...prev, reminder]);
+    pushToCloud();
   };
 
   const updateReminder = async (id: string, updates: Partial<ReminderEntry>) => {
@@ -476,12 +526,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveReminder(updated);
     // Update state directly instead of refreshing all data
     setReminders(prev => prev.map(r => r.id === id ? updated : r));
+    pushToCloud();
   };
 
   const deleteReminder = async (id: string) => {
     await vaultStorage.deleteReminder(id);
     // Update state directly instead of refreshing all data
     setReminders(prev => prev.filter(r => r.id !== id));
+    pushToCloud();
   };
 
   // Bank Statements CRUD
@@ -495,12 +547,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveBankStatement(newStatement);
     // Update state directly instead of refreshing all data
     setBankStatements(prev => [...prev, newStatement]);
+    pushToCloud();
   };
 
   const updateBankStatement = async (id: string, updates: Partial<BankStatement>) => {
     const existing = await vaultStorage.getBankStatement(id);
     if (!existing) throw new Error('Bank statement not found');
-    
+
     const updated: BankStatement = {
       ...existing,
       ...updates,
@@ -510,12 +563,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveBankStatement(updated);
     // Update state directly instead of refreshing all data
     setBankStatements(prev => prev.map(bs => bs.id === id ? updated : bs));
+    pushToCloud();
   };
 
   const deleteBankStatement = async (id: string) => {
     await vaultStorage.deleteBankStatement(id);
     // Update state directly instead of refreshing all data
     setBankStatements(prev => prev.filter(bs => bs.id !== id));
+    pushToCloud();
   };
 
   const addBankTransaction = async (transaction: Omit<BankTransaction, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -528,12 +583,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveBankTransaction(newTransaction);
     // Update state directly instead of refreshing all data
     setBankTransactions(prev => [...prev, newTransaction]);
+    pushToCloud();
   };
 
   const updateBankTransaction = async (id: string, updates: Partial<BankTransaction>) => {
     const existing = await vaultStorage.getBankTransaction(id);
     if (!existing) throw new Error('Bank transaction not found');
-    
+
     const updated: BankTransaction = {
       ...existing,
       ...updates,
@@ -543,12 +599,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveBankTransaction(updated);
     // Update state directly instead of refreshing all data
     setBankTransactions(prev => prev.map(bt => bt.id === id ? updated : bt));
+    pushToCloud();
   };
 
   const deleteBankTransaction = async (id: string) => {
     await vaultStorage.deleteBankTransaction(id);
     // Update state directly instead of refreshing all data
     setBankTransactions(prev => prev.filter(bt => bt.id !== id));
+    pushToCloud();
   };
 
   // Investments CRUD
@@ -562,12 +620,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveInvestment(newInvestment);
     // Update state directly instead of refreshing all data
     setInvestments(prev => [...prev, newInvestment]);
+    pushToCloud();
   };
 
   const updateInvestment = async (id: string, updates: Partial<Investment>) => {
     const existing = await vaultStorage.getInvestment(id);
     if (!existing) throw new Error('Investment not found');
-    
+
     const updated: Investment = {
       ...existing,
       ...updates,
@@ -577,12 +636,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveInvestment(updated);
     // Update state directly instead of refreshing all data
     setInvestments(prev => prev.map(inv => inv.id === id ? updated : inv));
+    pushToCloud();
   };
 
   const deleteInvestment = async (id: string) => {
     await vaultStorage.deleteInvestment(id);
     // Update state directly instead of refreshing all data
     setInvestments(prev => prev.filter(inv => inv.id !== id));
+    pushToCloud();
   };
 
   const addInvestmentGoal = async (goal: Omit<InvestmentGoal, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -595,12 +656,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveInvestmentGoal(newGoal);
     // Update state directly instead of refreshing all data
     setInvestmentGoals(prev => [...prev, newGoal]);
+    pushToCloud();
   };
 
   const updateInvestmentGoal = async (id: string, updates: Partial<InvestmentGoal>) => {
     const existing = await vaultStorage.getInvestmentGoal(id);
     if (!existing) throw new Error('Investment goal not found');
-    
+
     const updated: InvestmentGoal = {
       ...existing,
       ...updates,
@@ -610,12 +672,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.saveInvestmentGoal(updated);
     // Update state directly instead of refreshing all data
     setInvestmentGoals(prev => prev.map(ig => ig.id === id ? updated : ig));
+    pushToCloud();
   };
 
   const deleteInvestmentGoal = async (id: string) => {
     await vaultStorage.deleteInvestmentGoal(id);
     // Update state directly instead of refreshing all data
     setInvestmentGoals(prev => prev.filter(ig => ig.id !== id));
+    pushToCloud();
   };
 
   // ── API Keys CRUD ────────────────────────────────────────────────────────────
@@ -623,6 +687,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const newKey = { ...key, id: key.id || crypto.randomUUID(), createdAt: key.createdAt || new Date(), updatedAt: new Date() };
     await vaultStorage.saveApiKey(newKey);
     setApiKeys(prev => [...prev, newKey]);
+    pushToCloud();
   };
 
   const updateApiKey = async (id: string, updates: any) => {
@@ -631,11 +696,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...existing, ...updates, updatedAt: new Date() };
     await vaultStorage.saveApiKey(updated);
     setApiKeys(prev => prev.map(k => k.id === id ? updated : k));
+    pushToCloud();
   };
 
   const deleteApiKeyFromVault = async (id: string) => {
     await vaultStorage.deleteApiKey(id);
     setApiKeys(prev => prev.filter(k => k.id !== id));
+    pushToCloud();
   };
 
   const importBankStatementsFromCSV = async (csvContent: string) => {
@@ -643,10 +710,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       console.log('VaultContext: Starting bank statements import...');
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent);
       console.log('VaultContext: Import completed:', result);
-      
+
       // Log the import activity
       addLog('Import Bank Statements', 'system', `Imported ${result.statements} statements and ${result.transactions} transactions from CSV`);
-      
+
       await refreshData();
       console.log('VaultContext: Data refreshed after import');
       return result;
@@ -711,10 +778,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   const importPasswordsFromCSV = async (csvContent: string, parserId: string): Promise<{ imported: number; skipped: number }> => {
     const result = await vaultStorage.importPasswordsFromCSV(csvContent, parserId);
-    
+
     // Log the import activity
     addLog('Import Passwords', 'password', `Imported ${result.imported} passwords from CSV (${result.skipped} skipped)`);
-    
+
     await refreshData();
     return result;
   };
@@ -760,15 +827,15 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       .filter(e => {
         const expenseDate = new Date(e.date);
         const currentMonth = new Date();
-        return expenseDate.getMonth() === currentMonth.getMonth() && 
+        return expenseDate.getMonth() === currentMonth.getMonth() &&
                expenseDate.getFullYear() === currentMonth.getFullYear();
       })
       .reduce((total, e) => total + e.amount, 0),
     weakPasswords: passwords.filter(p => {
       // Basic weak password detection
-      return p.password.length < 8 || 
-             !/[A-Z]/.test(p.password) || 
-             !/[a-z]/.test(p.password) || 
+      return p.password.length < 8 ||
+             !/[A-Z]/.test(p.password) ||
+             !/[a-z]/.test(p.password) ||
              !/[0-9]/.test(p.password);
     }).length,
   };
@@ -825,14 +892,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     getAvailableCSVParsers,
     getKDFConfig,
     updateKDFConfig,
-    
+
     // Security features
     failedAttempts,
     isLockedOut,
     lockoutTimeRemaining,
     hasRecentBackup,
     getBackupMetadata: async () => await vaultStorage.getBackupMetadata(),
-    
+
     isLoading,
     isCloudSyncing,
   };

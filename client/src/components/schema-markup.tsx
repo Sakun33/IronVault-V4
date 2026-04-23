@@ -69,7 +69,7 @@ function generateSchema(type: string, data: any) {
         operatingSystem: 'Windows, macOS, Linux, iOS, Android',
         offers: {
           '@type': 'Offer',
-          price: '199',
+          price: '149',
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
         },

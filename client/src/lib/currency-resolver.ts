@@ -21,8 +21,8 @@ export interface PricePoint {
 
 // Base pricing in INR
 const BASE_PRICING_INR: PricePoint = {
-  monthly: 199,
-  yearly: 1999,
+  monthly: 149,
+  yearly: 1499,
   lifetime: 9999,
 };
 
