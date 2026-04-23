@@ -118,7 +118,7 @@ interface VaultContextType {
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
 
 export function VaultProvider({ children }: { children: React.ReactNode }) {
-  const { isUnlocked } = useAuth();
+  const { isUnlocked, masterPassword } = useAuth();
   const { addLog } = useLogging();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionEntry[]>([]);
@@ -666,7 +666,35 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     await vaultStorage.importVault(data, password);
     addLog('Import Vault', 'system', `Imported complete vault data${password ? ' with password protection' : ' (plaintext)'}`);
     await refreshData();
-    // Trigger immediate cloud push (handled by use-cloud-auto-sync with master password)
+
+    // Blocking cloud push — awaited before this function returns so logout
+    // cannot race ahead and discard imported data before it reaches the server.
+    if (masterPassword) {
+      try {
+        const [{ getCloudToken, pushCloudVault, markVaultAsCloudSynced }, { vaultManager }] = await Promise.all([
+          import('@/lib/cloud-vault-sync'),
+          import('@/lib/vault-manager'),
+        ]);
+        const cloudToken = getCloudToken();
+        const vaultId = vaultManager.getActiveVaultId();
+        if (cloudToken && vaultId) {
+          const blob = await vaultStorage.exportVault(masterPassword);
+          const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
+          const vaultName = vaultMeta?.name ?? 'My Vault';
+          console.log('[IMPORT] Blocking cloud push starting...');
+          const result = await pushCloudVault(vaultId, vaultName, blob, false);
+          if (result.success) {
+            markVaultAsCloudSynced(vaultId);
+            localStorage.setItem(`iv_last_pull_${vaultId}`, new Date().toISOString());
+            localStorage.removeItem(`iv_dirty_${vaultId}`);
+          }
+          console.log('[IMPORT] Cloud push result:', result);
+        }
+      } catch (e) {
+        console.error('[IMPORT] Cloud push failed:', e);
+      }
+    }
+
     window.dispatchEvent(new CustomEvent('vault:import:complete'));
   };
 
