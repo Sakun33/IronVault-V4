@@ -7,12 +7,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { PLANS, planPriceLabel, type PlanId } from '@/lib/plans';
 
-// Zoho Billing hosted payment page URLs — set these in Vercel env vars after
-// creating hosted pages in billing.zoho.in → Hosted Pages
-const ZOHO_BILLING_URLS: Partial<Record<PlanId, string>> = {
-  pro: import.meta.env.VITE_ZOHO_BILLING_PRO_URL || '',
-  family: import.meta.env.VITE_ZOHO_BILLING_FAMILY_URL || '',
-  lifetime: import.meta.env.VITE_ZOHO_BILLING_LIFETIME_URL || '',
+declare global {
+  interface Window { Razorpay: any; }
+}
+
+const RAZORPAY_PLAN_CODES: Partial<Record<PlanId, string>> = {
+  pro: 'pro_monthly',
+  family: 'pro_family',
+  lifetime: 'lifetime',
 };
 
 const PLAN_ICONS: Record<PlanId, typeof Crown> = {
@@ -46,13 +48,48 @@ export default function PricingPage() {
   const handleSelectPlan = async (id: PlanId) => {
     if (id === currentTier) return;
 
-    // For paid upgrades, redirect to Zoho Billing hosted payment page
-    const billingUrl = ZOHO_BILLING_URLS[id];
-    if (id !== 'free' && billingUrl) {
-      const url = new URL(billingUrl);
-      if (accountEmail) url.searchParams.set('email', accountEmail);
-      window.open(url.toString(), '_blank', 'noopener,noreferrer');
-      toast({ title: 'Redirecting to payment…', description: 'Complete your purchase in the new tab.' });
+    const razorpayPlan = RAZORPAY_PLAN_CODES[id];
+    if (id !== 'free' && razorpayPlan) {
+      try {
+        const res = await fetch('/api/payments/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: razorpayPlan, email: accountEmail }),
+        });
+        if (!res.ok) throw new Error('Failed to create order');
+        const { orderId, amount, currency, keyId } = await res.json();
+
+        const planName = PLANS.find(p => p.id === id)?.name || id;
+        const options = {
+          key: keyId,
+          amount,
+          currency,
+          name: 'IronVault',
+          description: `IronVault ${planName} Plan`,
+          order_id: orderId,
+          handler: async (response: any) => {
+            const verifyRes = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...response, plan: razorpayPlan, email: accountEmail }),
+            });
+            const result = await verifyRes.json();
+            if (result.success) {
+              toast({ title: `Upgraded to ${planName}!`, description: 'All features unlocked. Refreshing…' });
+              setTimeout(() => window.location.reload(), 1500);
+            } else {
+              toast({ title: 'Payment verification failed', description: 'Contact support if amount was deducted.', variant: 'destructive' });
+            }
+          },
+          prefill: { email: accountEmail || '' },
+          theme: { color: '#4f46e5' },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } catch {
+        toast({ title: 'Failed to initiate payment', description: 'Please try again.', variant: 'destructive' });
+      }
       return;
     }
 
@@ -146,7 +183,7 @@ export default function PricingPage() {
       </div>
 
       <p className="text-center text-sm text-muted-foreground">
-        All prices in Indian Rupees (INR). Pro Family launches Q3 2026. Secure payments via Zoho Billing.
+        All prices in Indian Rupees (INR). Pro Family launches Q3 2026. Secure payments via Razorpay.
       </p>
     </div>
   );

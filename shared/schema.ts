@@ -155,11 +155,11 @@ export const insertCrmUserSchema = z.object({
 
 export const insertEntitlementSchema = z.object({
   userId: z.string().optional(),
-  plan: z.enum(["free", "premium", "lifetime"]).default("free"),
+  plan: z.enum(["free", "pro", "family", "premium", "lifetime"]).default("free"),
   status: z.enum(["active", "cancelled", "expired", "trial"]).default("active"),
   trialActive: z.boolean().optional().default(false),
   trialEndsAt: z.date().optional(),
-  subscriptionPlatform: z.enum(["stripe", "app_store", "play_store", "admin"]).optional(),
+  subscriptionPlatform: z.enum(["stripe", "app_store", "play_store", "admin", "zoho_billing", "razorpay"]).optional(),
   subscriptionId: z.string().optional(),
   productId: z.string().optional(),
   currentPeriodEndsAt: z.date().optional(),

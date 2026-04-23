@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { randomBytes } from "crypto";
+import { randomBytes, createHmac } from "crypto";
 import { z } from "zod";
 import { sign, verify } from 'jsonwebtoken';
 
@@ -983,6 +983,243 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Failed to set default' });
+    }
+  });
+
+  // ============================================
+  // Razorpay Payment Endpoints
+  // ============================================
+
+  const RAZORPAY_PLAN_CONFIG: Record<string, { amount: number; currency: string; tier: string; isLifetime: boolean; periodMonths: number }> = {
+    pro_monthly:       { amount: 14900,  currency: 'INR', tier: 'pro',      isLifetime: false, periodMonths: 1  },
+    pro_yearly:        { amount: 149900, currency: 'INR', tier: 'pro',      isLifetime: false, periodMonths: 12 },
+    pro_family:        { amount: 29900,  currency: 'INR', tier: 'family',   isLifetime: false, periodMonths: 1  },
+    pro_family_yearly: { amount: 299900, currency: 'INR', tier: 'family',   isLifetime: false, periodMonths: 12 },
+    lifetime:          { amount: 999900, currency: 'INR', tier: 'lifetime', isLifetime: true,  periodMonths: 0  },
+  };
+
+  // POST /api/payments/create-order
+  app.post('/api/payments/create-order', async (req: any, res: any) => {
+    try {
+      const { plan, email } = req.body;
+      if (!plan || !RAZORPAY_PLAN_CONFIG[plan]) {
+        return res.status(400).json({ error: 'Invalid plan' });
+      }
+      const cfg = RAZORPAY_PLAN_CONFIG[plan];
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const RazorpayClient = require('razorpay');
+      const rzp = new RazorpayClient({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+      });
+      const order = await rzp.orders.create({
+        amount: cfg.amount,
+        currency: cfg.currency,
+        receipt: `iv_${plan}_${Date.now()}`,
+        notes: { email: email || '', plan },
+      });
+      res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID });
+    } catch (err: any) {
+      console.error('[Razorpay] create-order error:', err);
+      res.status(500).json({ error: err.message || 'Failed to create order' });
+    }
+  });
+
+  // POST /api/payments/verify
+  app.post('/api/payments/verify', async (req: any, res: any) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, email } = req.body;
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !plan || !email) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const expectedSig = createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+      if (expectedSig !== razorpay_signature) {
+        console.warn('[Razorpay] Signature mismatch for payment:', razorpay_payment_id);
+        return res.status(400).json({ error: 'Invalid payment signature' });
+      }
+
+      const cfg = RAZORPAY_PLAN_CONFIG[plan];
+      if (!cfg) return res.status(400).json({ error: 'Invalid plan' });
+
+      const crmUser = await storage.getCrmUserByEmail(email);
+      if (!crmUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const now = new Date();
+      let periodEndsAt: Date | null = null;
+      if (!cfg.isLifetime) {
+        periodEndsAt = new Date(now);
+        periodEndsAt.setMonth(periodEndsAt.getMonth() + cfg.periodMonths);
+      }
+
+      await storage.updateEntitlement(crmUser.id, {
+        plan: cfg.tier,
+        status: 'active',
+        trialActive: false,
+        trialEndsAt: null,
+        currentPeriodEndsAt: periodEndsAt,
+        willRenew: !cfg.isLifetime,
+        subscriptionPlatform: 'razorpay',
+        subscriptionId: razorpay_payment_id,
+      });
+
+      await storage.logBillingEvent({
+        userId: crmUser.id,
+        eventType: 'payment_success',
+        platform: 'zoho_billing',
+        subscriptionId: razorpay_payment_id,
+        productId: plan,
+      });
+
+      console.log(`[Razorpay] Payment verified: ${email} → ${cfg.tier} (${plan})`);
+      res.json({ success: true, plan: cfg.tier });
+    } catch (err: any) {
+      console.error('[Razorpay] verify error:', err);
+      res.status(500).json({ error: err.message || 'Verification failed' });
+    }
+  });
+
+  // ============================================
+  // Zoho Billing Webhook
+  // POST /api/webhooks/zoho-billing
+  // ============================================
+
+  // Map Zoho plan codes → internal tier names
+  const ZOHO_PLAN_TO_TIER: Record<string, string> = {
+    'ironvault-pro-monthly': 'pro',
+    'ironvault-pro-yearly': 'pro',
+    'ironvault-pro-family': 'family',
+    'ironvault-pro-family-yearly': 'family',
+    'ironvault-lifetime': 'lifetime',
+  };
+
+  app.post('/api/webhooks/zoho-billing', async (req: any, res: any) => {
+    try {
+      // Optional token verification (set ZOHO_BILLING_WEBHOOK_TOKEN in Vercel env)
+      const expectedToken = process.env.ZOHO_BILLING_WEBHOOK_TOKEN;
+      if (expectedToken) {
+        const incoming = req.headers['x-zoho-webhook-token'] || req.query.token;
+        if (incoming !== expectedToken) {
+          console.warn('[ZohoBilling] Invalid webhook token');
+          return res.status(401).json({ error: 'Invalid token' });
+        }
+      }
+
+      const { event_type, data } = req.body;
+      console.log('[ZohoBilling] Webhook received:', event_type);
+
+      if (!event_type || !data) {
+        return res.status(400).json({ error: 'Missing event_type or data' });
+      }
+
+      const sub = data.subscription;
+      if (!sub) return res.json({ received: true, skipped: true });
+
+      const customerEmail = sub.customer?.email || sub.email;
+      const planCode = sub.plan?.plan_code || sub.plan_code;
+      const subId = sub.subscription_id;
+      const periodEndsAt = sub.current_term_ends_at ? new Date(sub.current_term_ends_at) : undefined;
+
+      if (!customerEmail) {
+        console.warn('[ZohoBilling] No customer email in payload');
+        return res.json({ received: true, skipped: true });
+      }
+
+      // Find user in our DB
+      const crmUser = await storage.getCrmUserByEmail(customerEmail);
+      if (!crmUser) {
+        console.warn('[ZohoBilling] No user found for email:', customerEmail);
+        return res.json({ received: true, user_not_found: true });
+      }
+
+      switch (event_type) {
+        case 'subscription_created':
+        case 'subscription_activated':
+        case 'subscription_renewed':
+        case 'payment_success': {
+          const tier = ZOHO_PLAN_TO_TIER[planCode] || 'pro';
+          const isLifetime = planCode === 'ironvault-lifetime';
+          await storage.updateEntitlement(crmUser.id, {
+            plan: tier,
+            status: 'active',
+            trialActive: false,
+            trialEndsAt: null,
+            currentPeriodEndsAt: isLifetime ? null : (periodEndsAt || null),
+            willRenew: !isLifetime,
+            subscriptionPlatform: 'zoho_billing',
+            subscriptionId: subId || null,
+          });
+          console.log(`[ZohoBilling] Upgraded ${customerEmail} → ${tier} (${planCode})`);
+
+          // Log the billing event
+          await storage.logBillingEvent({
+            userId: crmUser.id,
+            eventType: event_type,
+            platform: 'zoho_billing',
+            subscriptionId: subId || undefined,
+            productId: planCode || undefined,
+          });
+          break;
+        }
+
+        case 'subscription_upgraded':
+        case 'subscription_downgraded': {
+          // Plan change — new plan_code is in the payload
+          const newTier = ZOHO_PLAN_TO_TIER[planCode] || 'pro';
+          const isLifetime = planCode === 'ironvault-lifetime';
+          await storage.updateEntitlement(crmUser.id, {
+            plan: newTier,
+            status: 'active',
+            trialActive: false,
+            trialEndsAt: null,
+            currentPeriodEndsAt: isLifetime ? null : (periodEndsAt || null),
+            willRenew: !isLifetime,
+            subscriptionPlatform: 'zoho_billing',
+            subscriptionId: subId || null,
+          });
+          console.log(`[ZohoBilling] Plan changed ${customerEmail} → ${newTier} (${planCode})`);
+          await storage.logBillingEvent({
+            userId: crmUser.id,
+            eventType: event_type,
+            platform: 'zoho_billing',
+            subscriptionId: subId || undefined,
+            productId: planCode || undefined,
+          });
+          break;
+        }
+
+        case 'subscription_cancelled':
+        case 'subscription_expired': {
+          await storage.updateEntitlement(crmUser.id, {
+            plan: 'free',
+            status: 'cancelled',
+            willRenew: false,
+            subscriptionPlatform: 'zoho_billing',
+          });
+          console.log(`[ZohoBilling] Cancelled/expired → downgraded ${customerEmail} to free`);
+
+          await storage.logBillingEvent({
+            userId: crmUser.id,
+            eventType: event_type,
+            platform: 'zoho_billing',
+            subscriptionId: subId || undefined,
+            productId: planCode || undefined,
+          });
+          break;
+        }
+
+        default:
+          console.log('[ZohoBilling] Unhandled event:', event_type);
+      }
+
+      return res.json({ received: true });
+    } catch (err: any) {
+      console.error('[ZohoBilling] Webhook error:', err);
+      return res.status(500).json({ error: err.message || 'Webhook processing failed' });
     }
   });
 
