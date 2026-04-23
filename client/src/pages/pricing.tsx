@@ -17,6 +17,23 @@ const RAZORPAY_PLAN_CODES: Partial<Record<PlanId, string>> = {
   lifetime: 'lifetime',
 };
 
+function loadRazorpay(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window.Razorpay !== 'undefined') { resolve(); return; }
+    const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Razorpay failed to load')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Razorpay failed to load'));
+    document.head.appendChild(script);
+  });
+}
+
 const PLAN_ICONS: Record<PlanId, typeof Crown> = {
   free: Shield,
   pro: Zap,
@@ -51,6 +68,7 @@ export default function PricingPage() {
     const razorpayPlan = RAZORPAY_PLAN_CODES[id];
     if (id !== 'free' && razorpayPlan) {
       try {
+        await loadRazorpay();
         const res = await fetch('/api/payments/create-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

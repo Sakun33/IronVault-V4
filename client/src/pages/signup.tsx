@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Eye, EyeOff, Mail, User, Globe, Phone, Building2,
+  Eye, EyeOff, Mail, User, Globe, Phone, Building2, MapPin,
   Sparkles, Crown, Infinity, Users, KeyRound, MailCheck,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
@@ -60,6 +60,10 @@ export default function SignupPage() {
   const [marketingConsent, setMarketingConsent] = useState(false);
 
   const [company, setCompany] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [addressState, setAddressState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -94,6 +98,10 @@ export default function SignupPage() {
           country,
           phone: phone ? `${phoneCode}${phone}` : '',
           company: company.trim() || undefined,
+          address: address.trim() || undefined,
+          city: city.trim() || undefined,
+          state: addressState.trim() || undefined,
+          postalCode: postalCode.trim() || undefined,
           planType: selectedPlan,
           marketingConsent,
         }),
@@ -324,6 +332,63 @@ export default function SignupPage() {
                       className="pl-9"
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Billing Address (optional) */}
+            <div className="border-t border-border/60 pt-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">Billing Address <span className="font-normal normal-case">(optional)</span></p>
+              <p className="text-xs text-muted-foreground mb-4">Used for invoices and receipts. All fields optional.</p>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="signup-address" className="text-sm font-medium">Address</Label>
+                  <div className="relative mt-1.5">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="signup-address"
+                      type="text"
+                      placeholder="Street address"
+                      value={address}
+                      onChange={e => setAddress(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="signup-city" className="text-sm font-medium">City</Label>
+                    <Input
+                      id="signup-city"
+                      type="text"
+                      placeholder="City"
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="signup-state" className="text-sm font-medium">State</Label>
+                    <Input
+                      id="signup-state"
+                      type="text"
+                      placeholder="State / Province"
+                      value={addressState}
+                      onChange={e => setAddressState(e.target.value)}
+                      className="mt-1.5"
+                    />
+                  </div>
+                </div>
+                <div className="w-1/2 pr-1.5">
+                  <Label htmlFor="signup-postal" className="text-sm font-medium">Postal Code</Label>
+                  <Input
+                    id="signup-postal"
+                    type="text"
+                    placeholder="PIN / ZIP"
+                    value={postalCode}
+                    onChange={e => setPostalCode(e.target.value)}
+                    className="mt-1.5"
+                  />
                 </div>
               </div>
             </div>

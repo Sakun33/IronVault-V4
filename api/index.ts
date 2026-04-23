@@ -61,7 +61,7 @@ async function getCrmAccessToken(): Promise<string | null> {
   return null;
 }
 
-async function createCrmContact(opts: { email: string; firstName: string; lastName: string; source?: string; phone?: string; country?: string; plan?: string; company?: string }): Promise<string | null> {
+async function createCrmContact(opts: { email: string; firstName: string; lastName: string; source?: string; phone?: string; country?: string; plan?: string; company?: string; address?: string; city?: string; state?: string; postalCode?: string }): Promise<string | null> {
   const token = await getCrmAccessToken();
   if (!token) return null;
   try {
@@ -75,6 +75,10 @@ async function createCrmContact(opts: { email: string; firstName: string; lastNa
     if (opts.country) contact.Mailing_Country = opts.country;
     if (opts.company) contact.Account_Name = opts.company;
     if (opts.plan) contact.Description = `Plan: ${opts.plan}`;
+    if (opts.address) contact.Mailing_Street = opts.address;
+    if (opts.city) contact.Mailing_City = opts.city;
+    if (opts.state) contact.Mailing_State = opts.state;
+    if (opts.postalCode) contact.Mailing_Zip = opts.postalCode;
     const r = await fetch('https://www.zohoapis.in/crm/v7/Contacts/upsert', {
       method: 'POST',
       headers: { 'Authorization': `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
@@ -499,7 +503,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/auth/register ────────────────────────────────────────────────
   // Creates a new account with pending_verification status and sends a verification email.
   if (path === '/api/auth/register' && req.method === 'POST') {
-    const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent } = req.body || {};
+    const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent, address, city, state, postalCode } = req.body || {};
     if (!email || !accountPasswordHash) return res.status(400).json({ error: 'email and accountPasswordHash required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
     const safeFullName = fullName ? stripHtml(String(fullName)) : normalizedEmail.split('@')[0];
@@ -543,6 +547,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         country: country || 'US',
         plan: planType || 'free',
         company: company || undefined,
+        address: address || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        postalCode: postalCode || undefined,
       }).catch(() => {});
 
       const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
@@ -564,7 +572,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const normalizedEmail = (email as string).toLowerCase().trim();
     try {
       const { rows } = await db.query(
-        `SELECT id, verification_token, verification_token_expires_at, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+        `SELECT id, full_name, verification_token, verification_token_expires_at, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
@@ -578,6 +586,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `UPDATE crm_users SET account_status = 'active', verification_token = NULL, verification_token_expires_at = NULL WHERE id = $1`,
         [user.id]
       );
+      // Send welcome email now that the account is verified
+      const displayName = user.full_name || normalizedEmail.split('@')[0];
+      sendEmail({ to: normalizedEmail, ...welcomeEmail(displayName) }).catch(() => {});
       return res.json({ success: true, message: 'Email verified! You can now log in.' });
     } catch (err: any) {
       console.error('verify-email error:', err.message);

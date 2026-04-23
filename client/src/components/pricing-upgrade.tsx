@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useLicense } from '@/contexts/license-context';
 import { useToast } from '@/hooks/use-toast';
-import { Crown, Shield, RotateCcw, ExternalLink, AlertCircle, RefreshCcw, Check, Clock } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { Crown, Shield, RotateCcw, AlertCircle, RefreshCcw, Check, Infinity as InfinityIcon, Zap } from 'lucide-react';
 import { useBillingPackages, usePurchase } from '@/billing/useBilling';
 import { isNativePlatform, getStoreName, getPlatform } from '@/billing/platform';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -17,6 +18,25 @@ import {
   type ProCycle,
 } from '@/components/paywall';
 
+declare global { interface Window { Razorpay: any; } }
+
+function loadRazorpay(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window.Razorpay !== 'undefined') { resolve(); return; }
+    const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('load failed')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('load failed'));
+    document.head.appendChild(s);
+  });
+}
+
 interface PricingUpgradeProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,9 +45,94 @@ interface PricingUpgradeProps {
 type PaywallState = 'loading' | 'error' | 'ready' | 'purchasing' | 'entitled';
 type PlanTier = 'pro' | 'lifetime';
 
+interface WebRazorpayPlansProps {
+  email: string | null;
+  onSuccess: (tier: string) => void;
+}
+
+const WEB_PLANS = [
+  { id: 'pro_monthly', tier: 'pro', label: 'Pro Monthly', price: '₹149/mo', icon: Zap, border: 'border-primary', iconColor: 'text-primary' },
+  { id: 'lifetime',    tier: 'lifetime', label: 'Lifetime',    price: '₹9,999 one-time', icon: InfinityIcon, border: 'border-amber-500', iconColor: 'text-amber-500' },
+];
+
+function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleWebBuy = async (planId: string, tier: string, label: string) => {
+    setLoading(planId);
+    try {
+      await loadRazorpay();
+      const res = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planId, email }),
+      });
+      if (!res.ok) throw new Error('Failed to create order');
+      const { orderId, amount, currency, keyId } = await res.json();
+
+      const options = {
+        key: keyId,
+        amount,
+        currency,
+        name: 'IronVault',
+        description: `IronVault ${label} Plan`,
+        order_id: orderId,
+        handler: async (response: any) => {
+          const verifyRes = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...response, plan: planId, email }),
+          });
+          const result = await verifyRes.json();
+          if (result.success) {
+            onSuccess(tier);
+          } else {
+            toast({ title: 'Payment verification failed', description: 'Contact support if amount was deducted.', variant: 'destructive' });
+          }
+        },
+        prefill: { email: email || '' },
+        theme: { color: '#4f46e5' },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch {
+      toast({ title: 'Failed to initiate payment', description: 'Please try again.', variant: 'destructive' });
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4 py-2">
+      <p className="text-center text-sm text-muted-foreground">Secure payment via Razorpay</p>
+      <div className="grid md:grid-cols-2 gap-4">
+        {WEB_PLANS.map(p => {
+          const Icon = p.icon;
+          return (
+            <Button
+              key={p.id}
+              variant="outline"
+              disabled={loading === p.id}
+              className={`h-auto py-4 flex flex-col items-center gap-2 ${p.border}`}
+              onClick={() => handleWebBuy(p.id, p.tier, p.label)}
+            >
+              <Icon className={`w-6 h-6 ${p.iconColor}`} />
+              <span className="font-semibold">{p.label}</span>
+              <span className="text-xs text-muted-foreground">{p.price}</span>
+              {loading === p.id && <span className="text-xs text-muted-foreground">Opening checkout…</span>}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
   const { license, syncEntitlements, changePlan } = useLicense();
   const { toast } = useToast();
+  const { accountEmail } = useAuth();
   const [billingCycle, setBillingCycle] = useState<ProCycle>('yearly');
   const [selectedTier, setSelectedTier] = useState<PlanTier>('pro');
   const [paywallState, setPaywallState] = useState<PaywallState>('loading');
@@ -293,41 +398,16 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
             </div>
           )}
 
-          {/* Web Platform — Local Plan Activation */}
+          {/* Web Platform — Razorpay Checkout */}
           {!isNative && !hasProEntitlement && (
-            <div className="space-y-4 py-4">
-              <p className="text-center text-muted-foreground text-sm">
-                Select a plan to activate it. Stripe/RevenueCat billing coming soon.
-              </p>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 flex flex-col items-center gap-2 border-primary"
-                  onClick={async () => {
-                    await changePlan('pro');
-                    toast({ title: 'Upgraded to Pro!', description: 'All Pro features unlocked.' });
-                    onClose();
-                  }}
-                >
-                  <Crown className="w-6 h-6 text-primary" />
-                  <span className="font-semibold">Activate Pro</span>
-                  <span className="text-xs text-muted-foreground">Unlimited everything</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 flex flex-col items-center gap-2 border-purple-500"
-                  onClick={async () => {
-                    await changePlan('lifetime');
-                    toast({ title: 'Lifetime Access Activated!', description: 'All features unlocked forever.' });
-                    onClose();
-                  }}
-                >
-                  <Shield className="w-6 h-6 text-purple-500" />
-                  <span className="font-semibold">Activate Lifetime</span>
-                  <span className="text-xs text-muted-foreground">Pay once, use forever</span>
-                </Button>
-              </div>
-            </div>
+            <WebRazorpayPlans
+              email={accountEmail}
+              onSuccess={async (tier) => {
+                await changePlan(tier as any);
+                toast({ title: tier === 'lifetime' ? 'Lifetime Access Activated!' : 'Upgraded to Pro!', description: 'All features unlocked.' });
+                onClose();
+              }}
+            />
           )}
 
           {/* Billing Toggle for Pro Plan */}
