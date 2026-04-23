@@ -6,11 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, ExternalLink, User, Mail, Key, Clock, AlertTriangle, Eye, EyeOff, LogIn, Copy, Check, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, MoreVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight } from 'lucide-react';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { BrandCard } from '@/components/brand-card';
 import { Favicon } from '@/components/favicon';
 import { useVault } from '@/contexts/vault-context';
 import { useCurrency } from '@/contexts/currency-context';
@@ -40,6 +38,7 @@ export default function Subscriptions() {
   const [isVerified, setIsVerified] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteSubTarget, setDeleteSubTarget] = useState<{id: string; name: string} | null>(null);
+  const [detailSub, setDetailSub] = useState<any>(null);
 
   // Subscription Templates
   const SUBSCRIPTION_TEMPLATES = [
@@ -331,159 +330,35 @@ export default function Subscriptions() {
 
             {/* Subscription List */}
             {filteredSubscriptions.length > 0 ? (
-              <div className="space-y-3 stagger-children">
-                {filteredSubscriptions.map((subscription) => {
+              <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+                {filteredSubscriptions.map((subscription, idx) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
-
                   return (
-                    <BrandCard key={subscription.id} name={subscription.name} url={subscription.platformLink || undefined}>
-                      <div className="px-4 py-3">
-                        {/* Main row: favicon + name/plan + kebab */}
-                        <div className="flex items-center gap-3">
-                          <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-10 h-10 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-[15px] text-foreground truncate leading-tight">{subscription.name}</h3>
-                            <p className="text-[13px] text-muted-foreground truncate leading-tight mt-0.5">
-                              {subscription.plan || subscription.category || subscription.billingCycle}
-                            </p>
-                          </div>
-                          {/* Inline reveal toggle (only if credentials exist) */}
-                          {subscription.credentials && (subscription.credentials.username || subscription.credentials.email || subscription.credentials.password) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 flex-shrink-0"
-                              onClick={() => toggleCredentialVisibility(subscription.id)}
-                              title={revealedCredentials.has(subscription.id) ? 'Hide credentials' : 'Reveal credentials'}
-                            >
-                              {revealedCredentials.has(subscription.id)
-                                ? <EyeOff className="w-4 h-4 text-primary" />
-                                : <Eye className="w-4 h-4 text-muted-foreground" />}
-                            </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              {subscription.platformLink && (
-                                <DropdownMenuItem onClick={() => openPlatform(subscription.platformLink || '', subscription.name)}>
-                                  <LogIn className="w-4 h-4 mr-2" /> Open site
-                                </DropdownMenuItem>
-                              )}
-                              {subscription.credentials && (subscription.credentials.username || subscription.credentials.email || subscription.credentials.password) && (
-                                <DropdownMenuItem onClick={() => toggleCredentialVisibility(subscription.id)}>
-                                  {revealedCredentials.has(subscription.id)
-                                    ? <><EyeOff className="w-4 h-4 mr-2" /> Hide credentials</>
-                                    : <><Eye className="w-4 h-4 mr-2" /> Reveal credentials</>}
-                                </DropdownMenuItem>
-                              )}
-                              {revealedCredentials.has(subscription.id) && subscription.credentials?.username && (
-                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.username!, 'Username')}>
-                                  <Copy className="w-4 h-4 mr-2" /> Copy username
-                                </DropdownMenuItem>
-                              )}
-                              {revealedCredentials.has(subscription.id) && subscription.credentials?.email && (
-                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.email!, 'Email')}>
-                                  <Copy className="w-4 h-4 mr-2" /> Copy email
-                                </DropdownMenuItem>
-                              )}
-                              {revealedCredentials.has(subscription.id) && subscription.credentials?.password && (
-                                <DropdownMenuItem onClick={() => copyCredential(subscription.credentials!.password!, 'Password')}>
-                                  <Copy className="w-4 h-4 mr-2" /> Copy password
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setEditingSubscription(subscription)}>
-                                <Edit className="w-4 h-4 mr-2" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDeleteSubscription(subscription.id, subscription.name)}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-
-                        {/* Revealed credentials */}
-                        {revealedCredentials.has(subscription.id) && subscription.credentials && (
-                          <div className="mt-2.5 rounded-lg bg-muted/60 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                            {subscription.credentials.username && (
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Username</div>
-                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.username}</div>
-                                </div>
-                                <button onClick={() => copyCredential(subscription.credentials!.username!, 'Username')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                              </div>
-                            )}
-                            {subscription.credentials.email && (
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Email</div>
-                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.email}</div>
-                                </div>
-                                <button onClick={() => copyCredential(subscription.credentials!.email!, 'Email')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                              </div>
-                            )}
-                            {subscription.credentials.password && (
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Password</div>
-                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.password}</div>
-                                </div>
-                                <button onClick={() => copyCredential(subscription.credentials!.password!, 'Password')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                              </div>
-                            )}
-                            {subscription.credentials.accountId && (
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] uppercase text-muted-foreground tracking-wide">Account ID</div>
-                                  <div className="text-[13px] font-mono text-foreground select-text break-all">{subscription.credentials.accountId}</div>
-                                </div>
-                                <button onClick={() => copyCredential(subscription.credentials!.accountId!, 'Account ID')} className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"><Copy className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Bottom: cost + renewal + status */}
-                        <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border/40">
-                          <span className="text-[13px] font-semibold text-foreground">
-                            {formatCurrency(subscription.cost || 0, currency)}
-                            <span className="text-[11px] font-normal text-muted-foreground ml-0.5">
-                              /{subscription.billingCycle === 'yearly' ? 'yr' : 'mo'}
-                            </span>
-                          </span>
-                          <span className="text-muted-foreground/40 text-[11px]">•</span>
-                          <Calendar className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(subscription.nextBillingDate, 'MMM dd')}
-                          </span>
-                          <div className="ml-auto flex items-center gap-1.5">
-                            {isUpcoming && (
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
-                                Due soon
-                              </span>
-                            )}
-                            <Badge
-                              variant={subscription.isActive ? "default" : "secondary"}
-                              className="text-[11px] h-5 px-1.5"
-                            >
-                              {subscription.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
+                    <button
+                      key={subscription.id}
+                      onClick={() => setDetailSub(subscription)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''}`}
+                    >
+                      <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[15px] font-medium text-foreground truncate">{subscription.name}</div>
+                        <div className="text-[13px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                          <span className="font-medium">{formatCurrency(subscription.cost || 0, currency)}/{subscription.billingCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <Calendar size={11} className="flex-shrink-0" />
+                          <span>{format(subscription.nextBillingDate, 'MMM d')}</span>
+                          {isUpcoming && <span className="text-orange-500 font-medium">· due soon</span>}
                         </div>
                       </div>
-                    </BrandCard>
+                      <Badge variant={subscription.isActive ? 'default' : 'secondary'} className="text-[11px] h-5 px-1.5 flex-shrink-0">
+                        {subscription.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                      <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                    </button>
                   );
                 })}
-              </div>
+              </Card>
             ) : (
               <Card className="rounded-2xl shadow-sm border-0 bg-card">
                 <CardContent className="p-12 text-center">
@@ -581,6 +456,110 @@ export default function Subscriptions() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Subscription Detail Modal */}
+      {detailSub && (() => {
+        const sub = detailSub;
+        const daysUntilRenewal = differenceInCalendarDays(sub.nextBillingDate, new Date());
+        const isUpcoming = daysUntilRenewal <= sub.reminderDays && daysUntilRenewal >= 0;
+        const hasCredentials = sub.credentials && (sub.credentials.username || sub.credentials.email || sub.credentials.password || sub.credentials.accountId);
+        const isRevealed = revealedCredentials.has(sub.id);
+        return (
+          <Dialog open={!!detailSub} onOpenChange={(open) => { if (!open) setDetailSub(null); }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <Favicon url={sub.platformLink || undefined} name={sub.name} className="w-9 h-9 rounded-lg flex-shrink-0" />
+                  <span className="truncate">{sub.name}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="space-y-3">
+                {/* Cost + billing */}
+                <div className="rounded-xl bg-muted/50 px-4 py-3">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Billing</div>
+                  <div className="text-[15px] font-semibold text-foreground">
+                    {formatCurrency(sub.cost || 0, currency)}<span className="text-[13px] font-normal text-muted-foreground">/{sub.billingCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                  </div>
+                </div>
+
+                {/* Next billing date */}
+                <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Next Payment</div>
+                    <div className="text-[14px] text-foreground">{format(sub.nextBillingDate, 'MMM d, yyyy')}</div>
+                  </div>
+                  {isUpcoming && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">Due soon</span>
+                  )}
+                </div>
+
+                {/* Plan / Category */}
+                {(sub.plan || sub.category) && (
+                  <div className="rounded-xl bg-muted/50 px-4 py-3">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Plan</div>
+                    <div className="text-[14px] text-foreground">{sub.plan || sub.category}</div>
+                  </div>
+                )}
+
+                {/* Credentials */}
+                {hasCredentials && (
+                  <div className="rounded-xl bg-muted/50 overflow-hidden">
+                    <div className="px-4 py-2 flex items-center justify-between border-b border-border/40">
+                      <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Credentials</span>
+                      <button
+                        onClick={() => toggleCredentialVisibility(sub.id)}
+                        className="p-1 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        {isRevealed ? <EyeOff size={14} className="text-primary" /> : <Eye size={14} className="text-muted-foreground" />}
+                      </button>
+                    </div>
+                    {(['username', 'email', 'password', 'accountId'] as const).map(field => {
+                      const val = sub.credentials?.[field];
+                      if (!val) return null;
+                      return (
+                        <div key={field} className="flex items-center gap-2 px-4 py-2 border-b border-border/30 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[10px] text-muted-foreground capitalize">{field === 'accountId' ? 'Account ID' : field}</div>
+                            <div className="text-[13px] font-mono text-foreground truncate">
+                              {isRevealed ? val : '••••••••'}
+                            </div>
+                          </div>
+                          {isRevealed && (
+                            <button onClick={() => copyCredential(val, field)} className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
+                              <Copy size={13} className="text-muted-foreground" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="flex items-center gap-2 pt-1">
+                  <Badge variant={sub.isActive ? 'default' : 'secondary'}>{sub.isActive ? 'Active' : 'Inactive'}</Badge>
+                  {sub.platformLink && (
+                    <button onClick={() => openPlatform(sub.platformLink, sub.name)} className="flex items-center gap-1 text-[12px] text-primary hover:underline">
+                      <Globe size={12} /> Open site
+                    </button>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setDetailSub(null); setEditingSubscription(sub); setShowAddModal(true); }}>
+                    <Edit size={14} className="mr-1.5" /> Edit
+                  </Button>
+                  <Button variant="outline" className="flex-1 rounded-xl text-destructive hover:text-destructive border-destructive/30"
+                    onClick={() => { setDetailSub(null); handleDeleteSubscription(sub.id, sub.name); }}>
+                    <Trash2 size={14} className="mr-1.5" /> Delete
+                  </Button>
+                </div>
+              </DialogBody>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

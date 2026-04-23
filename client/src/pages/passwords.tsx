@@ -6,15 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, MoreVertical, CheckCircle, User } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
 import { PasswordGenerator } from '@/lib/password-generator';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
-import { BrandCard } from '@/components/brand-card';
 import { ShareModal } from '@/components/share-modal';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { formatDistanceToNow } from 'date-fns';
@@ -37,6 +35,7 @@ export default function Passwords() {
   const [isVerified, setIsVerified] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [detailPassword, setDetailPassword] = useState<any>(null);
 
   const PASSWORD_TEMPLATES = [
     { id: 'gmail', name: 'Gmail', icon: Mail, category: 'Email', fields: { name: 'Gmail', username: '', url: 'https://mail.google.com' } },
@@ -79,25 +78,14 @@ export default function Passwords() {
     });
   }, [passwords, searchQuery, categoryFilter, strengthFilter]);
 
-  const copyPassword = async (password: string, id: string) => {
+  const copyToClipboard = async (text: string, key: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(password);
-      setCopiedId(id);
-      toast({ title: "Copied", description: "Password copied to clipboard" });
+      await navigator.clipboard.writeText(text);
+      setCopiedId(key);
+      toast({ title: "Copied", description: `${label} copied to clipboard` });
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast({ title: "Error", description: "Failed to copy password", variant: "destructive" });
-    }
-  };
-
-  const copyUsername = async (username: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(username);
-      setCopiedId(`${id}-username`);
-      toast({ title: "Copied", description: "Username copied to clipboard" });
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast({ title: "Error", description: "Failed to copy username", variant: "destructive" });
+      toast({ title: "Error", description: `Failed to copy ${label}`, variant: "destructive" });
     }
   };
 
@@ -124,14 +112,13 @@ export default function Passwords() {
     try {
       await deletePassword(deleteTargetId);
       toast({ title: "Deleted", description: "Password deleted successfully" });
+      if (detailPassword?.id === deleteTargetId) setDetailPassword(null);
     } catch {
       toast({ title: "Error", description: "Failed to delete password", variant: "destructive" });
     } finally {
       setDeleteTargetId(null);
     }
   };
-
-  const handleShare = (password: any) => { setSelectedPassword(password); setShowShareModal(true); };
 
   const strengthStyle = (level: string) => {
     if (level === 'strong' || level === 'very-strong')
@@ -141,19 +128,20 @@ export default function Passwords() {
     return 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400';
   };
 
+  const openDetail = (password: any) => setDetailPassword(password);
+
   return (
     <div>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Header */}
-        <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Password Vault</h1>
-            <p className="text-muted-foreground text-sm">Manage your passwords securely with end-to-end encryption</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Passwords</h1>
+            {!isPro && (
+              <p className="text-xs text-muted-foreground mt-0.5">{passwords.length} / {getLimit('passwords')} used</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            {!isPro && (
-              <span className="text-xs text-muted-foreground">{passwords.length}/{getLimit('passwords')}</span>
-            )}
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl">
               <LayoutTemplate className="w-4 h-4 mr-1" />
               Templates
@@ -173,192 +161,71 @@ export default function Passwords() {
               data-testid="add-password-button"
             >
               <Plus className="w-4 h-4 mr-1" />
-              {!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade to Add' : 'Add'}
+              {!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade' : 'Add'}
             </Button>
           </div>
         </div>
 
-        {/* Filters */}
-        <Card className="rounded-2xl shadow-sm border-border/50 bg-card/80 backdrop-blur-sm">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative group">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 transition-colors group-focus-within:text-primary" />
-                <Input
-                  type="text"
-                  placeholder="Search passwords & services..."
-                  className="pl-10 rounded-xl border-input bg-muted/50"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="rounded-xl border-input bg-muted">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {PASSWORD_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>{category}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={strengthFilter} onValueChange={setStrengthFilter}>
-                <SelectTrigger className="rounded-xl border-input bg-muted">
-                  <SelectValue placeholder="All Strength" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Strength</SelectItem>
-                  <SelectItem value="weak">Weak</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="strong">Strong</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search + Filters */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              type="text"
+              placeholder="Search passwords..."
+              className="pl-10 rounded-xl border-input bg-muted/50"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 text-sm h-9">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {PASSWORD_CATEGORIES.map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={strengthFilter} onValueChange={setStrengthFilter}>
+              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 text-sm h-9">
+                <SelectValue placeholder="All Strength" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Strength</SelectItem>
+                <SelectItem value="weak">Weak</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="strong">Strong</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {/* Password List */}
         {filteredPasswords.length > 0 ? (
-          <div className="space-y-2.5 stagger-children">
-            {filteredPasswords.map((password) => {
-              const { level } = PasswordGenerator.calculateStrength(password.password);
-              const isVisible = visiblePasswords.has(password.id);
-              const lastUsed = password.lastUsed || password.updatedAt;
-
-              return (
-                <BrandCard key={password.id} name={password.name} url={password.url} data-testid={`password-row-${password.id}`}>
-                  <div className="px-4 py-3">
-                    {/* Main row: favicon + name/username + actions */}
-                    <div className="flex items-center gap-3">
-                      <Favicon url={password.url} name={password.name} className="w-10 h-10 flex-shrink-0" />
-
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-[15px] text-foreground truncate leading-tight">
-                          {password.name}
-                        </h3>
-                        <p className="text-[13px] text-muted-foreground truncate leading-tight mt-0.5">
-                          {password.username}
-                        </p>
-                      </div>
-
-                      {/* Inline actions: reveal + copy username + copy password + kebab */}
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => togglePasswordVisibility(password.id)}
-                          data-testid={`reveal-inline-${password.id}`}
-                          title={isVisible ? 'Hide password' : 'Reveal password'}
-                        >
-                          {isVisible
-                            ? <EyeOff className="w-4 h-4 text-primary" />
-                            : <Eye className="w-4 h-4 text-muted-foreground" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => copyUsername(password.username, password.id)}
-                          data-testid={`copy-username-${password.id}`}
-                          title="Copy username"
-                        >
-                          {copiedId === `${password.id}-username`
-                            ? <CheckCircle className="w-4 h-4 text-primary" />
-                            : <User className="w-4 h-4 text-muted-foreground" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => copyPassword(password.password, password.id)}
-                          data-testid={`copy-password-${password.id}`}
-                          title="Copy password"
-                        >
-                          {copiedId === password.id
-                            ? <CheckCircle className="w-4 h-4 text-primary" />
-                            : <Copy className="w-4 h-4 text-muted-foreground" />}
-                        </Button>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem
-                              onClick={() => togglePasswordVisibility(password.id)}
-                              data-testid={`reveal-password-${password.id}`}
-                            >
-                              {isVisible
-                                ? <><EyeOff className="w-4 h-4 mr-2" />Hide password</>
-                                : <><Eye className="w-4 h-4 mr-2" />Reveal password</>}
-                            </DropdownMenuItem>
-                            {password.url && (
-                              <DropdownMenuItem onClick={() => window.open(password.url, '_blank')}>
-                                <Globe className="w-4 h-4 mr-2" />
-                                Open site
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => handleShare(password)}>
-                              <Share2 className="w-4 h-4 mr-2" />
-                              Share
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => setEditingPassword(password)}
-                              data-testid={`edit-password-${password.id}`}
-                            >
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handleDelete(password.id)}
-                              data-testid={`delete-password-${password.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-
-                    {/* Revealed password (only when visible) */}
-                    {isVisible && (
-                      <div className="mt-2.5 rounded-lg bg-muted/60 flex items-center gap-2 px-3 py-2">
-                        <span className="text-[13px] font-mono text-foreground break-all flex-1 select-text">{password.password}</span>
-                        <button
-                          onClick={() => copyPassword(password.password, password.id)}
-                          className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
-                          title="Copy password"
-                        >
-                          {copiedId === password.id
-                            ? <CheckCircle className="w-3.5 h-3.5 text-primary" />
-                            : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Bottom row: strength + last used */}
-                    <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border/40">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${strengthStyle(level)}`}>
-                        {level === 'very-strong' ? 'very strong' : level}
-                      </span>
-                      {lastUsed && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {formatDistanceToNow(new Date(lastUsed), { addSuffix: true })}
-                        </span>
-                      )}
-                    </div>
+          <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+            {filteredPasswords.map((password, idx) => (
+              <button
+                key={password.id}
+                data-testid={`password-row-${password.id}`}
+                onClick={() => openDetail(password)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''}`}
+              >
+                <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
+                  <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                    <Lock size={11} className="flex-shrink-0" />
+                    <span className="truncate">{password.username}</span>
                   </div>
-                </BrandCard>
-              );
-            })}
-          </div>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+              </button>
+            ))}
+          </Card>
         ) : (
           <Card className="rounded-2xl shadow-sm border-0 bg-card">
             <CardContent className="p-12 text-center">
@@ -385,6 +252,137 @@ export default function Passwords() {
           </Card>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {detailPassword && (() => {
+        const pw = detailPassword;
+        const { level } = PasswordGenerator.calculateStrength(pw.password);
+        const isVisible = visiblePasswords.has(pw.id);
+        const lastUsed = pw.lastUsed || pw.updatedAt;
+        return (
+          <Dialog open={!!detailPassword} onOpenChange={(open) => { if (!open) setDetailPassword(null); }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <Favicon url={pw.url} name={pw.name} className="w-9 h-9 rounded-lg flex-shrink-0" />
+                  <span className="truncate">{pw.name}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="space-y-3">
+                {/* Username */}
+                <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Username / Email</div>
+                    <div className="text-[14px] text-foreground truncate">{pw.username}</div>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(pw.username, `${pw.id}-username`, 'Username')}
+                    className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                  >
+                    {copiedId === `${pw.id}-username`
+                      ? <CheckCircle size={15} className="text-primary" />
+                      : <Copy size={15} className="text-muted-foreground" />}
+                  </button>
+                </div>
+
+                {/* Password */}
+                <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Password</div>
+                    <div className="text-[14px] font-mono text-foreground truncate">
+                      {isVisible ? pw.password : '••••••••••••'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => togglePasswordVisibility(pw.id)}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      data-testid={`reveal-password-${pw.id}`}
+                    >
+                      {isVisible ? <EyeOff size={15} className="text-primary" /> : <Eye size={15} className="text-muted-foreground" />}
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(pw.password, pw.id, 'Password')}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      data-testid={`copy-password-${pw.id}`}
+                    >
+                      {copiedId === pw.id
+                        ? <CheckCircle size={15} className="text-primary" />
+                        : <Copy size={15} className="text-muted-foreground" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* URL */}
+                {pw.url && (
+                  <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Website</div>
+                      <div className="text-[14px] text-foreground truncate">{pw.url}</div>
+                    </div>
+                    <button
+                      onClick={() => window.open(pw.url, '_blank')}
+                      className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                    >
+                      <Globe size={15} className="text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {pw.notes && (
+                  <div className="rounded-xl bg-muted/50 px-4 py-3">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Notes</div>
+                    <div className="text-[14px] text-foreground whitespace-pre-wrap">{pw.notes}</div>
+                  </div>
+                )}
+
+                {/* Meta row */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${strengthStyle(level)}`}>
+                    {level === 'very-strong' ? 'very strong' : level}
+                  </span>
+                  {pw.category && (
+                    <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{pw.category}</span>
+                  )}
+                  {lastUsed && (
+                    <span className="text-[11px] text-muted-foreground ml-auto">
+                      {formatDistanceToNow(new Date(lastUsed), { addSuffix: true })}
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-xl"
+                    onClick={() => { setSelectedPassword(pw); setShowShareModal(true); }}
+                  >
+                    <Share2 size={14} className="mr-1.5" /> Share
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-xl"
+                    onClick={() => { setDetailPassword(null); setEditingPassword(pw); setShowAddModal(true); }}
+                    data-testid={`edit-password-${pw.id}`}
+                  >
+                    <Edit size={14} className="mr-1.5" /> Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-xl text-destructive hover:text-destructive border-destructive/30"
+                    onClick={() => handleDelete(pw.id)}
+                    data-testid={`delete-password-${pw.id}`}
+                  >
+                    <Trash2 size={14} className="mr-1.5" /> Delete
+                  </Button>
+                </div>
+              </DialogBody>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       <AddPasswordModal
         open={showAddModal || !!editingPassword}

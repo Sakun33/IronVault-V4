@@ -4,6 +4,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { useVault } from '@/contexts/vault-context';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Edit, Trash2, Search, BookOpen, Tag, Pin, Calendar,
   StickyNote, Archive, FileText, LayoutTemplate,
-  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles
+  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, ChevronRight
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -444,85 +445,37 @@ export default function Notes() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedNotes.map(note => {
+        <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+          {sortedNotes.map((note, idx) => {
             const color = notebookColor(note.notebook);
             const preview = getPreview(note.content || '');
             return (
-              <div
+              <button
                 key={note.id}
                 data-testid={`note-card-${note.id}`}
                 onClick={() => setViewingNote(note)}
-                className="group relative rounded-2xl border bg-card cursor-pointer hover:shadow-md transition-all duration-200 overflow-hidden"
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < sortedNotes.length - 1 ? 'border-b border-border/50' : ''}`}
               >
-                <div className="h-1 w-full" style={{ background: color }} />
-                <div className="p-4 space-y-2.5">
-                  {/* Title row */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {note.isPinned && <Pin className="w-3.5 h-3.5 flex-shrink-0 fill-amber-400 text-amber-400" />}
-                      <h3 data-testid={`note-title-${note.id}`}
-                        className="font-semibold text-sm leading-snug line-clamp-2 text-foreground">
-                        {note.title}
-                      </h3>
-                    </div>
-                    <div className="flex gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
-                      <button data-testid={`button-pin-${note.id}`}
-                        onClick={e => { e.stopPropagation(); togglePinNote(note); }}
-                        className="p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                        title={note.isPinned ? 'Unpin' : 'Pin'}>
-                        <Pin className={`w-3.5 h-3.5 ${note.isPinned ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'}`} />
-                      </button>
-                      <button data-testid={`button-edit-${note.id}`}
-                        onClick={e => { e.stopPropagation(); handleEditNote(note); }}
-                        className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors" title="Edit">
-                        <Edit className="w-3.5 h-3.5 text-primary" />
-                      </button>
-                      <button data-testid={`button-delete-${note.id}`}
-                        onClick={e => { e.stopPropagation(); handleDeleteNote(note.id, note.title); }}
-                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" title="Delete">
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Preview text */}
-                  {preview && (
-                    <p data-testid={`note-content-${note.id}`}
-                      className="text-xs text-muted-foreground line-clamp-3 leading-relaxed whitespace-pre-wrap">
-                      {preview}
-                    </p>
-                  )}
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between pt-0.5">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-                      <span>{note.notebook}</span>
-                      <span className="opacity-40">·</span>
-                      <span>{timeAgo(note.updatedAt)}</span>
-                    </div>
-                    {(note.tags || []).length > 0 && (
-                      <div className="flex gap-1">
-                        {(note.tags || []).slice(0, 2).map(tag => (
-                          <span key={tag} data-testid={`note-tag-${note.id}-${tag}`}
-                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                            {tag}
-                          </span>
-                        ))}
-                        {(note.tags || []).length > 2 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            +{(note.tags || []).length - 2}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div className="flex-shrink-0 flex flex-col items-center gap-1 pt-0.5">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                  {note.isPinned && <Pin className="w-3 h-3 fill-amber-400 text-amber-400" />}
                 </div>
-              </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-medium text-foreground truncate" data-testid={`note-title-${note.id}`}>
+                    {note.title}
+                  </div>
+                  {preview && (
+                    <div className="text-[13px] text-muted-foreground truncate mt-0.5" data-testid={`note-content-${note.id}`}>
+                      {preview}
+                    </div>
+                  )}
+                  <div className="text-[11px] text-muted-foreground/60 mt-0.5">{timeAgo(note.updatedAt)}</div>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+              </button>
             );
           })}
-        </div>
+        </Card>
       )}
 
       {renderViewModal()}
