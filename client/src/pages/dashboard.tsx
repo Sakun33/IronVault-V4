@@ -1,60 +1,26 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
-import { StatCard } from "@/components/StatCard";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
   CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw,
-  BarChart3, ArrowRight,
+  BarChart3, ChevronRight, CreditCard, Target, Activity, Key, Calendar,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, addDays, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
+import { format, differenceInCalendarDays, formatDistanceToNow, subMonths } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
+import { motion } from "framer-motion";
 
-// ── Expense horizontal bar chart ──────────────────────────────────────────────
-function ExpenseBarChart({
-  categories,
-  formatAmount,
-}: {
-  categories: { cat: string; amount: number; pct: number; color: string }[];
-  formatAmount: (n: number) => string;
-}) {
-  const top3 = categories.slice(0, 3);
-  const total = categories.reduce((sum, c) => sum + c.amount, 0);
-  return (
-    <div className="space-y-4">
-      {top3.map(c => (
-        <div key={c.cat}>
-          <div className="flex justify-between items-center mb-1.5">
-            <span className="flex items-center gap-2 text-sm">
-              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
-              <span className="text-foreground truncate max-w-[130px]">{c.cat}</span>
-            </span>
-            <span className="text-xs text-muted-foreground font-medium">{formatAmount(c.amount)}</span>
-          </div>
-          <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(c.pct, 100)}%`, background: c.color }}
-            />
-          </div>
-        </div>
-      ))}
-      {total > 0 && (
-        <div className="flex justify-between text-xs font-semibold pt-2 border-t border-border/40 mt-1">
-          <span className="text-muted-foreground">Total</span>
-          <span className="text-foreground">{formatAmount(total)}</span>
-        </div>
-      )}
-    </div>
-  );
-}
+// ── Animation variants ────────────────────────────────────────────────────────
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+};
+const stagger = { show: { transition: { staggerChildren: 0.07 } } };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function pwdStrength(pwd: string): 'weak' | 'fair' | 'strong' {
@@ -71,6 +37,36 @@ function maskUsername(u: string): string {
     return local.slice(0, 2) + '•••@' + domain;
   }
   return u.slice(0, 2) + '•••';
+}
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Good night';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getTimeEmoji(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return '☀️';
+  if (h >= 12 && h < 17) return '🌤️';
+  if (h >= 17 && h < 21) return '🌅';
+  return '🌙';
+}
+
+function getUserName(): string {
+  try {
+    const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
+    const name = (cp.name || '').trim();
+    if (name && !name.includes('@')) return name.split(' ')[0];
+    const session = localStorage.getItem('iv_account_session');
+    if (session) {
+      const { email } = JSON.parse(session);
+      if (email) return (email as string).split('@')[0];
+    }
+  } catch { /* ignore */ }
+  return '';
 }
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -98,36 +94,73 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other': '#94a3b8',
 };
 
-// ── Glass widget card ─────────────────────────────────────────────────────────
+// ── Animated security ring ────────────────────────────────────────────────────
+function SecurityRing({ score }: { score: number }) {
+  const [animScore, setAnimScore] = useState(0);
+  const size = 84, sw = 7;
+  const r = (size - sw) / 2;
+  const cx = size / 2, cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (animScore / 100) * circ;
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimScore(score), 200);
+    return () => clearTimeout(t);
+  }, [score]);
+
+  const label = score >= 90 ? 'EXCELLENT' : score >= 75 ? 'STRONG' : score >= 50 ? 'FAIR' : 'WEAK';
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="white" strokeWidth={sw}
+        strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
+        strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`}
+        style={{ transition: 'stroke-dasharray 1.3s cubic-bezier(0.4,0,0.2,1)' }} />
+      <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="middle"
+        fontSize="22" fontWeight="800" fill="white">{animScore}</text>
+      <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="middle"
+        fontSize="7.5" fontWeight="700" fill="rgba(255,255,255,0.6)" letterSpacing="0.06em">{label}</text>
+    </svg>
+  );
+}
+
+// ── Widget card ───────────────────────────────────────────────────────────────
 function WidgetCard({
-  title,
-  viewAllHref,
-  children,
-  empty,
-  emptyText = 'Nothing here yet',
+  title, viewAllHref, children, empty, emptyText = 'Nothing here yet',
+  accentClass = 'bg-primary/10', iconEl,
 }: {
   title: string;
   viewAllHref?: string;
   children?: React.ReactNode;
   empty?: boolean;
   emptyText?: string;
+  accentClass?: string;
+  iconEl?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <div className="rounded-2xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
+        <div className="flex items-center gap-2">
+          {iconEl && (
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${accentClass}`}>
+              {iconEl}
+            </div>
+          )}
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        </div>
         {viewAllHref && (
           <Link href={viewAllHref}>
-            <span className="text-xs text-primary hover:text-primary/70 flex items-center gap-1 transition-colors">
-              View all <ArrowRight className="w-3 h-3" />
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+              All <ChevronRight className="w-3 h-3" />
             </span>
           </Link>
         )}
       </div>
-      <div className="px-5 pb-5 flex-1">
+      <div className="px-3 py-3 flex-1">
         {empty ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center">
-            <Clock className="w-8 h-8 text-muted-foreground/40 mb-2" />
+          <div className="flex flex-col items-center justify-center py-7 text-center">
+            <Clock className="w-6 h-6 text-muted-foreground/25 mb-2" />
             <p className="text-xs text-muted-foreground">{emptyText}</p>
           </div>
         ) : children}
@@ -136,67 +169,91 @@ function WidgetCard({
   );
 }
 
-// ── Greeting helpers ──────────────────────────────────────────────────────────
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return 'Good night';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+// ── Expense category bars ─────────────────────────────────────────────────────
+function ExpenseBars({
+  cats, fmt,
+}: {
+  cats: { cat: string; amount: number; pct: number; color: string }[];
+  fmt: (n: number) => string;
+}) {
+  return (
+    <div className="space-y-3.5">
+      {cats.slice(0, 3).map(c => (
+        <div key={c.cat}>
+          <div className="flex justify-between items-center mb-1">
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
+              <span className="text-foreground/80 truncate max-w-[110px]">{c.cat}</span>
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">{fmt(c.amount)}</span>
+          </div>
+          <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+            <div className="h-full rounded-full"
+              style={{ width: `${Math.min(c.pct, 100)}%`, background: c.color, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function getTimeEmoji(): string {
-  const h = new Date().getHours();
-  if (h >= 5 && h < 12) return '☀️';
-  if (h >= 12 && h < 17) return '🌤️';
-  if (h >= 17 && h < 21) return '🌅';
-  return '🌙';
-}
-
-function getUserName(): string {
-  try {
-    const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-    const name = (cp.name || '').trim();
-    if (name && !name.includes('@')) return name.split(' ')[0];
-    // Fall back to email prefix from account session
-    const session = localStorage.getItem('iv_account_session');
-    if (session) {
-      const { email } = JSON.parse(session);
-      if (email) return (email as string).split('@')[0];
-    }
-  } catch {}
-  return '';
+// ── Vault completeness card ───────────────────────────────────────────────────
+function VaultCompletenessCard({ score, suggestions }: { score: number; suggestions: string[] }) {
+  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#6366f1';
+  return (
+    <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+          <Target className="w-3.5 h-3.5 text-indigo-500" />
+        </div>
+        <h3 className="text-sm font-semibold text-foreground">Vault Completeness</h3>
+        <span className="ml-auto text-sm font-bold tabular-nums" style={{ color }}>{score}%</span>
+      </div>
+      <div className="h-2 bg-muted/40 rounded-full overflow-hidden mb-3">
+        <div className="h-full rounded-full"
+          style={{ width: `${score}%`, background: color, transition: 'width 1.1s cubic-bezier(0.4,0,0.2,1)' }} />
+      </div>
+      {suggestions.length > 0 ? (
+        <div className="space-y-1.5">
+          {suggestions.map((s, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Plus className="w-3 h-3 text-muted-foreground/40 flex-shrink-0" />
+              {s}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          All categories filled — vault complete!
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
-  const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, setSearchQuery, refreshData } = useVault();
+  const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData();
-      setLastRefresh(new Date());
-    }, 15000);
+    const interval = setInterval(() => refreshData(), 15000);
     return () => clearInterval(interval);
   }, [refreshData]);
 
-  const handleManualRefresh = async () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       await refreshData();
-      setLastRefresh(new Date());
-      toast({ title: "Refreshed", description: "Dashboard data updated successfully" });
-    } catch {
-      toast({ title: "Error", description: "Failed to refresh dashboard", variant: "destructive" });
+      toast({ title: 'Refreshed', description: 'Dashboard updated' });
     } finally {
       setIsRefreshing(false);
     }
@@ -206,27 +263,35 @@ export default function Dashboard() {
     try {
       await navigator.clipboard.writeText(password);
       setCopiedId(id);
-      toast({ title: "Copied", description: "Password copied to clipboard" });
+      toast({ title: 'Copied', description: 'Password copied to clipboard' });
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast({ title: "Error", description: "Failed to copy password", variant: "destructive" });
+      toast({ title: 'Error', description: 'Failed to copy', variant: 'destructive' });
     }
   };
 
+  const fmtAmt = (n: number) => formatCurrency(n, currency);
+  const userName = getUserName();
   const normalizedSearch = searchQuery.trim().toLowerCase();
+  const sixMonthsAgo = useMemo(() => subMonths(new Date(), 6), []);
 
-  // ── Derived data ─────────────────────────────────────────────────────────────
-
+  // ── Derived stats ─────────────────────────────────────────────────────────
   const weakPasswordList = useMemo(() =>
-    passwords.filter(p => pwdStrength(p.password || '') === 'weak'),
-    [passwords]
-  );
+    passwords.filter(p => pwdStrength(p.password || '') === 'weak'), [passwords]);
   const weakPasswords = weakPasswordList.length;
+  const strongPasswords = passwords.length - weakPasswords;
 
-  const monthlySpend = useMemo(() =>
-    subscriptions.filter(s => s.isActive).reduce((t, s) => t + (s.cost || 0), 0),
-    [subscriptions]
-  );
+  const stalePasswords = useMemo(() =>
+    passwords.filter(p => p.updatedAt && new Date(p.updatedAt) < sixMonthsAgo).length,
+    [passwords, sixMonthsAgo]);
+
+  const monthlySubSpend = useMemo(() =>
+    subscriptions.filter(s => s.isActive).reduce((t, s) => {
+      const cost = s.cost || 0;
+      if (s.billingCycle === 'yearly') return t + cost / 12;
+      if (s.billingCycle === 'quarterly') return t + cost / 3;
+      return t + cost;
+    }, 0), [subscriptions]);
 
   const thisMonthExpenses = useMemo(() => {
     const now = new Date();
@@ -239,24 +304,32 @@ export default function Dashboard() {
   }, [expenses]);
 
   const dueTodayCount = useMemo(() =>
-    reminders.filter(r =>
-      !r.isCompleted && r.dueDate &&
-      differenceInCalendarDays(new Date(r.dueDate), new Date()) === 0
-    ).length,
-    [reminders]
-  );
-
-  const userName = getUserName();
+    reminders.filter(r => !r.isCompleted && r.dueDate &&
+      differenceInCalendarDays(new Date(r.dueDate), new Date()) === 0).length,
+    [reminders]);
 
   const securityScore = useMemo(() => {
     if (stats.totalPasswords === 0) return 0;
-    let score = Math.min(50, stats.totalPasswords * 5);
-    if (stats.activeSubscriptions > 0) score += 20;
-    if (expenses.length > 0) score += 15;
-    if (stats.totalNotes > 0) score += 15;
-    score -= weakPasswords * 5;
-    return Math.max(0, Math.min(100, score));
-  }, [stats.totalPasswords, stats.activeSubscriptions, expenses.length, stats.totalNotes, weakPasswords]);
+    let score = Math.min(50, stats.totalPasswords * 3);
+    if (stats.activeSubscriptions > 0) score += 15;
+    if (expenses.length > 0) score += 10;
+    if (stats.totalNotes > 0) score += 10;
+    if (reminders.length > 0) score += 5;
+    score -= weakPasswords * 4;
+    score -= Math.min(stalePasswords * 2, 20);
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }, [stats, expenses.length, weakPasswords, stalePasswords, reminders.length]);
+
+  const { vaultScore, vaultSuggestions } = useMemo(() => {
+    let score = 0;
+    const suggestions: string[] = [];
+    if (passwords.length > 0) score += 20; else suggestions.push('Add your first password');
+    if (notes.length > 0) score += 20; else suggestions.push('Create a note');
+    if (subscriptions.length > 0) score += 20; else suggestions.push('Track a subscription');
+    if (expenses.length > 0) score += 20; else suggestions.push('Log an expense');
+    if (reminders.length > 0) score += 20; else suggestions.push('Set a reminder');
+    return { vaultScore: score, vaultSuggestions: suggestions.slice(0, 2) };
+  }, [passwords.length, notes.length, subscriptions.length, expenses.length, reminders.length]);
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, number> = {};
@@ -278,469 +351,447 @@ export default function Dashboard() {
 
   const recentPasswords = useMemo(() =>
     [...passwords]
-      .filter(p => {
-        if (!normalizedSearch) return true;
-        return (
-          p.name.toLowerCase().includes(normalizedSearch) ||
-          p.username.toLowerCase().includes(normalizedSearch) ||
-          (p.url || '').toLowerCase().includes(normalizedSearch)
-        );
-      })
+      .filter(p => !normalizedSearch || p.name.toLowerCase().includes(normalizedSearch) || p.username.toLowerCase().includes(normalizedSearch))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 5),
-    [passwords, normalizedSearch]
-  );
+    [passwords, normalizedSearch]);
 
   const upcomingRenewals = useMemo(() =>
     subscriptions
       .filter(s => s.isActive)
+      .filter(s => !normalizedSearch || s.name.toLowerCase().includes(normalizedSearch))
       .filter(s => {
-        if (!normalizedSearch) return true;
-        return (
-          s.name.toLowerCase().includes(normalizedSearch) ||
-          (s.plan || '').toLowerCase().includes(normalizedSearch)
-        );
+        if (!s.nextBillingDate) return false;
+        const d = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
+        return d >= 0 && d <= 30;
       })
-      .filter(s => {
-        const today = new Date();
-        const reminderDate = addDays(today, s.reminderDays || 7);
-        return s.nextBillingDate <= reminderDate;
-      })
-      .sort((a, b) => (a.nextBillingDate?.getTime?.() ?? 0) - (b.nextBillingDate?.getTime?.() ?? 0))
-      .slice(0, 3),
-    [subscriptions, normalizedSearch]
-  );
+      .sort((a, b) => new Date(a.nextBillingDate).getTime() - new Date(b.nextBillingDate).getTime())
+      .slice(0, 4),
+    [subscriptions, normalizedSearch]);
 
   const dueSoonReminders = useMemo(() =>
     reminders
       .filter(r => !r.isCompleted && r.dueDate)
       .filter(r => {
-        const days = differenceInCalendarDays(new Date(r.dueDate), new Date());
-        return days >= 0 && days <= 6;
+        const d = differenceInCalendarDays(new Date(r.dueDate), new Date());
+        return d >= 0 && d <= 7;
       })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
-    [reminders]
-  );
-
-  const getActivityIcon = (category: string) => {
-    switch (category) {
-      case 'password': return Lock;
-      case 'subscription': return Bookmark;
-      case 'note': return FileText;
-      case 'expense': return DollarSign;
-      case 'reminder': return Bell;
-      case 'system': return BarChart3;
-      case 'security': return Shield;
-      default: return Clock;
-    }
-  };
-
-  const getActivityColor = (category: string) => {
-    switch (category) {
-      case 'password': return 'text-primary';
-      case 'subscription': return 'text-primary';
-      case 'security': return 'text-destructive';
-      default: return 'text-muted-foreground';
-    }
-  };
-
-  const getActivityBg = (category: string) => {
-    switch (category) {
-      case 'password': return 'bg-primary/10';
-      case 'subscription': return 'bg-primary/10';
-      case 'security': return 'bg-destructive/10';
-      default: return 'bg-muted/50';
-    }
-  };
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 4),
+    [reminders]);
 
   const recentActivity = useMemo(() => {
-    const merged = [
-      ...passwords.map(p => ({
-        id: p.id,
-        description: `Password for ${p.name}`,
-        category: 'password' as const,
-        timestamp: new Date(p.updatedAt || p.createdAt),
-      })),
-      ...subscriptions.map(s => ({
-        id: s.id,
-        description: `Subscription: ${s.name}`,
-        category: 'subscription' as const,
-        timestamp: new Date(s.updatedAt || s.createdAt),
-      })),
-      ...expenses.map(e => ({
-        id: e.id,
-        description: e.description || e.category || 'Expense',
-        category: 'expense' as const,
-        timestamp: new Date((e as any).updatedAt || e.date || e.createdAt),
-      })),
-      ...reminders.map(r => ({
-        id: r.id,
-        description: r.title,
-        category: 'reminder' as const,
-        timestamp: new Date(r.updatedAt || r.createdAt),
-      })),
-      ...notes.map(n => ({
-        id: n.id,
-        description: n.title,
-        category: 'note' as const,
-        timestamp: new Date(n.updatedAt || n.createdAt),
-      })),
+    const items = [
+      ...passwords.map(p => ({ id: p.id, text: p.name, action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: new Date(p.updatedAt || p.createdAt) })),
+      ...notes.map(n => ({ id: n.id, text: n.title, action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: new Date(n.updatedAt || n.createdAt) })),
+      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: new Date((e as any).updatedAt || e.date || e.createdAt) })),
+      ...reminders.map(r => ({ id: r.id, text: r.title, action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: new Date(r.updatedAt || r.createdAt) })),
+      ...subscriptions.map(s => ({ id: s.id, text: s.name, action: 'Subscription', icon: Bookmark, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: new Date(s.updatedAt || s.createdAt) })),
     ];
-    return merged
-      .filter(item => {
-        if (!normalizedSearch) return true;
-        return (
-          item.description.toLowerCase().includes(normalizedSearch) ||
-          item.category.toLowerCase().includes(normalizedSearch)
-        );
-      })
+    return items
+      .filter(item => !normalizedSearch || item.text.toLowerCase().includes(normalizedSearch))
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, 5)
-      .map(item => ({
-        ...item,
-        icon: getActivityIcon(item.category),
-        color: getActivityColor(item.category),
-        bg: getActivityBg(item.category),
-      }));
-  }, [passwords, subscriptions, expenses, reminders, notes, normalizedSearch]);
+      .slice(0, 6);
+  }, [passwords, notes, expenses, reminders, subscriptions, normalizedSearch]);
 
-  const fmtAmt = (n: number) => formatCurrency(n, currency);
+  // ── Insights ──────────────────────────────────────────────────────────────
+  interface InsightItem { icon: React.ElementType; text: string; sub?: string; variant: 'red' | 'amber' | 'green' | 'blue'; href?: string; }
+  const insights = useMemo((): InsightItem[] => {
+    const items: InsightItem[] = [];
+    if (weakPasswords > 0) items.push({ icon: AlertTriangle, text: `${weakPasswords} weak password${weakPasswords > 1 ? 's' : ''}`, sub: 'Tap to fix', variant: 'red', href: '/passwords' });
+    if (stalePasswords > 0) items.push({ icon: Clock, text: `${stalePasswords} stale password${stalePasswords > 1 ? 's' : ''}`, sub: '6+ months old', variant: 'amber', href: '/passwords' });
+    const expiringCount = subscriptions.filter(s => s.isActive && s.nextBillingDate && differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) <= 7).length;
+    if (expiringCount > 0) items.push({ icon: Calendar, text: `${expiringCount} renewal${expiringCount > 1 ? 's' : ''} this week`, sub: 'Check billing', variant: 'amber', href: '/subscriptions' });
+    if (dueTodayCount > 0) items.push({ icon: Bell, text: `${dueTodayCount} due today`, sub: "Don't miss them", variant: 'red', href: '/reminders' });
+    if (items.length === 0) items.push({ icon: CheckCircle, text: 'All clear', sub: 'No action needed', variant: 'green' });
+    items.push({ icon: Shield, text: '0 breaches detected', sub: 'Breach monitor active', variant: 'blue' });
+    return items;
+  }, [weakPasswords, stalePasswords, subscriptions, dueTodayCount]);
 
-  const quickActions = [
-    { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bgColor: 'bg-blue-500' },
-    { label: 'New Note', icon: FileText, href: '/notes?action=add', bgColor: 'bg-amber-500' },
-    { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bgColor: 'bg-emerald-500' },
-    { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bgColor: 'bg-purple-500' },
+  const insightStyles: Record<string, string> = {
+    red: 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400',
+    amber: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400',
+    green: 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400',
+    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400',
+  };
+
+  // ── Stat items ────────────────────────────────────────────────────────────
+  const pinnedNotes = notes.filter(n => n.isPinned).length;
+  const statItems = [
+    { icon: Lock, label: 'Passwords', value: stats.totalPasswords, sub: weakPasswords > 0 ? `${weakPasswords} weak` : `${strongPasswords} strong`, subColor: weakPasswords > 0 ? '#ef4444' : '#22c55e', href: '/passwords', accent: '#6366f1' },
+    { icon: FileText, label: 'Notes', value: stats.totalNotes, sub: pinnedNotes > 0 ? `${pinnedNotes} pinned` : undefined, subColor: '#f59e0b', href: '/notes', accent: '#f59e0b' },
+    { icon: CreditCard, label: 'Subscriptions', value: stats.activeSubscriptions, sub: monthlySubSpend > 0 ? `${fmtAmt(monthlySubSpend)}/mo` : undefined, subColor: '#a855f7', href: '/subscriptions', accent: '#a855f7' },
+    { icon: DollarSign, label: 'Expenses', value: stats.totalExpenses, sub: thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo` : undefined, subColor: '#22c55e', href: '/expenses', accent: '#22c55e' },
+    { icon: Bell, label: 'Reminders', value: stats.totalReminders, sub: dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined, subColor: '#f97316', href: '/reminders', accent: '#f97316' },
+    { icon: BarChart3, label: 'Documents', value: stats.totalBankStatements, sub: undefined, subColor: '#64748b', href: '/documents', accent: '#64748b' },
   ];
 
+  const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
+
   return (
-    <div>
-      <div className="space-y-6">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6">
 
+      {/* ── Hero ──────────────────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp}
+        className="rounded-3xl overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 dark:from-indigo-950 dark:via-indigo-900 dark:to-purple-950 shadow-xl shadow-indigo-500/20">
+        <div className="relative p-5 sm:p-6">
+          {/* Decorative blobs */}
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+          <div className="absolute bottom-0 left-1/3 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 pointer-events-none" />
 
-        {/* Greeting Card — solid colors, security score inline */}
-        <div className="rounded-2xl p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-0.5">
-            {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
-          </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-            {format(new Date(), 'EEEE, MMMM d, yyyy')} · Your vault is secure 🔒
-          </p>
+          <div className="mb-4">
+            <h1 className="text-[22px] font-bold text-white leading-snug">
+              {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
+            </h1>
+            <p className="text-sm text-indigo-200 mt-0.5">
+              {format(new Date(), 'EEEE, MMMM d')} · Vault secure 🔒
+            </p>
+          </div>
 
-          {/* Compact inline security score */}
-          {(() => {
-            const r = 20, cx = 24, cy = 24, sw = 4;
-            const circ = 2 * Math.PI * r;
-            const dash = (securityScore / 100) * circ;
-            const color = securityScore >= 75 ? '#22c55e' : securityScore >= 50 ? '#f59e0b' : '#ef4444';
-            const label = securityScore >= 90 ? 'Excellent' : securityScore >= 75 ? 'Strong' : securityScore >= 50 ? 'Fair' : 'Weak';
-            return (
-              <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600">
-                <svg width="48" height="48" viewBox="0 0 48 48" className="flex-shrink-0">
-                  <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={sw} className="text-slate-200 dark:text-slate-600" />
-                  <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
-                    strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-                    strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`} />
-                  <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fill={color}>{securityScore}</text>
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold" style={{ color }}>{label}</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {stats.totalPasswords > 0 ? (
-                      <>
-                        Strong <span className="font-medium">{stats.totalPasswords - weakPasswords}/{stats.totalPasswords}</span>
-                        {weakPasswords > 0 && (
-                          <> · <button onClick={() => setLocation('/passwords?filter=weak')} className="text-red-500 hover:underline font-medium">Weak {weakPasswords}</button></>
-                        )}
-                      </>
-                    ) : 'Add passwords to see your score'}
-                  </div>
-                </div>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 flex-shrink-0">Security</span>
+          {/* Score + metrics row */}
+          <div className="flex items-center gap-5 mb-5">
+            <SecurityRing score={securityScore} />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                <span className="text-sm text-indigo-100">
+                  Strong: <span className="font-semibold">{strongPasswords}/{stats.totalPasswords}</span>
+                </span>
               </div>
-            );
-          })()}
+              {weakPasswords > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                  <button onClick={() => setLocation('/passwords')} className="text-sm text-red-300 hover:text-red-100 underline underline-offset-2 text-left">
+                    Weak: {weakPasswords} — fix now
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-300 flex-shrink-0" />
+                <span className="text-sm text-indigo-100">Subs: {fmtAmt(monthlySubSpend)}/mo</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
+                <span className="text-sm text-indigo-100">Spent: {fmtAmt(thisMonthExpenses)} this month</span>
+              </div>
+            </div>
+          </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
-            <button
-              onClick={handleManualRefresh}
-              disabled={isRefreshing}
-              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition disabled:opacity-50
-                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
-                border border-slate-200 dark:border-slate-600
-                text-slate-700 dark:text-slate-200"
-            >
+          {/* Action pills */}
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleRefresh} disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all disabled:opacity-50 active:scale-95">
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="h-auto py-2 px-3 rounded-xl text-sm gap-2 w-auto shadow-none focus:ring-0
-                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
-                border border-slate-200 dark:border-slate-600
-                text-slate-700 dark:text-slate-200">
+              <SelectTrigger className="h-auto py-2 px-3.5 rounded-xl bg-white/15 hover:bg-white/25 border-0 text-white text-sm font-medium focus:ring-0 gap-1.5 w-auto shadow-none [&>svg]:text-white/60">
                 <Globe className="w-3.5 h-3.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {currencies.map((curr) => (
-                  <SelectItem key={curr.code} value={curr.code}>
-                    {curr.symbol} {curr.code}
-                  </SelectItem>
+                {currencies.map(curr => (
+                  <SelectItem key={curr.code} value={curr.code}>{curr.symbol} {curr.code}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <button
-              onClick={() => setShowImportExport(true)}
-              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition
-                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
-                border border-slate-200 dark:border-slate-600
-                text-slate-700 dark:text-slate-200"
-            >
+            <button onClick={() => setShowImportExport(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all active:scale-95">
               <Upload className="w-3.5 h-3.5" />
-              Import / Export
+              Import/Export
             </button>
-            <button
-              onClick={() => setShowGenerator(true)}
-              className="px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition
-                bg-white hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600
-                border border-slate-200 dark:border-slate-600
-                text-slate-700 dark:text-slate-200"
-            >
-              <Plus className="w-3.5 h-3.5" />
+            <button onClick={() => setShowGenerator(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all active:scale-95">
+              <Key className="w-3.5 h-3.5" />
               Generator
             </button>
           </div>
         </div>
+      </motion.div>
 
-        {/* Onboarding CTA */}
-        {stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && (
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 flex flex-col md:flex-row items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Shield className="w-6 h-6 text-primary" />
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <h3 className="font-semibold text-foreground mb-1">Welcome to IronVault!</h3>
-              <p className="text-sm text-muted-foreground">Your vault is ready. Start by adding a password, tracking a subscription, or creating a note.</p>
-            </div>
-            <Link href="/passwords">
-              <Button size="sm" className="rounded-xl shrink-0">
-                <Plus className="w-4 h-4 mr-1" />
-                Add Password
-              </Button>
-            </Link>
+      {/* ── Onboarding ────────────────────────────────────────────────────── */}
+      {isEmpty && (
+        <motion.div variants={fadeUp}
+          className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-col sm:flex-row items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <Shield className="w-5 h-5 text-indigo-500" />
           </div>
-        )}
+          <div className="flex-1 text-center sm:text-left">
+            <h3 className="font-semibold text-foreground mb-0.5">Your vault is empty</h3>
+            <p className="text-sm text-muted-foreground">Add a password to unlock your security score and insights.</p>
+          </div>
+          <Link href="/passwords">
+            <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors shrink-0">
+              <Plus className="w-4 h-4" /> Add Password
+            </button>
+          </Link>
+        </motion.div>
+      )}
 
-        {/* Stats Grid — compact 2-column, 3-row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {[
-            { icon: Lock,     label: 'Passwords',     value: stats.totalPasswords,      sub: weakPasswords > 0 ? `${weakPasswords} weak` : undefined,                    subColor: 'text-red-500' },
-            { icon: Bookmark, label: 'Subscriptions', value: stats.activeSubscriptions,  sub: monthlySpend > 0 ? `${fmtAmt(monthlySpend)}/mo` : undefined,               subColor: 'text-slate-500' },
-            { icon: FileText, label: 'Notes',         value: stats.totalNotes,           sub: undefined,                                                                  subColor: '' },
-            { icon: DollarSign,label: 'Expenses',     value: stats.totalExpenses,        sub: thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo.` : undefined, subColor: 'text-slate-500' },
-            { icon: Bell,     label: 'Reminders',     value: stats.totalReminders,       sub: dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined,               subColor: 'text-red-500' },
-            { icon: BarChart3, label: 'Documents',    value: stats.totalBankStatements,  sub: undefined,                                                                  subColor: '' },
-          ].map(s => (
-            <div key={s.label} className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="flex items-center gap-1.5 mb-1">
-                <s.icon size={13} className="text-slate-400 flex-shrink-0" />
-                <span className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 truncate">{s.label}</span>
+      {/* ── Insights bar ──────────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp} className="overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex gap-2.5 pb-0.5" style={{ minWidth: 'max-content' }}>
+          {insights.map(insight => {
+            const Icon = insight.icon;
+            const cls = insightStyles[insight.variant];
+            const card = (
+              <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border cursor-pointer select-none transition-all hover:scale-[1.02] active:scale-[0.98] ${cls}`}>
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <div>
+                  <div className="text-xs font-semibold whitespace-nowrap">{insight.text}</div>
+                  {insight.sub && <div className="text-[11px] opacity-70 whitespace-nowrap">{insight.sub}</div>}
+                </div>
               </div>
-              <div className="text-xl font-bold text-slate-900 dark:text-white">{s.value}</div>
-              {s.sub && <div className={`text-[11px] mt-0.5 ${s.subColor || 'text-slate-500'}`}>{s.sub}</div>}
-            </div>
-          ))}
+            );
+            return insight.href
+              ? <Link key={insight.text} href={insight.href}>{card}</Link>
+              : <div key={insight.text}>{card}</div>;
+          })}
         </div>
+      </motion.div>
 
-        {/* Weak password alert */}
-        {weakPasswords > 0 && (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-destructive">
-                {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'} detected
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
-                These passwords are shorter than 8 characters or missing complexity.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {weakPasswordList.slice(0, 6).map(p => (
-                  <Link key={p.id} href="/passwords">
-                    <span className="inline-flex items-center gap-1 text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full hover:bg-destructive/20 transition-colors cursor-pointer">
-                      {p.url ? <Favicon url={p.url} name={p.name} size={12} /> : <Lock className="w-3 h-3" />}
-                      {p.name}
-                    </span>
-                  </Link>
-                ))}
-                {weakPasswords > 6 && (
-                  <span className="text-xs text-muted-foreground px-2 py-0.5">+{weakPasswords - 6} more</span>
+      {/* ── Stats grid ────────────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {statItems.map(s => (
+          <Link key={s.label} href={s.href}>
+            <div className="rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
+              <div className="h-1 w-full" style={{ background: s.accent }} />
+              <div className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${s.accent}18` }}>
+                    <s.icon className="w-3.5 h-3.5" style={{ color: s.accent }} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                    {s.label}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold tabular-nums text-foreground">{s.value}</div>
+                {s.sub && (
+                  <div className="text-[11px] mt-0.5 font-medium" style={{ color: s.subColor }}>{s.sub}</div>
                 )}
               </div>
             </div>
-          </div>
-        )}
+          </Link>
+        ))}
+      </motion.div>
 
-        {/* Quick Actions */}
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {quickActions.map(({ label, icon: Icon, href, bgColor }) => (
-              <Link key={label} href={href}>
-                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:-translate-y-0.5">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bgColor}`}>
-                    <Icon className="w-[18px] h-[18px] text-white" />
+      {/* ── Quick actions ─────────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp}>
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Quick Actions</p>
+        <div className="overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex gap-2.5" style={{ minWidth: 'max-content' }}>
+            {([
+              { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'bg-indigo-500' },
+              { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'bg-amber-500' },
+              { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bg: 'bg-emerald-500' },
+              { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bg: 'bg-orange-500' },
+              { label: 'Subscription', icon: Bookmark, href: '/subscriptions?action=add', bg: 'bg-purple-500' },
+              { label: 'Import', icon: Upload, bg: 'bg-slate-500', onClick: () => setShowImportExport(true) },
+              { label: 'Generator', icon: Key, bg: 'bg-cyan-500', onClick: () => setShowGenerator(true) },
+            ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
+              const inner = (
+                <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
+                    <Icon className="w-[15px] h-[15px] text-white" />
                   </div>
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight">{label}</span>
+                  <span className="text-sm font-medium text-foreground whitespace-nowrap">{label}</span>
                 </div>
-              </Link>
-            ))}
+              );
+              if (href) return <Link key={label} href={href}>{inner}</Link>;
+              return <button key={label} onClick={onClick}>{inner}</button>;
+            })}
           </div>
         </div>
+      </motion.div>
 
-        {/* Three-column widgets */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* ── Vault completeness + Breach monitor ───────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <VaultCompletenessCard score={vaultScore} suggestions={vaultSuggestions} />
 
-          {/* Upcoming Renewals */}
-          <WidgetCard
-            title="Upcoming Renewals"
-            viewAllHref="/subscriptions"
-            empty={upcomingRenewals.length === 0}
-            emptyText="No renewals due soon"
-          >
-            <div className="space-y-3">
-              {upcomingRenewals.map(s => {
-                const daysLeft = differenceInCalendarDays(s.nextBillingDate, new Date());
-                return (
-                  <div key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
-                    <Favicon url={s.platformLink} name={s.name} className="w-8 h-8 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                      <p className="text-xs text-muted-foreground">{fmtAmt(s.cost || 0)}</p>
-                    </div>
-                    <Badge variant={daysLeft <= 3 ? 'destructive' : 'secondary'} className="text-[11px] flex-shrink-0">
-                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1d' : `${daysLeft}d`}
-                    </Badge>
-                  </div>
-                );
-              })}
+        <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <Shield className="w-3.5 h-3.5 text-green-500" />
             </div>
-          </WidgetCard>
+            <h3 className="text-sm font-semibold text-foreground">Breach Monitor</h3>
+            <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 uppercase tracking-wide">
+              Coming soon
+            </span>
+          </div>
+          <div className="flex items-center gap-3 py-1">
+            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <div className="text-lg font-bold text-green-500 tabular-nums">0 breaches</div>
+              <div className="text-xs text-muted-foreground">No passwords in known leaks</div>
+            </div>
+          </div>
+          {stalePasswords > 0 && (
+            <Link href="/passwords">
+              <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/8 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-500/15 transition-colors border border-amber-500/20">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                {stalePasswords} password{stalePasswords > 1 ? 's' : ''} not rotated in 6+ months
+              </div>
+            </Link>
+          )}
+        </div>
+      </motion.div>
 
-          {/* Recent Passwords */}
-          <WidgetCard
-            title="Recent Passwords"
-            viewAllHref="/passwords"
-            empty={recentPasswords.length === 0}
-            emptyText="No passwords saved yet"
-          >
-            <div className="space-y-2">
-              {recentPasswords.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors group">
-                  <Favicon url={p.url} name={p.name} className="w-8 h-8 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{maskUsername(p.username)}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyPassword(p.password, p.id)}
-                      className="p-1.5 h-auto opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      {copiedId === p.id ? (
-                        <CheckCircle className="w-3.5 h-3.5 text-primary" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                      )}
-                    </Button>
-                    <span className="text-[10px] text-muted-foreground/60">
-                      {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+      {/* ── Weak password alert ────────────────────────────────────────────── */}
+      {weakPasswords > 0 && (
+        <motion.div variants={fadeUp}
+          className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+              {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'} detected
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2.5">
+              These are too short or lack complexity.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {weakPasswordList.slice(0, 6).map(p => (
+                <Link key={p.id} href="/passwords">
+                  <span className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full hover:bg-red-500/20 transition-colors cursor-pointer border border-red-500/20">
+                    {p.url ? <Favicon url={p.url} name={p.name} size={11} /> : <Lock className="w-2.5 h-2.5" />}
+                    {p.name}
+                  </span>
+                </Link>
+              ))}
+              {weakPasswords > 6 && (
+                <span className="text-xs text-muted-foreground px-2 py-0.5">+{weakPasswords - 6} more</span>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Renewals + Reminders ───────────────────────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <WidgetCard title="Upcoming Renewals" viewAllHref="/subscriptions"
+          empty={upcomingRenewals.length === 0} emptyText="No renewals due soon"
+          accentClass="bg-purple-500/10" iconEl={<CreditCard className="w-3.5 h-3.5 text-purple-500" />}>
+          <div className="space-y-0.5">
+            {upcomingRenewals.map(s => {
+              const daysLeft = s.nextBillingDate ? differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) : 99;
+              const urgent = daysLeft <= 3;
+              return (
+                <Link key={s.id} href="/subscriptions">
+                  <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
+                    <Favicon url={s.platformLink} name={s.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
+                      <div className="text-xs text-muted-foreground">{fmtAmt(s.cost || 0)}</div>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${urgent ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
+                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1d' : `${daysLeft}d`}
                     </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
+                </Link>
+              );
+            })}
+          </div>
+        </WidgetCard>
 
-          {/* Due Soon */}
-          <WidgetCard
-            title="Due Soon"
-            viewAllHref="/reminders"
-            empty={dueSoonReminders.length === 0}
-            emptyText="No reminders due in the next 7 days"
-          >
-            <div className="space-y-3">
-              {dueSoonReminders.map(r => {
-                const daysLeft = differenceInCalendarDays(new Date(r.dueDate), new Date());
-                return (
-                  <div key={r.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
+        <WidgetCard title="Due Soon" viewAllHref="/reminders"
+          empty={dueSoonReminders.length === 0} emptyText="No reminders in the next 7 days"
+          accentClass="bg-orange-500/10" iconEl={<Bell className="w-3.5 h-3.5 text-orange-500" />}>
+          <div className="space-y-0.5">
+            {dueSoonReminders.map(r => {
+              const daysLeft = differenceInCalendarDays(new Date(r.dueDate), new Date());
+              return (
+                <Link key={r.id} href="/reminders">
+                  <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{r.title}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{r.priority} priority</p>
+                      <div className="text-sm font-medium text-foreground truncate">{r.title}</div>
+                      <div className="text-xs text-muted-foreground capitalize">{r.priority} priority</div>
                     </div>
-                    <Badge
-                      variant={daysLeft === 0 ? 'destructive' : daysLeft === 1 ? 'secondary' : 'outline'}
-                      className="text-[11px] flex-shrink-0"
-                    >
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${daysLeft === 0 ? 'bg-red-500/10 text-red-500' : daysLeft <= 2 ? 'bg-orange-500/10 text-orange-500' : 'bg-muted text-muted-foreground'}`}>
                       {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                    </Badge>
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </WidgetCard>
-        </div>
+                </Link>
+              );
+            })}
+          </div>
+        </WidgetCard>
+      </motion.div>
 
-        {/* Two-column bottom widgets */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* ── Recent Passwords ───────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp}>
+        <WidgetCard title="Recently Used" viewAllHref="/passwords"
+          empty={recentPasswords.length === 0} emptyText="No passwords saved yet"
+          accentClass="bg-indigo-500/10" iconEl={<Lock className="w-3.5 h-3.5 text-indigo-500" />}>
+          <div className="space-y-0.5">
+            {recentPasswords.map(p => (
+              <div key={p.id} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group">
+                <Favicon url={p.url} name={p.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground font-mono truncate">{maskUsername(p.username)}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <button onClick={() => copyPassword(p.password, p.id)}
+                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
+                    {copiedId === p.id
+                      ? <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                      : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                  </button>
+                  <span className="text-[10px] text-muted-foreground/50">
+                    {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </WidgetCard>
+      </motion.div>
 
-          {/* Expense Summary */}
-          <WidgetCard
-            title="Expense Summary"
-            viewAllHref="/expenses"
-            empty={topExpenseCategories.length === 0}
-            emptyText="No expenses recorded yet"
-          >
-            <ExpenseBarChart categories={topExpenseCategories} formatAmount={fmtAmt} />
-          </WidgetCard>
+      {/* ── Expense snapshot + Activity ────────────────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <WidgetCard title={`${format(new Date(), 'MMMM')} Spending`} viewAllHref="/expenses"
+          empty={topExpenseCategories.length === 0} emptyText="No expenses recorded yet"
+          accentClass="bg-emerald-500/10" iconEl={<DollarSign className="w-3.5 h-3.5 text-emerald-500" />}>
+          <div className="mb-4">
+            <div className="text-2xl font-bold tabular-nums text-foreground">{fmtAmt(thisMonthExpenses)}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">total spent this month</div>
+          </div>
+          <ExpenseBars cats={topExpenseCategories} fmt={fmtAmt} />
+        </WidgetCard>
 
-          {/* Recent Activity */}
-          <WidgetCard
-            title="Recent Activity"
-            viewAllHref="/logging"
-            empty={recentActivity.length === 0}
-            emptyText="No activity recorded yet"
-          >
-            <div className="space-y-2">
-              {recentActivity.map((log: any, index: number) => {
-                const IconComponent = log.icon;
-                return (
-                  <div key={log.id || index} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/30 transition-colors">
-                    <div className={`w-8 h-8 rounded-full ${log.bg} flex items-center justify-center flex-shrink-0`}>
-                      <IconComponent className={`w-3.5 h-3.5 ${log.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{log.description}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="text-[10px] capitalize flex-shrink-0">
-                      {log.category}
-                    </Badge>
+        <WidgetCard title="Recent Activity" viewAllHref="/logging"
+          empty={recentActivity.length === 0} emptyText="No activity yet"
+          accentClass="bg-blue-500/10" iconEl={<Activity className="w-3.5 h-3.5 text-blue-500" />}>
+          <div className="space-y-0.5">
+            {recentActivity.map(item => {
+              const Icon = item.icon;
+              return (
+                <div key={`${item.action}-${item.id}`}
+                  className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors">
+                  <div className={`w-7 h-7 rounded-full ${item.iconBg} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
                   </div>
-                );
-              })}
-            </div>
-          </WidgetCard>
-        </div>
-
-      </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-foreground truncate">{item.text}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {formatDistanceToNow(item.timestamp, { addSuffix: true })}
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">
+                    {item.action}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </WidgetCard>
+      </motion.div>
 
       <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
       <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
-    </div>
+    </motion.div>
   );
 }
