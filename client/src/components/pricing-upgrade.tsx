@@ -332,8 +332,8 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
               onManage={handleManageSubscription}
             />
           )}
-          {/* Loading State with Skeleton */}
-          {paywallState === 'loading' && (
+          {/* Loading State with Skeleton — native only; web uses Razorpay directly */}
+          {isNative && paywallState === 'loading' && (
             <div className="space-y-6">
               <div className="text-center py-4">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -362,8 +362,8 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
             </div>
           )}
 
-          {/* Error State */}
-          {paywallState === 'error' && (
+          {/* Error State — native only */}
+          {isNative && paywallState === 'error' && (
             <div className="space-y-6">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -420,8 +420,8 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
             />
           )}
 
-          {/* Plan Cards */}
-          {(paywallState === 'ready' || paywallState === 'purchasing' || paywallState === 'entitled') && (
+          {/* Plan Cards — native only; web users use WebRazorpayPlans above */}
+          {(paywallState === 'ready' || paywallState === 'purchasing' || paywallState === 'entitled') && isNative && (
             <div className="grid md:grid-cols-2 gap-6">
               <PlanCard
                 title="Pro"
@@ -493,7 +493,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
           )}
 
           {/* iOS Subscription Disclosure */}
-          {(paywallState === 'ready' || paywallState === 'purchasing') && (
+          {isNative && (paywallState === 'ready' || paywallState === 'purchasing') && (
             <SubscriptionTermsAccordion
               platform={platform}
               termsUrl="https://www.ironvault.app/terms"
