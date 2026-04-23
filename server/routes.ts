@@ -1006,8 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid plan' });
       }
       const cfg = RAZORPAY_PLAN_CONFIG[plan];
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const RazorpayClient = require('razorpay');
+      const { default: RazorpayClient } = await import('razorpay');
       const rzp = new RazorpayClient({
         key_id: process.env.RAZORPAY_KEY_ID,
         key_secret: process.env.RAZORPAY_KEY_SECRET,

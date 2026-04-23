@@ -1281,8 +1281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const planCfg = RAZORPAY_PLANS[plan as string];
     if (!planCfg) return res.status(400).json({ error: 'Invalid plan' });
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const RazorpayClient = require('razorpay');
+      const { default: RazorpayClient } = await import('razorpay');
       const rzp = new RazorpayClient({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
       const order = await rzp.orders.create({
         amount: planCfg.amount,
