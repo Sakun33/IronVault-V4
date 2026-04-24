@@ -4,12 +4,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
   CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw,
-  BarChart3, ChevronRight, CreditCard, Target, Activity, Key, Calendar,
+  BarChart3, ChevronRight, CreditCard, Activity, Key, Calendar,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, differenceInCalendarDays, formatDistanceToNow, subMonths } from "date-fns";
+import { format, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
@@ -58,12 +58,18 @@ function getTimeEmoji(): string {
 function getUserName(): string {
   try {
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-    const name = (cp.name || '').trim();
-    if (name && !name.includes('@')) return name.split(' ')[0];
+    // Prefer full_name, then name, then display_name
+    const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
+    if (fullName && !fullName.includes('@')) return fullName.split(' ')[0];
     const session = localStorage.getItem('iv_account_session');
     if (session) {
-      const { email } = JSON.parse(session);
-      if (email) return (email as string).split('@')[0];
+      const { email, name } = JSON.parse(session);
+      if (name && typeof name === 'string' && !name.includes('@')) return name.split(' ')[0];
+      if (email) {
+        // Capitalize and strip numbers from email prefix
+        const prefix = (email as string).split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
+        if (prefix) return prefix.charAt(0).toUpperCase() + prefix.slice(1).split(' ')[0];
+      }
     }
   } catch { /* ignore */ }
   return '';
@@ -197,41 +203,6 @@ function ExpenseBars({
   );
 }
 
-// ── Vault completeness card ───────────────────────────────────────────────────
-function VaultCompletenessCard({ score, suggestions }: { score: number; suggestions: string[] }) {
-  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#6366f1';
-  return (
-    <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-          <Target className="w-3.5 h-3.5 text-indigo-500" />
-        </div>
-        <h3 className="text-sm font-semibold text-foreground">Vault Completeness</h3>
-        <span className="ml-auto text-sm font-bold tabular-nums" style={{ color }}>{score}%</span>
-      </div>
-      <div className="h-2 bg-muted/40 rounded-full overflow-hidden mb-3">
-        <div className="h-full rounded-full"
-          style={{ width: `${score}%`, background: color, transition: 'width 1.1s cubic-bezier(0.4,0,0.2,1)' }} />
-      </div>
-      {suggestions.length > 0 ? (
-        <div className="space-y-1.5">
-          {suggestions.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Plus className="w-3 h-3 text-muted-foreground/40 flex-shrink-0" />
-              {s}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-          All categories filled — vault complete!
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -273,17 +244,12 @@ export default function Dashboard() {
   const fmtAmt = (n: number) => formatCurrency(n, currency);
   const userName = getUserName();
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const sixMonthsAgo = useMemo(() => subMonths(new Date(), 6), []);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const weakPasswordList = useMemo(() =>
     passwords.filter(p => pwdStrength(p.password || '') === 'weak'), [passwords]);
   const weakPasswords = weakPasswordList.length;
   const strongPasswords = passwords.length - weakPasswords;
-
-  const stalePasswords = useMemo(() =>
-    passwords.filter(p => p.updatedAt && new Date(p.updatedAt) < sixMonthsAgo).length,
-    [passwords, sixMonthsAgo]);
 
   const monthlySubSpend = useMemo(() =>
     subscriptions.filter(s => s.isActive).reduce((t, s) => {
@@ -316,20 +282,8 @@ export default function Dashboard() {
     if (stats.totalNotes > 0) score += 10;
     if (reminders.length > 0) score += 5;
     score -= weakPasswords * 4;
-    score -= Math.min(stalePasswords * 2, 20);
     return Math.max(0, Math.min(100, Math.round(score)));
-  }, [stats, expenses.length, weakPasswords, stalePasswords, reminders.length]);
-
-  const { vaultScore, vaultSuggestions } = useMemo(() => {
-    let score = 0;
-    const suggestions: string[] = [];
-    if (passwords.length > 0) score += 20; else suggestions.push('Add your first password');
-    if (notes.length > 0) score += 20; else suggestions.push('Create a note');
-    if (subscriptions.length > 0) score += 20; else suggestions.push('Track a subscription');
-    if (expenses.length > 0) score += 20; else suggestions.push('Log an expense');
-    if (reminders.length > 0) score += 20; else suggestions.push('Set a reminder');
-    return { vaultScore: score, vaultSuggestions: suggestions.slice(0, 2) };
-  }, [passwords.length, notes.length, subscriptions.length, expenses.length, reminders.length]);
+  }, [stats, expenses.length, weakPasswords, reminders.length]);
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, number> = {};
@@ -395,24 +349,21 @@ export default function Dashboard() {
   }, [passwords, notes, expenses, reminders, subscriptions, normalizedSearch]);
 
   // ── Insights ──────────────────────────────────────────────────────────────
-  interface InsightItem { icon: React.ElementType; text: string; sub?: string; variant: 'red' | 'amber' | 'green' | 'blue'; href?: string; }
+  interface InsightItem { icon: React.ElementType; text: string; sub?: string; variant: 'red' | 'amber' | 'green'; href?: string; }
   const insights = useMemo((): InsightItem[] => {
     const items: InsightItem[] = [];
     if (weakPasswords > 0) items.push({ icon: AlertTriangle, text: `${weakPasswords} weak password${weakPasswords > 1 ? 's' : ''}`, sub: 'Tap to fix', variant: 'red', href: '/passwords' });
-    if (stalePasswords > 0) items.push({ icon: Clock, text: `${stalePasswords} stale password${stalePasswords > 1 ? 's' : ''}`, sub: '6+ months old', variant: 'amber', href: '/passwords' });
     const expiringCount = subscriptions.filter(s => s.isActive && s.nextBillingDate && differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) <= 7).length;
     if (expiringCount > 0) items.push({ icon: Calendar, text: `${expiringCount} renewal${expiringCount > 1 ? 's' : ''} this week`, sub: 'Check billing', variant: 'amber', href: '/subscriptions' });
-    if (dueTodayCount > 0) items.push({ icon: Bell, text: `${dueTodayCount} due today`, sub: "Don't miss them", variant: 'red', href: '/reminders' });
+    if (dueTodayCount > 0) items.push({ icon: Bell, text: `${dueTodayCount} reminder${dueTodayCount > 1 ? 's' : ''} due today`, sub: "Don't miss them", variant: 'red', href: '/reminders' });
     if (items.length === 0) items.push({ icon: CheckCircle, text: 'All clear', sub: 'No action needed', variant: 'green' });
-    items.push({ icon: Shield, text: '0 breaches detected', sub: 'Breach monitor active', variant: 'blue' });
     return items;
-  }, [weakPasswords, stalePasswords, subscriptions, dueTodayCount]);
+  }, [weakPasswords, subscriptions, dueTodayCount]);
 
   const insightStyles: Record<string, string> = {
     red: 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400',
     amber: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400',
     green: 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400',
-    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400',
   };
 
   // ── Stat items ────────────────────────────────────────────────────────────
@@ -529,25 +480,23 @@ export default function Dashboard() {
       )}
 
       {/* ── Insights bar ──────────────────────────────────────────────────── */}
-      <motion.div variants={fadeUp} className="overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex gap-2.5 pb-0.5" style={{ minWidth: 'max-content' }}>
-          {insights.map(insight => {
-            const Icon = insight.icon;
-            const cls = insightStyles[insight.variant];
-            const card = (
-              <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border cursor-pointer select-none transition-all hover:scale-[1.02] active:scale-[0.98] ${cls}`}>
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                <div>
-                  <div className="text-xs font-semibold whitespace-nowrap">{insight.text}</div>
-                  {insight.sub && <div className="text-[11px] opacity-70 whitespace-nowrap">{insight.sub}</div>}
-                </div>
+      <motion.div variants={fadeUp} className="flex flex-wrap gap-2.5">
+        {insights.map(insight => {
+          const Icon = insight.icon;
+          const cls = insightStyles[insight.variant];
+          const card = (
+            <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border cursor-pointer select-none transition-all hover:scale-[1.02] active:scale-[0.98] flex-shrink-0 ${cls}`}>
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <div>
+                <div className="text-xs font-semibold">{insight.text}</div>
+                {insight.sub && <div className="text-[11px] opacity-70">{insight.sub}</div>}
               </div>
-            );
-            return insight.href
-              ? <Link key={insight.text} href={insight.href}>{card}</Link>
-              : <div key={insight.text}>{card}</div>;
-          })}
-        </div>
+            </div>
+          );
+          return insight.href
+            ? <Link key={insight.text} href={insight.href}>{card}</Link>
+            : <div key={insight.text}>{card}</div>;
+        })}
       </motion.div>
 
       {/* ── Stats grid ────────────────────────────────────────────────────── */}
@@ -602,40 +551,6 @@ export default function Dashboard() {
               return <button key={label} onClick={onClick}>{inner}</button>;
             })}
           </div>
-        </div>
-      </motion.div>
-
-      {/* ── Vault completeness + Breach monitor ───────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <VaultCompletenessCard score={vaultScore} suggestions={vaultSuggestions} />
-
-        <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-lg bg-green-500/10 flex items-center justify-center">
-              <Shield className="w-3.5 h-3.5 text-green-500" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Breach Monitor</h3>
-            <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 uppercase tracking-wide">
-              Coming soon
-            </span>
-          </div>
-          <div className="flex items-center gap-3 py-1">
-            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-green-500 tabular-nums">0 breaches</div>
-              <div className="text-xs text-muted-foreground">No passwords in known leaks</div>
-            </div>
-          </div>
-          {stalePasswords > 0 && (
-            <Link href="/passwords">
-              <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/8 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-500/15 transition-colors border border-amber-500/20">
-                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                {stalePasswords} password{stalePasswords > 1 ? 's' : ''} not rotated in 6+ months
-              </div>
-            </Link>
-          )}
         </div>
       </motion.div>
 
