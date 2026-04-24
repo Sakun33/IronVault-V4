@@ -17,67 +17,86 @@
     .task:last-child { border-bottom: none; }
     .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
     .done { background: #064e3b; color: #34d399; }
-    .active { background: #1e3a5f; color: #60a5fa; }
-    .pending { background: #27272a; color: #71717a; }
+    .fixed { background: #1e3a5f; color: #60a5fa; }
+    .pass { background: #052e16; color: #4ade80; }
     .task-body { flex: 1; min-width: 0; }
     .task-name { font-size: 14px; font-weight: 500; color: #f1f5f9; }
     .task-detail { font-size: 12px; color: #64748b; margin-top: 3px; line-height: 1.5; }
     .progress-bar { height: 6px; background: #334155; border-radius: 3px; overflow: hidden; margin-top: 8px; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); border-radius: 3px; }
     .deployed-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #064e3b; color: #34d399; margin-left: 6px; vertical-align: middle; }
+    .all-done { text-align: center; padding: 20px; background: linear-gradient(135deg, #064e3b, #1e3a5f); border-radius: 12px; margin-bottom: 16px; }
+    .all-done h2 { color: #34d399; font-size: 18px; margin-bottom: 4px; }
+    .all-done p { color: #94a3b8; font-size: 13px; }
   </style>
 </head>
 <body>
   <h1>IronVault Agent Dashboard</h1>
   <p class="subtitle">Auto-refreshes every 2 minutes &nbsp;&middot;&nbsp; Last updated: <strong id="ts"></strong></p>
 
+  <div class="all-done">
+    <h2>QA Sweep Complete &mdash; All Fixes Deployed</h2>
+    <p>Full codebase audit + 2 crash bug fixes deployed to ironvault.app</p>
+  </div>
+
   <div class="grid">
 
-    <!-- TASK 1: DONE -->
     <div class="card">
-      <div class="card-title">Task 1 &mdash; 1Password-Style UI <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
-      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#34d399">100% &mdash; All 4 pages live at ironvault.app</p>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Passwords</div><div class="task-detail">Rows + detail modal (reveal/copy/edit/delete)</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Notes</div><div class="task-detail">List rows with color dot + title + preview + chevron</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Subscriptions</div><div class="task-detail">List rows + detail modal with credentials reveal</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Expenses</div><div class="task-detail">Already had daily-grouped list rows</div></div></div>
+      <div class="card-title">Phase 1 Tasks <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">100% &mdash; All 3 tasks live</p>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">1Password-Style UI</div><div class="task-detail">Passwords, Notes, Subscriptions redesigned with list rows + detail modals</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Biometric Unlock</div><div class="task-detail">BiometricSetupPrompt fires 800ms post-unlock on native. Face ID / Touch ID.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Android Autofill Service</div><div class="task-detail">IronVaultAutofillService.java + AutofillPlugin + JS wrapper + Manifest</div></div></div>
     </div>
 
-    <!-- TASK 2: DONE -->
     <div class="card">
-      <div class="card-title">Task 2 &mdash; Biometric / Face ID Unlock <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
-      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#34d399">100% &mdash; Deployed to ironvault.app</p>
-      <div class="task">
-        <span class="badge done">DONE</span>
-        <div class="task-body">
-          <div class="task-name">BiometricSetupPrompt component</div>
-          <div class="task-detail">Fires 800ms after first password unlock on native. Checks: isNativeApp + biometric available + not already enabled + not asked this session. Derives vault unlock key (CryptoService salt + keystore), calls enableBiometricUnlock, stores salt. Wired into MainLayout in App.tsx. Renders null on web.</div>
-        </div>
-      </div>
+      <div class="card-title">Dashboard Redesign <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">100% &mdash; Live</p>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Hero gradient + SecurityRing SVG</div><div class="task-detail">Animated score ring, gradient background, stagger animations</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Insights bar (wrapping)</div><div class="task-detail">Weak passwords, expiring subs, reminders due. flex-wrap replaces cutoff scroll.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Name fix (strip email numbers)</div><div class="task-detail">getUserName() reads customerProfile first, strips digits from email prefix</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Removed Vault Completeness + Breach Monitor</div><div class="task-detail">Non-functional sections removed per user request</div></div></div>
     </div>
 
-    <!-- TASK 3: IN PROGRESS -->
     <div class="card">
-      <div class="card-title">Task 3 &mdash; Android Autofill Service</div>
-      <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
-      <p class="task-detail" style="margin-top:8px; margin-bottom:12px; color:#60a5fa">0% &mdash; Starting now</p>
-      <div class="task">
-        <span class="badge active">IN PROGRESS</span>
-        <div class="task-body">
-          <div class="task-name">IronVaultAutofillService.java</div>
-          <div class="task-detail">Native Android AutofillService extending android.service.autofill.AutofillService. AndroidManifest.xml registration + autofill_service_config.xml + Capacitor JS bridge.</div>
-        </div>
-      </div>
+      <div class="card-title">Crash Bugs Fixed <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#3b82f6">2 crashes fixed</p>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Signup crash (family/lifetime plan → ChevronRight undefined)</div><div class="task-detail">Missing import caused render crash when ChevronRight rendered. Added to lucide imports.</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Password Share → crash (wrong props)</div><div class="task-detail">ShareModal requires item/itemType/children but was passed open/onOpenChange/password. Rewired as inline trigger wrapper.</div></div></div>
     </div>
 
-    <!-- PREVIOUS FIXES -->
+    <div class="card">
+      <div class="card-title">QA Sweep: confirm() → AlertDialog <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">All window.confirm() calls replaced</p>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">goals.tsx — Delete Goal</div><div class="task-detail">AlertDialog with Cancel + Delete (destructive). deleteGoalTarget state.</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">profile.tsx — Cancel Subscription</div><div class="task-detail">AlertDialog with Keep / Cancel Subscription buttons. showCancelConfirm state.</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">QA Sweep: Code Quality <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">subscriptions.tsx — console.log removed</div><div class="task-detail">onReminderAction no longer logs reminder + action to console</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">investments.tsx — 8 debug logs removed</div><div class="task-detail">Emoji-prefixed debug logs in useEffect + handlers stripped</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">bank-statements.tsx — 4 import debug logs removed</div><div class="task-detail">CSV import step logs stripped</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">profile.tsx — 3 debug logs removed</div><div class="task-detail">customerProfile load, entitlement fetch, ticket fetch logs stripped</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Components — 6 debug logs removed</div><div class="task-detail">analytics-integration, verify-access-modal, edit-investment-modal</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">QA Sweep: UI Bugs <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — folder name toast</div><div class="task-detail">Capture folderName before clearing state so toast shows correct name</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — dynamic Tailwind bg-${color}-500</div><div class="task-detail">Replaced with inline style + hex color map. PurgeCSS-safe.</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — Share button feedback</div><div class="task-detail">Share Document button now shows toast instead of silently closing</div></div></div>
+    </div>
+
     <div class="card">
       <div class="card-title">Previous Fixes &mdash; Deployed</div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Cloud sync race condition (BUG-096)</div><div class="task-detail">Inline pushToCloud() in vault-context.tsx. Dirty flag set before push, cleared on success only.</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Upgrade button broken on web</div><div class="task-detail">Native PlanCard gated behind isNative. Web uses Razorpay only.</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Wrong price &curren;199 &rarr; &curren;149</div><div class="task-detail">Fixed in all 4 files. Live verified.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Cloud sync race condition (BUG-096)</div><div class="task-detail">Inline pushToCloud() in vault-context.tsx</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Upgrade button broken on web</div><div class="task-detail">Native PlanCard gated behind isNative. Web uses Razorpay.</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Wrong price &curren;199 &rarr; &curren;149</div><div class="task-detail">Fixed in 4 files. Live verified.</div></div></div>
     </div>
 
   </div>
