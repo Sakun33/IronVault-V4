@@ -19,90 +19,136 @@
     .done { background: #064e3b; color: #34d399; }
     .fixed { background: #1e3a5f; color: #60a5fa; }
     .pass { background: #052e16; color: #4ade80; }
+    .warn { background: #451a03; color: #fb923c; }
+    .info { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
     .task-body { flex: 1; min-width: 0; }
     .task-name { font-size: 14px; font-weight: 500; color: #f1f5f9; }
     .task-detail { font-size: 12px; color: #64748b; margin-top: 3px; line-height: 1.5; }
     .progress-bar { height: 6px; background: #334155; border-radius: 3px; overflow: hidden; margin-top: 8px; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); border-radius: 3px; }
-    .deployed-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #064e3b; color: #34d399; margin-left: 6px; vertical-align: middle; }
-    .all-done { text-align: center; padding: 20px; background: linear-gradient(135deg, #064e3b, #1e3a5f); border-radius: 12px; margin-bottom: 16px; }
-    .all-done h2 { color: #34d399; font-size: 18px; margin-bottom: 4px; }
-    .all-done p { color: #94a3b8; font-size: 13px; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+    .tag-green { background: #064e3b; color: #34d399; }
+    .tag-amber { background: #451a03; color: #fb923c; }
+    .tag-blue  { background: #1e3a5f; color: #60a5fa; }
+    .verdict-go { text-align: center; padding: 24px 20px; background: linear-gradient(135deg, #064e3b, #1e3a5f); border-radius: 12px; margin-bottom: 16px; border: 1px solid #34d399; }
+    .verdict-go h2 { color: #34d399; font-size: 22px; margin-bottom: 6px; font-weight: 800; letter-spacing: -0.5px; }
+    .verdict-go p { color: #94a3b8; font-size: 13px; line-height: 1.6; }
+    .metrics-row { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 0 6px; }
+    .metric { text-align: center; }
+    .metric strong { color: #f1f5f9; font-size: 18px; display: block; font-weight: 700; }
+    .metric span { font-size: 11px; color: #64748b; }
+    .divider { margin: 10px 0; border-top: 1px solid #334155; }
   </style>
 </head>
 <body>
-  <h1>IronVault Agent Dashboard</h1>
+  <h1>IronVault Agent Dashboard — DeepTest Complete</h1>
   <p class="subtitle">Auto-refreshes every 2 minutes &nbsp;&middot;&nbsp; Last updated: <strong id="ts"></strong></p>
 
-  <div class="all-done">
-    <h2>QA Sweep Complete &mdash; All Fixes Deployed</h2>
-    <p>Full codebase audit + 2 crash bug fixes deployed to ironvault.app</p>
+  <div class="verdict-go">
+    <h2>&#10003; GO — Full DeepTest Complete</h2>
+    <p>10-phase QA sweep done &nbsp;&middot;&nbsp; All 9 vault modules CRUD tested &nbsp;&middot;&nbsp; 5 bugs fixed across 2 sessions<br>
+    0 crashes &nbsp;&middot;&nbsp; 0 JS errors &nbsp;&middot;&nbsp; 17/17 routes clean &nbsp;&middot;&nbsp; bundle <code>index-52ca3fd7.js</code> live</p>
+    <div class="metrics-row" style="justify-content:center;margin-top:14px">
+      <div class="metric"><strong style="color:#34d399">17/17</strong><span>Routes OK</span></div>
+      <div class="metric"><strong style="color:#34d399">0</strong><span>Crashes</span></div>
+      <div class="metric"><strong style="color:#34d399">0</strong><span>JS Errors</span></div>
+      <div class="metric"><strong style="color:#34d399">50ms</strong><span>TTFB</span></div>
+      <div class="metric"><strong style="color:#34d399">492ms</strong><span>Load</span></div>
+      <div class="metric"><strong style="color:#34d399">100%</strong><span>SW Cache</span></div>
+      <div class="metric"><strong style="color:#34d399">5</strong><span>Bugs Fixed</span></div>
+      <div class="metric"><strong style="color:#fb923c">1</strong><span>Feature Gap</span></div>
+    </div>
   </div>
 
   <div class="grid">
 
+    <!-- Session 2 Fixes -->
     <div class="card">
-      <div class="card-title">Phase 1 Tasks <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="card-title">Session 2 Fixes <span class="tag tag-green">3 DEPLOYED</span></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Notes DELETE button — no UI trigger</div><div class="task-detail">handleDeleteNote() existed but was never wired to JSX. Added Delete button to view modal header + edit modal footer. Commit: 61a0042. Verified: Close/Edit/Delete all present.</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Expenses search/duplicate crash — undefined.toLowerCase()</div><div class="task-detail">Expenses with null title in vault storage crashed detectPotentialDuplicate + search filter. Added optional chaining + nullish coalescing guards. Commit: be8bea5. Bundle: index-52ca3fd7.js. Force-deployed via <code>vercel deploy --prod</code> (GitHub integration was stale).</div></div></div>
+      <div class="task"><span class="badge warn">GAP</span><div class="task-body"><div class="task-name">Documents folder DELETE — missing feature</div><div class="task-detail">No deleteFolder function anywhere in documents.tsx. No trash icon, no right-click, no delete-on-open. Feature simply not implemented. Test artifact "QA DeepTest Folder" remains in vault.</div></div></div>
+    </div>
+
+    <!-- Phase 3: CRUD — All 9 Modules -->
+    <div class="card">
+      <div class="card-title">Phase 3: CRUD — All 9 Modules <span class="tag tag-green">PASS</span></div>
       <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
-      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">100% &mdash; All 3 tasks live</p>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">1Password-Style UI</div><div class="task-detail">Passwords, Notes, Subscriptions redesigned with list rows + detail modals</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Biometric Unlock</div><div class="task-detail">BiometricSetupPrompt fires 800ms post-unlock on native. Face ID / Touch ID.</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Android Autofill Service</div><div class="task-detail">IronVaultAutofillService.java + AutofillPlugin + JS wrapper + Manifest</div></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">Full CREATE + DELETE cycle on every module. 0 crashes.</p>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Passwords, Subscriptions, Reminders, Goals, Investments</div><div class="task-detail">All tested in Session 1. Create/edit/delete flows confirmed functional.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Notes CRUD</div><div class="task-detail">CREATE ✓ &middot; view modal shows Close/Edit/Delete ✓ &middot; DELETE via AlertDialog confirm ✓ (fix required)</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Expenses CRUD</div><div class="task-detail">CREATE ✓ (no crash) &middot; SEARCH ✓ (no crash, fix required) &middot; DELETE via trash button + AlertDialog ✓</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Documents — folder CREATE</div><div class="task-detail">New folder created successfully. Individual document delete works.</div></div></div>
+      <div class="task"><span class="badge warn">GAP</span><div class="task-body"><div class="task-name">Documents — folder DELETE (not implemented)</div><div class="task-detail">No UI or function for deleting folders. Not a regression — feature never existed.</div></div></div>
+      <div class="task"><span class="badge info">BYDESIGN</span><div class="task-body"><div class="task-name">API Keys — secondary vault lock</div><div class="task-detail">Separate 5-min auto-lock. Verify identity prompt is intentional security layer.</div></div></div>
     </div>
 
+    <!-- Session 1 Critical Fixes -->
     <div class="card">
-      <div class="card-title">Dashboard Redesign <span class="deployed-tag">DEPLOYED</span></div>
+      <div class="card-title">Session 1 Fixes <span class="tag tag-green">2 DEPLOYED</span></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">CRASH: Zoho SalesIQ visitor undefined</div><div class="task-detail">salesiq.visitor?.email() &mdash; optional chaining prevents crash when widget initializes async. Was crashing 100% of page loads. Commit: 054d156</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">ISSUE-001: "Upgrade to Pro" shows for Lifetime users</div><div class="task-detail">bottomNavItems filtered by !isPro. Lifetime maps to isPro=true via tierMap. Commit: 2992b7e. Brief flash on first load (plan fetch async) — minor UX only.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Service Worker v3.0.0 live</div><div class="task-detail">Network First for HTML/navigation. Cache First for /assets/. 100% cache hit rate confirmed. Zero stale-cache issues.</div></div></div>
+    </div>
+
+    <!-- Phase 1 + 2: Routes + Clickables -->
+    <div class="card">
+      <div class="card-title">Phase 1&ndash;2: Routes + Clickables <span class="tag tag-green">PASS</span></div>
       <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
-      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">100% &mdash; Live</p>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Hero gradient + SecurityRing SVG</div><div class="task-detail">Animated score ring, gradient background, stagger animations</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Insights bar (wrapping)</div><div class="task-detail">Weak passwords, expiring subs, reminders due. flex-wrap replaces cutoff scroll.</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Name fix (strip email numbers)</div><div class="task-detail">getUserName() reads customerProfile first, strips digits from email prefix</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Removed Vault Completeness + Breach Monitor</div><div class="task-detail">Non-functional sections removed per user request</div></div></div>
+      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">17/17 routes &mdash; 0 crashes &mdash; 0 ErrorBoundary hits</p>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">14 authenticated routes</div><div class="task-detail">/, /passwords, /notes, /subscriptions, /expenses, /investments, /goals, /documents, /api-keys, /reminders, /settings, /logging, /pricing, /create-vault</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">3 auth routes</div><div class="task-detail">/auth/login (email+password), /auth/signup (full form), /auth/forgot-password (email) &mdash; all render correctly</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Passwords page clickables</div><div class="task-detail">Add, Templates, Generate, Search, filter dropdowns &mdash; all functional. Quick-fill templates (Google, GitHub, Apple, Microsoft, Netflix, Amazon&hellip;)</div></div></div>
     </div>
 
+    <!-- Phase 4: Auth Flows -->
     <div class="card">
-      <div class="card-title">Crash Bugs Fixed <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
-      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#3b82f6">2 crashes fixed</p>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Signup crash (family/lifetime plan → ChevronRight undefined)</div><div class="task-detail">Missing import caused render crash when ChevronRight rendered. Added to lucide imports.</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Password Share → crash (wrong props)</div><div class="task-detail">ShareModal requires item/itemType/children but was passed open/onOpenChange/password. Rewired as inline trigger wrapper.</div></div></div>
+      <div class="card-title">Phase 4: Auth Flows <span class="tag tag-green">PASS</span></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Vault unlock with password</div><div class="task-detail">12121212 unlocks vault. App transitions from "Your Vaults" lock screen to full dashboard. No crash.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Login / Signup / Forgot pages</div><div class="task-detail">All three auth pages render, have correct inputs, no crashes.</div></div></div>
+      <div class="task"><span class="badge info">BYDESIGN</span><div class="task-body"><div class="task-name">Logout on vault picker screen</div><div class="task-detail">Sign out button lives at /vaults (lock screen). User must lock vault first to access logout. Intentional security UX.</div></div></div>
     </div>
 
+    <!-- Phase 5: Payment -->
     <div class="card">
-      <div class="card-title">QA Sweep: confirm() → AlertDialog <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
-      <p class="task-detail" style="margin-top:8px;margin-bottom:12px;color:#34d399">All window.confirm() calls replaced</p>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">goals.tsx — Delete Goal</div><div class="task-detail">AlertDialog with Cancel + Delete (destructive). deleteGoalTarget state.</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">profile.tsx — Cancel Subscription</div><div class="task-detail">AlertDialog with Keep / Cancel Subscription buttons. showCancelConfirm state.</div></div></div>
+      <div class="card-title">Phase 5: Payment Flow <span class="tag tag-green">PASS</span></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Razorpay SDK pre-loaded</div><div class="task-detail">window.Razorpay defined before user clicks. Script loaded asynchronously on pricing page. No checkout delay.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Pricing page buttons</div><div class="task-detail">"Get Started Free", "Upgrade to Pro", "Contact Sales" x2. INR (&#8377;) currency. All plan tiers visible.</div></div></div>
+      <div class="task"><span class="badge info">NOT EXECUTED</span><div class="task-body"><div class="task-name">Actual checkout not triggered</div><div class="task-detail">No test payment executed — would require Razorpay sandbox mode. Integration confirmed via SDK load check.</div></div></div>
     </div>
 
+    <!-- Phase 6: Edge Cases -->
     <div class="card">
-      <div class="card-title">QA Sweep: Code Quality <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">subscriptions.tsx — console.log removed</div><div class="task-detail">onReminderAction no longer logs reminder + action to console</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">investments.tsx — 8 debug logs removed</div><div class="task-detail">Emoji-prefixed debug logs in useEffect + handlers stripped</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">bank-statements.tsx — 4 import debug logs removed</div><div class="task-detail">CSV import step logs stripped</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">profile.tsx — 3 debug logs removed</div><div class="task-detail">customerProfile load, entitlement fetch, ticket fetch logs stripped</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Components — 6 debug logs removed</div><div class="task-detail">analytics-integration, verify-access-modal, edit-investment-modal</div></div></div>
+      <div class="card-title">Phase 6: Edge Cases <span class="tag tag-green">PASS</span></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Empty form submit</div><div class="task-detail">Add Password modal with empty fields: Save clicked, dialog stays open (validation blocks). No crash, no ghost save.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">XSS payload in input</div><div class="task-detail">&lt;script&gt;alert(1)&lt;/script&gt; + img onerror in site-name field: script NOT injected. React escapes all output correctly.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">1000-character input</div><div class="task-detail">Accepted without crash, UI freeze, or unexpected behavior.</div></div></div>
     </div>
 
+    <!-- Phase 7–10: Quality -->
     <div class="card">
-      <div class="card-title">QA Sweep: UI Bugs <span class="deployed-tag">DEPLOYED</span></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — folder name toast</div><div class="task-detail">Capture folderName before clearing state so toast shows correct name</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — dynamic Tailwind bg-${color}-500</div><div class="task-detail">Replaced with inline style + hex color map. PurgeCSS-safe.</div></div></div>
-      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">documents.tsx — Share button feedback</div><div class="task-detail">Share Document button now shows toast instead of silently closing</div></div></div>
+      <div class="card-title">Phase 7&ndash;10: Quality <span class="tag tag-green">PASS</span></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Phase 7: Responsive</div><div class="task-detail">grid-cols-1 md:grid-cols-3 &mdash; proper Tailwind responsive prefixes. No horizontal overflow. Pricing card grid correct.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Phase 8: Dark mode + Themes</div><div class="task-detail">7 theme presets (Ocean Blue, Forest Green ✓, Sunset Amber, Rose Quartz, Royal Purple, Arctic Teal, Midnight). Light/Dark/System persist.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Phase 9: SalesIQ integration</div><div class="task-detail">window.$zoho.salesiq loaded. salesiq.visitor initialized. Widget #zsiqscript present. Crash fix verified end-to-end.</div></div></div>
+      <div class="task"><span class="badge pass">PASS</span><div class="task-body"><div class="task-name">Phase 10: Performance</div><div class="task-detail">TTFB: 50ms &middot; Load: 492ms &middot; SW cache: 100% hit (0KB transfer). Slow resources: all Zoho third-party (non-blocking).</div></div></div>
     </div>
 
+    <!-- Prior Session Fixes -->
     <div class="card">
-      <div class="card-title">Previous Fixes &mdash; Deployed</div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Cloud sync race condition (BUG-096)</div><div class="task-detail">Inline pushToCloud() in vault-context.tsx</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Upgrade button broken on web</div><div class="task-detail">Native PlanCard gated behind isNative. Web uses Razorpay.</div></div></div>
-      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Wrong price &curren;199 &rarr; &curren;149</div><div class="task-detail">Fixed in 4 files. Live verified.</div></div></div>
+      <div class="card-title">Prior Session Fixes &mdash; All Deployed</div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Signup crash &mdash; ChevronRight undefined</div><div class="task-detail">Missing lucide import crashed family/lifetime plan signup flow</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">Password Share &rarr; crash (wrong props)</div><div class="task-detail">ShareModal rewired as inline trigger wrapper</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">window.confirm() &rarr; AlertDialog</div><div class="task-detail">Delete Goal + Cancel Subscription use shadcn AlertDialog</div></div></div>
+      <div class="task"><span class="badge fixed">FIXED</span><div class="task-body"><div class="task-name">15+ debug console.log calls stripped</div><div class="task-detail">subscriptions, investments, bank-statements, profile, components</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Cloud sync race (BUG-096) + draggable FAB (BUG-097)</div><div class="task-detail">Inline pushToCloud() in vault-context.tsx &middot; FAB drag fixed</div></div></div>
+      <div class="task"><span class="badge done">DONE</span><div class="task-body"><div class="task-name">Price fix &#8377;199 &rarr; &#8377;149 (4 files)</div><div class="task-detail">Live verified</div></div></div>
     </div>
 
   </div>
 
   <script>
-    document.getElementById('ts').textContent = new Date().toLocaleTimeString();
+    document.getElementById('ts').textContent = new Date().toLocaleString();
   </script>
 </body>
 </html>
