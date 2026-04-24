@@ -73,10 +73,7 @@ export function AnalyticsIntegration({ children }: AnalyticsIntegrationProps) {
   // Track record creation/deletion based on stats changes
   useEffect(() => {
     if (appIntegrationRef.current && isUnlocked) {
-      // This would be called when stats change
-      // In a real implementation, you'd track individual operations
-      // For now, we'll just log that stats are being tracked
-      console.log('Analytics: Tracking vault stats', stats);
+      // Track vault stats changes for analytics
     }
   }, [stats, isUnlocked]);
 

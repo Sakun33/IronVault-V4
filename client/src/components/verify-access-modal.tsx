@@ -35,16 +35,11 @@ export function VerifyAccessModal({
   // Check biometric availability on mount and when modal opens
   useEffect(() => {
     const checkBiometric = async () => {
-      console.log('VerifyModal: Checking biometric...', { isNative: isNativeApp(), open });
       if (isNativeApp()) {
         try {
-          // Get the default vault ID from vault manager
           const defaultVault = vaultManager.getDefaultVault();
           const vaultId = defaultVault?.id || 'default';
-          console.log('VerifyModal: Default vault ID:', vaultId);
-          
           const enabled = await isBiometricUnlockEnabled(vaultId);
-          console.log('VerifyModal: Biometric enabled for vault:', enabled);
           setBiometricAvailable(enabled);
         } catch (error) {
           console.error('VerifyModal: Error checking biometric:', error);

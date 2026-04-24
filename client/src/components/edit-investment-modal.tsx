@@ -22,7 +22,6 @@ export function EditInvestmentModal({ investment, isOpen, onClose, onInvestmentU
   // Update current price when investment changes
   useEffect(() => {
     if (investment) {
-      console.log('EditInvestmentModal: Setting current price for investment:', investment.name);
       setCurrentPrice(investment.currentPrice?.toString() || '');
     }
   }, [investment]);
@@ -51,7 +50,6 @@ export function EditInvestmentModal({ investment, isOpen, onClose, onInvestmentU
         updatedAt: new Date()
       };
 
-      console.log('EditInvestmentModal: Updating investment with:', updates);
       await updateInvestment(investment.id, updates);
       
       addLog('Investment updated', 'system', `Updated current price for ${investment.name} to ${currentPrice}`);
@@ -79,11 +77,8 @@ export function EditInvestmentModal({ investment, isOpen, onClose, onInvestmentU
   };
 
   if (!isOpen || !investment) {
-    console.log('EditInvestmentModal: Not rendering - isOpen:', isOpen, 'investment:', investment?.name);
     return null;
   }
-
-  console.log('EditInvestmentModal: Rendering modal for investment:', investment.name);
 
   return (
     <div 
