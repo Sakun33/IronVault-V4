@@ -80,15 +80,6 @@ export default function Investments() {
     const { addLog } = loggingContext;
     const { toast } = toastContext;
     
-    console.log('🔍 Data loaded:', {
-      investmentsCount: investments?.length || 0,
-      investments: investments?.slice(0, 3) || []
-    });
-
-    // Debug: Log investment data instead of showing alert
-    if (!investments || investments.length === 0) {
-      console.log('📊 No investments data found - this is normal for a new vault');
-    }
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -102,8 +93,6 @@ export default function Investments() {
 
     // Calculate portfolio analytics
     const portfolioAnalytics = useMemo(() => {
-      console.log('🔍 Calculating portfolio analytics...');
-      
       const filteredInvestments = investments.filter(inv => {
         const matchesSearch = searchQuery === '' ||
           inv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -176,14 +165,12 @@ export default function Investments() {
         investmentCount: filteredInvestments.length
       };
 
-      console.log('🔍 Portfolio analytics calculated:', analytics);
       return analytics;
     }, [investments, searchQuery, typeFilter, statusFilter]);
 
     // Calculate portfolio analytics
 
     const handleInvestmentAdded = () => {
-      console.log('🔍 Investment added callback triggered');
       toast({
         title: "Investment Added",
         description: "Your investment has been added to the portfolio.",
@@ -191,19 +178,16 @@ export default function Investments() {
     };
 
     const handleEditInvestment = (investment: Investment) => {
-      console.log('🔍 Opening edit modal for:', investment.name);
       setEditingInvestment(investment);
       setIsEditModalOpen(true);
     };
 
     const handleCloseEditModal = () => {
-      console.log('🔍 Closing edit modal');
       setEditingInvestment(null);
       setIsEditModalOpen(false);
     };
 
     const handleInvestmentUpdated = () => {
-      console.log('🔍 Investment updated callback triggered');
       toast({
         title: "Investment Updated",
         description: "Your investment has been updated successfully.",

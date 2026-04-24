@@ -56,14 +56,6 @@ export default function BankStatements() {
   const [selectedStatement, setSelectedStatement] = useState<string>('all');
   const [deleteStatementId, setDeleteStatementId] = useState<string | null>(null);
 
-  // Debug logging
-  console.log('Bank Statements Debug:', {
-    statementsCount: statements.length,
-    transactionsCount: transactions.length,
-    statements: statements.slice(0, 2),
-    transactions: transactions.slice(0, 2)
-  });
-
   // Calculate analytics
   const analytics = useMemo(() => {
     const filteredTransactions = transactions.filter(txn => {
@@ -213,23 +205,14 @@ export default function BankStatements() {
         if (!file) return;
 
         try {
-          console.log('Bank Statements: Starting import...');
           addLog('Import statement initiated', 'system', 'User selected CSV file for import');
-          
           const csvContent = await file.text();
-          console.log('Bank Statements: CSV content length:', csvContent.length);
-          
           const result = await importBankStatementsFromCSV(csvContent);
-          console.log('Bank Statements: Import result:', result);
-          
           addLog('Import statement completed', 'system', `Imported ${result.statements} statements and ${result.transactions} transactions`);
           toast({
             title: "Import Successful",
             description: `Successfully imported ${result.statements} bank statements with ${result.transactions} transactions.`,
           });
-          
-          // Force refresh the data without page reload
-          console.log('Bank Statements: Refreshing data...');
           setTimeout(() => {
             window.location.reload();
           }, 1000);
