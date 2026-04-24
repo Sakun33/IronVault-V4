@@ -212,10 +212,16 @@ export default function Notes() {
                     <span>{format(new Date(viewingNote.updatedAt), 'MMM d, yyyy')}</span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="flex-shrink-0"
-                  onClick={() => { setViewingNote(null); handleEditNote(viewingNote); }}>
-                  <Edit className="w-3.5 h-3.5 mr-1" /> Edit
-                </Button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button variant="outline" size="sm"
+                    onClick={() => { setViewingNote(null); handleEditNote(viewingNote); }}>
+                    <Edit className="w-3.5 h-3.5 mr-1" /> Edit
+                  </Button>
+                  <Button variant="destructive" size="sm"
+                    onClick={() => { setViewingNote(null); handleDeleteNote(viewingNote.id, viewingNote.title); }}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                  </Button>
+                </div>
               </div>
             </DialogHeader>
 
@@ -316,6 +322,12 @@ export default function Notes() {
         </DialogBody>
 
         <DialogFooter>
+          {editingNote && (
+            <Button variant="destructive" className="mr-auto" data-testid="button-delete-note"
+              onClick={() => { closeModal(); handleDeleteNote(editingNote.id, editingNote.title); }}>
+              <Trash2 className="w-4 h-4 mr-1" /> Delete
+            </Button>
+          )}
           <Button variant="outline" onClick={closeModal}>Cancel</Button>
           <Button type="button" data-testid="button-save-note" onClick={editingNote ? handleUpdateNote : handleAddNote}>
             {editingNote ? 'Save changes' : 'Save note'}
