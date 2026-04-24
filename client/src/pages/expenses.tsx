@@ -156,8 +156,8 @@ export default function Expenses() {
     return expenses.filter(expense => {
       // Search filter
       const matchesSearch = !searchQuery || 
-        expense.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        expense.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        expense.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         expense.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (expense.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -281,8 +281,8 @@ export default function Expenses() {
   // Smart duplicate detection
   const detectPotentialDuplicate = (newExpense: Omit<ExpenseEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
     const similar = expenses.filter(existing => {
-      const titleSimilar = existing.title.toLowerCase().includes(newExpense.title.toLowerCase()) ||
-                          newExpense.title.toLowerCase().includes(existing.title.toLowerCase());
+      const titleSimilar = (existing.title?.toLowerCase() ?? '').includes(newExpense.title.toLowerCase()) ||
+                          newExpense.title.toLowerCase().includes(existing.title?.toLowerCase() ?? '');
       const amountSimilar = Math.abs(existing.amount - newExpense.amount) < 0.01;
       const categorySame = existing.category === newExpense.category;
       const dateSimilar = Math.abs(new Date(existing.date).getTime() - new Date(newExpense.date).getTime()) < 24 * 60 * 60 * 1000; // Within 24 hours
@@ -610,7 +610,16 @@ export default function Expenses() {
               type="date"
               data-testid="input-expense-date"
               value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFormData(prev => ({ ...prev, date: val }));
+                if (val) {
+                  const today = new Date().setHours(0, 0, 0, 0);
+                  if (new Date(val).getTime() > today) {
+                    toast({ title: 'Future date selected', description: 'Expense dates are typically today or earlier.' });
+                  }
+                }
+              }}
             />
           </div>
 
