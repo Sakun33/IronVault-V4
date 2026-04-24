@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
-import { createHmac } from "crypto";
+import { createHmac, randomUUID } from "crypto";
 import nodemailer from "nodemailer";
 
 // ── Zoho Desk API ─────────────────────────────────────────────────────────────
@@ -1366,6 +1366,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('[Razorpay] verify error:', err.message);
       return res.status(500).json({ error: err.message || 'Verification failed' });
+    }
+  }
+
+  // ── POST /api/share/migrate ───────────────────────────────────────────────────
+  if (path === '/api/share/migrate' && req.method === 'POST') {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS shared_links (
+          id SERIAL PRIMARY KEY,
+          token VARCHAR(255) UNIQUE NOT NULL,
+          encrypted_data TEXT NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          viewed BOOLEAN DEFAULT false,
+          viewed_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token);
+      `);
+      return res.json({ success: true, message: 'shared_links table ready' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/share/create ────────────────────────────────────────────────────
+  if (path === '/api/share/create' && req.method === 'POST') {
+    try {
+      const { data, expiresIn = 24 } = req.body as { data: unknown; expiresIn?: number };
+      if (!data) return res.status(400).json({ error: 'data required' });
+      const token = randomUUID();
+      const expiresAt = new Date(Date.now() + (expiresIn as number) * 60 * 60 * 1000);
+      await db.query(
+        'INSERT INTO shared_links (token, encrypted_data, expires_at) VALUES ($1, $2, $3)',
+        [token, JSON.stringify(data), expiresAt]
+      );
+      return res.json({
+        link: `https://www.ironvault.app/share/${token}`,
+        expiresAt: expiresAt.toISOString(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/share/:token ─────────────────────────────────────────────────────
+  if (path.startsWith('/api/share/') && req.method === 'GET') {
+    const token = path.slice('/api/share/'.length);
+    if (!token || token.includes('/')) return res.status(400).json({ error: 'Invalid token' });
+    try {
+      const { rows } = await db.query('SELECT * FROM shared_links WHERE token = $1', [token]);
+      if (rows.length === 0) return res.status(404).json({ error: 'Link not found' });
+      const share = rows[0];
+      if (new Date(share.expires_at) < new Date()) {
+        return res.status(410).json({ error: 'Link expired' });
+      }
+      if (share.viewed) {
+        return res.status(410).json({ error: 'Link already used — one-time links expire after first view' });
+      }
+      await db.query('UPDATE shared_links SET viewed = true, viewed_at = NOW() WHERE token = $1', [token]);
+      return res.json({ data: JSON.parse(share.encrypted_data) });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
     }
   }
 

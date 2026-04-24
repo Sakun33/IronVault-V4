@@ -13,7 +13,6 @@ import { PASSWORD_CATEGORIES } from '@shared/schema';
 import { PasswordGenerator } from '@/lib/password-generator';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
-import { ShareModal } from '@/components/share-modal';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -53,6 +52,41 @@ export default function Passwords() {
     { id: 'paypal', name: 'PayPal', icon: CreditCard, category: 'Finance', fields: { name: 'PayPal', username: '', url: 'https://paypal.com' } },
     { id: 'wifi', name: 'WiFi Network', icon: Globe, category: 'Network', fields: { name: '', username: 'admin', url: '' } },
   ];
+
+  const handleShare = async (pw: any) => {
+    try {
+      const res = await fetch('/api/share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            name: pw.name,
+            username: pw.username || pw.email || '',
+            password: pw.password,
+            url: pw.url || '',
+            sharedBy: 'IronVault User',
+          },
+          expiresIn: 24,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create share link');
+      const { link } = await res.json();
+
+      if (navigator.share) {
+        await navigator.share({
+          title: `Password for ${pw.name}`,
+          text: `Here's the login for ${pw.name}. One-time link — save the details.`,
+          url: link,
+        });
+      } else {
+        await navigator.clipboard.writeText(link);
+        toast({ title: 'Share link copied!', description: 'One-time link valid for 24 hours' });
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      toast({ title: 'Share failed', description: 'Could not create share link', variant: 'destructive' });
+    }
+  };
 
   const handleUseTemplate = (template: typeof PASSWORD_TEMPLATES[0]) => {
     setEditingPassword({ ...template.fields, category: template.category, isTemplate: true });
@@ -353,11 +387,9 @@ export default function Passwords() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  <ShareModal item={pw} itemType="password">
-                    <Button variant="outline" className="flex-1 rounded-xl">
-                      <Share2 size={14} className="mr-1.5" /> Share
-                    </Button>
-                  </ShareModal>
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => handleShare(pw)}>
+                    <Share2 size={14} className="mr-1.5" /> Share
+                  </Button>
                   <Button
                     variant="outline"
                     className="flex-1 rounded-xl"

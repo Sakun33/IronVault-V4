@@ -28,6 +28,7 @@ import Notes from "@/pages/notes";
 import Expenses from "@/pages/expenses";
 import Reminders from "@/pages/reminders";
 import Logging from "@/pages/logging";
+import ShareView from "@/pages/share-view";
 import BankStatements from "@/pages/bank-statements";
 import Investments from "@/pages/investments";
 import Goals from "@/pages/goals";
@@ -755,6 +756,10 @@ const PUBLIC_INFO_ROUTES = (
 // Router Component
 function Router() {
   const { isUnlocked, isLoading, isAccountLoggedIn } = useAuth();
+  const [location] = useLocation();
+
+  // Share links are always public — bypass all auth checks
+  if (location.startsWith('/share/')) return <ShareView />;
 
   if (isLoading) {
     return (
