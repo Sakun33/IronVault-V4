@@ -175,6 +175,10 @@ function planUpgradeEmail(plan: string) {
   const body = `${_eh1(`You're now on ${label}!`)}${_ep(`Your IronVault account has been upgraded to <strong style="color:#111827">${label}</strong>. All premium features are now unlocked.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What's included</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Unlimited vaults</li><li>Cloud sync across devices</li><li>Priority support</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}`;
   return { subject: `You're now on IronVault ${label} ⭐`, html: _emailLayout(body) };
 }
+function vaultReadyEmail(vaultName: string) {
+  const body = `${_eh1('Your vault is ready 🔒')}${_ep(`<strong style="color:#111827">${vaultName || 'Your vault'}</strong> has been created and encrypted with your master password.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you can store</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Passwords &amp; login credentials</li><li>Secure notes &amp; documents</li><li>Financial data &amp; subscriptions</li><li>Reminders &amp; goals</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Keep your master password safe — it cannot be recovered.</p>`;
+  return { subject: 'Your IronVault vault is ready! 🔒', html: _emailLayout(body) };
+}
 // ── End email service ──────────────────────────────────────────────────────────
 
 let pool: Pool | null = null;
@@ -384,6 +388,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Send confirmation email with Zoho ticket number
       sendEmail({ to: email, ...ticketConfirmationEmail(safeSubject, ticketId) }).catch(() => {});
+      // Upsert CRM contact so ticket submitters appear in Zoho CRM
+      createCrmContact({ email, firstName: email.split('@')[0], lastName: 'IronVault User', source: 'Support Ticket' }).catch(() => {});
       return res.json({ success: true, ticket: { id: ticketId, zoho: !!zdTicket } });
     } catch (err: any) {
       console.error("ticket create error:", err.message);
@@ -784,6 +790,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [cloudUser.userId, vaultId]
       );
       if (existing[0]) return res.status(409).json({ error: 'Vault already exists. Use PUT to update.' });
+      // Count existing vaults before insert to detect first vault
+      const { rows: priorVaults } = await db.query(
+        `SELECT COUNT(*) AS cnt FROM cloud_vaults WHERE user_id = $1`, [cloudUser.userId]
+      );
+      const isFirstVault = parseInt(priorVaults[0]?.cnt ?? '0', 10) === 0;
       const ts = clientModifiedAt ? new Date(clientModifiedAt) : new Date();
       const { rows: created } = await db.query(
         `INSERT INTO cloud_vaults (user_id, vault_id, vault_name, encrypted_blob, is_default, client_modified_at, source_device_id)
@@ -793,6 +804,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isDefault) {
         await db.query(`UPDATE cloud_vaults SET is_default = false WHERE user_id = $1 AND vault_id != $2`, [cloudUser.userId, vaultId]);
         await db.query(`UPDATE cloud_vaults SET is_default = true WHERE user_id = $1 AND vault_id = $2`, [cloudUser.userId, vaultId]);
+      }
+      // Send vault-ready email on first vault creation
+      if (isFirstVault) {
+        sendEmail({ to: cloudUser.email, ...vaultReadyEmail(vaultName as string) }).catch(() => {});
       }
       const r = created[0];
       return res.status(201).json({ success: true, vault: {
@@ -1227,6 +1242,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [userId, plan]
       );
 
+      // Fire upgrade email + CRM deal (fire-and-forget)
+      sendEmail({ to: email, ...planUpgradeEmail(plan) }).catch(() => {});
+      createOrUpdateCrmDeal({ contactId: null, email, plan }).catch(() => {});
       console.log(`[zoho-billing] ${eventType} → ${email} → ${plan}`);
       return res.json({ received: true, email, plan, eventType });
     } catch (err: any) {

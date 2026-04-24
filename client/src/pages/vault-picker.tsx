@@ -311,7 +311,7 @@ export default function VaultPickerPage() {
               <p className="text-sm text-muted-foreground mb-6">
                 Free plan users can access IronVault on the mobile app with local storage.
               </p>
-              <Button onClick={() => { alert('BUTTON WORKS - starting payment...'); handleUpgrade(); }} disabled={upgradeLoading} className="gap-2">
+              <Button onClick={handleUpgrade} disabled={upgradeLoading} className="gap-2">
                 <Zap className="w-4 h-4" />
                 {upgradeLoading ? 'Loading…' : 'Upgrade to Pro'}
               </Button>
