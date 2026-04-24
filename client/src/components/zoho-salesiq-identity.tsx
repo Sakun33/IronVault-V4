@@ -26,8 +26,8 @@ export function ZohoSalesIQIdentity() {
     if (!salesiq) return;
 
     if (isAccountLoggedIn && accountEmail) {
-      salesiq.visitor.email(accountEmail);
-      salesiq.visitor.id(accountEmail);
+      salesiq.visitor?.email(accountEmail);
+      salesiq.visitor?.id(accountEmail);
     } else {
       salesiq.reset?.();
     }
