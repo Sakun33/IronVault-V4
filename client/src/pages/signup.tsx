@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Eye, EyeOff, Mail, User, Globe, Phone, Building2, MapPin,
-  Sparkles, Crown, Infinity, Users, KeyRound, MailCheck,
+  Sparkles, Crown, Infinity, Users, KeyRound, MailCheck, ChevronRight,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useToast } from '@/hooks/use-toast';
@@ -506,7 +506,7 @@ export default function SignupPage() {
                 id="signup-marketing"
                 data-testid="signup-marketing"
                 checked={marketingConsent}
-                onCheckedChange={v => setMarketingConsent(v === true)}
+                onCheckedChange={v => { try { setMarketingConsent(v === true); } catch { /* ignore */ } }}
                 className="mt-0.5"
               />
               <Label htmlFor="signup-marketing" className="text-sm text-muted-foreground cursor-pointer leading-relaxed">

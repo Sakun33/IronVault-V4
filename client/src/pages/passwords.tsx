@@ -28,7 +28,6 @@ export default function Passwords() {
   const [strengthFilter, setStrengthFilter] = useState<string>('all');
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [selectedPassword, setSelectedPassword] = useState<any>(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
@@ -354,13 +353,11 @@ export default function Passwords() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    className="flex-1 rounded-xl"
-                    onClick={() => { setSelectedPassword(pw); setShowShareModal(true); }}
-                  >
-                    <Share2 size={14} className="mr-1.5" /> Share
-                  </Button>
+                  <ShareModal item={pw} itemType="password">
+                    <Button variant="outline" className="flex-1 rounded-xl">
+                      <Share2 size={14} className="mr-1.5" /> Share
+                    </Button>
+                  </ShareModal>
                   <Button
                     variant="outline"
                     className="flex-1 rounded-xl"
@@ -401,13 +398,6 @@ export default function Passwords() {
         description="Verify your identity to view this password."
       />
 
-      {selectedPassword && (
-        <ShareModal
-          open={showShareModal}
-          onOpenChange={setShowShareModal}
-          password={selectedPassword}
-        />
-      )}
 
       {/* Templates Modal */}
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
