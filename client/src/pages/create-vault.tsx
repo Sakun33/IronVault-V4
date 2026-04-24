@@ -15,7 +15,7 @@ import { isNativeApp } from '@/native/platform';
 
 export default function CreateVaultPage() {
   const [, setLocation] = useLocation();
-  const { createVault } = useAuth();
+  const { createVault, accountEmail } = useAuth();
   const { toast } = useToast();
   const { localVaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
@@ -26,8 +26,58 @@ export default function CreateVaultPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   const onWeb = !isNativeApp();
+
+  const handleUpgrade = async () => {
+    setUpgradeLoading(true);
+    try {
+      if (typeof window.Razorpay === 'undefined') {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Razorpay failed to load'));
+          setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
+          document.head.appendChild(s);
+        });
+      }
+      const email = accountEmail || localStorage.getItem('iv_account_email') || '';
+      const res = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'pro_monthly', email }),
+      });
+      const { orderId, amount, currency, keyId } = await res.json();
+      const rzp = new window.Razorpay({
+        key: keyId,
+        amount,
+        currency,
+        name: 'IronVault',
+        description: 'IronVault Pro Monthly',
+        order_id: orderId,
+        handler: async (response: any) => {
+          const verify = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...response, plan: 'pro_monthly', email }),
+          });
+          if ((await verify.json()).success) {
+            window.location.reload();
+          }
+        },
+        prefill: { email },
+        theme: { color: '#4f46e5' },
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast({ title: 'Payment error', description: 'Could not open checkout. Try again.', variant: 'destructive' });
+    } finally {
+      setUpgradeLoading(false);
+    }
+  };
   const currentVaultCount = vaultManager.getLocalVaultCount();
   const atLimit = !planLoading && !onWeb && currentVaultCount >= localVaultLimit;
 
@@ -116,9 +166,9 @@ export default function CreateVaultPage() {
               <p className="text-sm text-muted-foreground mb-6">
                 Free plan users can create local vaults on the mobile app.
               </p>
-              <Button onClick={() => setLocation('/pricing')} className="gap-2">
+              <Button onClick={handleUpgrade} disabled={upgradeLoading} className="gap-2">
                 <Zap className="w-4 h-4" />
-                Upgrade to Pro
+                {upgradeLoading ? 'Loading…' : 'Upgrade to Pro'}
               </Button>
             </div>
           )}

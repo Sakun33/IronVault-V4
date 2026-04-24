@@ -32,6 +32,57 @@ export default function VaultPickerPage() {
 
   const { localVaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+
+  const handleUpgrade = async () => {
+    setUpgradeLoading(true);
+    try {
+      if (typeof window.Razorpay === 'undefined') {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Razorpay failed to load'));
+          setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
+          document.head.appendChild(s);
+        });
+      }
+      const email = accountEmail || localStorage.getItem('iv_account_email') || '';
+      const res = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'pro_monthly', email }),
+      });
+      const { orderId, amount, currency, keyId } = await res.json();
+      const rzp = new window.Razorpay({
+        key: keyId,
+        amount,
+        currency,
+        name: 'IronVault',
+        description: 'IronVault Pro Monthly',
+        order_id: orderId,
+        handler: async (response: any) => {
+          const verify = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...response, plan: 'pro_monthly', email }),
+          });
+          if ((await verify.json()).success) {
+            window.location.reload();
+          }
+        },
+        prefill: { email },
+        theme: { color: '#4f46e5' },
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast({ title: 'Payment error', description: 'Could not open checkout. Try again.', variant: 'destructive' });
+    } finally {
+      setUpgradeLoading(false);
+    }
+  };
+
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [showPw, setShowPw] = useState<Record<string, boolean>>({});
@@ -260,9 +311,9 @@ export default function VaultPickerPage() {
               <p className="text-sm text-muted-foreground mb-6">
                 Free plan users can access IronVault on the mobile app with local storage.
               </p>
-              <Button onClick={() => setLocation('/pricing')} className="gap-2">
+              <Button onClick={handleUpgrade} disabled={upgradeLoading} className="gap-2">
                 <Zap className="w-4 h-4" />
-                Upgrade to Pro
+                {upgradeLoading ? 'Loading…' : 'Upgrade to Pro'}
               </Button>
             </div>
           )}
@@ -352,7 +403,7 @@ export default function VaultPickerPage() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    onClick={() => setLocation('/pricing')}
+                    onClick={() => setLocation('/upgrade')}
                   >
                     <Zap className="w-3 h-3 mr-1" />
                     Upgrade
@@ -429,7 +480,7 @@ export default function VaultPickerPage() {
                   <>
                     <p className="text-sm font-medium text-muted-foreground">Cloud Sync — Pro feature</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Upgrade to Pro to sync your vault across devices.</p>
-                    <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation('/pricing')}>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation('/upgrade')}>
                       Upgrade to Pro
                     </Button>
                   </>
