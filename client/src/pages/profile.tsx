@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -203,6 +204,7 @@ export default function Profile() {
 
   // FAQ expand state
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   
   // Import file ref
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -232,7 +234,6 @@ export default function Profile() {
       const savedProfile = localStorage.getItem('customerProfile');
       if (savedProfile) {
         const profile = JSON.parse(savedProfile);
-        console.log('📋 Loaded customer profile:', profile);
         return profile;
       }
     } catch (error) {
@@ -681,7 +682,7 @@ export default function Profile() {
           }
         }
       })
-      .catch(err => console.log('Entitlement fetch failed (non-critical):', err));
+      .catch(() => {});
   }, []);
 
   // Fetch real tickets from backend on mount — use email (tickets are keyed by email, not UUID)
@@ -706,7 +707,7 @@ export default function Profile() {
           })));
         }
       })
-      .catch(err => console.log('Failed to fetch tickets:', err));
+      .catch(() => {});
   }, []);
 
   // Get pricing tiers
@@ -748,19 +749,16 @@ export default function Profile() {
   };
 
   const handleCancelSubscription = () => {
-    if (confirm('Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing period.')) {
-      setUserProfile(prev => ({
-        ...prev,
-        subscription: {
-          ...prev.subscription,
-          status: 'cancelled',
-        },
-      }));
-      toast({
-        title: "Subscription Cancelled",
-        description: "Your subscription will remain active until the end of your billing period.",
-      });
-    }
+    setShowCancelConfirm(true);
+  };
+
+  const confirmCancelSubscription = () => {
+    setUserProfile(prev => ({
+      ...prev,
+      subscription: { ...prev.subscription, status: 'cancelled' },
+    }));
+    toast({ title: "Subscription Cancelled", description: "Your subscription will remain active until the end of your billing period." });
+    setShowCancelConfirm(false);
   };
 
   const handleCreateSupportTicket = async (ticketData: Partial<SupportTicket>) => {
@@ -2346,6 +2344,23 @@ export default function Profile() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will lose access to premium features at the end of your billing period. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelSubscription} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </ErrorBoundary>
   );
