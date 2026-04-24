@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -306,6 +307,7 @@ export default function Goals() {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<InvestmentGoal | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [deleteGoalTarget, setDeleteGoalTarget] = useState<{ id: string; name: string } | null>(null);
   
   // Enhanced goal form state
   const [goalForm, setGoalForm] = useState({
@@ -704,23 +706,19 @@ export default function Goals() {
     }
   };
 
-  const handleDeleteGoal = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      return;
-    }
+  const handleDeleteGoal = (id: string, name: string) => {
+    setDeleteGoalTarget({ id, name });
+  };
 
+  const confirmDeleteGoal = async () => {
+    if (!deleteGoalTarget) return;
     try {
-      await deleteInvestmentGoal(id);
-      toast({
-        title: "Success",
-        description: "Goal deleted successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete goal",
-        variant: "destructive",
-      });
+      await deleteInvestmentGoal(deleteGoalTarget.id);
+      toast({ title: "Success", description: "Goal deleted successfully" });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete goal", variant: "destructive" });
+    } finally {
+      setDeleteGoalTarget(null);
     }
   };
 
@@ -1343,6 +1341,23 @@ export default function Goals() {
           </DialogBody>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteGoalTarget} onOpenChange={(open) => !open && setDeleteGoalTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Goal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteGoalTarget?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteGoal} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

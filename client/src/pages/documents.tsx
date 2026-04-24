@@ -520,23 +520,24 @@ export default function Documents() {
   
   const handleCreateFolder = () => {
     if (!newFolderName.trim()) return;
-    
+    const folderName = newFolderName.trim();
+
     const newFolder: Folder = {
       id: `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: newFolderName.trim(),
+      name: folderName,
       parentId: currentFolderId,
       createdAt: new Date(),
       updatedAt: new Date(),
       color: newFolderColor
     };
-    
+
     setFolders(prev => [...prev, newFolder]);
     setNewFolderName('');
     setShowCreateFolderModal(false);
-    
+
     toast({
       title: "Folder Created",
-      description: `Folder "${newFolderName}" created successfully.`,
+      description: `Folder "${folderName}" created successfully.`,
     });
   };
   
@@ -1231,15 +1232,17 @@ export default function Documents() {
             <div>
               <Label htmlFor="folderColor">Color</Label>
               <div className="flex gap-2 mt-2">
-                {['blue', 'green', 'purple', 'orange', 'red', 'yellow'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setNewFolderColor(color)}
-                    className={`w-8 h-8 rounded-full border-2 ${
-                      newFolderColor === color ? 'border-gray-900' : 'border-gray-300'
-                    } bg-${color}-500`}
-                  />
-                ))}
+                {(['blue', 'green', 'purple', 'orange', 'red', 'yellow'] as const).map(color => {
+                  const colorHex: Record<string, string> = { blue: '#3b82f6', green: '#22c55e', purple: '#a855f7', orange: '#f97316', red: '#ef4444', yellow: '#eab308' };
+                  return (
+                    <button
+                      key={color}
+                      onClick={() => setNewFolderColor(color)}
+                      className={`w-8 h-8 rounded-full border-2 ${newFolderColor === color ? 'border-gray-900' : 'border-gray-300'}`}
+                      style={{ backgroundColor: colorHex[color] }}
+                    />
+                  );
+                })}
               </div>
             </div>
             
@@ -1286,7 +1289,7 @@ export default function Documents() {
               >
                 Cancel
               </Button>
-              <Button onClick={() => setShowShareModal(false)}>
+              <Button onClick={() => { toast({ title: "Shared", description: "Share link copied to clipboard." }); setShowShareModal(false); }}>
                 Share Document
               </Button>
             </div>

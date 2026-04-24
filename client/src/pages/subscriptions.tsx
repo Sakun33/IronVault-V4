@@ -266,8 +266,7 @@ export default function Subscriptions() {
         {/* Subscription Reminders */}
         <SubscriptionReminderComponent 
           subscriptions={subscriptions}
-          onReminderAction={(reminder, action) => {
-            console.log(`Reminder ${action}:`, reminder);
+          onReminderAction={(_reminder, _action) => {
           }}
         />
 
