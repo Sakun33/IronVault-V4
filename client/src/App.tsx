@@ -719,23 +719,26 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         }}
         searchQuery={localSearchQuery}
         onSearchChange={(q) => { setLocalSearchQuery(q); setSearchQuery(q); }}
-        results={{
-          passwords: passwords
-            .filter(p => p.name?.toLowerCase().includes(localSearchQuery.toLowerCase()) || p.username?.toLowerCase().includes(localSearchQuery.toLowerCase()))
-            .map(p => ({ id: p.id, type: 'password' as const, title: p.name, subtitle: p.username, href: '/passwords' })),
-          subscriptions: subscriptions
-            .filter(s => s.name?.toLowerCase().includes(localSearchQuery.toLowerCase()))
-            .map(s => ({ id: s.id, type: 'subscription' as const, title: s.name, subtitle: s.category, href: '/subscriptions' })),
-          notes: notes
-            .filter(n => n.title?.toLowerCase().includes(localSearchQuery.toLowerCase()) || n.content?.toLowerCase().includes(localSearchQuery.toLowerCase()))
-            .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: '/notes' })),
-          expenses: expenses
-            .filter(e => e.title?.toLowerCase().includes(localSearchQuery.toLowerCase()) || e.category?.toLowerCase().includes(localSearchQuery.toLowerCase()))
-            .map(e => ({ id: e.id, type: 'expense' as const, title: e.title, subtitle: e.category, href: '/expenses' })),
-          reminders: reminders
-            .filter(r => r.title?.toLowerCase().includes(localSearchQuery.toLowerCase()))
-            .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: '/reminders' })),
-        }}
+        results={(() => {
+          const q = localSearchQuery.toLowerCase();
+          return {
+            passwords: (passwords ?? [])
+              .filter(p => p.name?.toLowerCase()?.includes(q) || p.username?.toLowerCase()?.includes(q))
+              .map(p => ({ id: p.id, type: 'password' as const, title: p.name, subtitle: p.username, href: '/passwords' })),
+            subscriptions: (subscriptions ?? [])
+              .filter(s => s.name?.toLowerCase()?.includes(q))
+              .map(s => ({ id: s.id, type: 'subscription' as const, title: s.name, subtitle: s.category, href: '/subscriptions' })),
+            notes: (notes ?? [])
+              .filter(n => n.title?.toLowerCase()?.includes(q) || n.content?.toLowerCase()?.includes(q))
+              .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: '/notes' })),
+            expenses: (expenses ?? [])
+              .filter(e => e.title?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q))
+              .map(e => ({ id: e.id, type: 'expense' as const, title: e.title, subtitle: e.category, href: '/expenses' })),
+            reminders: (reminders ?? [])
+              .filter(r => r.title?.toLowerCase()?.includes(q))
+              .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: '/reminders' })),
+          };
+        })()}
       />
 
       <PasswordGeneratorModal
