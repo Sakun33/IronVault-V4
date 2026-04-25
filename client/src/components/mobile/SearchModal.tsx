@@ -29,6 +29,7 @@ interface SearchModalProps {
   onClearRecentSearches?: () => void;
 }
 
+// Keys are the singular type values used in SearchResult.type
 const typeConfig = {
   password: { icon: Key, label: 'Passwords', color: 'text-primary' },
   subscription: { icon: Bookmark, label: 'Subscriptions', color: 'text-primary' },
@@ -37,7 +38,7 @@ const typeConfig = {
   reminder: { icon: Bell, label: 'Reminders', color: 'text-foreground' },
 };
 
-export function SearchModal({
+function SearchModalInner({
   open,
   onOpenChange,
   searchQuery,
@@ -51,28 +52,26 @@ export function SearchModal({
 
   useEffect(() => {
     if (open) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      setTimeout(() => { inputRef.current?.focus(); }, 100);
     }
   }, [open]);
 
-  const allResults = Object.entries(results).flatMap(([type, items]) =>
-    (items || []).map((item) => ({ ...item, type: type as keyof typeof typeConfig }))
-  );
+  // Flatten without overriding type — items already carry the correct singular type
+  const allResults: SearchResult[] = Object.values(results).flatMap(items => items ?? []);
 
   const filteredResults =
-    activeTab === 'all' ? allResults : allResults.filter((r) => r.type === activeTab);
+    activeTab === 'all' ? allResults : allResults.filter(r => r.type === activeTab);
 
   const hasResults = filteredResults.length > 0;
   const showRecentSearches = !searchQuery && recentSearches.length > 0;
 
-  const resultCounts = {
-    passwords: results.passwords?.length || 0,
-    subscriptions: results.subscriptions?.length || 0,
-    notes: results.notes?.length || 0,
-    expenses: results.expenses?.length || 0,
-    reminders: results.reminders?.length || 0,
+  // Singular keys so Object.entries yields 'password', 'subscription', … matching typeConfig
+  const resultCounts: Record<keyof typeof typeConfig, number> = {
+    password: results.passwords?.length ?? 0,
+    subscription: results.subscriptions?.length ?? 0,
+    note: results.notes?.length ?? 0,
+    expense: results.expenses?.length ?? 0,
+    reminder: results.reminders?.length ?? 0,
   };
 
   if (!open) return null;
@@ -123,15 +122,16 @@ export function SearchModal({
             >
               All ({allResults.length})
             </Button>
-            {Object.entries(resultCounts).map(([type, count]) => {
+            {(Object.entries(resultCounts) as [keyof typeof typeConfig, number][]).map(([type, count]) => {
               if (count === 0) return null;
-              const config = typeConfig[type as keyof typeof typeConfig];
+              const config = typeConfig[type];
+              if (!config) return null;
               return (
                 <Button
                   key={type}
                   variant={activeTab === type ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setActiveTab(type as keyof typeof typeConfig)}
+                  onClick={() => setActiveTab(type)}
                   className="rounded-full shrink-0"
                 >
                   {config.label} ({count})
@@ -191,6 +191,7 @@ export function SearchModal({
           <div className="p-4 space-y-1">
             {filteredResults.map((result) => {
               const config = typeConfig[result.type];
+              if (!config) return null;
               const Icon = config.icon;
 
               return (
@@ -225,4 +226,19 @@ export function SearchModal({
       </div>
     </div>
   );
+}
+
+export function SearchModal(props: SearchModalProps) {
+  try {
+    return <SearchModalInner {...props} />;
+  } catch (err) {
+    console.error('SearchModal crash:', err);
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4 p-8" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <Search className="w-10 h-10 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground text-center">Search is temporarily unavailable. Please try again.</p>
+        <Button variant="outline" onClick={() => props.onOpenChange(false)}>Close</Button>
+      </div>
+    );
+  }
 }
