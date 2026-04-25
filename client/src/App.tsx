@@ -3,12 +3,12 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { VaultProvider, useVault } from "@/contexts/vault-context";
 import { CurrencyProvider } from "@/contexts/currency-context";
 import { LoggingProvider } from "@/contexts/logging-context";
-import { ThemeProvider } from "@/contexts/theme-context";
+import { ThemeProvider, useTheme } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
@@ -64,7 +64,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check, MessageCircle, MoreVertical, Sun, Moon } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -81,7 +81,7 @@ import { SectionCard } from "@/components/StatCard";
 import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
-import { QuickAddFab } from "@/components/quick-add-fab";
+import { QuickAddMenu } from "@/components/quick-add-fab";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
 import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
@@ -91,6 +91,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const { searchQuery, setSearchQuery, stats, isCloudSyncing, passwords, subscriptions, notes, expenses, reminders } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
+  const { toggleTheme, resolvedTheme } = useTheme();
   useCloudAutoSync(activeVault?.id, masterPassword);
 
   // On every unlock: heal pre-fix vaults by checking server for cloud entry and pushing current state
@@ -130,6 +131,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickAccess, setShowQuickAccess] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
@@ -229,31 +231,28 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
-      {/* Mobile Header - Glassmorphism */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)] pb-1.5">
-        <div className="flex items-center justify-between max-w-full h-11 gap-1">
-          {/* Left side: menu + logo + vault chip — min-w-0 allows shrinking so right icons stay visible */}
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowQuickAccess(true)}
-              className="h-9 w-9 rounded-xl shrink-0"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <button
-              onClick={() => setLocation('/')}
-              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity shrink-0"
-            >
+      {/* Mobile Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)]">
+        <div className="flex items-center justify-between h-14">
+          {/* Left: hamburger + logo */}
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Menu</TooltipContent>
+            </Tooltip>
+            <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
               <AppLogo size={26} />
-              <span className="text-sm font-bold tracking-tight text-foreground hidden xs:inline">IronVault</span>
+              <span className="text-sm font-bold tracking-tight text-foreground">IronVault</span>
             </button>
-            {/* Mobile vault switcher chip — Radix DropdownMenu (portals to body, immune to overflow:hidden) */}
+            {/* Vault chip — only when multiple vaults */}
             {vaults.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40 min-w-0 max-w-[90px] shrink">
+                  <button className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 rounded-lg px-2 py-1 border border-border/40 max-w-[80px]">
                     <Database className="w-3 h-3 shrink-0" />
                     <span className="truncate">{activeVault?.name || 'Vault'}</span>
                     <ChevronDown className="w-3 h-3 shrink-0" />
@@ -262,13 +261,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuContent align="start" className="min-w-[160px]">
                   <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Switch Vault</div>
                   {vaults.map(vault => (
-                    <DropdownMenuItem
-                      key={vault.id}
-                      className="gap-2"
-                      onClick={() => {
-                        if (vault.id !== activeVault?.id) requestVaultSwitch(vault.id);
-                      }}
-                    >
+                    <DropdownMenuItem key={vault.id} className="gap-2" onClick={() => { if (vault.id !== activeVault?.id) requestVaultSwitch(vault.id); }}>
                       <Database className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="flex-1 truncate">{vault.name}</span>
                       {vault.id === activeVault?.id && <Check className="w-3.5 h-3.5 text-primary" />}
@@ -279,31 +272,53 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          {/* Right side: always visible, shrink-0 */}
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowSearchModal(true)}
-              className="h-9 w-9 rounded-xl"
-            >
-              <Search className="w-4 h-4" />
-            </Button>
+          {/* Right: Search | Quick Add | Overflow ⋮ */}
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl">
+                  <Search className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Search</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Quick Add</TooltipContent>
+            </Tooltip>
             <NotificationBell userId="current-user" />
-            <SimpleThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLockVault}
-              className="h-9 w-9 rounded-xl"
-            >
-              <Lock className="w-4 h-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem className="gap-2" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }}>
+                  <MessageCircle className="w-4 h-4 text-muted-foreground" /> Support Chat
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2" onClick={toggleTheme}>
+                  {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
+                  Toggle Theme
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/profile')}>
+                  <User className="w-4 h-4 text-muted-foreground" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={handleLockVault}>
+                  <Lock className="w-4 h-4" /> Lock Vault
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
       {/* Spacer for fixed header + safe area */}
-      <div className="lg:hidden h-[calc(env(safe-area-inset-top)+44px)]" />
+      <div className="lg:hidden h-[calc(env(safe-area-inset-top)+56px)]" />
 
       {/* Desktop Header - Glassmorphism */}
       <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
@@ -392,42 +407,71 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               onExtensionPairing={() => setShowExtensionPairing(true)}
             />
 
-            <SecuritySettingsModal
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="p-2 rounded-xl"
-                >
-                  <SettingsIcon className="w-5 h-5" />
-                </Button>
-              }
-              onSettingsChanged={(_kdfConfig) => {
-              }}
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <SecuritySettingsModal
+                    trigger={
+                      <Button variant="ghost" size="sm" className="p-2 rounded-xl">
+                        <SettingsIcon className="w-5 h-5" />
+                      </Button>
+                    }
+                    onSettingsChanged={(_kdfConfig) => {}}
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Security Settings</TooltipContent>
+            </Tooltip>
 
-            <NotificationBell userId="current-user" />
-            <ThemeToggle />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setShowQuickAdd(true)} className="p-2 rounded-xl">
+                  <Plus className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Quick Add</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }} className="p-2 rounded-xl">
+                  <MessageCircle className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Support Chat</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span><NotificationBell userId="current-user" /></span>
+              </TooltipTrigger>
+              <TooltipContent>Notifications</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span><ThemeToggle /></span>
+              </TooltipTrigger>
+              <TooltipContent>Toggle Theme</TooltipContent>
+            </Tooltip>
 
             <div className="h-6 w-px bg-border/50" />
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setLocation('/profile')}
-              className="p-2 rounded-xl hover:bg-accent text-foreground"
-            >
-              <User className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setLocation('/profile')} className="p-2 rounded-xl hover:bg-accent text-foreground">
+                  <User className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Profile</TooltipContent>
+            </Tooltip>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLockVault}
-              className="p-2 rounded-xl hover:bg-accent text-foreground"
-            >
-              <Lock className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={handleLockVault} className="p-2 rounded-xl hover:bg-accent text-foreground">
+                  <Lock className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Lock Vault</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </header>
@@ -653,8 +697,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      {/* Quick-Add FAB - mobile only, floats above BottomTabs */}
-      <QuickAddFab />
+      {/* Quick-Add Menu - controlled from header + button */}
+      <QuickAddMenu open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />
 
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
       <BottomTabs items={bottomTabItems} />

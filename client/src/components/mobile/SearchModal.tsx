@@ -78,7 +78,7 @@ export function SearchModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col lg:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       {/* Header */}
       <div className="bg-background px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
