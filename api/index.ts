@@ -1026,7 +1026,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          RETURNING *`,
         [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(), vaultShareId || null]
       );
-      await sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail) }).catch(e => console.error('[invite-email]', e?.message));
+      const emailSent = await sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail) });
+      console.log('[invite-email]', emailSent ? 'SENT' : 'FAILED', '→', inviteeEmail.toLowerCase());
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
