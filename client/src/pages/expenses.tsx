@@ -366,7 +366,7 @@ export default function Expenses() {
     setFormData({
       title: expense.title,
       amount: expense.amount.toString(),
-      currency: expense.currency,
+      currency: expense.currency || currency,
       category: expense.category,
       date: format(new Date(expense.date), 'yyyy-MM-dd'),
       notes: expense.notes || '',
@@ -488,10 +488,14 @@ export default function Expenses() {
   };
 
   const formatCurrencyLocal = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency || 'INR',
+      }).format(amount);
+    } catch {
+      return `${currency || 'INR'} ${amount.toFixed(2)}`;
+    }
   };
 
   const renderExpenseModal = () => (
@@ -755,17 +759,12 @@ export default function Expenses() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-foreground">
-            <DollarSign className="w-6 h-6" />
-            Expenses
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Track and analyze your spending patterns
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Expenses</h1>
+          <p className="text-muted-foreground text-sm">Track and analyze your spending patterns</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"

@@ -1447,7 +1447,12 @@ export default function Profile() {
               {/* Send invite — only for pro/family/lifetime */}
               {['pro', 'family', 'lifetime'].includes(userProfile.subscription.tier) ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium">Invite a family member</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Invite a family member</p>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {outgoingInvites.filter(i => i.status === 'accepted').length + 1}/6 members
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       placeholder="invitee@email.com"

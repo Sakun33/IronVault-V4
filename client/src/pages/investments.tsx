@@ -486,19 +486,15 @@ export default function Investments() {
     if (!licenseLoading && !isFeatureAvailable('investments')) return <UpgradeGate feature="Investments" />;
 
     return (
-      <div className="p-4 space-y-6 overflow-x-hidden">
+      <div className="space-y-6">
 
         {/* Header */}
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-start">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Investments</h1>
-              <p className="text-muted-foreground text-sm">
-                Track your portfolio
-              </p>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Investments</h1>
+            <p className="text-muted-foreground text-sm">Track your portfolio</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setLocation('/goals')} title="Goals">
               <Target className="w-4 h-4 mr-1" />
               Goals
