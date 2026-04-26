@@ -1081,7 +1081,7 @@ export default function Profile() {
       </Dialog>
 
       {/* Profile Overview */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -1137,7 +1137,7 @@ export default function Profile() {
         <TabsContent value="overview" className="space-y-6">
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <Lock className="w-5 h-5 text-primary" />
@@ -1148,7 +1148,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-green-500" />
@@ -1159,7 +1159,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-purple-500" />
@@ -1170,7 +1170,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5 text-orange-500" />
@@ -1184,7 +1184,7 @@ export default function Profile() {
           </div>
 
           {/* Recent Activity */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
@@ -1228,7 +1228,7 @@ export default function Profile() {
         {/* Subscription Tab */}
         <TabsContent value="subscription" className="space-y-6">
           {/* Current Subscription */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Crown className="w-5 h-5" />
@@ -1375,7 +1375,7 @@ export default function Profile() {
           </Card>
 
           {/* Account Information Card */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Wallet className="w-5 h-5" />
@@ -1417,7 +1417,7 @@ export default function Profile() {
             </CardContent>
           </Card>
           {/* Family Invites Card — visible to all users (send requires pro/family/lifetime) */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
@@ -1503,7 +1503,7 @@ export default function Profile() {
         {/* Data & Export Tab */}
         <TabsContent value="data" className="space-y-6">
           {/* Data Encryption Info */}
-          <Card className="border-primary/30 bg-primary/5">
+          <Card className="rounded-2xl shadow-sm border-primary/30 bg-primary/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <Shield className="w-5 h-5" />
@@ -1546,7 +1546,7 @@ export default function Profile() {
           </Card>
 
           {/* Export Options */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Download className="w-5 h-5" />
@@ -1612,7 +1612,7 @@ export default function Profile() {
           </Card>
 
           {/* Backup & Restore */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HardDrive className="w-5 h-5" />
@@ -1666,7 +1666,7 @@ export default function Profile() {
         {/* Support Tab */}
         <TabsContent value="support" className="space-y-6">
           {/* Quick Help */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="w-5 h-5" />
@@ -1738,7 +1738,7 @@ export default function Profile() {
           </Card>
 
           {/* Admin Requests */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
@@ -1801,7 +1801,7 @@ export default function Profile() {
           </Card>
 
           {/* Support Tickets */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -1849,7 +1849,7 @@ export default function Profile() {
           </Card>
 
           {/* Help Resources */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="w-5 h-5" />
@@ -1894,7 +1894,7 @@ export default function Profile() {
         {/* Security Tab */}
         <TabsContent value="security" className="space-y-6">
           {/* Account Information */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5" />
@@ -1948,7 +1948,7 @@ export default function Profile() {
           </Card>
 
           {/* Local Encryption Notice */}
-          <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
+          <Card className="rounded-2xl shadow-sm border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-300">
                 <Shield className="w-5 h-5" />
@@ -1969,7 +1969,7 @@ export default function Profile() {
           </Card>
 
           {/* Master Passcode Management */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Key className="w-5 h-5" />
@@ -2047,7 +2047,7 @@ export default function Profile() {
           />
 
           {/* Security Settings */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5" />
@@ -2082,7 +2082,7 @@ export default function Profile() {
           </Card>
 
           {/* Data & Privacy */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="w-5 h-5" />
@@ -2117,7 +2117,7 @@ export default function Profile() {
           </Card>
 
           {/* Data Management */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="w-5 h-5" />

@@ -326,7 +326,7 @@ export default function BankStatements() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Income</p>
@@ -337,7 +337,7 @@ export default function BankStatements() {
             <TrendingUp className="w-8 h-8 text-green-500/70" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Expenses</p>
@@ -348,7 +348,7 @@ export default function BankStatements() {
             <TrendingDown className="w-8 h-8 text-red-500/70" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Net Savings</p>
@@ -359,7 +359,7 @@ export default function BankStatements() {
             <DollarSign className="w-8 h-8 text-primary/70" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Transactions</p>
@@ -373,7 +373,7 @@ export default function BankStatements() {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-lg font-medium">Filters</CardTitle>
         </CardHeader>
@@ -436,7 +436,7 @@ export default function BankStatements() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           {/* Category Breakdown */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PieChart className="w-5 h-5" />
@@ -471,7 +471,7 @@ export default function BankStatements() {
           </Card>
 
           {/* Monthly Trends */}
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="w-5 h-5" />
@@ -503,7 +503,7 @@ export default function BankStatements() {
           </Card>
           {/* Uploaded Statements Management */}
           {statements.length > 0 && (
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50">
               <CardHeader>
                 <CardTitle className="text-base">Uploaded Statements</CardTitle>
               </CardHeader>
@@ -535,7 +535,7 @@ export default function BankStatements() {
 
         {/* Categories Tab */}
         <TabsContent value="categories" className="space-y-6">
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle>Category Analysis</CardTitle>
             </CardHeader>
@@ -573,7 +573,7 @@ export default function BankStatements() {
 
         {/* Recurring Tab */}
         <TabsContent value="recurring" className="space-y-6">
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
@@ -610,12 +610,12 @@ export default function BankStatements() {
 
         {/* Transactions Tab */}
         <TabsContent value="transactions" className="space-y-6">
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-border">
+              <div>
                 {transactions
                   .filter(txn => {
                     const matchesSearch = searchQuery === '' ||
@@ -644,8 +644,8 @@ export default function BankStatements() {
                     return matchesSearch && matchesCategory && matchesDateRange && matchesStatement;
                   })
                   .sort((a, b) => b.date.getTime() - a.date.getTime())
-                  .map(transaction => (
-                    <div key={transaction.id} className="p-4 hover:bg-muted/50 transition-colors">
+                  .map((transaction, idx, arr) => (
+                    <div key={transaction.id} className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {getTransactionTypeIcon(transaction.transactionType)}

@@ -513,7 +513,7 @@ export default function Investments() {
 
         {/* Portfolio Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Invested</p>
@@ -524,7 +524,7 @@ export default function Investments() {
               <DollarSign className="w-8 h-8 text-primary/70" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Current Value</p>
@@ -535,7 +535,7 @@ export default function Investments() {
               <TrendingUp className="w-8 h-8 text-green-500/70" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Gain/Loss</p>
@@ -550,7 +550,7 @@ export default function Investments() {
               )}
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Return</p>
@@ -564,7 +564,7 @@ export default function Investments() {
         </div>
 
         {/* Filters */}
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-0 bg-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg font-medium">Filters</CardTitle>
           </CardHeader>
@@ -605,7 +605,7 @@ export default function Investments() {
 
         {/* Goal Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Goal Progress</p>
@@ -616,7 +616,7 @@ export default function Investments() {
               <Award className="w-8 h-8 text-primary/70" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Goals</p>
@@ -627,7 +627,7 @@ export default function Investments() {
               <Clock className="w-8 h-8 text-primary/70" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Achieved Goals</p>
@@ -638,7 +638,7 @@ export default function Investments() {
               <CheckCircle className="w-8 h-8 text-primary/70" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Target</p>
@@ -663,7 +663,7 @@ export default function Investments() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Asset Allocation */}
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <PieChart className="w-5 h-5" />
@@ -699,7 +699,7 @@ export default function Investments() {
 
             {/* Performance Highlights */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
+              <Card className="rounded-2xl shadow-sm border-border/50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
                     <TrendingUp className="w-5 h-5" />
@@ -722,7 +722,7 @@ export default function Investments() {
                   )}
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="rounded-2xl shadow-sm border-border/50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-red-600">
                     <TrendingDown className="w-5 h-5" />
@@ -748,7 +748,7 @@ export default function Investments() {
             </div>
 
             {/* Upcoming Goals */}
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Award className="w-5 h-5" />
@@ -796,12 +796,12 @@ export default function Investments() {
 
           {/* Investments Tab */}
           <TabsContent value="investments" className="space-y-6">
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
               <CardHeader>
                 <CardTitle>Investment Portfolio</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-border">
+                <div>
                   {investments
                     .filter(inv => {
                       const matchesSearch = searchQuery === '' ||
@@ -817,14 +817,14 @@ export default function Investments() {
                       return matchesSearch && matchesType && matchesStatus;
                     })
                     .sort((a, b) => (b.currentValue || 0) - (a.currentValue || 0))
-                    .map(investment => {
+                    .map((investment, idx, arr) => {
                       const currentValue = investment.currentValue || (investment.currentPrice || investment.purchasePrice) * investment.quantity;
                       const invested = investment.purchasePrice * investment.quantity;
                       const gainLoss = currentValue - invested;
                       const returnPct = (gainLoss / invested) * 100;
 
                       return (
-                        <div key={investment.id} className="p-4 hover:bg-muted/50 transition-colors">
+                        <div key={investment.id} className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}>
                           <div className="flex flex-col gap-3">
                             {/* Top row: Info and Value */}
                             <div className="flex items-start justify-between gap-2">
@@ -900,12 +900,12 @@ export default function Investments() {
               </Button>
             </div>
             
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
               <CardHeader>
                 <CardTitle>Your Goals</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-border">
+                <div>
                   {investmentGoals && investmentGoals.length > 0 ? (
                     investmentGoals
                       .sort((a, b) => {
@@ -916,8 +916,8 @@ export default function Investments() {
                         const dateB = b.targetDate instanceof Date ? b.targetDate : new Date(b.targetDate);
                         return dateA.getTime() - dateB.getTime();
                       })
-                      .map(goal => (
-                        <div key={goal.id} className="p-4 hover:bg-muted/50 transition-colors">
+                      .map((goal, idx, arr) => (
+                        <div key={goal.id} className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}>
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
                               {goal.isAchieved ? (
@@ -987,7 +987,7 @@ export default function Investments() {
             </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
+              <Card className="rounded-2xl shadow-sm border-border/50">
                 <CardHeader>
                   <CardTitle>Goal Statistics</CardTitle>
                 </CardHeader>
@@ -1008,7 +1008,7 @@ export default function Investments() {
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
+              <Card className="rounded-2xl shadow-sm border-border/50">
                 <CardHeader>
                   <CardTitle>Portfolio Performance</CardTitle>
                 </CardHeader>
