@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +48,8 @@ export default function SignupPage() {
 
   // Stage 1 fields — account identity + security
   const [email, setEmail] = useState('');
+  const [inviteId, setInviteId] = useState('');
+  const [inviteMode, setInviteMode] = useState(false);
   const [name, setName] = useState('');
   const [country, setCountry] = useState('IN');
   const [phoneCode, setPhoneCode] = useState('+91');
@@ -69,6 +71,22 @@ export default function SignupPage() {
   const [emailSent, setEmailSent] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inv = params.get('invite');
+    const invEmail = params.get('email');
+    if (inv) {
+      setInviteId(inv);
+      setInviteMode(true);
+      localStorage.setItem('pending_family_invite_id', inv);
+      if (invEmail) {
+        const decoded = decodeURIComponent(invEmail);
+        setEmail(decoded);
+        localStorage.setItem('pending_family_invite_email', decoded);
+      }
+    }
+  }, []);
 
   const handleCountryChange = (code: string) => {
     setCountry(code);
@@ -225,9 +243,16 @@ export default function SignupPage() {
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold tracking-tight mb-2">Create your account</h1>
-            <p className="text-muted-foreground">Step 1 of 2 — Your account details. No credit card required.</p>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">{inviteMode ? 'Accept your family invite' : 'Create your account'}</h1>
+            <p className="text-muted-foreground">{inviteMode ? 'Create a free account to join your family plan. No credit card required.' : 'Step 1 of 2 — Your account details. No credit card required.'}</p>
           </div>
+
+          {inviteMode && (
+            <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-3 mb-2 flex items-start gap-3">
+              <Users className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-indigo-700 dark:text-indigo-300">You've been invited to join a family plan. Sign up below — your account will be upgraded automatically.</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
@@ -249,10 +274,11 @@ export default function SignupPage() {
                   type="email"
                   placeholder="you@example.com"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="pl-10"
+                  onChange={e => !inviteMode && setEmail(e.target.value)}
+                  className={`pl-10 ${inviteMode ? 'bg-muted text-muted-foreground' : ''}`}
                   required
                   autoComplete="email"
+                  readOnly={inviteMode}
                 />
               </div>
             </div>
@@ -393,13 +419,13 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Plan Selection */}
-            <div>
+            {/* Plan Selection — hidden in invite mode (plan set server-side on acceptance) */}
+            {!inviteMode && <div>
               <Label className="text-sm font-medium mb-2 block">
                 Choose your plan <span className="text-destructive">*</span>
               </Label>
               <div className="grid grid-cols-2 gap-2">
-                {PLANS.map(plan => {
+                {PLANS.filter(p => p.id !== 'pro_family_member').map(plan => {
                   const style = PLAN_CARD_STYLE[plan.id];
                   const Icon = style.icon;
                   const selected = selectedPlan === plan.id;
@@ -434,7 +460,7 @@ export default function SignupPage() {
                   After vault creation you'll be taken to manage your {selectedPlan} subscription.
                 </p>
               )}
-            </div>
+            </div>}
 
             {/* Divider: Account Security */}
             <div className="border-t border-border/60 pt-4">

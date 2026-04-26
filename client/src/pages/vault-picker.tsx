@@ -15,7 +15,7 @@ import { isNativeApp } from '@/native/platform';
 import { listCloudVaults, downloadCloudVault, pushCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
-import { usePlanFeatures } from '@/hooks/use-plan-features';
+import { usePlanFeatures, clearPlanCache } from '@/hooks/use-plan-features';
 
 function resetViewportZoom() {
   setTimeout(() => {
@@ -136,6 +136,26 @@ export default function VaultPickerPage() {
     };
     loadCloudVaults();
   }, [accountEmail]); // re-run when email is set (e.g. after initializeAuth completes)
+
+  // Consume pending family invite (set by signup page when invite link was clicked)
+  useEffect(() => {
+    if (!accountEmail) return;
+    const inviteId = localStorage.getItem('pending_family_invite_id');
+    const inviteEmail = localStorage.getItem('pending_family_invite_email');
+    if (!inviteId) return;
+    localStorage.removeItem('pending_family_invite_id');
+    localStorage.removeItem('pending_family_invite_email');
+    fetch(`/api/crm/family-invites/${encodeURIComponent(inviteId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted', inviteeEmail: (inviteEmail || accountEmail).toLowerCase() }),
+    }).then(r => r.json()).then(d => {
+      if (d.success) {
+        clearPlanCache();
+        toast({ title: 'Family plan activated!', description: 'You now have access to IronVault Pro features.' });
+      }
+    }).catch(() => {});
+  }, [accountEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUnlock = async (vaultId: string, vaultName: string) => {
     const pw = passwords[vaultId] || '';
