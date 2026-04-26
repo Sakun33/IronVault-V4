@@ -19,9 +19,15 @@ self.addEventListener('install', (event) => {
   // Skip waiting immediately so the new SW takes over as fast as possible.
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(['/offline.html', '/manifest.json'])
-    ).catch(() => {})
+    // Purge ALL caches not belonging to this version before caching new shell.
+    // This prevents stale hashed-asset bundles from being served after redeploy.
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => !KNOWN_CACHES.includes(k)).map((k) => caches.delete(k)))
+    ).then(() =>
+      caches.open(CACHE_VERSION).then((cache) =>
+        cache.addAll(['/offline.html', '/manifest.json']).catch(() => {})
+      )
+    )
   );
 });
 

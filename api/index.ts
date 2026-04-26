@@ -179,6 +179,10 @@ function vaultReadyEmail(vaultName: string) {
   const body = `${_eh1('Your vault is ready 🔒')}${_ep(`<strong style="color:#111827">${vaultName || 'Your vault'}</strong> has been created and encrypted with your master password.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you can store</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Passwords &amp; login credentials</li><li>Secure notes &amp; documents</li><li>Financial data &amp; subscriptions</li><li>Reminders &amp; goals</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Keep your master password safe — it cannot be recovered.</p>`;
   return { subject: 'Your IronVault vault is ready! 🔒', html: _emailLayout(body) };
 }
+function familyInviteEmail(ownerEmail: string) {
+  const body = `${_eh1('You\'ve been invited to IronVault Family!')}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to join their IronVault Family plan — giving you full access to all premium features at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Unlimited passwords, notes &amp; documents</li><li>Cloud sync across all your devices</li><li>Expense tracking &amp; bank statement import</li><li>Investment portfolio tracking</li></ul>`)}${_ebtn(_APP_URL,'Accept Invite')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in (or create a free account) at ironvault.app to accept. If you didn't expect this, you can safely ignore this email.</p>`;
+  return { subject: `${ownerEmail} invited you to IronVault Family 🛡`, html: _emailLayout(body) };
+}
 // ── End email service ──────────────────────────────────────────────────────────
 
 let pool: Pool | null = null;
@@ -1022,6 +1026,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          RETURNING *`,
         [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(), vaultShareId || null]
       );
+      sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail) }).catch(() => {});
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });

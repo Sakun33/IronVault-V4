@@ -259,6 +259,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Nuke stale SW caches before app boots — removes any ironvault cache not matching current version -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        caches.keys().then(function(names) {
+          names.filter(function(n) { return n.indexOf('v3.1') === -1; })
+               .forEach(function(n) { caches.delete(n); });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Razorpay Checkout -->

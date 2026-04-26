@@ -294,7 +294,7 @@ export default function Expenses() {
   };
 
   const handleAddExpense = async () => {
-    if (!formData.title.trim() || !formData.amount || !formData.category) {
+    if (!(formData.title || '').trim() || !formData.amount || !formData.category) {
       toast({
         title: "Error",
         description: "Title, amount, and category are required",
@@ -314,7 +314,7 @@ export default function Expenses() {
     }
 
     const newExpense = {
-      title: formData.title.trim(),
+      title: (formData.title || '').trim(),
       amount,
       currency: formData.currency,
       category: formData.category,
@@ -364,7 +364,7 @@ export default function Expenses() {
   const handleEditExpense = (expense: ExpenseEntry) => {
     setEditingExpense(expense);
     setFormData({
-      title: expense.title,
+      title: expense.title || '',
       amount: expense.amount.toString(),
       currency: expense.currency || currency,
       category: expense.category,
@@ -378,7 +378,7 @@ export default function Expenses() {
   };
 
   const handleUpdateExpense = async () => {
-    if (!editingExpense || !formData.title.trim() || !formData.amount || !formData.category) {
+    if (!editingExpense || !(formData.title || '').trim() || !formData.amount || !formData.category) {
       toast({
         title: "Error", 
         description: "Title, amount, and category are required",
@@ -399,7 +399,7 @@ export default function Expenses() {
 
     try {
       await updateExpense(editingExpense.id, {
-        title: formData.title.trim(),
+        title: (formData.title || '').trim(),
         amount,
         currency: formData.currency,
         category: formData.category,
