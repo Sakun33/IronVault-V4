@@ -137,14 +137,26 @@ export default function VaultPickerPage() {
     loadCloudVaults();
   }, [accountEmail]); // re-run when email is set (e.g. after initializeAuth completes)
 
-  // Consume pending family invite (set by signup page when invite link was clicked)
+  // Consume pending family invite — checks both URL params and localStorage.
+  // URL params are present when the user is already logged in and clicks the invite link
+  // (routed to VaultPickerPage by Tier 2). localStorage is set by SignupPage for new users.
   useEffect(() => {
     if (!accountEmail) return;
-    const inviteId = localStorage.getItem('pending_family_invite_id');
-    const inviteEmail = localStorage.getItem('pending_family_invite_email');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlInviteId = urlParams.get('invite');
+    const urlInviteEmail = urlParams.get('email');
+    const storedInviteId = localStorage.getItem('pending_family_invite_id');
+    const storedInviteEmail = localStorage.getItem('pending_family_invite_email');
+    const inviteId = urlInviteId || storedInviteId;
+    const inviteEmail = urlInviteEmail ? decodeURIComponent(urlInviteEmail) : storedInviteEmail;
     if (!inviteId) return;
     localStorage.removeItem('pending_family_invite_id');
     localStorage.removeItem('pending_family_invite_email');
+    // Clean invite params from URL without triggering a page reload
+    if (urlInviteId) {
+      const clean = window.location.pathname;
+      window.history.replaceState({}, '', clean);
+    }
     fetch(`/api/crm/family-invites/${encodeURIComponent(inviteId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
