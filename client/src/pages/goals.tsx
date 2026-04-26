@@ -1117,7 +1117,7 @@ export default function Goals() {
                       {format(goalForm.targetDate, 'PPP')}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[200]" align="center" sideOffset={4}>
+                  <PopoverContent className="w-auto p-0 z-[200]" align="start" side="bottom" sideOffset={4} avoidCollisions={true}>
                     <Calendar
                       mode="single"
                       selected={goalForm.targetDate}

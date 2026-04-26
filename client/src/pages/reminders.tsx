@@ -199,19 +199,28 @@ export default function Reminders() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
+      if (!formData.dueDate) {
+        toast({ title: 'Date required', description: 'Please select a due date.', variant: 'destructive' });
+        return;
+      }
+      const parsedDue = new Date(formData.dueDate + (formData.dueTime ? `T${formData.dueTime}` : 'T09:00'));
+      if (isNaN(parsedDue.getTime())) {
+        toast({ title: 'Invalid date', description: 'Please enter a valid due date.', variant: 'destructive' });
+        return;
+      }
       const reminderData = {
         title: formData.title,
         description: formData.description || undefined,
-        dueDate: new Date(formData.dueDate + (formData.dueTime ? `T${formData.dueTime}` : 'T09:00')),
+        dueDate: parsedDue,
         dueTime: formData.dueTime || undefined,
         priority: formData.priority,
         category: formData.category,
         isCompleted: formData.isCompleted,
         isRecurring: formData.isRecurring,
         recurringFrequency: formData.isRecurring ? formData.recurringFrequency : undefined,
-        nextReminderDate: formData.isRecurring ? calculateNextReminderDate(new Date(formData.dueDate), formData.recurringFrequency) : undefined,
+        nextReminderDate: formData.isRecurring ? calculateNextReminderDate(parsedDue, formData.recurringFrequency) : undefined,
         tags: formData.tags,
         color: formData.color,
         notificationEnabled: formData.notificationEnabled,
@@ -264,9 +273,10 @@ export default function Reminders() {
       setShowAddModal(false);
       setEditingReminder(null);
     } catch (error) {
+      console.error('[Reminders] handleSubmit error:', error);
       toast({
-        title: "Error",
-        description: "Failed to save reminder. Please try again.",
+        title: "Error saving reminder",
+        description: error instanceof Error ? error.message : "Failed to save reminder. Please try again.",
         variant: "destructive",
       });
     }

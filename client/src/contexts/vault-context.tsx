@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal } from '@shared/schema';
 import { vaultStorage } from '@/lib/storage';
 import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
@@ -120,6 +121,9 @@ const VaultContext = createContext<VaultContextType | undefined>(undefined);
 export function VaultProvider({ children }: { children: React.ReactNode }) {
   const { isUnlocked, masterPassword } = useAuth();
   const { addLog } = useLogging();
+  const { toast } = useToast();
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [subscriptions, setSubscriptions] = useState<SubscriptionEntry[]>([]);
   const [notes, setNotes] = useState<NoteEntry[]>([]);
@@ -220,7 +224,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   // Bypasses the event system — directly exports and PUTs the encrypted blob.
   const pushToCloud = () => {
     const token = localStorage.getItem('iv_cloud_token');
-    if (!token || !masterPassword) return;
+    if (!token) {
+      console.error('[CLOUD-PUSH] NO TOKEN — push skipped! iv_cloud_token not in localStorage');
+      return;
+    }
+    if (!masterPassword) {
+      console.error('[CLOUD-PUSH] No master password — push skipped');
+      return;
+    }
     const mp = masterPassword;
     (async () => {
       try {
@@ -250,9 +261,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         } else {
           ok = res.ok;
         }
-        if (ok) localStorage.removeItem(`iv_dirty_${vaultId}`);
+        if (ok) {
+          localStorage.removeItem(`iv_dirty_${vaultId}`);
+          toastRef.current({ title: '☁️ Synced', description: 'Vault saved to cloud', duration: 2000 });
+        } else {
+          console.error('[CLOUD-PUSH] Server returned not-ok:', res.status);
+          toastRef.current({ title: '⚠️ Cloud sync failed', description: `Server error ${res.status}`, variant: 'destructive', duration: 3000 });
+        }
       } catch (e) {
         console.error('[CLOUD-PUSH]', e);
+        toastRef.current({ title: '⚠️ Cloud sync error', description: String(e), variant: 'destructive', duration: 3000 });
       }
     })();
   };
