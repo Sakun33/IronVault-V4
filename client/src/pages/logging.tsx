@@ -168,7 +168,7 @@ export default function Logging() {
       </div>
 
       {/* Log entries */}
-      <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-2xl shadow-sm border border-border/50 bg-card/80 backdrop-blur-sm overflow-hidden">
         {filteredLogs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Clock className="w-12 h-12 text-muted-foreground/30 mb-3" />
@@ -177,13 +177,13 @@ export default function Logging() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border/40">
+          <div>
             {filteredLogs.map((log, index) => {
               const Icon = getCategoryIcon(log.category);
               const bgColor = getCategoryBg(log.category);
               const isLoginEvent = log.category === 'security' || /login|unlock|auth/i.test(log.action);
               return (
-                <div key={log.id || index} className="flex items-start gap-4 p-4 hover:bg-muted/20 transition-colors">
+                <div key={log.id || index} className={`flex items-start gap-4 p-4 hover:bg-muted/50 active:bg-muted transition-colors ${index < filteredLogs.length - 1 ? 'border-b border-border/50' : ''}`}>
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${bgColor}`}>
                     <Icon className="w-4 h-4" />
                   </div>

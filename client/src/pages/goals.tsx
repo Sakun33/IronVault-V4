@@ -804,7 +804,7 @@ export default function Goals() {
       </div>
 
       {/* Search and Filters */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Filter className="w-4 h-4" />
@@ -865,12 +865,14 @@ export default function Goals() {
 
       {/* Goals Grid */}
       {filteredGoals.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Target className="w-12 h-12 text-muted-foreground mb-4" />
+        <Card className="rounded-2xl shadow-sm border-0 bg-card">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <Target className="w-8 h-8 text-muted-foreground" />
+            </div>
             <h3 className="text-lg font-medium mb-2">No Goals Found</h3>
             <p className="text-muted-foreground text-center mb-4">
-              {investmentGoals.length === 0 
+              {investmentGoals.length === 0
                 ? "Get started by creating your first investment goal"
                 : "Try adjusting your search or filter criteria"
               }
@@ -1115,11 +1117,17 @@ export default function Goals() {
                       {format(goalForm.targetDate, 'PPP')}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className="w-auto p-0 z-[200]" align="center" sideOffset={4}>
                     <Calendar
                       mode="single"
                       selected={goalForm.targetDate}
-                      onSelect={(date) => date && setGoalForm(prev => ({ ...prev, targetDate: date }))}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        setGoalForm(prev => ({ ...prev, targetDate: date }));
+                        if (date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                          toast({ title: 'Past date selected', description: 'Goal target dates are typically in the future.' });
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>

@@ -385,7 +385,7 @@ export default function APIKeys() {
       </div>
 
       {/* Search and Filters */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardContent className="p-4 space-y-3">
           <div className="flex gap-3">
             <div className="relative flex-1">
@@ -427,12 +427,14 @@ export default function APIKeys() {
 
       {/* API Keys Grid */}
       {filteredKeys.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Code className="w-12 h-12 text-muted-foreground mb-4" />
+        <Card className="rounded-2xl shadow-sm border-0 bg-card">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <Code className="w-8 h-8 text-muted-foreground" />
+            </div>
             <h3 className="text-lg font-medium mb-2">No API Keys</h3>
             <p className="text-muted-foreground text-center mb-4">
-              {apiKeys.length === 0 
+              {apiKeys.length === 0
                 ? "Get started by adding your first API key"
                 : "No API keys match your search criteria"
               }

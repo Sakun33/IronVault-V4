@@ -68,3 +68,4 @@ reports/
 dependency-check/
 .claude/
 .vercel
+.env*.local

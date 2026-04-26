@@ -213,7 +213,16 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
                       id="purchaseDate"
                       type="date"
                       value={formData.purchaseDate}
-                      onChange={(e) => handleInputChange('purchaseDate', e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        handleInputChange('purchaseDate', val);
+                        if (val) {
+                          const today = new Date().setHours(0, 0, 0, 0);
+                          if (new Date(val).getTime() > today) {
+                            toast({ title: 'Future date selected', description: 'Purchase dates are typically today or earlier.' });
+                          }
+                        }
+                      }}
                       className="pl-10"
                     />
                   </div>

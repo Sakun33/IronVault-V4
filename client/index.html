@@ -264,11 +264,16 @@
     <!-- Razorpay Checkout -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
-    <!-- Push SalesIQ chat widget above the mobile nav bar -->
-    <style>.zsiq_floatmain, #zsiq_float { bottom: 80px !important; }</style>
-
-    <!-- Zoho SalesIQ Live Chat -->
-    <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){}}</script>
+    <!-- Zoho SalesIQ Live Chat — float button hidden; opened programmatically from header chat icon -->
+    <script>
+      window.$zoho = window.$zoho || {};
+      $zoho.salesiq = $zoho.salesiq || { ready: function() {} };
+      var _zsiqReady = $zoho.salesiq.ready;
+      $zoho.salesiq.ready = function() {
+        if (typeof _zsiqReady === 'function') _zsiqReady();
+        $zoho.salesiq.floatbutton.visible('hide');
+      };
+    </script>
     <script id="zsiqscript" src="https://salesiq.zohopublic.in/widget?wc=siq96500008c29a8d574d8099f49d14ee97f68d2c6e7055c66cced6f9de397bf642" defer></script>
     
     <!-- SEO: Crawlable content for search engines that don't fully render JavaScript SPAs -->

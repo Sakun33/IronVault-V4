@@ -783,7 +783,7 @@ export default function Expenses() {
       </div>
 
       {/* Monthly Hero */}
-      <Card className="rounded-2xl overflow-hidden">
+      <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
         <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -825,7 +825,7 @@ export default function Expenses() {
         <TabsContent value="overview" className="space-y-6">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -838,8 +838,8 @@ export default function Expenses() {
                 </div>
               </CardContent>
             </Card>
-            
-            <Card>
+
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -853,7 +853,7 @@ export default function Expenses() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -867,7 +867,7 @@ export default function Expenses() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -998,7 +998,7 @@ export default function Expenses() {
       </Tabs>
 
       {/* Search and Filters */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Filter className="w-4 h-4" />
@@ -1109,9 +1109,11 @@ export default function Expenses() {
 
       {/* Daily-grouped expense list */}
       {sortedExpenses.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Archive className="w-12 h-12 text-muted-foreground mb-4" />
+        <Card className="rounded-2xl shadow-sm border-0 bg-card">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <Archive className="w-8 h-8 text-muted-foreground" />
+            </div>
             <h3 className="text-lg font-medium mb-2">No Expenses Found</h3>
             <p className="text-muted-foreground text-center mb-4">
               {expenses.length === 0

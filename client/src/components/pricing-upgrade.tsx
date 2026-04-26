@@ -23,16 +23,11 @@ declare global { interface Window { Razorpay: any; } }
 function loadRazorpay(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof window.Razorpay !== 'undefined') { resolve(); return; }
-    const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('load failed')));
-      return;
-    }
+    const timeout = setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
     const s = document.createElement('script');
     s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('load failed'));
+    s.onload = () => { clearTimeout(timeout); resolve(); };
+    s.onerror = () => { clearTimeout(timeout); reject(new Error('Razorpay failed to load')); };
     document.head.appendChild(s);
   });
 }
@@ -328,7 +323,7 @@ export function PricingUpgrade({ isOpen, onClose }: PricingUpgradeProps) {
           {paywallState === 'entitled' && (
             <EntitlementBanner
               mode={hasLifetimeEntitlement ? 'lifetime' : 'pro'}
-              showManageButton={isSubscription}
+              showManageButton={isSubscription && isNative}
               onManage={handleManageSubscription}
             />
           )}

@@ -341,11 +341,16 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto p-0 z-[200]" align="center" sideOffset={4}>
                 <Calendar
                   mode="single"
                   selected={formData.nextBillingDate}
-                  onSelect={(date) => setFormData(prev => ({ ...prev, nextBillingDate: date }))}
+                  onSelect={(date) => {
+                    setFormData(prev => ({ ...prev, nextBillingDate: date }));
+                    if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                      toast({ title: 'Past date selected', description: 'Next billing dates are typically in the future.' });
+                    }
+                  }}
                   initialFocus
                 />
               </PopoverContent>
@@ -524,11 +529,16 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
                     {formData.expiryDate ? format(formData.expiryDate, "PPP") : "Select expiry date"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-[200]" align="center" sideOffset={4}>
                   <Calendar
                     mode="single"
                     selected={formData.expiryDate}
-                    onSelect={(date) => setFormData(prev => ({ ...prev, expiryDate: date }))}
+                    onSelect={(date) => {
+                      setFormData(prev => ({ ...prev, expiryDate: date }));
+                      if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                        toast({ title: 'Past date selected', description: 'Expiry dates are typically in the future.' });
+                      }
+                    }}
                     initialFocus
                   />
                 </PopoverContent>

@@ -849,7 +849,7 @@ export default function Documents() {
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" />
@@ -860,8 +860,8 @@ export default function Documents() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Folder className="w-5 h-5 text-primary" />
@@ -872,8 +872,8 @@ export default function Documents() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <HardDrive className="w-5 h-5 text-primary" />
@@ -884,8 +884,8 @@ export default function Documents() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Star className="w-5 h-5 text-yellow-600" />
@@ -929,7 +929,7 @@ export default function Documents() {
       )}
       
       {/* Navigation */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <Button
@@ -991,7 +991,7 @@ export default function Documents() {
       
       {/* Folders */}
       {filteredFolders.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FolderOpen className="w-5 h-5" />
@@ -1024,7 +1024,7 @@ export default function Documents() {
       )}
       
       {/* Documents */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />

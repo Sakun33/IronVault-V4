@@ -5,9 +5,11 @@ import { InfoLayout } from '@/components/info-layout';
 import { Check, X, Shield, Crown, Rocket } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { useMemo } from 'react';
+import { useLocation } from 'wouter';
 
 export default function PricingPage() {
   const { currency, setCurrency, currencies, convertCurrency } = useCurrency();
+  const [, setLocation] = useLocation();
 
   // Base prices in INR (as requested)
   const basePricesINR = {
@@ -246,9 +248,14 @@ export default function PricingPage() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <Button 
+                  <Button
                     className={`w-full mb-6 ${colors.button} text-primary-foreground`}
                     size="lg"
+                    onClick={() => {
+                      if (plan.name === "Pro") setLocation('/upgrade');
+                      else if (plan.name === "Enterprise") window.location.href = 'mailto:support@ironvault.app';
+                      else setLocation('/auth/signup');
+                    }}
                   >
                     {plan.name === "Enterprise" ? "Contact Sales" : plan.name === "Pro" ? "Upgrade to Pro" : "Get Started Free"}
                   </Button>

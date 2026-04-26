@@ -20,16 +20,11 @@ const RAZORPAY_PLAN_CODES: Partial<Record<PlanId, string>> = {
 function loadRazorpay(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof window.Razorpay !== 'undefined') { resolve(); return; }
-    const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Razorpay failed to load')));
-      return;
-    }
+    const timeout = setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Razorpay failed to load'));
+    script.onload = () => { clearTimeout(timeout); resolve(); };
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Razorpay failed to load')); };
     document.head.appendChild(script);
   });
 }

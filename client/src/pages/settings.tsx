@@ -290,7 +290,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Theme */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Palette className="w-5 h-5" />
@@ -327,7 +327,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Privacy & Analytics */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5" />
@@ -404,7 +404,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Support & Feedback */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <LifeBuoy className="w-5 h-5" />
@@ -442,7 +442,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Vault Backup */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
@@ -477,7 +477,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Data Management */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="w-5 h-5" />
@@ -541,7 +541,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Advanced Settings */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
@@ -602,7 +602,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Security Information */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />

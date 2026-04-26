@@ -587,7 +587,16 @@ export default function Reminders() {
                     id="dueDate"
                     type="date"
                     value={formData.dueDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData(prev => ({ ...prev, dueDate: val }));
+                      if (val) {
+                        const today = new Date().setHours(0, 0, 0, 0);
+                        if (new Date(val).getTime() < today) {
+                          toast({ title: 'Past date selected', description: 'This reminder will be immediately overdue.' });
+                        }
+                      }
+                    }}
                     required
                     data-testid="input-due-date"
                   />
@@ -875,7 +884,7 @@ export default function Reminders() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card data-testid="card-stat-total">
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-total">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <CalendarDays className="h-4 w-4 text-primary" />
@@ -886,8 +895,8 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card data-testid="card-stat-completed">
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-completed">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -898,8 +907,8 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card data-testid="card-stat-overdue">
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-overdue">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <AlertCircle className="h-4 w-4 text-destructive" />
@@ -910,8 +919,8 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card data-testid="card-stat-today">
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-today">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4 text-orange-600" />
@@ -922,8 +931,8 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card data-testid="card-stat-tomorrow">
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-tomorrow">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <ChevronRight className="h-4 w-4 text-primary" />
@@ -934,8 +943,8 @@ export default function Reminders() {
             </div>
           </CardContent>
         </Card>
-        
-        <Card data-testid="card-stat-week">
+
+        <Card className="rounded-2xl shadow-sm border-border/50 bg-card hover:shadow-md transition-all duration-200" data-testid="card-stat-week">
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-primary" />
@@ -982,7 +991,7 @@ export default function Reminders() {
       </div>
 
       {/* Filters and Search */}
-      <Card>
+      <Card className="rounded-2xl shadow-sm border-0 bg-card">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
@@ -1118,12 +1127,14 @@ export default function Reminders() {
 
       {/* Reminders Display */}
       {sortedReminders.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <CalendarDays className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <Card className="rounded-2xl shadow-sm border-0 bg-card">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <CalendarDays className="h-8 w-8 text-muted-foreground" />
+            </div>
             <h3 className="text-lg font-medium text-foreground mb-2">No reminders found</h3>
             <p className="text-muted-foreground mb-4">
-              {reminders.length === 0 
+              {reminders.length === 0
                 ? "Get started by creating your first reminder."
                 : "Try adjusting your filters to see more reminders."
               }
