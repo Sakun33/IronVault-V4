@@ -1,11 +1,12 @@
-// IronVault PWA Service Worker v3.0.0
+// IronVault PWA Service Worker v3.1.0
 // Key design: Network First for HTML/navigation (so deploys update immediately),
 // Cache First only for hashed /assets/ files (which are immutable by content hash).
-const CACHE_VERSION = 'ironvault-v3.0.0';
-const ASSETS_CACHE  = 'ironvault-assets-v3.0.0';
-const DYNAMIC_CACHE = 'ironvault-dynamic-v3.0.0';
+const CACHE_VERSION = 'ironvault-v3.1.0';
+const ASSETS_CACHE  = 'ironvault-assets-v3.1.0';
+const DYNAMIC_CACHE = 'ironvault-dynamic-v3.1.0';
 
 const KNOWN_CACHES = [CACHE_VERSION, ASSETS_CACHE, DYNAMIC_CACHE];
+// v3.1.0: force cache bust — evicts v3.0.0 caches that may hold stale hashed assets
 
 // Never cache — sensitive API endpoints
 const NETWORK_ONLY = [
