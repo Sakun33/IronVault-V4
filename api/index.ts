@@ -179,8 +179,10 @@ function vaultReadyEmail(vaultName: string) {
   const body = `${_eh1('Your vault is ready 🔒')}${_ep(`<strong style="color:#111827">${vaultName || 'Your vault'}</strong> has been created and encrypted with your master password.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you can store</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Passwords &amp; login credentials</li><li>Secure notes &amp; documents</li><li>Financial data &amp; subscriptions</li><li>Reminders &amp; goals</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Keep your master password safe — it cannot be recovered.</p>`;
   return { subject: 'Your IronVault vault is ready! 🔒', html: _emailLayout(body) };
 }
-function familyInviteEmail(ownerEmail: string) {
-  const body = `${_eh1('You\'ve been invited to IronVault Family!')}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to join their IronVault Family plan — giving you full access to all premium features at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Unlimited passwords, notes &amp; documents</li><li>Cloud sync across all your devices</li><li>Expense tracking &amp; bank statement import</li><li>Investment portfolio tracking</li></ul>`)}${_ebtn(_APP_URL,'Accept Invite')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in (or create a free account) at ironvault.app to accept. If you didn't expect this, you can safely ignore this email.</p>`;
+function familyInviteEmail(ownerEmail: string, inviteId: string, inviteeEmail: string) {
+  const ownerHandle = ownerEmail.split('@')[0];
+  const inviteLink = `${_APP_URL}/auth/signup?invite=${encodeURIComponent(inviteId)}&email=${encodeURIComponent(inviteeEmail)}`;
+  const body = `${_eh1(`Join ${ownerHandle}'s IronVault Family!`)}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to their IronVault Family plan — you get full premium access at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>1 cloud vault + 1 local vault (your own, private)</li><li>Cloud sync across all your devices</li><li>Unlimited passwords, notes &amp; documents</li><li>Expense tracking &amp; bank statement import</li></ul>`)}${_ebtn(inviteLink,`Join ${ownerHandle}'s Family Plan`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in or create a free IronVault account to accept. If you didn't expect this, you can safely ignore this email.</p>`;
   return { subject: `${ownerEmail} invited you to IronVault Family 🛡`, html: _emailLayout(body) };
 }
 // ── End email service ──────────────────────────────────────────────────────────
@@ -1026,7 +1028,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          RETURNING *`,
         [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(), vaultShareId || null]
       );
-      const emailSent = await sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail) });
+      const emailSent = await sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail, rows[0].id, inviteeEmail.toLowerCase()) });
       console.log('[invite-email]', emailSent ? 'SENT' : 'FAILED', '→', inviteeEmail.toLowerCase());
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
@@ -1050,6 +1052,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [status, id]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Invite not found' });
+      // When accepted: promote invitee to pro_family_member plan (1 cloud + 1 local vault)
+      if (status === 'accepted' && rows[0].invitee_email) {
+        await db.query(
+          `UPDATE customers SET plan_type = 'pro_family_member', updated_at = NOW()
+           WHERE email = $1`,
+          [rows[0].invitee_email]
+        ).catch(e => console.error('[invite-accept] plan update failed:', e.message));
+      }
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -1063,7 +1073,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!email) return res.status(400).json({ error: 'email required' });
     const count = Number(vaultCount) || 0;
     // Determine plan limit
-    const planLimits: Record<string, number> = { free: 1, pro: 5, family: 5, lifetime: 5 };
+    const planLimits: Record<string, number> = { free: 1, pro: 5, family: 5, lifetime: 5, pro_family_member: 1 };
     const resolvedPlanId = (planId as string) || 'free';
     const limit = planLimits[resolvedPlanId] ?? 1;
     const flagged = count > limit;

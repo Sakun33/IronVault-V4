@@ -100,6 +100,8 @@ function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refres
       return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: true, localVaultLimit: plan.localVaultLimit };
     case 'lifetime':
       return { plan, planId, ...PAID_FEATURES, isLifetime: true, localVaultLimit: plan.localVaultLimit };
+    case 'pro_family_member':
+      return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: false, localVaultLimit: 1 };
     default:
       return { plan, planId, ...FREE_FEATURES };
   }
@@ -136,8 +138,8 @@ export function usePlanFeatures(): PlanFeatures {
       if (resp.ok) {
         const data = await resp.json();
         const serverPlan = (data.plan as PlanId) ?? 'free';
-        const validPlan: PlanId = ['free', 'pro', 'family', 'lifetime'].includes(serverPlan)
-          ? serverPlan
+        const validPlan: PlanId = ['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(serverPlan)
+          ? serverPlan as PlanId
           : 'free';
         setPlanId(validPlan);
         savePlanCache(email, validPlan);

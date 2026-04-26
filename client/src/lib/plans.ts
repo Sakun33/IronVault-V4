@@ -11,7 +11,7 @@
  *   4. Lifetime     (single user, one-time)
  */
 
-export type PlanId = 'free' | 'pro' | 'family' | 'lifetime';
+export type PlanId = 'free' | 'pro' | 'family' | 'lifetime' | 'pro_family_member';
 
 export interface Plan {
   /** Machine-readable id — matches the license `tier` field */
@@ -132,6 +132,31 @@ export const PLANS: Plan[] = [
       'All future updates',
       'Early access to new features',
       'Premium support',
+    ],
+  },
+  {
+    id: 'pro_family_member',
+    name: 'Family Member',
+    description: 'Invited to a Pro Family plan.',
+    priceMonthly: null,
+    priceYearly: null,
+    priceOneTime: null,
+    seats: 1,
+    localVaultLimit: 1,
+    available: false,
+    badge: null,
+    features: [
+      'Web app + Mobile app',
+      '1 cloud vault',
+      '1 local vault',
+      'Unlimited passwords',
+      'Unlimited subscriptions',
+      'Unlimited notes & reminders',
+      'Unlimited documents',
+      'Bank statement import (OCR)',
+      'Expense tracking & analytics',
+      'Biometric authentication',
+      'Cloud sync',
     ],
   },
 ];
