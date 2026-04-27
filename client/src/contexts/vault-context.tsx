@@ -66,15 +66,19 @@ interface VaultContextType {
   addPassword: (password: Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updatePassword: (id: string, updates: Partial<PasswordEntry>) => Promise<void>;
   deletePassword: (id: string) => Promise<void>;
+  bulkDeletePasswords: (ids: string[]) => Promise<number>;
   addSubscription: (subscription: Omit<SubscriptionEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateSubscription: (id: string, updates: Partial<SubscriptionEntry>) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
+  bulkDeleteSubscriptions: (ids: string[]) => Promise<number>;
   addNote: (note: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateNote: (id: string, updates: Partial<NoteEntry>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
+  bulkDeleteNotes: (ids: string[]) => Promise<number>;
   addExpense: (expense: Omit<ExpenseEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateExpense: (id: string, updates: Partial<ExpenseEntry>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  bulkDeleteExpenses: (ids: string[]) => Promise<number>;
   addReminder: (reminder: Omit<ReminderEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateReminder: (id: string, updates: Partial<ReminderEntry>) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
@@ -525,6 +529,54 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
+  // Bulk delete helpers — batch storage deletes, single state update, single cloud push.
+  // Returns the number actually removed (storage deletes that did not throw).
+  const bulkDeletePasswords = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const targets = passwords.filter(p => idSet.has(p.id));
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deletePassword(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setPasswords(prev => prev.filter(p => !idSet.has(p.id)));
+    if (targets.length > 0) {
+      addLog('Bulk Delete Passwords', 'password', `Deleted ${ok} password${ok === 1 ? '' : 's'}`);
+    }
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteSubscriptions = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteSubscription(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setSubscriptions(prev => prev.filter(s => !idSet.has(s.id)));
+    addLog('Bulk Delete Subscriptions', 'subscription', `Deleted ${ok} subscription${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteNotes = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteNote(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setNotes(prev => prev.filter(n => !idSet.has(n.id)));
+    addLog('Bulk Delete Notes', 'note', `Deleted ${ok} note${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteExpenses = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteExpense(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setExpenses(prev => prev.filter(e => !idSet.has(e.id)));
+    pushToCloud();
+    return ok;
+  };
+
   const addReminder = async (reminderData: Omit<ReminderEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
     const reminder: ReminderEntry = {
       ...reminderData,
@@ -948,15 +1000,19 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addPassword,
     updatePassword,
     deletePassword,
+    bulkDeletePasswords,
     addSubscription,
     updateSubscription,
     deleteSubscription,
+    bulkDeleteSubscriptions,
     addNote,
     updateNote,
     deleteNote,
+    bulkDeleteNotes,
     addExpense,
     updateExpense,
     deleteExpense,
+    bulkDeleteExpenses,
     addReminder,
     updateReminder,
     deleteReminder,

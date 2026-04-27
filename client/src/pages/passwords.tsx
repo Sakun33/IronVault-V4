@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight, CheckSquare } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
@@ -15,10 +15,12 @@ import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { GuidedImportButton } from '@/components/guided-import';
+import { useMultiSelect } from '@/hooks/use-multi-select';
+import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Passwords() {
-  const { passwords, deletePassword, searchQuery, setSearchQuery } = useVault();
+  const { passwords, deletePassword, bulkDeletePasswords, searchQuery, setSearchQuery } = useVault();
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
 
@@ -35,6 +37,7 @@ export default function Passwords() {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [detailPassword, setDetailPassword] = useState<any>(null);
+  // Multi-select state populated below once filteredPasswords is known.
 
   const PASSWORD_TEMPLATES = [
     { id: 'gmail', name: 'Gmail', icon: Mail, category: 'Email', fields: { name: 'Gmail', username: '', url: 'https://mail.google.com' } },
@@ -112,6 +115,20 @@ export default function Passwords() {
     });
   }, [passwords, searchQuery, categoryFilter, strengthFilter]);
 
+  const selection = useMultiSelect(filteredPasswords);
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selection.selectedIds);
+    if (ids.length === 0) return;
+    const removed = await bulkDeletePasswords(ids);
+    selection.exitSelectionMode();
+    toast({
+      title: removed === ids.length ? 'Passwords deleted' : 'Some passwords could not be deleted',
+      description: `${removed} of ${ids.length} removed.`,
+      variant: removed === ids.length ? 'default' : 'destructive',
+    });
+  };
+
   const copyToClipboard = async (text: string, key: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -181,6 +198,18 @@ export default function Passwords() {
               <LayoutTemplate className="w-4 h-4 mr-1" />
               Templates
             </Button>
+            {filteredPasswords.length > 0 && !selection.isSelectionMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selection.enterSelectionMode()}
+                className="rounded-xl"
+                data-testid="button-enter-selection-passwords"
+              >
+                <CheckSquare className="w-4 h-4 mr-1" />
+                Select
+              </Button>
+            )}
             <Button
               onClick={() => {
                 if (!isPro && passwords.length >= getLimit('passwords')) {
@@ -241,25 +270,37 @@ export default function Passwords() {
 
         {/* Password List */}
         {filteredPasswords.length > 0 ? (
-          <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
-            {filteredPasswords.map((password, idx) => (
-              <button
-                key={password.id}
-                data-testid={`password-row-${password.id}`}
-                onClick={() => openDetail(password)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''}`}
-              >
-                <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
-                  <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                    <Lock size={11} className="flex-shrink-0" />
-                    <span className="truncate">{password.username}</span>
+          <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+            {filteredPasswords.map((password, idx) => {
+              const checked = selection.isSelected(password.id);
+              return (
+                <button
+                  key={password.id}
+                  data-testid={`password-row-${password.id}`}
+                  onClick={() => {
+                    if (selection.isSelectionMode) selection.toggle(password.id);
+                    else openDetail(password);
+                  }}
+                  onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
+                >
+                  {selection.isSelectionMode && (
+                    <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
+                  )}
+                  <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
+                    <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                      <Lock size={11} className="flex-shrink-0" />
+                      <span className="truncate">{password.username}</span>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
-              </button>
-            ))}
+                  {!selection.isSelectionMode && (
+                    <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
           </Card>
         ) : (
           <Card className="rounded-2xl shadow-sm border-0 bg-card">
@@ -483,6 +524,19 @@ export default function Passwords() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {selection.isSelectionMode && (
+        <SelectionBar
+          selectedCount={selection.selectedCount}
+          totalCount={filteredPasswords.length}
+          allSelected={selection.allSelected}
+          itemLabel="password"
+          onSelectAll={selection.selectAll}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDelete}
+        />
+      )}
     </div>
   );
 }

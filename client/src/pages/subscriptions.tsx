@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare } from 'lucide-react';
+import { useMultiSelect } from '@/hooks/use-multi-select';
+import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Favicon } from '@/components/favicon';
@@ -23,7 +25,7 @@ import { format, addDays, differenceInCalendarDays } from 'date-fns';
 export default function Subscriptions() {
   const { isPro, getLimit, isLoading: licenseLoading } = useSubscription();
 
-  const { subscriptions, deleteSubscription, searchQuery, setSearchQuery, stats } = useVault();
+  const { subscriptions, deleteSubscription, bulkDeleteSubscriptions, searchQuery, setSearchQuery, stats } = useVault();
   const { formatCurrency, currency } = useCurrency();
   const { toast } = useToast();
   
@@ -158,6 +160,20 @@ export default function Subscriptions() {
     });
   }, [subscriptions, searchQuery, categoryFilter, statusFilter]);
 
+  const selection = useMultiSelect(filteredSubscriptions);
+
+  const handleBulkDeleteSubscriptions = async () => {
+    const ids = Array.from(selection.selectedIds);
+    if (ids.length === 0) return;
+    const removed = await bulkDeleteSubscriptions(ids);
+    selection.exitSelectionMode();
+    toast({
+      title: removed === ids.length ? 'Subscriptions deleted' : 'Some subscriptions could not be deleted',
+      description: `${removed} of ${ids.length} removed.`,
+      variant: removed === ids.length ? 'default' : 'destructive',
+    });
+  };
+
   const handleDeleteSubscription = (id: string, name: string) => {
     setDeleteSubTarget({ id, name });
   };
@@ -214,6 +230,17 @@ export default function Subscriptions() {
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl hidden sm:flex">
               <LayoutTemplate className="w-4 h-4 mr-1.5" />Templates
             </Button>
+            {filteredSubscriptions.length > 0 && !selection.isSelectionMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => selection.enterSelectionMode()}
+                data-testid="button-enter-selection-subscriptions"
+              >
+                <CheckSquare className="w-4 h-4 mr-1.5" />Select
+              </Button>
+            )}
             <Button
               onClick={() => {
                 if (atSubscriptionLimit) {
@@ -329,16 +356,25 @@ export default function Subscriptions() {
 
             {/* Subscription List */}
             {filteredSubscriptions.length > 0 ? (
-              <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+              <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 {filteredSubscriptions.map((subscription, idx) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
+                  const checked = selection.isSelected(subscription.id);
                   return (
                     <button
                       key={subscription.id}
-                      onClick={() => setDetailSub(subscription)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''}`}
+                      data-testid={`subscription-row-${subscription.id}`}
+                      onClick={() => {
+                        if (selection.isSelectionMode) selection.toggle(subscription.id);
+                        else setDetailSub(subscription);
+                      }}
+                      onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(subscription.id); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
                     >
+                      {selection.isSelectionMode && (
+                        <SelectionCheckbox checked={checked} onChange={() => selection.toggle(subscription.id)} label={`Select ${subscription.name}`} />
+                      )}
                       <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-medium text-foreground truncate">{subscription.name}</div>
@@ -353,7 +389,9 @@ export default function Subscriptions() {
                       <Badge variant={subscription.isActive ? 'default' : 'secondary'} className="text-[11px] h-5 px-1.5 flex-shrink-0">
                         {subscription.isActive ? 'Active' : 'Inactive'}
                       </Badge>
-                      <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                      {!selection.isSelectionMode && (
+                        <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                      )}
                     </button>
                   );
                 })}
@@ -559,6 +597,19 @@ export default function Subscriptions() {
           </Dialog>
         );
       })()}
+
+      {selection.isSelectionMode && (
+        <SelectionBar
+          selectedCount={selection.selectedCount}
+          totalCount={filteredSubscriptions.length}
+          allSelected={selection.allSelected}
+          itemLabel="subscription"
+          onSelectAll={selection.selectAll}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDeleteSubscriptions}
+        />
+      )}
     </div>
   );
 }

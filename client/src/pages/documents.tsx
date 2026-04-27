@@ -126,6 +126,9 @@ import { format } from 'date-fns';
 import { documentService } from '@/lib/document-encryption';
 import { useAuth } from '@/contexts/auth-context';
 import { ocrService, ScanResult } from '@/lib/ocr-service';
+import { useMultiSelect } from '@/hooks/use-multi-select';
+import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
+import { CheckSquare } from 'lucide-react';
 
 // Document types and interfaces
 interface Document {
@@ -386,7 +389,23 @@ export default function Documents() {
     
     return filtered;
   }, [documents, currentFolderId, searchQuery, sortBy, sortOrder]);
-  
+
+  const selection = useMultiSelect(filteredDocuments);
+
+  const handleBulkDeleteDocuments = async () => {
+    const ids = Array.from(selection.selectedIds);
+    if (ids.length === 0) return;
+    const results = await Promise.allSettled(ids.map(id => documentService.deleteDocument(id)));
+    const removed = results.filter(r => r.status === 'fulfilled').length;
+    setDocuments(prev => prev.filter(doc => !selection.selectedIds.has(doc.id)));
+    selection.exitSelectionMode();
+    toast({
+      title: removed === ids.length ? 'Documents deleted' : 'Some documents could not be deleted',
+      description: `${removed} of ${ids.length} removed.`,
+      variant: removed === ids.length ? 'default' : 'destructive',
+    });
+  };
+
   const filteredFolders = useMemo(() => {
     return folders.filter(folder => folder.parentId === currentFolderId);
   }, [folders, currentFolderId]);
@@ -985,6 +1004,18 @@ export default function Documents() {
             >
               {viewMode === 'grid' ? 'List' : 'Grid'} View
             </Button>
+
+            {filteredDocuments.length > 0 && !selection.isSelectionMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selection.enterSelectionMode()}
+                data-testid="button-enter-selection-documents"
+              >
+                <CheckSquare className="w-4 h-4 mr-1.5" />
+                Select
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1050,20 +1081,27 @@ export default function Documents() {
               </Button>
             </div>
           ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
+            <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'} ${selection.isSelectionMode ? 'pb-24' : ''}`}>
               {filteredDocuments.map(document => {
                 const FileIcon = getFileIcon(document.type);
                 const fileColor = getFileColor(document.type);
+                const checked = selection.isSelected(document.id);
 
                 return (
                   <BrandCard
                     key={document.id}
                     name={document.name}
                     brandColor={getFileBrandColor(document.type)}
-                    className="cursor-pointer"
-                    onClick={() => handleDocumentClick(document)}
+                    className={`cursor-pointer ${checked ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                    onClick={() => {
+                      if (selection.isSelectionMode) selection.toggle(document.id);
+                      else handleDocumentClick(document);
+                    }}
                   >
                   <div className={`flex items-center gap-3 p-3 ${viewMode === 'list' ? 'flex-row' : 'flex-col text-center'}`}>
+                    {selection.isSelectionMode && (
+                      <SelectionCheckbox checked={checked} onChange={() => selection.toggle(document.id)} label={`Select ${document.name}`} />
+                    )}
                     {viewMode === 'grid' ? (
                       <>
                         <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
@@ -1401,6 +1439,19 @@ export default function Documents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {selection.isSelectionMode && (
+        <SelectionBar
+          selectedCount={selection.selectedCount}
+          totalCount={filteredDocuments.length}
+          allSelected={selection.allSelected}
+          itemLabel="document"
+          onSelectAll={selection.selectAll}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDeleteDocuments}
+        />
+      )}
     </div>
   );
 }

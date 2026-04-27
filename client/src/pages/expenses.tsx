@@ -41,17 +41,20 @@ import {
   Home,
   Zap,
   Phone,
-  Plane
+  Plane,
+  CheckSquare,
 } from 'lucide-react';
 import { format, isSameMonth } from 'date-fns';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { useMultiSelect } from '@/hooks/use-multi-select';
+import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 
 // Color palette for charts
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#f97316', '#6b7280'];
 
 export default function Expenses() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
-  const { expenses, addExpense, updateExpense, deleteExpense, searchQuery, setSearchQuery } = useVault();
+  const { expenses, addExpense, updateExpense, deleteExpense, bulkDeleteExpenses, searchQuery, setSearchQuery } = useVault();
   const { formatCurrency, currency, currencies } = useCurrency();
   const { toast } = useToast();
   const { lastExpenseCategory, saveExpenseCategory } = useFormDefaults();
@@ -200,10 +203,24 @@ export default function Expenses() {
 
   // Sort expenses by date (newest first)
   const sortedExpenses = useMemo(() => {
-    return [...filteredExpenses].sort((a, b) => 
+    return [...filteredExpenses].sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [filteredExpenses]);
+
+  const selection = useMultiSelect(sortedExpenses);
+
+  const handleBulkDeleteExpenses = async () => {
+    const ids = Array.from(selection.selectedIds);
+    if (ids.length === 0) return;
+    const removed = await bulkDeleteExpenses(ids);
+    selection.exitSelectionMode();
+    toast({
+      title: removed === ids.length ? 'Expenses deleted' : 'Some expenses could not be deleted',
+      description: `${removed} of ${ids.length} removed.`,
+      variant: removed === ids.length ? 'default' : 'destructive',
+    });
+  };
 
   // Calculate analytics data
   const analytics = useMemo(() => {
@@ -1128,7 +1145,21 @@ export default function Expenses() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className={`space-y-6 ${selection.isSelectionMode ? 'pb-24' : ''}`}>
+          {!selection.isSelectionMode && (
+            <div className="flex justify-end px-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => selection.enterSelectionMode()}
+                data-testid="button-enter-selection-expenses"
+              >
+                <CheckSquare className="w-4 h-4 mr-1.5" />
+                Select
+              </Button>
+            </div>
+          )}
           {groupedByDay.map(([dateKey, dayExpenses]) => {
             const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
             const dayDate = new Date(dateKey + 'T12:00:00');
@@ -1143,44 +1174,57 @@ export default function Expenses() {
                 </div>
                 <Card className="rounded-2xl shadow-sm overflow-hidden">
                   <CardContent className="p-0">
-                    {dayExpenses.map((expense, i) => (
-                      <div
-                        key={expense.id}
-                        className={`group flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${i < dayExpenses.length - 1 ? 'border-b border-border/50' : ''}`}
-                      >
-                        {/* Category dot */}
+                    {dayExpenses.map((expense, i) => {
+                      const checked = selection.isSelected(expense.id);
+                      return (
                         <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
-                          style={{ backgroundColor: COLORS[EXPENSE_CATEGORIES.indexOf(expense.category) % COLORS.length] }}
+                          key={expense.id}
+                          data-testid={`expense-row-${expense.id}`}
+                          onClick={() => { if (selection.isSelectionMode) selection.toggle(expense.id); }}
+                          onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(expense.id); }}
+                          className={`group flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${i < dayExpenses.length - 1 ? 'border-b border-border/50' : ''} ${selection.isSelectionMode ? 'cursor-pointer' : ''} ${checked ? 'bg-primary/5' : ''}`}
                         >
-                          {expense.category.charAt(0)}
+                          {selection.isSelectionMode && (
+                            <SelectionCheckbox checked={checked} onChange={() => selection.toggle(expense.id)} label={`Select ${expense.title}`} />
+                          )}
+                          {/* Category dot */}
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
+                            style={{ backgroundColor: COLORS[EXPENSE_CATEGORIES.indexOf(expense.category) % COLORS.length] }}
+                          >
+                            {expense.category.charAt(0)}
+                          </div>
+                          {/* Title + category */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate" data-testid={`expense-title-${expense.id}`}>
+                              {expense.title}
+                              {expense.isRecurring && <Repeat className="w-3 h-3 text-orange-400 inline ml-1.5" />}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{expense.category}</p>
+                          </div>
+                          {/* Amount + actions */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-sm font-semibold text-foreground" data-testid={`expense-amount-${expense.id}`}>
+                              {formatCurrency(expense.amount, expense.currency)}
+                            </span>
+                            {!selection.isSelectionMode && (
+                              <>
+                                <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
+                                  data-testid={`button-edit-${expense.id}`}
+                                  onClick={() => handleEditExpense(expense)}>
+                                  <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
+                                  data-testid={`button-delete-${expense.id}`}
+                                  onClick={() => handleDeleteExpense(expense.id, expense.title)}>
+                                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        {/* Title + category */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate" data-testid={`expense-title-${expense.id}`}>
-                            {expense.title}
-                            {expense.isRecurring && <Repeat className="w-3 h-3 text-orange-400 inline ml-1.5" />}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{expense.category}</p>
-                        </div>
-                        {/* Amount + actions */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-sm font-semibold text-foreground" data-testid={`expense-amount-${expense.id}`}>
-                            {formatCurrency(expense.amount, expense.currency)}
-                          </span>
-                          <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
-                            data-testid={`button-edit-${expense.id}`}
-                            onClick={() => handleEditExpense(expense)}>
-                            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100 hover:opacity-100"
-                            data-testid={`button-delete-${expense.id}`}
-                            onClick={() => handleDeleteExpense(expense.id, expense.title)}>
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </CardContent>
                 </Card>
               </div>
@@ -1256,6 +1300,19 @@ export default function Expenses() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {selection.isSelectionMode && (
+        <SelectionBar
+          selectedCount={selection.selectedCount}
+          totalCount={sortedExpenses.length}
+          allSelected={selection.allSelected}
+          itemLabel="expense"
+          onSelectAll={selection.selectAll}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDeleteExpenses}
+        />
+      )}
     </div>
   );
 }

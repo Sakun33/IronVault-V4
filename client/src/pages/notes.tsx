@@ -15,9 +15,11 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Edit, Trash2, Search, BookOpen, Tag, Pin, Calendar,
   StickyNote, Archive, FileText, LayoutTemplate,
-  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, ChevronRight
+  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, ChevronRight, CheckSquare
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { useMultiSelect } from '@/hooks/use-multi-select';
+import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 
 const NOTEBOOK_COLORS: Record<string, string> = {
   personal:  '#6366f1',
@@ -45,7 +47,7 @@ function timeAgo(date: Date | string) {
 }
 
 export default function Notes() {
-  const { notes, addNote, updateNote, deleteNote } = useVault();
+  const { notes, addNote, updateNote, deleteNote, bulkDeleteNotes } = useVault();
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
@@ -112,6 +114,20 @@ export default function Notes() {
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     }), [filteredNotes]);
+
+  const selection = useMultiSelect(sortedNotes);
+
+  const handleBulkDeleteNotes = async () => {
+    const ids = Array.from(selection.selectedIds);
+    if (ids.length === 0) return;
+    const removed = await bulkDeleteNotes(ids);
+    selection.exitSelectionMode();
+    toast({
+      title: removed === ids.length ? 'Notes deleted' : 'Some notes could not be deleted',
+      description: `${removed} of ${ids.length} removed.`,
+      variant: removed === ids.length ? 'default' : 'destructive',
+    });
+  };
 
   const handleAddNote = async () => {
     if (!formData.title.trim()) {
@@ -354,6 +370,17 @@ export default function Notes() {
           <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowTemplatesModal(true)}>
             <LayoutTemplate className="w-4 h-4 mr-1" /> Templates
           </Button>
+          {sortedNotes.length > 0 && !selection.isSelectionMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => selection.enterSelectionMode()}
+              data-testid="button-enter-selection-notes"
+            >
+              <CheckSquare className="w-4 h-4 mr-1" /> Select
+            </Button>
+          )}
           <Button
             size="sm"
             disabled={!isPro && notes.length >= getLimit('notes')}
@@ -457,17 +484,25 @@ export default function Notes() {
           )}
         </div>
       ) : (
-        <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+        <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
           {sortedNotes.map((note, idx) => {
             const color = notebookColor(note.notebook);
             const preview = getPreview(note.content || '');
+            const checked = selection.isSelected(note.id);
             return (
               <button
                 key={note.id}
                 data-testid={`note-card-${note.id}`}
-                onClick={() => setViewingNote(note)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < sortedNotes.length - 1 ? 'border-b border-border/50' : ''}`}
+                onClick={() => {
+                  if (selection.isSelectionMode) selection.toggle(note.id);
+                  else setViewingNote(note);
+                }}
+                onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(note.id); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < sortedNotes.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
               >
+                {selection.isSelectionMode && (
+                  <SelectionCheckbox checked={checked} onChange={() => selection.toggle(note.id)} label={`Select ${note.title}`} />
+                )}
                 <div className="flex-shrink-0 flex flex-col items-center gap-1 pt-0.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
                   {note.isPinned && <Pin className="w-3 h-3 fill-amber-400 text-amber-400" />}
@@ -483,7 +518,9 @@ export default function Notes() {
                   )}
                   <div className="text-[11px] text-muted-foreground/60 mt-0.5">{timeAgo(note.updatedAt)}</div>
                 </div>
-                <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                {!selection.isSelectionMode && (
+                  <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                )}
               </button>
             );
           })}
@@ -540,6 +577,19 @@ export default function Notes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selection.isSelectionMode && (
+        <SelectionBar
+          selectedCount={selection.selectedCount}
+          totalCount={sortedNotes.length}
+          allSelected={selection.allSelected}
+          itemLabel="note"
+          onSelectAll={selection.selectAll}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDeleteNotes}
+        />
+      )}
     </div>
   );
 }
