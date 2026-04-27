@@ -174,6 +174,13 @@
     }
   }
 
+  // Badge dimensions — kept in sync with .iv-autofill-badge in content.css.
+  const BADGE_SIZE = 28;
+  // Distance from the input's right edge to the badge's right edge.
+  // Negative pulls the badge inside the input (1Password-style); positive
+  // pushes it outside.
+  const BADGE_INSET = 6;
+
   function attachBadge(passwordInput) {
     if (trackedInputs.has(passwordInput)) return;
     trackedInputs.add(passwordInput);
@@ -181,15 +188,19 @@
     const badge = document.createElement('button');
     badge.type = 'button';
     badge.className = BADGE_CLASS;
-    badge.title = 'IronVault — autofill';
-    badge.setAttribute('aria-label', 'IronVault autofill');
-    // Inline IV brand mark — matches chrome-extension/icons/icon.svg.
-    // Inlining (vs. <img src> via chrome.runtime.getURL) keeps the badge
-    // working even when web_accessible_resources can't be loaded by the
-    // host page (some strict CSP sites). Brand gradient is hardcoded so
-    // the IV letters stay readable through the badge's white→indigo
-    // hover swap.
-    badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="14" height="14" aria-hidden="true" focusable="false"><rect width="128" height="128" rx="28" fill="#4f46e5"/><text x="64" y="84" font-family="-apple-system, system-ui, sans-serif" font-size="58" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-2">IV</text></svg>';
+    badge.title = 'Fetch from IronVault';
+    badge.setAttribute('aria-label', 'Fetch from IronVault');
+    // Real IronVault app icon (vault/safe). Loaded via chrome.runtime.getURL
+    // from web_accessible_resources so we don't bloat content.js with a
+    // base64 blob and the icon stays a single source of truth.
+    const iconUrl = RUNTIME.getURL('icons/icon-48.png');
+    const iconImg = document.createElement('img');
+    iconImg.src = iconUrl;
+    iconImg.alt = '';
+    iconImg.setAttribute('aria-hidden', 'true');
+    iconImg.className = 'iv-autofill-badge-img';
+    iconImg.draggable = false;
+    badge.appendChild(iconImg);
     badge.tabIndex = -1; // don't grab tab focus from the form
     badge.addEventListener('mousedown', (ev) => {
       // Prevent the password input from losing focus on click.
@@ -200,6 +211,16 @@
       ev.stopPropagation();
       openPicker(passwordInput, badge);
     });
+    // Reserve space on the input's right side so the badge never overlaps
+    // text the user is typing. We stash the prior padding so we can restore
+    // it if the badge is ever removed.
+    const cs = getComputedStyle(passwordInput);
+    const existingPad = parseFloat(cs.paddingRight) || 0;
+    const reserved = BADGE_SIZE + Math.max(BADGE_INSET, 0) + 4;
+    if (existingPad < reserved) {
+      passwordInput.dataset.ivPrevPaddingRight = passwordInput.style.paddingRight || '';
+      passwordInput.style.setProperty('padding-right', reserved + 'px', 'important');
+    }
     document.body.appendChild(badge);
     badgesByInput.set(passwordInput, badge);
     repositionBadge(passwordInput, badge);
@@ -212,8 +233,10 @@
     }
     const r = input.getBoundingClientRect();
     badge.style.display = 'flex';
-    const top = window.scrollY + r.top + (r.height - 22) / 2;
-    const left = window.scrollX + r.right - 26;
+    // Vertically centered with the input.
+    const top = window.scrollY + r.top + (r.height - BADGE_SIZE) / 2;
+    // Right-anchored, just inside the input's right edge.
+    const left = window.scrollX + r.right - BADGE_SIZE - BADGE_INSET;
     badge.style.top = top + 'px';
     badge.style.left = left + 'px';
   }

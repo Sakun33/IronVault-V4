@@ -59,6 +59,12 @@ body {
   font-weight: 700;
   font-size: 14px;
 }
+.iv-brand-icon {
+  border-radius: 5px;
+  display: block;
+  -webkit-user-drag: none;
+  user-select: none;
+}
 .iv-header-right {
   display: flex;
   align-items: center;

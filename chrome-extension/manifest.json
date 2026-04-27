@@ -45,5 +45,11 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon-48.png", "icons/icon-128.png"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
 }
