@@ -137,8 +137,20 @@ function _getTransporter() {
 async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
   if (!emailConfigured) { console.warn('[email] ZOHO_MAIL_PASSWORD not set, skip →', to); return false; }
   try {
+    // Split-envelope sender: SMTP MAIL FROM = saket@ (the authed mailbox
+    // Zoho will accept and DKIM-sign), while the visible From: header
+    // shows noreply@ (what the user sees in Gmail). Both addresses are
+    // on @ironvault.app so DMARC relaxed-alignment is preserved.
+    // Without this split, nodemailer derives MAIL FROM from `from`, and
+    // Zoho silently drops alias-submitted messages — the SMTP transaction
+    // returns 250 OK and a Message-ID, but the message never leaves
+    // Zoho's outbound queue. Symptom: [email] sent logs success, user
+    // never receives anything.
     const result = await _getTransporter().sendMail({
       from: `"${_FROM_NAME}" <${_FROM_DISPLAY}>`,
+      replyTo: _FROM_DISPLAY,
+      sender: _FROM_ADDR,
+      envelope: { from: _FROM_ADDR, to },
       to, subject, html,
     });
     console.log('[email] sent:', subject, '→', to, result.messageId);
