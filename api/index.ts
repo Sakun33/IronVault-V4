@@ -188,8 +188,9 @@ function familyInviteEmail(ownerEmail: string, inviteId: string, inviteeEmail: s
 // ── End email service ──────────────────────────────────────────────────────────
 
 // ── n8n webhook triggers (fire-and-forget) ────────────────────────────────────
-const N8N_SIGNUP_WEBHOOK  = 'https://saketapptest.app.n8n.cloud/webhook/ironvault-signup';
-const N8N_PAYMENT_WEBHOOK = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-payment';
+const N8N_SIGNUP_WEBHOOK         = 'https://saketapptest.app.n8n.cloud/webhook/ironvault-signup';
+const N8N_PAYMENT_WEBHOOK        = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-payment';
+const N8N_PAYMENT_FAILED_WEBHOOK = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-failed';
 
 function triggerN8n(url: string, payload: unknown): void {
   fetch(url, {
@@ -1230,13 +1231,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const { rows } = await db.query(
         `SELECT u.id, u.email, u.full_name AS name,
+                u.created_at, u.last_active_at,
                 MAX(cv.server_updated_at) AS last_backup_at,
-                COALESCE(MAX(e.plan), 'free') AS plan
+                COALESCE(MAX(e.plan), 'free') AS plan,
+                MAX(e.current_period_ends_at) AS plan_expires_at
            FROM crm_users u
            LEFT JOIN entitlements e ON e.user_id = u.id
            LEFT JOIN cloud_vaults cv ON cv.user_id = u.id
           WHERE u.account_status = 'active'
-          GROUP BY u.id, u.email, u.full_name`
+          GROUP BY u.id, u.email, u.full_name, u.created_at, u.last_active_at`
       );
       return res.json({
         users: rows.map((r: any) => ({
@@ -1245,6 +1248,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           name: r.name,
           lastBackupAt: r.last_backup_at,
           plan: r.plan,
+          planExpiresAt: r.plan_expires_at,
+          lastLoginAt: r.last_active_at,
+          createdAt: r.created_at,
         })),
       });
     } catch (err: any) {
@@ -1411,6 +1417,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pro_family_yearly: { tier: 'family',   isLifetime: false, periodMonths: 12 },
       lifetime:          { tier: 'lifetime', isLifetime: true,  periodMonths: 0  },
     };
+    const RAZORPAY_AMOUNTS: Record<string, number> = {
+      pro_monthly: 14900,
+      pro_yearly: 149900,
+      pro_family: 29900,
+      pro_family_yearly: 299900,
+      lifetime: 999900,
+    };
     const tierCfg = RAZORPAY_TIERS[plan as string];
     if (!tierCfg) return res.status(400).json({ error: 'Invalid plan' });
 
@@ -1419,6 +1432,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .digest('hex');
     if (expectedSig !== razorpay_signature) {
       console.warn('[Razorpay] Signature mismatch:', razorpay_payment_id);
+      triggerN8n(N8N_PAYMENT_FAILED_WEBHOOK, {
+        event: 'payment.failed',
+        payload: {
+          payment: {
+            entity: {
+              id: razorpay_payment_id,
+              amount: RAZORPAY_AMOUNTS[plan as string] ?? 0,
+              currency: 'INR',
+              email: (email as string).toLowerCase().trim(),
+              error_description: 'Invalid payment signature',
+              notes: { plan, userId: null },
+            },
+          },
+        },
+      });
       return res.status(400).json({ error: 'Invalid payment signature' });
     }
 
@@ -1453,13 +1481,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sendEmail({ to: normalizedEmail, ...planUpgradeEmail(tierCfg.tier) }).catch(() => {});
 
       // Fire-and-forget: trigger n8n payment-lifecycle workflow with Razorpay-shaped payload
-      const RAZORPAY_AMOUNTS: Record<string, number> = {
-        pro_monthly: 14900,
-        pro_yearly: 149900,
-        pro_family: 29900,
-        pro_family_yearly: 299900,
-        lifetime: 999900,
-      };
       triggerN8n(N8N_PAYMENT_WEBHOOK, {
         event: 'payment.captured',
         payload: {
