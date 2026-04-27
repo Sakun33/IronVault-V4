@@ -187,6 +187,20 @@ function familyInviteEmail(ownerEmail: string, inviteId: string, inviteeEmail: s
 }
 // ── End email service ──────────────────────────────────────────────────────────
 
+// ── n8n webhook triggers (fire-and-forget) ────────────────────────────────────
+const N8N_SIGNUP_WEBHOOK  = 'https://saketapptest.app.n8n.cloud/webhook/ironvault-signup';
+const N8N_PAYMENT_WEBHOOK = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-payment';
+
+function triggerN8n(url: string, payload: unknown): void {
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then((r) => console.log(`[n8n] POST ${url} → ${r.status}`))
+    .catch((e) => console.error(`[n8n] POST ${url} failed:`, e.message));
+}
+
 let pool: Pool | null = null;
 
 function getPool(): Pool {
@@ -564,6 +578,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         state: state || undefined,
         postalCode: postalCode || undefined,
       }).catch(() => {});
+
+      // Fire-and-forget: trigger n8n onboarding-drip workflow
+      triggerN8n(N8N_SIGNUP_WEBHOOK, {
+        email: normalizedEmail,
+        name: safeFullName,
+        plan: planType || 'free',
+      });
 
       const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
       const verifyLink = `${APP_URL_REG}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
@@ -1196,6 +1217,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── GET /api/admin/users ────────────────────────────────────────────────────
+  // Returns active users for the n8n backup-reminder workflow.
+  // Protected by N8N_API_KEY env var via the x-api-key header.
+  // lastBackupAt is derived from the most recent cloud_vaults.server_updated_at row.
+  if (path === '/api/admin/users' && req.method === 'GET') {
+    const apiKey = req.headers['x-api-key'] as string | undefined;
+    const expected = process.env.N8N_API_KEY;
+    if (!expected || !apiKey || apiKey !== expected) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const { rows } = await db.query(
+        `SELECT u.id, u.email, u.full_name AS name,
+                MAX(cv.server_updated_at) AS last_backup_at,
+                COALESCE(MAX(e.plan), 'free') AS plan
+           FROM crm_users u
+           LEFT JOIN entitlements e ON e.user_id = u.id
+           LEFT JOIN cloud_vaults cv ON cv.user_id = u.id
+          WHERE u.account_status = 'active'
+          GROUP BY u.id, u.email, u.full_name`
+      );
+      return res.json({
+        users: rows.map((r: any) => ({
+          id: r.id,
+          email: r.email,
+          name: r.name,
+          lastBackupAt: r.last_backup_at,
+          plan: r.plan,
+        })),
+      });
+    } catch (err: any) {
+      console.error('[admin/users] error:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── POST /api/crm/upgrade ──────────────────────────────────────────────────
   // Called by the client after a successful plan upgrade to sync a Deal to Zoho CRM.
   if (path === '/api/crm/upgrade' && req.method === 'POST') {
@@ -1394,6 +1451,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       createOrUpdateCrmDeal({ contactId: null, email: normalizedEmail, plan: tierCfg.tier }).catch(() => {});
       sendEmail({ to: normalizedEmail, ...planUpgradeEmail(tierCfg.tier) }).catch(() => {});
+
+      // Fire-and-forget: trigger n8n payment-lifecycle workflow with Razorpay-shaped payload
+      const RAZORPAY_AMOUNTS: Record<string, number> = {
+        pro_monthly: 14900,
+        pro_yearly: 149900,
+        pro_family: 29900,
+        pro_family_yearly: 299900,
+        lifetime: 999900,
+      };
+      triggerN8n(N8N_PAYMENT_WEBHOOK, {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: razorpay_payment_id,
+              amount: RAZORPAY_AMOUNTS[plan as string] ?? 0,
+              currency: 'INR',
+              status: 'captured',
+              order_id: razorpay_order_id,
+              email: normalizedEmail,
+              notes: { plan, userId },
+            },
+          },
+        },
+      });
 
       console.log(`[Razorpay] Payment verified: ${normalizedEmail} → ${tierCfg.tier} (${plan})`);
       return res.json({ success: true, plan: tierCfg.tier });
