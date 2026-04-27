@@ -736,6 +736,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(403).json({ error: 'email_not_verified' });
         }
       }
+      // Fire-and-forget: stamp last_active_at for inactive-user re-engagement workflow
+      db.query(`UPDATE crm_users SET last_active_at = NOW() WHERE id = $1`, [userId])
+        .catch((e: any) => console.error('[auth/token] last_active_at update failed:', e.message));
       const token = signCloudToken(userId, normalizedEmail);
       return res.json({ success: true, token, userId, email: normalizedEmail });
     } catch (err: any) {
