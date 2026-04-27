@@ -473,6 +473,54 @@ export class VaultStorage {
     await this.ensureVerificationEntry();
   }
 
+  // Total live item count across every encrypted collection. Used by sync
+  // safeguards: a sudden drop in this number means the in-memory state has
+  // been wiped and pushing it would destroy cloud data.
+  async getTotalItemCount(): Promise<number> {
+    const [
+      passwords, subscriptions, notes, expenses, reminders,
+      bankStatements, bankTransactions, investments, investmentGoals,
+    ] = await Promise.all([
+      this.getAllPasswords(),
+      this.getAllSubscriptions(),
+      this.getAllNotes(),
+      this.getAllExpenses(),
+      this.getAllReminders(),
+      this.getAllBankStatements(),
+      this.getAllBankTransactions(),
+      this.getAllInvestments(),
+      this.getAllInvestmentGoals(),
+    ]);
+    return passwords.length + subscriptions.length + notes.length + expenses.length
+      + reminders.length + bankStatements.length + bankTransactions.length
+      + investments.length + investmentGoals.length;
+  }
+
+  // Decrypt a remote vault blob and count items WITHOUT touching local DB.
+  // Used to gate `replaceVaultFromBlob` so we never wipe a richer local
+  // vault with a sparser cloud snapshot. Returns null if the blob can't be
+  // parsed or decrypted (treat as "unknown — don't gate on it").
+  async peekVaultBlobItemCount(encryptedBlob: string, masterPassword: string): Promise<number | null> {
+    try {
+      const parsed = JSON.parse(encryptedBlob.trim().replace(/^﻿/, ''));
+      if (!parsed?.salt || !parsed?.iv || !parsed?.data) return null;
+      const salt = CryptoService.base64ToUint8Array(parsed.salt);
+      const iv = CryptoService.base64ToUint8Array(parsed.iv);
+      const data = new Uint8Array(CryptoService.base64ToArrayBuffer(parsed.data));
+      const key = await CryptoService.deriveKey(masterPassword, salt);
+      const decrypted = await CryptoService.decrypt(data, key, iv);
+      const payload = JSON.parse(new TextDecoder().decode(decrypted));
+      const lengths = [
+        payload.passwords, payload.subscriptions, payload.notes, payload.expenses,
+        payload.reminders, payload.bankStatements, payload.bankTransactions,
+        payload.investments, payload.investmentGoals,
+      ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
+      return lengths.reduce((a, b) => a + b, 0);
+    } catch {
+      return null;
+    }
+  }
+
   // Recreate the password verification entry using the current encryption key.
   // Must be called after any operation that wipes encrypted_data (clearEncryptedItems).
   async ensureVerificationEntry(): Promise<void> {
@@ -1495,6 +1543,145 @@ export class VaultStorage {
       iterations: metadata.kdfConfig.iterations,
       hash: metadata.kdfConfig.hash,
     } as CryptoKDFConfig;
+  }
+
+  // Verify the current master password without changing vault state.
+  // Derives a candidate key from the supplied password and the stored salt
+  // and decrypts the password-verification entry. Used by Security flows
+  // (master password change) where calling unlockVault() would clobber the
+  // already-active session.
+  async verifyMasterPassword(candidate: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    const metadata = await this.getMetadata();
+    if (!metadata) return false;
+    const salt = CryptoService.base64ToUint8Array(metadata.encryptionSalt);
+    const kdfConfig = metadata.kdfConfig ? {
+      algorithm: metadata.kdfConfig.algorithm,
+      iterations: metadata.kdfConfig.iterations,
+      hash: metadata.kdfConfig.hash,
+    } : { algorithm: 'PBKDF2' as const, iterations: 100000, hash: 'SHA-256' as const };
+    try {
+      const key = await CryptoService.deriveKey(candidate, salt, kdfConfig);
+      const entry = await this.getPasswordVerificationEntry();
+      if (!entry) return false;
+      const enc = new Uint8Array(CryptoService.base64ToArrayBuffer(entry.data));
+      const iv = CryptoService.base64ToUint8Array(entry.iv);
+      const dec = await CryptoService.decrypt(enc, key, iv);
+      return new TextDecoder().decode(dec) === 'VAULT_PASSWORD_VERIFICATION';
+    } catch {
+      return false;
+    }
+  }
+
+  // Change the master password by re-encrypting every item under a freshly
+  // derived key. Caller must have already verified `currentPassword` and
+  // collected confirmation from the user (incl. email code). On success the
+  // session continues with the new key — caller is responsible for updating
+  // any cached/stored copy of the master password (auth-context state, the
+  // sessionStorage iv_session entry, and any keychain biometric backup).
+  async changeMasterPassword(
+    currentPassword: string,
+    newPassword: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<void> {
+    if (!this.db || !this.encryptionKey) {
+      throw new Error('Vault must be unlocked to change master password');
+    }
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters');
+    }
+    if (currentPassword === newPassword) {
+      throw new Error('New password must differ from current password');
+    }
+
+    const metadata = await this.getMetadata();
+    if (!metadata) throw new Error('Vault metadata not found');
+
+    onProgress?.(5);
+    const verified = await this.verifyMasterPassword(currentPassword);
+    if (!verified) throw new Error('Current master password is incorrect');
+
+    onProgress?.(15);
+
+    // Snapshot every encrypted collection under the current key. We must read
+    // BEFORE rotating the key — once `this.encryptionKey` flips, any read on
+    // the old data will fail.
+    const [
+      passwords, subscriptions, notes, expenses, reminders,
+      bankStatements, bankTransactions, investments, investmentGoals,
+    ] = await Promise.all([
+      this.getAllPasswords(),
+      this.getAllSubscriptions(),
+      this.getAllNotes(),
+      this.getAllExpenses(),
+      this.getAllReminders(),
+      this.getAllBankStatements(),
+      this.getAllBankTransactions(),
+      this.getAllInvestments(),
+      this.getAllInvestmentGoals(),
+    ]);
+
+    onProgress?.(35);
+
+    const kdfConfig = metadata.kdfConfig ? {
+      algorithm: metadata.kdfConfig.algorithm,
+      iterations: metadata.kdfConfig.iterations,
+      hash: metadata.kdfConfig.hash,
+    } : { algorithm: 'PBKDF2' as const, iterations: 100000, hash: 'SHA-256' as const };
+
+    const newSalt = CryptoService.generateSalt();
+    const newKey = await CryptoService.deriveKey(newPassword, newSalt, kdfConfig);
+
+    onProgress?.(50);
+
+    const oldKey = this.encryptionKey;
+    this.encryptionKey = newKey;
+
+    try {
+      // Re-encrypt every item by re-saving it. Each save uses encryptAndStore
+      // which fires `vault:item:saved`; the auto-sync hook debounces those
+      // into a single push at the end, which is exactly what we want.
+      const groups: Array<{ items: any[]; saver: (item: any) => Promise<void> }> = [
+        { items: passwords,        saver: (i) => this.savePassword(i) },
+        { items: subscriptions,    saver: (i) => this.saveSubscription(i) },
+        { items: notes,            saver: (i) => this.saveNote(i) },
+        { items: expenses,         saver: (i) => this.saveExpense(i) },
+        { items: reminders,        saver: (i) => this.saveReminder(i) },
+        { items: bankStatements,   saver: (i) => this.saveBankStatement(i) },
+        { items: bankTransactions, saver: (i) => this.saveBankTransaction(i) },
+        { items: investments,      saver: (i) => this.saveInvestment(i) },
+        { items: investmentGoals,  saver: (i) => this.saveInvestmentGoal(i) },
+      ];
+      const total = Math.max(1, groups.reduce((s, g) => s + g.items.length, 0));
+      let done = 0;
+      for (const { items, saver } of groups) {
+        for (const item of items) {
+          await saver(item);
+          done++;
+          onProgress?.(50 + Math.round((done / total) * 40));
+        }
+      }
+
+      // Replace the verification entry under the new key BEFORE committing
+      // the metadata swap, so a crash here still leaves the vault unlockable
+      // with the OLD password.
+      await this.createPasswordVerificationEntry(newKey);
+      onProgress?.(95);
+
+      const newMetadata: VaultMetadata = {
+        ...metadata,
+        encryptionSalt: CryptoService.uint8ArrayToBase64(newSalt),
+        lastUnlocked: new Date(),
+      };
+      await this.saveMetadata(newMetadata);
+
+      onProgress?.(100);
+    } catch (error) {
+      this.encryptionKey = oldKey;
+      throw new Error(
+        `Failed to change master password: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
   }
 
   // Re-encrypt vault with new KDF configuration

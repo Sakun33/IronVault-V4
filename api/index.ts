@@ -672,6 +672,93 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/auth/send-verification-code ──────────────────────────────────
+  // Generic 6-digit code-by-email endpoint used by Security flows that need a
+  // second factor (currently: master-password change). The code is hashed at
+  // rest with HMAC(JWT_SECRET) and expires in 10 minutes. Single outstanding
+  // code per (email, purpose) — issuing a new one supersedes the previous.
+  if (path === '/api/auth/send-verification-code' && req.method === 'POST') {
+    const { email, purpose } = req.body || {};
+    const normalizedEmail = (email as string || '').toLowerCase().trim();
+    const normalizedPurpose = (purpose as string || 'master_password_change').trim();
+    if (!normalizedEmail) return res.status(400).json({ error: 'email required' });
+    const allowedPurposes = new Set(['master_password_change']);
+    if (!allowedPurposes.has(normalizedPurpose)) {
+      return res.status(400).json({ error: 'Invalid purpose' });
+    }
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS auth_verification_codes (
+          email TEXT NOT NULL,
+          purpose TEXT NOT NULL,
+          code_hash TEXT NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          attempts INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (email, purpose)
+        )
+      `);
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const secret = process.env.JWT_SECRET || 'ironvault-dev-secret';
+      const codeHash = createHmac('sha256', secret).update(`${normalizedEmail}:${normalizedPurpose}:${code}`).digest('hex');
+      await db.query(
+        `INSERT INTO auth_verification_codes (email, purpose, code_hash, expires_at, attempts)
+         VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes', 0)
+         ON CONFLICT (email, purpose) DO UPDATE
+         SET code_hash = EXCLUDED.code_hash,
+             expires_at = EXCLUDED.expires_at,
+             attempts = 0,
+             created_at = NOW()`,
+        [normalizedEmail, normalizedPurpose, codeHash],
+      );
+      const subject = 'Your IronVault security code';
+      const body = `${_eh1('Confirm your master password change')}${_ep('Use the 6-digit code below to confirm changing your IronVault master password. The code expires in <strong style="color:#111827">10 minutes</strong>.')}${_ecard(`<div style="text-align:center;font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;font-family:'SF Mono','Menlo',monospace">${code}</div>`)}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you didn't request this, your account password is still safe — just ignore this email and consider changing your account password.</p>`;
+      const sent = await sendEmail({ to: normalizedEmail, subject, html: _emailLayout(body) });
+      return res.json({ ok: true, emailSent: sent });
+    } catch (err: any) {
+      console.error('send-verification-code error:', err.message);
+      return res.status(500).json({ error: 'Failed to send code' });
+    }
+  }
+
+  // ── POST /api/auth/verify-code ─────────────────────────────────────────────
+  // Verifies a code issued by send-verification-code. On success, deletes the
+  // code (single-use). Limits to 5 wrong attempts per code.
+  if (path === '/api/auth/verify-code' && req.method === 'POST') {
+    const { email, purpose, code } = req.body || {};
+    const normalizedEmail = (email as string || '').toLowerCase().trim();
+    const normalizedPurpose = (purpose as string || 'master_password_change').trim();
+    const normalizedCode = (code as string || '').trim();
+    if (!normalizedEmail || !normalizedCode) return res.status(400).json({ error: 'email and code required' });
+    try {
+      const { rows } = await db.query(
+        `SELECT code_hash, expires_at, attempts FROM auth_verification_codes WHERE email = $1 AND purpose = $2 LIMIT 1`,
+        [normalizedEmail, normalizedPurpose],
+      );
+      if (!rows[0]) return res.status(400).json({ error: 'No active code. Please request a new one.' });
+      if (rows[0].attempts >= 5) {
+        await db.query(`DELETE FROM auth_verification_codes WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
+        return res.status(429).json({ error: 'Too many attempts. Please request a new code.' });
+      }
+      if (new Date(rows[0].expires_at) < new Date()) {
+        await db.query(`DELETE FROM auth_verification_codes WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
+        return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+      }
+      const secret = process.env.JWT_SECRET || 'ironvault-dev-secret';
+      const candidateHash = createHmac('sha256', secret).update(`${normalizedEmail}:${normalizedPurpose}:${normalizedCode}`).digest('hex');
+      if (candidateHash !== rows[0].code_hash) {
+        await db.query(`UPDATE auth_verification_codes SET attempts = attempts + 1 WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
+        return res.status(400).json({ error: 'Incorrect code.' });
+      }
+      // Single-use: consume on success
+      await db.query(`DELETE FROM auth_verification_codes WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error('verify-code error:', err.message);
+      return res.status(500).json({ error: 'Failed to verify code' });
+    }
+  }
+
   // ── POST /api/auth/token ────────────────────────────────────────────────────
   if (path === '/api/auth/token' && req.method === 'POST') {
     const { email, accountPasswordHash } = req.body || {};

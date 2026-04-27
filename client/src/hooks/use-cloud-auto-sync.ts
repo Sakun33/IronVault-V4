@@ -8,6 +8,11 @@ const LAST_PULL_PREFIX = 'iv_last_pull_';
 const LAST_BLOB_HASH_PREFIX = 'iv_last_blob_hash_';
 // Survives logout: set when local data changes, cleared only after successful cloud push
 const DIRTY_PREFIX = 'iv_dirty_';
+// Anti-wipe safeguard: track last known healthy item counts on both sides
+const LAST_PUSH_COUNT_PREFIX = 'iv_last_push_count_';
+const LAST_PULL_COUNT_PREFIX = 'iv_last_pull_count_';
+// Below this absolute count we don't gate (small vaults legitimately fluctuate)
+const MIN_GATED_COUNT = 5;
 
 export function useCloudAutoSync(
   vaultId: string | null | undefined,
@@ -28,6 +33,26 @@ export function useCloudAutoSync(
   // Only advances lastPull and clears dirty flag on actual success.
   const executePush = useCallback(async (vid: string, mpwd: string): Promise<boolean> => {
     try {
+      // Anti-wipe gate: if local item count has collapsed compared to the
+      // last successful sync, refuse to push. This protects against the race
+      // where an unmount/cleanup fires before in-memory state has hydrated
+      // from IDB (counts read 0) — pushing that empty snapshot would replace
+      // the cloud blob with nothing.
+      const localCount = await vaultStorage.getTotalItemCount();
+      const lastPushRaw = localStorage.getItem(`${LAST_PUSH_COUNT_PREFIX}${vid}`);
+      const lastPullRaw = localStorage.getItem(`${LAST_PULL_COUNT_PREFIX}${vid}`);
+      const lastKnown = Math.max(
+        lastPushRaw ? parseInt(lastPushRaw, 10) || 0 : 0,
+        lastPullRaw ? parseInt(lastPullRaw, 10) || 0 : 0,
+      );
+      if (lastKnown >= MIN_GATED_COUNT && localCount < lastKnown * 0.5) {
+        console.warn(
+          `[SYNC] Refusing push: local items collapsed from ${lastKnown} → ${localCount}. ` +
+          `This looks like a wipe, not a legitimate edit.`,
+        );
+        return false;
+      }
+
       const blob = await vaultStorage.exportVault(mpwd);
       const { vaultManager } = await import('@/lib/vault-manager');
       const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vid);
@@ -35,8 +60,9 @@ export function useCloudAutoSync(
       const result = await pushCloudVault(vid, vaultName, blob, false);
       if (result.success) {
         localStorage.setItem(`${LAST_PULL_PREFIX}${vid}`, new Date().toISOString());
+        localStorage.setItem(`${LAST_PUSH_COUNT_PREFIX}${vid}`, String(localCount));
         localStorage.removeItem(`${DIRTY_PREFIX}${vid}`);
-        console.log('[SYNC] Cloud push succeeded, dirty flag cleared');
+        console.log(`[SYNC] Cloud push succeeded (${localCount} items), dirty flag cleared`);
         return true;
       }
       // Don't advance lastPull on failure — let next poll retry
@@ -198,11 +224,39 @@ export function useCloudAutoSync(
       const hashKey = `${LAST_BLOB_HASH_PREFIX}${vaultId}`;
       if (blobHash === localStorage.getItem(hashKey)) {
         localStorage.setItem(lastPullKey, meta.serverUpdatedAt);
+        window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
         return;
       }
+
+      // Anti-wipe gate: peek the cloud blob's item count before destructively
+      // replacing local state. If cloud has materially fewer items than what
+      // we have locally, refuse — that's a regression, not a sync. The UI's
+      // "Syncing From Cloud" wipe-then-import previously caused user-visible
+      // data loss whenever an older blob was served (e.g. plan downgrade,
+      // cross-device clock skew, server replay).
+      const cloudCount = await vaultStorage.peekVaultBlobItemCount(full.encryptedBlob, masterPassword);
+      const localCount = await vaultStorage.getTotalItemCount();
+      if (
+        cloudCount !== null &&
+        localCount >= MIN_GATED_COUNT &&
+        cloudCount < localCount
+      ) {
+        console.warn(
+          `[SYNC] Refusing pull: cloud has ${cloudCount} items, local has ${localCount}. ` +
+          `Skipping replace to avoid data loss; pushing local state instead.`,
+        );
+        // Mark dirty so the next push will reconcile cloud back up to local
+        localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
+        window.dispatchEvent(new CustomEvent('vault:cloud:replaced')); // clear syncing state
+        return;
+      }
+
       await vaultStorage.replaceVaultFromBlob(full.encryptedBlob, masterPassword);
       localStorage.setItem(lastPullKey, meta.serverUpdatedAt);
       localStorage.setItem(hashKey, blobHash);
+      if (cloudCount !== null) {
+        localStorage.setItem(`${LAST_PULL_COUNT_PREFIX}${vaultId}`, String(cloudCount));
+      }
       window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
     } catch {
       // Silently fail

@@ -32,6 +32,11 @@ interface AuthContextType {
   accountLogout: () => void;
   isLoading: boolean;
   getMasterKey: () => Promise<CryptoKey | null>;
+  changeMasterPassword: (
+    currentPassword: string,
+    newPassword: string,
+    onProgress?: (p: number) => void,
+  ) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -260,6 +265,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     vaultStorage.setEncryptionKey(null as any);
   };
 
+  const changeMasterPassword = async (
+    currentPassword: string,
+    newPassword: string,
+    onProgress?: (p: number) => void,
+  ): Promise<void> => {
+    if (!isUnlocked) throw new Error('Vault must be unlocked');
+    await vaultStorage.changeMasterPassword(currentPassword, newPassword, onProgress);
+    // Update in-memory + sessionStorage so the rest of the app keeps working
+    // with the same vault under the new password.
+    setMasterPassword(newPassword);
+    sessionStorage.setItem(SESSION_KEY, newPassword);
+    addLog('Master Password Changed', 'security', 'Vault re-encrypted with new master password');
+    // Force the cloud sync hook to push the freshly re-encrypted blob so other
+    // devices receive the new copy. The hook reads masterPassword from props,
+    // so by the time this event fires the new value is already in state.
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    }, 100);
+  };
+
   /**
    * Get the master key for vault autofill encryption
    * Derives a separate key from the master password for autofill vault
@@ -312,6 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accountLogout,
     isLoading,
     getMasterKey,
+    changeMasterPassword,
   };
 
   return (

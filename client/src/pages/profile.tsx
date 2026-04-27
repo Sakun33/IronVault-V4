@@ -104,6 +104,7 @@ import { CryptoService } from '@/lib/crypto';
 import { VaultManagementSection } from '@/components/vault-management-section';
 import { vaultManager } from '@/lib/vault-manager';
 import { TwoFactorAuth } from '@/components/two-factor-auth';
+import { ChangeMasterPasswordDialog } from '@/components/change-master-password-dialog';
 import { vaultBackupService } from '@/lib/vault-backup';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -188,6 +189,8 @@ export default function Profile() {
   const [currentPasscode, setCurrentPasscode] = useState('');
   const [newPasscode, setNewPasscode] = useState('');
   const [confirmNewPasscode, setConfirmNewPasscode] = useState('');
+  // New (verified) master-password change flow
+  const [showChangeMasterPasswordDialog, setShowChangeMasterPasswordDialog] = useState(false);
   
   // Edit profile state
   const [editingEmail, setEditingEmail] = useState(false);
@@ -1987,7 +1990,7 @@ export default function Profile() {
                   <h4 className="font-medium">Change Master Passcode</h4>
                   <p className="text-sm text-muted-foreground">Update your vault's master password</p>
                 </div>
-                <Button variant="outline" onClick={() => setShowChangePasscodeDialog(true)}>
+                <Button variant="outline" onClick={() => setShowChangeMasterPasswordDialog(true)} data-testid="button-open-change-master-password">
                   <Edit className="w-4 h-4 mr-2" />
                   Change
                 </Button>
@@ -2159,10 +2162,17 @@ export default function Profile() {
         </TabsContent>
       </Tabs>
 
+      {/* Change Master Password (email-verified) */}
+      <ChangeMasterPasswordDialog
+        open={showChangeMasterPasswordDialog}
+        onOpenChange={setShowChangeMasterPasswordDialog}
+        accountEmail={accountEmail}
+      />
+
       {/* Pricing Modal */}
-      <PricingUpgrade 
-        isOpen={showPricingModal} 
-        onClose={() => setShowPricingModal(false)} 
+      <PricingUpgrade
+        isOpen={showPricingModal}
+        onClose={() => setShowPricingModal(false)}
       />
 
       {/* Support Modal */}
