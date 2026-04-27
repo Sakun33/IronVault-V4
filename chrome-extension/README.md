@@ -49,9 +49,14 @@ The extension requires Chrome 116+ (Manifest V3, modular service worker).
 - **Browser-isolated session storage.** State lives in `chrome.storage.session`
   — held in browser memory, never written to disk, automatically wiped when
   the browser closes.
-- **Auto-lock.** Configurable in Settings (default 5 min, range 1–120). A
-  background alarm checks `lastActivity` every minute and wipes session state
-  on timeout.
+- **Auto-lock.** Configurable in Settings — default 5 min, choices are 1 / 5 /
+  15 / 30 minutes. A background alarm checks `lastActivity` every minute and
+  wipes session state on timeout.
+- **Biometric unlock (Touch ID / Windows Hello / Face ID).** Optional. Enabled
+  per device in the popup's Settings panel. Uses WebAuthn with the PRF
+  extension to derive a wrapping key for the master password — the key never
+  leaves the platform authenticator and is unrecoverable if the credential is
+  removed. Falls back gracefully when PRF isn't supported.
 - **No `eval`, no inline scripts.** CSP is `script-src 'self'; object-src 'self'`.
 - **Minimum permissions.** `storage`, `activeTab`, `alarms`, plus host
   permissions only for `ironvault.app` (so we can call the auth and vault APIs).
@@ -82,25 +87,23 @@ chrome-extension/
 
 | Type                   | From    | Notes                                           |
 |------------------------|---------|-------------------------------------------------|
-| `STATUS`               | popup   | Returns unlock state + remembered email.        |
-| `LOGIN`                | popup   | `{email, accountPassword, masterPassword, vaultId?}`. |
-| `LOCK`                 | popup   | Wipe session storage.                           |
+| `STATUS`               | popup   | Returns unlock state, signedIn, biometric, autolock. |
+| `LOGIN`                | popup   | First-time sign-in — fetches & caches encrypted blob. |
+| `UNLOCK`               | popup   | Master-password unlock from cached blob (no network). |
+| `BIOMETRIC_ENABLE`/`_DISABLE`/`_UNLOCK` | popup | WebAuthn PRF flow.            |
+| `SIGN_OUT`             | popup   | Wipes cached blob, biometric, session.          |
+| `LOCK`                 | popup   | Wipe session storage only.                      |
 | `SEARCH`               | popup   | Filtered metadata-only list.                    |
+| `RESYNC`               | popup   | Re-fetches encrypted blob using cached JWT.     |
 | `GET_DOMAIN_MATCHES`   | content | Origin from `sender.tab.url`, never trusted.    |
 | `GET_PASSWORD_FOR_FILL`| both    | Decrypts ONE entry. Caller drops it after use.  |
-| `GET_SETTINGS` / `SET_AUTOLOCK` | popup | Auto-lock minutes (1–120).             |
+| `GET_SETTINGS` / `SET_AUTOLOCK` | popup | Auto-lock: one of 1, 5, 15, 30.        |
 
 ## What's NOT in this version
 
-- **Biometric / WebAuthn unlock.** Designed but deferred to v1.1. The plan is
-  a `navigator.credentials.create({ userVerification: 'required',
-  authenticatorAttachment: 'platform' })` flow, with the master-password-derived
-  key wrapped under a Chrome-protected secret that biometric verification
-  gates access to. Not shipped here because it adds substantial cross-platform
-  testing surface; password unlock works on every Chromium browser today.
 - **Saving new passwords from the page.** The extension is read-only for now.
-  Use the IronVault app to add or edit entries; they sync to the extension
-  next time you re-unlock.
+  Use the IronVault app to add or edit entries; they sync to the extension on
+  re-unlock or via the **Re-sync vault** button under Settings.
 
 ## Verifying byte-compatibility with the web app
 

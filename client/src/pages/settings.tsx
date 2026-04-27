@@ -564,6 +564,106 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Browser Extension */}
+      <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-browser-extension">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Monitor className="w-5 h-5" />
+            Browser Extension
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">IronVault for Chrome</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Auto-fill passwords on any website directly from your vault.
+                Zero-knowledge — your master password never leaves the browser.
+              </p>
+            </div>
+            <Badge variant="outline" className="shrink-0">v1.0</Badge>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="gap-2"
+              onClick={() => window.open('https://chrome.google.com/webstore/category/extensions', '_blank', 'noreferrer')}
+              data-testid="button-install-extension"
+            >
+              <Download className="w-4 h-4" />
+              Install from Chrome Web Store
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => window.open('https://github.com/Sakun33/IronVault-V4/tree/main/chrome-extension', '_blank', 'noreferrer')}
+              data-testid="button-extension-source"
+            >
+              <Key className="w-4 h-4" />
+              View source / unpacked install
+            </Button>
+          </div>
+
+          <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" />
+              Manual install (developer mode)
+            </p>
+            <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Download or clone the <code className="bg-muted px-1 rounded text-xs">chrome-extension/</code> folder.</li>
+              <li>Open <code className="bg-muted px-1 rounded text-xs">chrome://extensions</code> in Chrome.</li>
+              <li>Toggle <strong>Developer Mode</strong> on (top right).</li>
+              <li>Click <strong>Load Unpacked</strong> and select the folder.</li>
+              <li>Pin the IronVault icon to the toolbar.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              Security features
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-1.5">
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Zero-knowledge: passwords decrypted locally, never sent to server</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Vault stays AES-256-GCM encrypted; PBKDF2-SHA-256 with 600,000 iterations</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Auto-lock after 5 min of inactivity (configurable: 1 / 5 / 15 / 30 min)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Master password required to unlock; biometric / Touch ID / Face ID via WebAuthn PRF</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>One credential decrypted at a time; passwords masked as ••••• with a 5-second reveal</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Strict CSP, no <code className="text-xs bg-muted px-1 rounded">eval()</code>, no inline scripts; minimum permissions only</span>
+              </li>
+            </ul>
+          </div>
+
+          <Separator />
+
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-xs text-muted-foreground">
+              The extension uses the same encrypted cloud vault as this app. Sign in
+              with your IronVault email + master password; the encrypted blob is
+              cached locally and decrypted only on your device.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Advanced Settings */}
       <Card className="rounded-2xl shadow-sm border-border/50">
         <CardHeader>
