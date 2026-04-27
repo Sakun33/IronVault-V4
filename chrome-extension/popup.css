@@ -154,6 +154,9 @@ body {
 .iv-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .iv-btn-ghost { background: transparent; color: var(--iv-text-dim); margin-top: 6px; }
 .iv-btn-ghost:hover { background: var(--iv-surface-2); color: var(--iv-text); }
+.iv-link { text-align: center; font-weight: 500; }
+.iv-danger-link { color: var(--iv-danger); }
+.iv-danger-link:hover { background: rgba(220, 38, 38, 0.08); color: var(--iv-danger); }
 
 .iv-search { margin-bottom: 10px; }
 

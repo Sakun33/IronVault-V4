@@ -104,12 +104,26 @@
       <button id="iv-settings-back" class="iv-btn iv-btn-ghost">Back</button>
 
       <div class="iv-divider"></div>
-      <h2 class="iv-section-title">Security</h2>
+      <h2 class="iv-section-title">Biometric unlock</h2>
+      <p class="iv-foot" id="iv-bio-status">Use Touch ID / Windows Hello / Face ID instead of typing the master password.</p>
+      <button id="iv-bio-enable" class="iv-btn iv-btn-ghost" type="button">Enable biometric unlock</button>
+      <button id="iv-bio-disable" class="iv-btn iv-btn-ghost" type="button" hidden>Disable biometric unlock</button>
+      <p id="iv-bio-msg" class="iv-foot" hidden></p>
+
+      <div class="iv-divider"></div>
+      <h2 class="iv-section-title">Account</h2>
+      <button id="iv-resync" class="iv-btn iv-btn-ghost" type="button">Re-sync vault from cloud</button>
+      <button id="iv-signout" class="iv-btn iv-btn-ghost iv-danger-link" type="button">Sign out and clear local data</button>
+
+      <div class="iv-divider"></div>
+      <h2 class="iv-section-title">Security model</h2>
       <ul class="iv-bullets">
-        <li>Vault stays AES-256-GCM encrypted on disk and in transit.</li>
-        <li>Master password is never stored — only the per-session wrap key is held in browser memory.</li>
-        <li>Passwords are decrypted one at a time, only when you click reveal/copy/fill.</li>
-        <li>Session is wiped on browser close or after the auto-lock timeout.</li>
+        <li>Zero-knowledge: passwords decrypted locally, never sent to server.</li>
+        <li>Master password is never stored — only a per-session AES-GCM wrap key in <code>chrome.storage.session</code>.</li>
+        <li>Each entry's password is individually re-wrapped after unlock; only ONE password is decrypted on demand (reveal/copy/fill).</li>
+        <li>Auto-lock wipes the session after inactivity (1, 5, 15, or 30 min).</li>
+        <li>Session storage is wiped automatically when the browser closes.</li>
+        <li>No <code>eval()</code>, no inline scripts. Strict CSP: <code>script-src 'self'; object-src 'self'</code>.</li>
       </ul>
     </section>
   </main>
