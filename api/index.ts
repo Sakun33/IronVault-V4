@@ -113,8 +113,15 @@ async function createOrUpdateCrmDeal(opts: { contactId: string | null; email: st
 }
 
 // ── Zoho SMTP email service ────────────────────────────────────────────────────
-const _FROM_ADDR = 'saket@ironvault.app';
-const _FROM_NAME = 'IronVault';
+// _FROM_ADDR is the Zoho SMTP auth username — must remain the real mailbox
+// the workspace was provisioned with. _FROM_DISPLAY is what recipients see
+// in their inbox; we route all outbound mail under the noreply@ alias so
+// users don't accidentally reply into a personal address. The alias must
+// be configured under "Send-as" on the saket@ Zoho account for SMTP to
+// accept the From header.
+const _FROM_ADDR    = 'saket@ironvault.app';
+const _FROM_DISPLAY = 'noreply@ironvault.app';
+const _FROM_NAME    = 'IronVault';
 const _APP_URL   = process.env.APP_URL || 'https://www.ironvault.app';
 const emailConfigured = !!process.env.ZOHO_MAIL_PASSWORD;
 
@@ -131,7 +138,7 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
   if (!emailConfigured) { console.warn('[email] ZOHO_MAIL_PASSWORD not set, skip →', to); return false; }
   try {
     const result = await _getTransporter().sendMail({
-      from: `"${_FROM_NAME}" <${_FROM_ADDR}>`,
+      from: `"${_FROM_NAME}" <${_FROM_DISPLAY}>`,
       to, subject, html,
     });
     console.log('[email] sent:', subject, '→', to, result.messageId);
@@ -139,7 +146,7 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
   } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
 }
 function _emailLayout(body: string) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 20px 60px"><div style="text-align:center;margin-bottom:28px"><div style="display:inline-flex;align-items:center;gap:10px"><div style="width:38px;height:38px;background:#4f46e5;border-radius:9px;display:inline-flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:20px">🛡</span></div><span style="font-size:21px;font-weight:700;color:#111827;letter-spacing:-0.3px">IronVault</span></div></div><div style="background:#ffffff;border-radius:16px;padding:40px 36px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.04)">${body}</div><div style="text-align:center;padding:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.7"><p style="margin:0">© 2026 IronVault — Secure Password Manager</p><p style="margin:4px 0 0"><a href="mailto:saket@ironvault.app" style="color:#6366f1;text-decoration:none">saket@ironvault.app</a></p></div></div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 20px 60px"><div style="text-align:center;margin-bottom:28px"><div style="display:inline-flex;align-items:center;gap:10px"><div style="width:38px;height:38px;background:#4f46e5;border-radius:9px;display:inline-flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:20px">🛡</span></div><span style="font-size:21px;font-weight:700;color:#111827;letter-spacing:-0.3px">IronVault</span></div></div><div style="background:#ffffff;border-radius:16px;padding:40px 36px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.04)">${body}</div><div style="text-align:center;padding:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.7"><p style="margin:0">© 2026 IronVault — Secure Password Manager</p><p style="margin:4px 0 0"><a href="mailto:noreply@ironvault.app" style="color:#6366f1;text-decoration:none">noreply@ironvault.app</a></p></div></div></body></html>`;
 }
 function _eh1(t: string) { return `<h1 style="margin:0 0 10px;font-size:24px;font-weight:700;color:#111827;text-align:center;letter-spacing:-0.4px">${t}</h1>`; }
 function _ep(t: string)  { return `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#6b7280;text-align:center">${t}</p>`; }
@@ -159,15 +166,15 @@ function verificationEmail(name: string, link: string) {
   return { subject: 'Verify your IronVault email address', html: _emailLayout(body) };
 }
 function ticketConfirmationEmail(sub: string, id: string|number) {
-  const body = `${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Ticket #${id}</p><p style="margin:0;font-size:15px;font-weight:600;color:#111827">${sub}</p>`)}${_ebtn('mailto:saket@ironvault.app','Reply via Email')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You can also reply directly to this email to update your ticket.</p>`;
+  const body = `${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Ticket #${id}</p><p style="margin:0;font-size:15px;font-weight:600;color:#111827">${sub}</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply via Email')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You can also reply directly to this email to update your ticket.</p>`;
   return { subject: `[IronVault Support] Ticket received: ${sub}`, html: _emailLayout(body) };
 }
 function ticketReplyEmail(id: string|number, preview: string) {
-  const body = `${_eh1('New reply on your ticket')}${_ep(`Our support team has responded to ticket <strong style="color:#111827">#${id}</strong>.`)}${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}${_ebtn('mailto:saket@ironvault.app','Reply')}`;
+  const body = `${_eh1('New reply on your ticket')}${_ep(`Our support team has responded to ticket <strong style="color:#111827">#${id}</strong>.`)}${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply')}`;
   return { subject: `[IronVault Support] Update on ticket #${id}`, html: _emailLayout(body) };
 }
 function ticketClosedEmail(id: string|number) {
-  const body = `${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#111827">#${id}</strong> has been marked as resolved.`)}${_ecard(`<p style="margin:0;font-size:14px;color:#374151">We hope your issue was resolved. If you need further help, feel free to reach out — we're always here.</p>`)}${_ebtn('mailto:saket@ironvault.app','Contact Support Again')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Reply to this email if you need further assistance.</p>`;
+  const body = `${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#111827">#${id}</strong> has been marked as resolved.`)}${_ecard(`<p style="margin:0;font-size:14px;color:#374151">We hope your issue was resolved. If you need further help, feel free to reach out — we're always here.</p>`)}${_ebtn('mailto:noreply@ironvault.app','Contact Support Again')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Reply to this email if you need further assistance.</p>`;
   return { subject: `[IronVault Support] Ticket #${id} resolved`, html: _emailLayout(body) };
 }
 function planUpgradeEmail(plan: string) {

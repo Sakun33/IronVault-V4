@@ -183,7 +183,13 @@
     badge.className = BADGE_CLASS;
     badge.title = 'IronVault — autofill';
     badge.setAttribute('aria-label', 'IronVault autofill');
-    badge.textContent = '🛡';
+    // Inline IV brand mark — matches chrome-extension/icons/icon.svg.
+    // Inlining (vs. <img src> via chrome.runtime.getURL) keeps the badge
+    // working even when web_accessible_resources can't be loaded by the
+    // host page (some strict CSP sites). Brand gradient is hardcoded so
+    // the IV letters stay readable through the badge's white→indigo
+    // hover swap.
+    badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="14" height="14" aria-hidden="true" focusable="false"><rect width="128" height="128" rx="28" fill="#4f46e5"/><text x="64" y="84" font-family="-apple-system, system-ui, sans-serif" font-size="58" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-2">IV</text></svg>';
     badge.tabIndex = -1; // don't grab tab focus from the form
     badge.addEventListener('mousedown', (ev) => {
       // Prevent the password input from losing focus on click.
