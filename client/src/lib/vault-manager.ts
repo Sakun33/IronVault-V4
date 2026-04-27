@@ -261,14 +261,31 @@ export class VaultManager {
     return this.getRegistry().length;
   }
 
-  async createVault(name: string, isDefault = false, planLocalLimit?: number): Promise<VaultInfo> {
+  /**
+   * Create a new local vault entry.
+   *
+   * Plan limits are enforced on the COMBINED total of local + cloud vaults
+   * (a vault that is both local and cloud-synced counts as one). Callers
+   * must pass `cloudVaultCount` — the number of cloud vaults that are NOT
+   * already in the local registry — so we never count the same vault twice.
+   *
+   * @param planVaultLimit  total vaults allowed by the user's plan (-1 = unlimited)
+   * @param cloudVaultCount number of cloud vaults outside the local registry
+   */
+  async createVault(
+    name: string,
+    isDefault = false,
+    planVaultLimit?: number,
+    cloudVaultCount = 0,
+  ): Promise<VaultInfo> {
     const registry = this.getRegistry();
 
-    // Enforce per-plan vault limit when a limit is provided
-    const limit = planLocalLimit ?? MAX_VAULTS_FREE;
-    if (limit !== -1 && registry.length >= limit) {
-      const limitLabel = limit === 1 ? '1 vault' : `${limit} vaults`;
-      throw new Error(`PLAN_LIMIT: Your current plan allows ${limitLabel}. Upgrade to create more.`);
+    // Enforce per-plan TOTAL vault limit when a limit is provided.
+    const limit = planVaultLimit ?? MAX_VAULTS_FREE;
+    const currentTotal = registry.length + Math.max(0, cloudVaultCount);
+    if (limit !== -1 && currentTotal >= limit) {
+      const limitLabel = limit === 1 ? '1 vault' : `${limit} vaults total`;
+      throw new Error(`PLAN_LIMIT: Your current plan allows ${limitLabel} (local + cloud combined). Upgrade to create more.`);
     }
 
     const id = `vault_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;

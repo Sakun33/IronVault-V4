@@ -39,10 +39,13 @@ interface VaultRow extends VaultInfo {
 export function VaultManagementSection() {
   const { toast } = useToast();
   const { masterPassword, accountEmail } = useAuth();
-  const { localVaultLimit, isPaid } = usePlanFeatures();
+  const { vaultLimit, isPaid } = usePlanFeatures();
   const onWeb = !isNativeApp();
 
   const [vaults, setVaults] = useState<VaultRow[]>([]);
+  // Cloud-only vault IDs (cloud vaults that are NOT in the local registry).
+  // Counted toward the plan's TOTAL vault limit alongside local vaults.
+  const [cloudOnlyCount, setCloudOnlyCount] = useState(0);
   const [activeVaultId, setActiveVaultId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
@@ -94,13 +97,21 @@ export function VaultManagementSection() {
       })),
     );
     setVaults(rows);
+    // Cloud vaults that don't appear in the local registry — these still
+    // count toward the plan's TOTAL vault limit.
+    const localIds = new Set(list.map(v => v.id));
+    let extra = 0;
+    cloudIds.forEach(id => { if (!localIds.has(id)) extra += 1; });
+    setCloudOnlyCount(extra);
   }, [accountEmail]);
 
   useEffect(() => {
     loadVaults();
   }, [loadVaults]);
 
-  const canCreateVault = vaults.length < localVaultLimit;
+  // TOTAL count = local registry + cloud-only vaults (cloud-synced locals are counted once).
+  const combinedVaultCount = vaults.length + cloudOnlyCount;
+  const canCreateVault = combinedVaultCount < vaultLimit;
 
   const resetCreateForm = () => {
     setNewVaultName('');
@@ -127,11 +138,13 @@ export function VaultManagementSection() {
     const previousKey = (vaultStorage as unknown as { encryptionKey?: CryptoKey }).encryptionKey ?? null;
 
     try {
-      // 1) Register the new vault in the email-scoped registry
+      // 1) Register the new vault in the email-scoped registry.
+      //    Pass cloud-only count so the limit check uses the COMBINED total.
       const newVault = await vaultManager.createVault(
         newVaultName.trim(),
-        vaults.length === 0,
-        localVaultLimit,
+        combinedVaultCount === 0,
+        vaultLimit,
+        cloudOnlyCount,
       );
 
       // 2) Provision IndexedDB + encryption key for it
@@ -340,8 +353,8 @@ export function VaultManagementSection() {
               Your Vaults
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs whitespace-nowrap">
-                {vaults.length}/{localVaultLimit} used
+              <Badge variant="outline" className="text-xs whitespace-nowrap" data-testid="badge-vault-usage">
+                {combinedVaultCount}/{vaultLimit === -1 ? '∞' : vaultLimit} vaults
               </Badge>
               <Button
                 size="sm"
@@ -484,8 +497,8 @@ export function VaultManagementSection() {
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
                 {isPaid
-                  ? `Your plan allows up to ${localVaultLimit} vaults.`
-                  : 'Upgrade to Pro for up to 5 vaults.'}
+                  ? `Your plan allows up to ${vaultLimit} vaults total (local + cloud combined).`
+                  : 'Upgrade to Pro for up to 5 vaults total (local + cloud combined).'}
               </p>
             </div>
           )}

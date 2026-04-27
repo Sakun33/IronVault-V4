@@ -88,7 +88,7 @@ const BASE_PRICING_TIERS: Omit<PricingTier, 'currency'>[] = [
       yearly: 0,
     },
     features: [
-      '1 Vault per Device',
+      '1 Vault (Mobile Only)',
       'Password Management (50)',
       'Subscription Tracking (10)',
       'Notes (10)',
@@ -120,7 +120,7 @@ const BASE_PRICING_TIERS: Omit<PricingTier, 'currency'>[] = [
     },
     features: [
       '14-Day Free Trial',
-      'Up to 5 Vaults per Device',
+      'Up to 5 Vaults Total (Local + Cloud)',
       'Unlimited Passwords',
       'Unlimited Subscriptions',
       'Unlimited Notes',
@@ -161,7 +161,7 @@ const BASE_PRICING_TIERS: Omit<PricingTier, 'currency'>[] = [
     },
     features: [
       'Everything in Pro',
-      'Up to 5 Vaults per Device',
+      'Up to 5 Vaults Total (Local + Cloud)',
       'Lifetime Access',
       'No Recurring Payments',
       'Future Updates Included',
@@ -252,7 +252,7 @@ export class PricingService {
     
     return [
       {
-        feature: 'Vaults per Device',
+        feature: 'Vaults (local + cloud)',
         tiers: {
           free: '1',
           pro: '5',

@@ -40,8 +40,8 @@ export function clearPlanCache(): void {
 export interface PlanFeatures {
   plan: Plan;
   planId: PlanId;
-  /** Max local vaults for this plan */
-  localVaultLimit: number;
+  /** Max TOTAL vaults (local + cloud combined) for this plan */
+  vaultLimit: number;
   /** Whether cloud sync is allowed */
   cloudSyncEnabled: boolean;
   /** Whether family sharing is allowed */
@@ -67,7 +67,7 @@ export interface PlanFeatures {
 }
 
 const FREE_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refresh'> = {
-  localVaultLimit: 1,
+  vaultLimit: 1,
   cloudSyncEnabled: false,
   familySharingEnabled: false,
   bankImportEnabled: false,
@@ -80,7 +80,7 @@ const FREE_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refre
 };
 
 const PAID_FEATURES: Omit<PlanFeatures, 'plan' | 'planId' | 'isLoading' | 'refresh' | 'isLifetime'> = {
-  localVaultLimit: 5,
+  vaultLimit: 5,
   cloudSyncEnabled: true,
   familySharingEnabled: false,
   bankImportEnabled: true,
@@ -95,13 +95,13 @@ function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refres
   const plan = getPlan(planId) ?? PLANS[0];
   switch (planId) {
     case 'pro':
-      return { plan, planId, ...PAID_FEATURES, isLifetime: false, localVaultLimit: plan.localVaultLimit };
+      return { plan, planId, ...PAID_FEATURES, isLifetime: false, vaultLimit: plan.vaultLimit };
     case 'family':
-      return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: true, localVaultLimit: plan.localVaultLimit };
+      return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: true, vaultLimit: plan.vaultLimit };
     case 'lifetime':
-      return { plan, planId, ...PAID_FEATURES, isLifetime: true, localVaultLimit: plan.localVaultLimit };
+      return { plan, planId, ...PAID_FEATURES, isLifetime: true, vaultLimit: plan.vaultLimit };
     case 'pro_family_member':
-      return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: false, localVaultLimit: 1 };
+      return { plan, planId, ...PAID_FEATURES, isLifetime: false, familySharingEnabled: false, vaultLimit: plan.vaultLimit };
     default:
       return { plan, planId, ...FREE_FEATURES };
   }
@@ -112,7 +112,7 @@ function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refres
  * and returns a feature set for plan gating.
  *
  * Usage:
- *   const { localVaultLimit, cloudSyncEnabled, isPaid } = usePlanFeatures();
+ *   const { vaultLimit, cloudSyncEnabled, isPaid } = usePlanFeatures();
  */
 export function usePlanFeatures(): PlanFeatures {
   const [planId, setPlanId] = useState<PlanId>('free');

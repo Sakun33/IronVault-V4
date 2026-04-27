@@ -182,7 +182,7 @@ function vaultReadyEmail(vaultName: string) {
 function familyInviteEmail(ownerEmail: string, inviteId: string, inviteeEmail: string) {
   const ownerHandle = ownerEmail.split('@')[0];
   const inviteLink = `${_APP_URL}/auth/signup?invite=${encodeURIComponent(inviteId)}&email=${encodeURIComponent(inviteeEmail)}`;
-  const body = `${_eh1(`Join ${ownerHandle}'s IronVault Family!`)}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to their IronVault Family plan — you get full premium access at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>1 cloud vault + 1 local vault (your own, private)</li><li>Cloud sync across all your devices</li><li>Unlimited passwords, notes &amp; documents</li><li>Expense tracking &amp; bank statement import</li></ul>`)}${_ebtn(inviteLink,`Join ${ownerHandle}'s Family Plan`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in or create a free IronVault account to accept. If you didn't expect this, you can safely ignore this email.</p>`;
+  const body = `${_eh1(`Join ${ownerHandle}'s IronVault Family!`)}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to their IronVault Family plan — you get full premium access at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>2 vaults total (any mix of local + cloud, your own private)</li><li>Cloud sync across all your devices</li><li>Unlimited passwords, notes &amp; documents</li><li>Expense tracking &amp; bank statement import</li></ul>`)}${_ebtn(inviteLink,`Join ${ownerHandle}'s Family Plan`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in or create a free IronVault account to accept. If you didn't expect this, you can safely ignore this email.</p>`;
   return { subject: `${ownerEmail} invited you to IronVault Family 🛡`, html: _emailLayout(body) };
 }
 // ── End email service ──────────────────────────────────────────────────────────
@@ -1201,7 +1201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [status, id]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Invite not found' });
-      // When accepted: promote invitee to pro_family_member plan (1 cloud + 1 local vault)
+      // When accepted: promote invitee to pro_family_member plan (2 vaults total — local + cloud combined)
       if (status === 'accepted' && rows[0].invitee_email) {
         await db.query(
           `UPDATE customers SET plan_type = 'pro_family_member', updated_at = NOW()

@@ -1320,7 +1320,7 @@ export default function Profile() {
                     <>
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-sm">Up to 5 vaults</span>
+                        <span className="text-sm">Up to 5 vaults total (local + cloud)</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600" />

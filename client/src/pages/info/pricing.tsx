@@ -43,21 +43,21 @@ export default function PricingPage() {
         description: "Perfect for personal use with essential features",
         color: "blue",
         features: [
-          { name: "Unlimited Passwords", included: true },
-          { name: "Unlimited Subscriptions", included: true },
-          { name: "Unlimited Notes", included: true },
+          { name: "1 vault total (mobile only)", included: true },
+          { name: "50 passwords", included: true },
+          { name: "10 subscriptions", included: true },
+          { name: "10 notes", included: true },
+          { name: "10 reminders", included: true },
+          { name: "5 documents", included: true },
           { name: "Basic Expense Tracking", included: true },
-          { name: "Basic Reminders", included: true },
           { name: "AES-256 Encryption", included: true },
-          { name: "Offline-First", included: true },
+          { name: "Offline-First (Local Storage)", included: true },
           { name: "Import/Export", included: true },
           { name: "Dark/Light Mode", included: true },
-          { name: "Browser Extension", included: true },
-          { name: "Advanced Bank Analysis", included: false },
-          { name: "Investment Portfolio", included: false },
-          { name: "Document Management", included: false },
-          { name: "API Keys Vault", included: false },
+          { name: "Web App Access", included: false },
           { name: "Cloud Sync", included: false },
+          { name: "Bank Statement Import", included: false },
+          { name: "Investment Portfolio", included: false },
           { name: "Priority Support", included: false },
         ]
       },
@@ -71,16 +71,15 @@ export default function PricingPage() {
         popular: true,
         features: [
           { name: "Everything in Free", included: true },
+          { name: "Up to 5 vaults total (local + cloud)", included: true },
+          { name: "Unlimited passwords, notes, reminders, documents", included: true },
           { name: "Advanced Bank Statement Analysis", included: true },
           { name: "Investment Portfolio Tracking", included: true },
           { name: "Document Management (Encrypted)", included: true },
-          { name: "API Keys Vault", included: true },
-          { name: "Unlimited Document Storage", included: true },
           { name: "Advanced Analytics", included: true },
-          { name: "Custom Categories", included: true },
-          { name: "Rich Text Editor", included: true },
-          { name: "Goal Tracking", included: true },
-          { name: "Cloud Sync (Encrypted)", included: true },
+          { name: "Cloud Sync (End-to-End Encrypted)", included: true },
+          { name: "Web App + Mobile App", included: true },
+          { name: "Biometric Authentication", included: true },
           { name: "Priority Email Support", included: true },
           { name: "Early Access to Features", included: true },
         ]
@@ -300,8 +299,9 @@ export default function PricingPage() {
                 How many devices can I use?
               </h4>
               <p className="text-sm text-muted-foreground">
-                Pricing is per device. You can use IronVault on multiple devices, and each device requires a separate subscription. 
-                However, you can export/import your vault data between devices for free.
+                A Pro, Family, or Lifetime subscription works across all your devices — your account syncs cloud vaults
+                via end-to-end encryption. Free is mobile only and uses local storage. Vault limits are per account
+                (5 total for Pro and Lifetime — any mix of local and cloud), not per device.
               </p>
             </div>
 

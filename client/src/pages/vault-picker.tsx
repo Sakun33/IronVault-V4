@@ -38,7 +38,7 @@ export default function VaultPickerPage() {
   const { toast } = useToast();
   const { license } = useLicense();
 
-  const { localVaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
+  const { vaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
@@ -511,10 +511,16 @@ export default function VaultPickerPage() {
     setIsCreating(true);
     const previousActive = vaultManager.getActiveVaultId();
     try {
+      // Cloud vaults that aren't already in the local registry would otherwise
+      // be missed by createVault's limit check (which counts the local registry).
+      const cloudOnlyCount = cloudVaults.filter(
+        cv => !vaults.some(v => v.id === cv.vaultId),
+      ).length;
       const newVault = await vaultManager.createVault(
         newVaultName.trim(),
-        vaults.length === 0,
-        localVaultLimit,
+        vaults.length === 0 && cloudVaults.length === 0,
+        vaultLimit,
+        cloudOnlyCount,
       );
 
       vaultManager.setActiveVaultId(newVault.id);
@@ -572,6 +578,13 @@ export default function VaultPickerPage() {
       setIsCreating(false);
     }
   };
+
+  // Combined local + cloud count — a vault that exists in both lists is counted once.
+  const combinedVaultCount = new Set([
+    ...vaults.map(v => v.id),
+    ...cloudVaults.map(c => c.vaultId),
+  ]).size;
+  const atVaultLimit = !planLoading && combinedVaultCount >= vaultLimit;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -705,13 +718,15 @@ export default function VaultPickerPage() {
                 </div>
               )}
 
-              {/* Create new local vault (mobile only) */}
-              {!planLoading && vaults.length >= localVaultLimit ? (
+              {/* Create new vault (mobile only) — combined local + cloud count */}
+              {!planLoading && combinedVaultCount >= vaultLimit ? (
                 <div className="w-full mb-8 p-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <Zap className="w-4 h-4 text-amber-500 shrink-0" />
                     <span className="text-sm text-amber-800 dark:text-amber-300 truncate">
-                      {localVaultLimit === 1 ? 'Free plan: 1 vault max' : `Plan limit: ${localVaultLimit} vaults`}
+                      {vaultLimit === 1
+                        ? 'Free plan: 1 vault max'
+                        : `Plan limit reached: ${combinedVaultCount} of ${vaultLimit} vaults used`}
                     </span>
                   </div>
                   <Button
@@ -836,15 +851,40 @@ export default function VaultPickerPage() {
 
           {/* Always-visible "+ New Vault" card-button */}
           {(isNativeApp() || isPaid) && (
-            <button
-              type="button"
-              data-testid="button-add-new-vault"
-              onClick={() => { resetCreateForm(); setShowCreateDialog(true); }}
-              className="w-full rounded-xl border border-dashed border-border bg-card/40 hover:bg-card hover:border-primary/50 transition-colors p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground mb-4"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="font-medium">New Vault</span>
-            </button>
+            <>
+              <button
+                type="button"
+                data-testid="button-add-new-vault"
+                disabled={atVaultLimit}
+                onClick={() => { resetCreateForm(); setShowCreateDialog(true); }}
+                className="w-full rounded-xl border border-dashed border-border bg-card/40 hover:bg-card hover:border-primary/50 transition-colors p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground mb-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-card/40"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="font-medium">
+                  {atVaultLimit ? 'Vault limit reached' : 'New Vault'}
+                </span>
+              </button>
+              {!planLoading && (
+                <p
+                  className="text-xs text-center text-muted-foreground mb-4"
+                  data-testid="text-vault-usage"
+                >
+                  {combinedVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
+                  {atVaultLimit && vaultLimit !== -1 && (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        onClick={() => setLocation('/upgrade')}
+                        className="text-primary hover:underline"
+                      >
+                        Upgrade
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -941,6 +981,21 @@ export default function VaultPickerPage() {
               Each vault is encrypted with its own master password. You'll need this password every time you unlock it.
             </DialogDescription>
           </DialogHeader>
+
+          <div
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+              atVaultLimit
+                ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'
+                : 'border-border bg-muted/40 text-muted-foreground'
+            }`}
+            data-testid="text-dialog-vault-usage"
+          >
+            <Zap className={`w-4 h-4 ${atVaultLimit ? 'text-amber-500' : 'text-primary'}`} />
+            <span className="flex-1">
+              {combinedVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
+              {atVaultLimit && vaultLimit !== -1 && ' — upgrade to add more'}
+            </span>
+          </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1059,9 +1114,9 @@ export default function VaultPickerPage() {
             <Button
               data-testid="button-confirm-create-vault"
               onClick={handleCreateVault}
-              disabled={isCreating}
+              disabled={isCreating || atVaultLimit}
             >
-              {isCreating ? 'Creating…' : 'Create vault'}
+              {isCreating ? 'Creating…' : atVaultLimit ? 'Limit reached' : 'Create vault'}
             </Button>
           </DialogFooter>
         </DialogContent>

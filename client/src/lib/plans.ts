@@ -28,8 +28,11 @@ export interface Plan {
   priceOneTime: number | null;
   /** Number of seats (null = single user) */
   seats: number | null;
-  /** Max local vaults allowed for this plan (-1 = unlimited) */
-  localVaultLimit: number;
+  /**
+   * Max TOTAL vaults allowed for this plan — local + cloud combined (-1 = unlimited).
+   * A vault that is both stored locally and synced to the cloud counts as ONE vault.
+   */
+  vaultLimit: number;
   /** Whether this plan is available for purchase right now */
   available: boolean;
   /** Optional badge text */
@@ -48,7 +51,7 @@ export const PLANS: Plan[] = [
     priceYearly: 0,
     priceOneTime: null,
     seats: 1,
-    localVaultLimit: 1,
+    vaultLimit: 1,
     available: true,
     badge: null,
     features: [
@@ -72,7 +75,7 @@ export const PLANS: Plan[] = [
     priceYearly: 1499,
     priceOneTime: null,
     seats: 1,
-    localVaultLimit: 5,
+    vaultLimit: 5,
     available: true,
     badge: 'Most Popular',
     features: [
@@ -82,7 +85,7 @@ export const PLANS: Plan[] = [
       'Unlimited subscriptions',
       'Unlimited notes & reminders',
       'Unlimited documents',
-      'Up to 5 vaults per device',
+      'Up to 5 vaults (local + cloud)',
       'Bank statement import (OCR)',
       'Expense tracking & analytics',
       'Investment tracking',
@@ -99,7 +102,7 @@ export const PLANS: Plan[] = [
     priceYearly: 2999,
     priceOneTime: null,
     seats: 6,
-    localVaultLimit: 5,
+    vaultLimit: 5,
     available: false, // Coming soon
     badge: 'Coming Soon',
     features: [
@@ -120,13 +123,13 @@ export const PLANS: Plan[] = [
     priceYearly: null,
     priceOneTime: 9999,
     seats: 1,
-    localVaultLimit: 5,
+    vaultLimit: 5,
     available: true,
     badge: null,
     features: [
       'Everything in Pro',
       'Web app + Mobile app',
-      'Up to 5 vaults per device',
+      'Up to 5 vaults (local + cloud)',
       'Lifetime access',
       'No recurring payments',
       'All future updates',
@@ -142,13 +145,12 @@ export const PLANS: Plan[] = [
     priceYearly: null,
     priceOneTime: null,
     seats: 1,
-    localVaultLimit: 1,
+    vaultLimit: 2,
     available: false,
     badge: null,
     features: [
       'Web app + Mobile app',
-      '1 cloud vault',
-      '1 local vault',
+      '2 vaults total (local + cloud)',
       'Unlimited passwords',
       'Unlimited subscriptions',
       'Unlimited notes & reminders',

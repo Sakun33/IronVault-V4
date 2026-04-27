@@ -17,7 +17,7 @@ export default function CreateVaultPage() {
   const [, setLocation] = useLocation();
   const { createVault, accountEmail } = useAuth();
   const { toast } = useToast();
-  const { localVaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
+  const { vaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
   const [vaultName, setVaultName] = useState('My Vault');
   const [password, setPassword] = useState('');
@@ -78,8 +78,12 @@ export default function CreateVaultPage() {
       setUpgradeLoading(false);
     }
   };
+  // create-vault.tsx is the legacy single-vault create page (used pre-picker).
+  // It only knows about local vaults — cloud-only count is unknown here, so the
+  // limit is enforced as best-effort against the local registry. The vault
+  // picker (vault-picker.tsx) is the authoritative path with combined counting.
   const currentVaultCount = vaultManager.getLocalVaultCount();
-  const atLimit = !planLoading && !onWeb && currentVaultCount >= localVaultLimit;
+  const atLimit = !planLoading && !onWeb && currentVaultCount >= vaultLimit;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +94,7 @@ export default function CreateVaultPage() {
     setIsLoading(true);
     try {
       const isFirst = vaultManager.isFirstVault();
-      const newVault = await vaultManager.createVault(vaultName.trim() || 'My Vault', isFirst, localVaultLimit);
+      const newVault = await vaultManager.createVault(vaultName.trim() || 'My Vault', isFirst, vaultLimit);
       await vaultManager.createVaultPassword(newVault.id, password);
       vaultManager.setActiveVaultId(newVault.id);
       await vaultStorage.switchToVault(newVault.id);
@@ -178,10 +182,10 @@ export default function CreateVaultPage() {
             <div className="mb-6 p-4 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-center">
               <Zap className="w-6 h-6 text-amber-500 mx-auto mb-2" />
               <p className="font-semibold text-sm mb-1">
-                {localVaultLimit === 1 ? 'Free plan: 1 vault limit reached' : `Plan limit: ${localVaultLimit} vaults reached`}
+                {vaultLimit === 1 ? 'Free plan: 1 vault limit reached' : `Plan limit reached: ${vaultLimit} vaults total`}
               </p>
               <p className="text-xs text-muted-foreground mb-3">
-                Upgrade to Pro or Lifetime to create up to 5 vaults.
+                Upgrade to Pro or Lifetime to create up to 5 vaults total (local + cloud combined).
               </p>
               <Link href="/pricing">
                 <a className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-600 rounded-lg px-3 py-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
