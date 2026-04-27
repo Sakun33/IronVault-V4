@@ -97,6 +97,7 @@ const ui = {
 let addKind = 'password';
 let dismissedSaveDomains = new Set();
 let syncDetectedFilename = '';
+let syncDetectedDownloadId = null;
 
 let pendingReveal = null; // { id, pwEl, btnEl, timer }
 let lastStatus = null;
@@ -693,12 +694,13 @@ function resetSyncPanel() {
   showSyncError('');
   showSyncMsg('');
   ui.syncResult.hidden = true;
-  ui.syncResult.classList.remove('is-success');
+  ui.syncResult.classList.remove('is-success', 'is-warning');
   ui.syncResult.innerHTML = '';
   ui.syncFile.value = '';
   ui.syncMaster.value = '';
   ui.syncDetected.hidden = true;
   syncDetectedFilename = '';
+  syncDetectedDownloadId = null;
   ui.syncSubmit.disabled = true;
   ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
 }
@@ -737,31 +739,75 @@ ui.syncSubmit?.addEventListener('click', async () => {
   if (!file) { showSyncError('Pick the CSV file you exported from Chrome.'); return; }
   if (!ui.syncMaster.value) { showSyncError('Master password is required to re-encrypt the vault.'); return; }
 
+  // Only forward the detected downloadId when the picked filename matches —
+  // we don't want to delete an unrelated CSV the user happened to have
+  // downloaded earlier.
+  const downloadId = (syncDetectedFilename && file.name === syncDetectedFilename)
+    ? syncDetectedDownloadId
+    : null;
+
   ui.syncSubmit.disabled = true;
   ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Importing…';
+  let csvText = await file.text();
   try {
-    const csvText = await file.text();
     const result = await send({
       type: 'SYNC_FROM_BROWSER',
       csvText,
       masterPassword: ui.syncMaster.value,
+      downloadId,
     });
+    // Scrub the in-memory CSV string ASAP. JS strings are immutable so this
+    // is a hint for GC, not a guarantee — but it shortens the window where
+    // Chrome's plaintext passwords sit in this popup's heap. Also drop the
+    // File reference so the browser frees the underlying blob.
+    csvText = '';
+    try { ui.syncFile.value = ''; } catch {}
     ui.syncMaster.value = '';
+
     const summary = `${result.added} new · ${result.updated} updated · ${result.unchanged} unchanged`;
-    showSyncMsg('Sync complete.');
     ui.syncResult.classList.add('is-success');
+    let footer = '';
+    if (result.fileDeleted) {
+      footer = `<div class="iv-sync-result-note iv-sync-result-note-success">
+        ✓ Exported passwords file has been securely deleted from your Downloads folder.
+      </div>`;
+      showSyncMsg('Sync complete · CSV deleted from disk.');
+    } else if (downloadId && result.deleteError) {
+      // We tried but couldn't delete — warn so the user finishes the job.
+      footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
+        ⚠️ Couldn't auto-delete the exported CSV (${escapeHtml(result.deleteError)}).
+        For security, please delete the file from your Downloads folder.
+      </div>`;
+      showSyncMsg('Sync complete · CSV not deleted.');
+    } else {
+      // Manual pick — we never had a downloadId, so we can't delete.
+      footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
+        ⚠️ For security, please delete the exported CSV file from your Downloads folder now.
+        IronVault never sees the file path when you pick it manually.
+      </div>`;
+      showSyncMsg('Sync complete.');
+    }
+
     ui.syncResult.innerHTML = `
       <div class="iv-sync-result-row"><span>Added</span><strong>${result.added}</strong></div>
       <div class="iv-sync-result-row"><span>Updated</span><strong>${result.updated}</strong></div>
-      <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>`;
+      <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>
+      ${footer}`;
     ui.syncResult.hidden = false;
     ui.syncSubmit.querySelector('.iv-btn-label').textContent = summary;
   } catch (err) {
+    csvText = ''; // scrub even on failure
     showSyncError(err.message || 'Sync failed.');
     ui.syncSubmit.disabled = false;
     ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
   }
 });
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 
 // Listen for the background's "we saw a passwords-CSV download" broadcast.
 // Just an informational hint — the user still picks the file via the input
@@ -770,6 +816,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== 'BROWSER_CSV_DETECTED') return;
   if (!ui.syncPanel || ui.syncPanel.hidden) return;
   syncDetectedFilename = msg.basename || msg.filename || '';
+  syncDetectedDownloadId = typeof msg.downloadId === 'number' ? msg.downloadId : null;
   if (syncDetectedFilename) {
     ui.syncDetectedName.textContent = syncDetectedFilename;
     ui.syncDetected.hidden = false;

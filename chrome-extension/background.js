@@ -654,7 +654,7 @@ function csvUsernameMatch(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
-async function syncFromBrowser({ csvText, masterPassword }) {
+async function syncFromBrowser({ csvText, masterPassword, downloadId }) {
   if (!csvText || typeof csvText !== 'string') {
     throw new Error('CSV content is empty.');
   }
@@ -680,7 +680,13 @@ async function syncFromBrowser({ csvText, masterPassword }) {
     throw new Error('Could not decrypt vault.');
   }
 
-  const { rows } = parseCsv(csvText);
+  const parsed = parseCsv(csvText);
+  // Scrub the raw CSV string from this scope as soon as we have the rows.
+  // JS strings are immutable so this is a hint to GC, not a guarantee, but
+  // it shortens the window where Chrome's plaintext passwords sit in this
+  // worker's heap.
+  csvText = '';
+  const rows = parsed.rows;
   if (rows.length === 0) {
     throw new Error('No password rows found in this CSV.');
   }
@@ -741,7 +747,11 @@ async function syncFromBrowser({ csvText, masterPassword }) {
 
   // Nothing changed → don't burn a server roundtrip + a fresh blob.
   if (added === 0 && updated === 0) {
-    return { success: true, added: 0, updated: 0, unchanged };
+    // Even when nothing changed, the CSV file is still on disk — wipe it.
+    const del = await tryDeleteDownloadedCsv(downloadId);
+    // Best-effort scrub of the rows array we just used.
+    rows.length = 0;
+    return { success: true, added: 0, updated: 0, unchanged, ...del };
   }
 
   const newBlob = await encryptCloudBlob(payload, masterPassword);
@@ -786,7 +796,56 @@ async function syncFromBrowser({ csvText, masterPassword }) {
   }
 
   await touchActivity();
-  return { success: true, added, updated, unchanged };
+
+  // Auto-delete the exported CSV from disk + erase from Chrome's download
+  // history. Best-effort: if removeFile fails (file already moved/deleted,
+  // permissions, etc.) we still surface the warning to the user.
+  const deleteResult = await tryDeleteDownloadedCsv(downloadId);
+
+  // Scrub the parsed rows so plaintext passwords don't linger as a GC
+  // root for any longer than necessary.
+  rows.length = 0;
+
+  return { success: true, added, updated, unchanged, ...deleteResult };
+}
+
+// Attempt to delete a Chrome-exported CSV both from disk and from Chrome's
+// download history. Returns shape:
+//   { fileDeleted: true } — wiped from disk and history
+//   { fileDeleted: false, deleteError: string } — couldn't wipe, warn user
+//   { fileDeleted: false } — no downloadId supplied (manual file picker)
+async function tryDeleteDownloadedCsv(downloadId) {
+  if (!downloadId) return { fileDeleted: false };
+  if (!chrome?.downloads?.removeFile) {
+    return { fileDeleted: false, deleteError: 'downloads API unavailable' };
+  }
+  try {
+    // Verify the download item still exists and looks like a passwords CSV
+    // before we touch it, so a stray ID can't make us delete an unrelated
+    // file the user downloaded later.
+    const items = await chrome.downloads.search({ id: downloadId });
+    const item = items?.[0];
+    if (!item) return { fileDeleted: false, deleteError: 'download not found' };
+    if (!looksLikeBrowserPasswordCsv(item) && item.state !== 'complete') {
+      return { fileDeleted: false, deleteError: 'download no longer a CSV' };
+    }
+    await new Promise((resolve, reject) => {
+      chrome.downloads.removeFile(downloadId, () => {
+        const e = chrome.runtime.lastError;
+        if (e) reject(new Error(e.message));
+        else resolve();
+      });
+    });
+    // Erase the entry from Chrome's download history too. If this fails
+    // we don't roll back — the file is already gone, which is the security
+    // win that matters.
+    try {
+      await new Promise((resolve) => chrome.downloads.erase({ id: downloadId }, () => resolve()));
+    } catch {}
+    return { fileDeleted: true };
+  } catch (err) {
+    return { fileDeleted: false, deleteError: err?.message || 'delete failed' };
+  }
 }
 
 // Detect when the user finishes the Chrome password CSV export and notify

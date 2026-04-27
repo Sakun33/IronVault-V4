@@ -333,3 +333,20 @@ body {
 .iv-sync-result.is-success { border-color: var(--iv-success); }
 .iv-sync-result-row { display: flex; justify-content: space-between; }
 .iv-sync-result-row strong { color: var(--iv-text); }
+
+.iv-sync-result-note {
+  margin-top: 6px; padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11.5px; line-height: 1.5;
+  font-weight: 500;
+}
+.iv-sync-result-note-success {
+  background: rgba(22, 163, 74, 0.10);
+  border: 1px solid rgba(22, 163, 74, 0.30);
+  color: var(--iv-success);
+}
+.iv-sync-result-note-warning {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.30);
+  color: var(--iv-danger);
+}
