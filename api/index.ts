@@ -515,6 +515,97 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return verifyCloudToken(auth.substring(7));
   }
 
+  function getCloudUserToken(req: VercelRequest): string | null {
+    const auth = req.headers.authorization as string | undefined;
+    if (!auth?.startsWith('Bearer ')) return null;
+    return auth.substring(7);
+  }
+
+  function hashJwtToken(token: string): string {
+    return createHmac('sha256', JWT_SECRET).update(token).digest('hex');
+  }
+
+  function getClientIp(req: VercelRequest): string {
+    const xff = (req.headers['x-forwarded-for'] as string) || '';
+    const first = xff.split(',')[0]?.trim();
+    return first || (req.headers['x-real-ip'] as string) || (req.socket?.remoteAddress as string) || 'unknown';
+  }
+
+  function parseUserAgent(ua: string | undefined): { browser: string; os: string; deviceName: string } {
+    const s = ua || '';
+    let browser = 'Unknown';
+    if (/Edg\//i.test(s)) browser = 'Edge';
+    else if (/OPR\/|Opera/i.test(s)) browser = 'Opera';
+    else if (/Chrome\//i.test(s) && !/Chromium/i.test(s)) browser = 'Chrome';
+    else if (/Firefox\//i.test(s)) browser = 'Firefox';
+    else if (/Safari\//i.test(s) && !/Chrome\//i.test(s)) browser = 'Safari';
+    else if (/Chromium/i.test(s)) browser = 'Chromium';
+    let os = 'Unknown';
+    if (/Windows NT/i.test(s)) os = 'Windows';
+    else if (/Mac OS X|Macintosh/i.test(s)) os = 'macOS';
+    else if (/Android/i.test(s)) os = 'Android';
+    else if (/iPhone|iPad|iOS/i.test(s)) os = 'iOS';
+    else if (/Linux/i.test(s)) os = 'Linux';
+    return { browser, os, deviceName: `${browser} on ${os}` };
+  }
+
+  // Idempotent table provisioning (called from endpoints below). Wrapped in
+  // try so missing privileges don't 500 — re-issuing the migration via the
+  // first POST that needs the table is the same pattern as auth_verification_codes.
+  async function ensureSessionAndActivityTables(): Promise<void> {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS extension_sessions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL,
+          device_name TEXT,
+          browser TEXT,
+          os TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          client_kind TEXT,
+          jwt_token_hash TEXT NOT NULL,
+          last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          revoked_at TIMESTAMPTZ,
+          is_active BOOLEAN NOT NULL DEFAULT true
+        )
+      `);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_extension_sessions_user ON extension_sessions(user_id, is_active)`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_extension_sessions_hash ON extension_sessions(jwt_token_hash)`);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS vault_activity (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL,
+          session_id UUID,
+          action TEXT NOT NULL,
+          item_type TEXT,
+          item_title TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_vault_activity_user ON vault_activity(user_id, created_at DESC)`);
+    } catch (e: any) {
+      console.error('[ensureSessionAndActivityTables]', e.message);
+    }
+  }
+
+  async function getActiveSessionByToken(token: string): Promise<{ id: string; userId: string } | null> {
+    try {
+      const hash = hashJwtToken(token);
+      const { rows } = await db.query(
+        `SELECT id, user_id FROM extension_sessions WHERE jwt_token_hash = $1 AND is_active = true LIMIT 1`,
+        [hash]
+      );
+      if (!rows[0]) return null;
+      return { id: rows[0].id, userId: rows[0].user_id };
+    } catch {
+      return null;
+    }
+  }
+
   // ── POST /api/test-email ────────────────────────────────────────────────────
   if (path === '/api/test-email' && req.method === 'POST') {
     const { type, to, name, plan } = req.body || {};
@@ -846,7 +937,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db.query(`UPDATE crm_users SET last_active_at = NOW() WHERE id = $1`, [userId])
         .catch((e: any) => console.error('[auth/token] last_active_at update failed:', e.message));
       const token = signCloudToken(userId, normalizedEmail);
-      return res.json({ success: true, token, userId, email: normalizedEmail });
+
+      // Register session in extension_sessions. Auto-creates the table on first
+      // use (same pattern as auth_verification_codes). The hashed token is the
+      // server-side handle the extension's session_check polls against.
+      let sessionId: string | null = null;
+      try {
+        await ensureSessionAndActivityTables();
+        const ua = (req.headers['user-agent'] as string) || '';
+        const clientKind = (req.headers['x-iv-client'] as string) || (ua.includes('Chrome') && !ua.includes('Mobile') ? 'web' : 'web');
+        const { browser, os, deviceName } = parseUserAgent(ua);
+        const ip = getClientIp(req);
+        const tokenHash = hashJwtToken(token);
+        const { rows: sessRows } = await db.query(
+          `INSERT INTO extension_sessions (user_id, device_name, browser, os, ip_address, user_agent, client_kind, jwt_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [userId, deviceName, browser, os, ip, ua, clientKind, tokenHash]
+        );
+        sessionId = sessRows[0]?.id || null;
+      } catch (e: any) {
+        console.error('[auth/token] session register failed:', e.message);
+      }
+
+      return res.json({ success: true, token, userId, email: normalizedEmail, sessionId });
     } catch (err: any) {
       console.error('auth/token error:', err.message);
       return res.status(500).json({ error: 'Auth failed' });
@@ -1711,6 +1824,260 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ data: JSON.parse(share.encrypted_data) });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/auth/sessions ─────────────────────────────────────────────────
+  // Lists all active sessions (extension + web) for the authenticated user.
+  // Used by the Active Sessions UI in Profile → Security and by the extension
+  // settings list.
+  if (path === '/api/auth/sessions' && req.method === 'GET') {
+    const cloudUser = getCloudUser(req);
+    const callerToken = getCloudUserToken(req);
+    if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureSessionAndActivityTables();
+      const callerHash = hashJwtToken(callerToken);
+      const { rows } = await db.query(
+        `SELECT id, device_name, browser, os, ip_address, client_kind, last_active_at, created_at, revoked_at, is_active, jwt_token_hash
+           FROM extension_sessions
+          WHERE user_id = $1 AND is_active = true
+          ORDER BY last_active_at DESC
+          LIMIT 100`,
+        [cloudUser.userId]
+      );
+      return res.json({
+        success: true,
+        sessions: rows.map((r: any) => ({
+          id: r.id,
+          deviceName: r.device_name,
+          browser: r.browser,
+          os: r.os,
+          ipAddress: r.ip_address,
+          clientKind: r.client_kind,
+          lastActiveAt: r.last_active_at?.toISOString(),
+          createdAt: r.created_at?.toISOString(),
+          isCurrent: r.jwt_token_hash === callerHash,
+        })),
+      });
+    } catch (err: any) {
+      console.error('auth/sessions error:', err.message);
+      return res.status(500).json({ error: 'Failed to list sessions' });
+    }
+  }
+
+  // ── POST /api/auth/sessions/:id/revoke ─────────────────────────────────────
+  if (/^\/api\/auth\/sessions\/[^\/]+\/revoke$/.test(path) && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[4];
+    try {
+      await ensureSessionAndActivityTables();
+      const { rows } = await db.query(
+        `UPDATE extension_sessions
+            SET is_active = false, revoked_at = NOW()
+          WHERE id = $1 AND user_id = $2 AND is_active = true
+          RETURNING id`,
+        [id, cloudUser.userId]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Session not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('auth/sessions revoke error:', err.message);
+      return res.status(500).json({ error: 'Failed to revoke session' });
+    }
+  }
+
+  // ── POST /api/auth/sessions/revoke-all ─────────────────────────────────────
+  // Revokes every session except the caller's own, so the user isn't logged
+  // out of the device they're using to revoke. The "Sign out everywhere"
+  // button calls this.
+  if (path === '/api/auth/sessions/revoke-all' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    const callerToken = getCloudUserToken(req);
+    if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureSessionAndActivityTables();
+      const callerHash = hashJwtToken(callerToken);
+      const { rowCount } = await db.query(
+        `UPDATE extension_sessions
+            SET is_active = false, revoked_at = NOW()
+          WHERE user_id = $1 AND is_active = true AND jwt_token_hash <> $2`,
+        [cloudUser.userId, callerHash]
+      );
+      return res.json({ success: true, revoked: rowCount });
+    } catch (err: any) {
+      console.error('auth/sessions revoke-all error:', err.message);
+      return res.status(500).json({ error: 'Failed to revoke sessions' });
+    }
+  }
+
+  // ── GET /api/auth/session/check ────────────────────────────────────────────
+  // The extension polls this every 5 minutes. If the caller's token has been
+  // revoked server-side, returns 401 so the extension wipes local data.
+  if (path === '/api/auth/session/check' && req.method === 'GET') {
+    const cloudUser = getCloudUser(req);
+    const callerToken = getCloudUserToken(req);
+    if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureSessionAndActivityTables();
+      const session = await getActiveSessionByToken(callerToken);
+      if (!session) {
+        return res.status(401).json({ error: 'session_revoked', valid: false });
+      }
+      // Touch last_active_at so the UI reflects extension liveness.
+      db.query(`UPDATE extension_sessions SET last_active_at = NOW() WHERE id = $1`, [session.id])
+        .catch((e: any) => console.error('[session/check] touch failed:', e.message));
+      return res.json({ success: true, valid: true, sessionId: session.id });
+    } catch (err: any) {
+      console.error('auth/session/check error:', err.message);
+      return res.status(500).json({ error: 'Failed to check session' });
+    }
+  }
+
+  // ── POST /api/vault/items/add ──────────────────────────────────────────────
+  // Extension uploads a re-encrypted vault blob containing one or more newly
+  // appended items. Server is zero-knowledge: it only swaps the encrypted_blob
+  // for the chosen vault. Functionally a thin wrapper around PUT but lives at
+  // a clearer path the extension reaches for "Save to Vault".
+  if (path === '/api/vault/items/add' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const { vaultId, encryptedBlob, clientModifiedAt, addedItem } = req.body || {};
+    if (!encryptedBlob) return res.status(400).json({ error: 'encryptedBlob required' });
+    try {
+      await ensureSessionAndActivityTables();
+      // Resolve target vault: explicit vaultId, default vault, or single vault.
+      let targetVaultId = vaultId as string | undefined;
+      if (!targetVaultId) {
+        const { rows } = await db.query(
+          `SELECT vault_id FROM cloud_vaults WHERE user_id = $1
+             ORDER BY is_default DESC, created_at DESC LIMIT 1`,
+          [cloudUser.userId]
+        );
+        targetVaultId = rows[0]?.vault_id;
+      }
+      if (!targetVaultId) return res.status(404).json({ error: 'No cloud vault found' });
+      const incomingTs = clientModifiedAt ? new Date(clientModifiedAt) : new Date();
+      const { rows: updated } = await db.query(
+        `UPDATE cloud_vaults
+            SET encrypted_blob = $3, client_modified_at = $4, server_updated_at = NOW()
+          WHERE user_id = $1 AND vault_id = $2
+          RETURNING vault_id, server_updated_at`,
+        [cloudUser.userId, targetVaultId, encryptedBlob, incomingTs]
+      );
+      if (!updated[0]) return res.status(404).json({ error: 'Vault not found' });
+
+      // Best-effort activity log.
+      const callerToken = getCloudUserToken(req);
+      const session = callerToken ? await getActiveSessionByToken(callerToken) : null;
+      const itemType = addedItem?.itemType || 'password';
+      const itemTitle = addedItem?.title ? String(addedItem.title).slice(0, 200) : null;
+      db.query(
+        `INSERT INTO vault_activity (user_id, session_id, action, item_type, item_title, ip_address, user_agent)
+         VALUES ($1, $2, 'created', $3, $4, $5, $6)`,
+        [cloudUser.userId, session?.id || null, itemType, itemTitle, getClientIp(req), (req.headers['user-agent'] as string) || null]
+      ).catch((e: any) => console.error('[vault/items/add] activity log failed:', e.message));
+
+      return res.json({
+        success: true,
+        vaultId: updated[0].vault_id,
+        serverUpdatedAt: updated[0].server_updated_at?.toISOString(),
+      });
+    } catch (err: any) {
+      console.error('vault/items/add error:', err.message);
+      return res.status(500).json({ error: 'Failed to add item' });
+    }
+  }
+
+  // ── POST /api/vault/activity ───────────────────────────────────────────────
+  // Generic activity-log endpoint. Called by the extension on autofill, by the
+  // web app on view/import/export/delete, and anywhere else that wants to leave
+  // an audit trail in the user's activity timeline.
+  if (path === '/api/vault/activity' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const { action, itemType, itemTitle } = req.body || {};
+    if (!action) return res.status(400).json({ error: 'action required' });
+    const allowedActions = new Set(['viewed', 'filled', 'created', 'updated', 'deleted', 'exported', 'imported', 'login', 'logout']);
+    if (!allowedActions.has(String(action))) {
+      return res.status(400).json({ error: 'invalid action' });
+    }
+    try {
+      await ensureSessionAndActivityTables();
+      const callerToken = getCloudUserToken(req);
+      const session = callerToken ? await getActiveSessionByToken(callerToken) : null;
+      await db.query(
+        `INSERT INTO vault_activity (user_id, session_id, action, item_type, item_title, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          cloudUser.userId,
+          session?.id || null,
+          String(action),
+          itemType ? String(itemType).slice(0, 40) : null,
+          itemTitle ? String(itemTitle).slice(0, 200) : null,
+          getClientIp(req),
+          (req.headers['user-agent'] as string) || null,
+        ]
+      );
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('vault/activity log error:', err.message);
+      return res.status(500).json({ error: 'Failed to log activity' });
+    }
+  }
+
+  // ── GET /api/vault/activity ────────────────────────────────────────────────
+  // Paginated timeline used by Profile → Activity. Filterable by item_type
+  // and action. Returns up to 100 rows per page.
+  if (path === '/api/vault/activity' && req.method === 'GET') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureSessionAndActivityTables();
+      const limitRaw = parseInt((req.query?.limit as string) || '50', 10);
+      const offsetRaw = parseInt((req.query?.offset as string) || '0', 10);
+      const limit = Math.max(1, Math.min(100, isFinite(limitRaw) ? limitRaw : 50));
+      const offset = Math.max(0, isFinite(offsetRaw) ? offsetRaw : 0);
+      const itemType = (req.query?.type as string) || '';
+      const action = (req.query?.action as string) || '';
+      const params: any[] = [cloudUser.userId];
+      const where: string[] = ['va.user_id = $1'];
+      if (itemType) { params.push(itemType); where.push(`va.item_type = $${params.length}`); }
+      if (action) { params.push(action); where.push(`va.action = $${params.length}`); }
+      params.push(limit); params.push(offset);
+      const { rows } = await db.query(
+        `SELECT va.id, va.action, va.item_type, va.item_title, va.ip_address, va.created_at,
+                es.device_name, es.browser, es.os
+           FROM vault_activity va
+           LEFT JOIN extension_sessions es ON es.id = va.session_id
+          WHERE ${where.join(' AND ')}
+          ORDER BY va.created_at DESC
+          LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+      const { rows: countRows } = await db.query(
+        `SELECT COUNT(*)::int AS total FROM vault_activity WHERE user_id = $1`,
+        [cloudUser.userId]
+      );
+      return res.json({
+        success: true,
+        total: countRows[0]?.total || 0,
+        items: rows.map((r: any) => ({
+          id: r.id,
+          action: r.action,
+          itemType: r.item_type,
+          itemTitle: r.item_title,
+          ipAddress: r.ip_address,
+          createdAt: r.created_at?.toISOString(),
+          deviceName: r.device_name || null,
+          browser: r.browser || null,
+          os: r.os || null,
+        })),
+      });
+    } catch (err: any) {
+      console.error('vault/activity list error:', err.message);
+      return res.status(500).json({ error: 'Failed to list activity' });
     }
   }
 

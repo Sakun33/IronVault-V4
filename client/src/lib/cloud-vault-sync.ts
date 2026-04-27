@@ -47,7 +47,7 @@ export async function acquireCloudToken(email: string, accountPasswordHash: stri
   try {
     const res = await fetch(`${CLOUD_API}/api/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-iv-client': 'web' },
       body: JSON.stringify({ email, accountPasswordHash }),
     });
     if (!res.ok) return null;

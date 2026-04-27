@@ -80,13 +80,112 @@
 
     <!-- Vault list panel -->
     <section id="iv-list-panel" class="iv-panel" hidden>
-      <input id="iv-search" class="iv-search" type="search" placeholder="Search by site or username">
+      <div id="iv-save-banner" class="iv-save-banner" hidden>
+        <div class="iv-save-banner-text">
+          <strong>Save this site?</strong>
+          <span id="iv-save-banner-domain"></span>
+        </div>
+        <button id="iv-save-banner-btn" type="button" class="iv-btn iv-btn-primary iv-btn-sm">Save</button>
+        <button id="iv-save-banner-dismiss" type="button" class="iv-icon-btn" title="Dismiss">✕</button>
+      </div>
+      <div class="iv-list-toolbar">
+        <input id="iv-search" class="iv-search" type="search" placeholder="Search by site or username">
+        <button id="iv-add-btn" type="button" class="iv-icon-btn iv-add-btn" title="Add new entry">＋</button>
+      </div>
       <div id="iv-list-empty" class="iv-empty" hidden>No matching entries.</div>
       <ul id="iv-list" class="iv-list"></ul>
       <p class="iv-foot">
         Click <span class="iv-kbd">👁</span> to reveal a password for 5 seconds.
         Click <span class="iv-kbd">⎘</span> to copy.
       </p>
+    </section>
+
+    <!-- Add entry panel -->
+    <section id="iv-add-panel" class="iv-panel" hidden>
+      <h1 class="iv-title">Add to vault</h1>
+      <div class="iv-add-tabs" role="tablist">
+        <button type="button" class="iv-add-tab is-active" data-add-kind="password" role="tab">Password</button>
+        <button type="button" class="iv-add-tab" data-add-kind="note" role="tab">Note</button>
+        <button type="button" class="iv-add-tab" data-add-kind="subscription" role="tab">Subscription</button>
+      </div>
+
+      <form id="iv-add-form" class="iv-form" novalidate>
+        <!-- Password fields -->
+        <div class="iv-add-section" data-add-section="password">
+          <label class="iv-field">
+            <span>Title</span>
+            <input id="iv-add-pw-title" type="text" autocomplete="off" placeholder="e.g. Gmail">
+          </label>
+          <label class="iv-field">
+            <span>Site URL</span>
+            <input id="iv-add-pw-url" type="url" autocomplete="off" placeholder="https://example.com">
+          </label>
+          <label class="iv-field">
+            <span>Username / email</span>
+            <input id="iv-add-pw-username" type="text" autocomplete="off">
+          </label>
+          <label class="iv-field">
+            <span>Password</span>
+            <input id="iv-add-pw-password" type="password" autocomplete="off">
+          </label>
+        </div>
+
+        <!-- Note fields -->
+        <div class="iv-add-section" data-add-section="note" hidden>
+          <label class="iv-field">
+            <span>Title</span>
+            <input id="iv-add-note-title" type="text" autocomplete="off" placeholder="e.g. Wifi password">
+          </label>
+          <label class="iv-field">
+            <span>Content</span>
+            <textarea id="iv-add-note-content" rows="5"></textarea>
+          </label>
+        </div>
+
+        <!-- Subscription fields -->
+        <div class="iv-add-section" data-add-section="subscription" hidden>
+          <label class="iv-field">
+            <span>Service name</span>
+            <input id="iv-add-sub-name" type="text" autocomplete="off" placeholder="e.g. Netflix">
+          </label>
+          <label class="iv-field">
+            <span>Cost</span>
+            <input id="iv-add-sub-cost" type="number" step="0.01" min="0" autocomplete="off" placeholder="9.99">
+          </label>
+          <label class="iv-field">
+            <span>Currency</span>
+            <input id="iv-add-sub-currency" type="text" maxlength="3" autocomplete="off" placeholder="USD" value="USD">
+          </label>
+          <label class="iv-field">
+            <span>Next billing date</span>
+            <input id="iv-add-sub-billing" type="date" autocomplete="off">
+          </label>
+          <label class="iv-field">
+            <span>Billing cycle</span>
+            <select id="iv-add-sub-cycle">
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="weekly">Weekly</option>
+              <option value="quarterly">Quarterly</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="iv-field">
+          <span>Master password (to re-encrypt vault)</span>
+          <input id="iv-add-master" type="password" autocomplete="off" required>
+        </label>
+
+        <p id="iv-add-error" class="iv-error" hidden></p>
+        <p id="iv-add-msg" class="iv-foot" hidden></p>
+
+        <div class="iv-add-actions">
+          <button type="submit" class="iv-btn iv-btn-primary" id="iv-add-submit">
+            <span class="iv-btn-label">Save to vault</span>
+          </button>
+          <button type="button" class="iv-btn iv-btn-ghost" id="iv-add-cancel">Cancel</button>
+        </div>
+      </form>
     </section>
 
     <!-- Settings panel -->

@@ -95,3 +95,20 @@ export async function decryptCloudBlob(blobJsonString, masterPassword) {
   }
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
+
+// Re-encrypt a payload back into the same wire format the web app produces
+// (multi-vault-storage.ts → exportVault). Fresh salt + IV each call so the
+// blob is never reused. Byte-compatible: the web app will accept the result
+// the next time it pulls from cloud.
+export async function encryptCloudBlob(payload, masterPassword) {
+  const salt = generateBytes(16);
+  const key = await deriveMasterKey(masterPassword, salt);
+  const json = JSON.stringify(payload);
+  const { ciphertext, iv } = await aesGcmEncrypt(json, key);
+  return JSON.stringify({
+    version: 3,
+    salt: b64Encode(salt),
+    iv: b64Encode(iv),
+    data: b64Encode(ciphertext),
+  });
+}

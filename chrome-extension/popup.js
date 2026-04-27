@@ -17,6 +17,7 @@ const ui = {
   unlockPanel: $('iv-unlock-panel'),
   listPanel: $('iv-list-panel'),
   settingsPanel: $('iv-settings-panel'),
+  addPanel: $('iv-add-panel'),
 
   loginForm: $('iv-login-form'),
   emailInput: $('iv-email'),
@@ -54,7 +55,34 @@ const ui = {
   bioMsg: $('iv-bio-msg'),
   resync: $('iv-resync'),
   signout: $('iv-signout'),
+
+  saveBanner: $('iv-save-banner'),
+  saveBannerDomain: $('iv-save-banner-domain'),
+  saveBannerBtn: $('iv-save-banner-btn'),
+  saveBannerDismiss: $('iv-save-banner-dismiss'),
+
+  addBtn: $('iv-add-btn'),
+  addForm: $('iv-add-form'),
+  addError: $('iv-add-error'),
+  addMsg: $('iv-add-msg'),
+  addSubmit: $('iv-add-submit'),
+  addCancel: $('iv-add-cancel'),
+  addMaster: $('iv-add-master'),
+  addPwTitle: $('iv-add-pw-title'),
+  addPwUrl: $('iv-add-pw-url'),
+  addPwUsername: $('iv-add-pw-username'),
+  addPwPassword: $('iv-add-pw-password'),
+  addNoteTitle: $('iv-add-note-title'),
+  addNoteContent: $('iv-add-note-content'),
+  addSubName: $('iv-add-sub-name'),
+  addSubCost: $('iv-add-sub-cost'),
+  addSubCurrency: $('iv-add-sub-currency'),
+  addSubBilling: $('iv-add-sub-billing'),
+  addSubCycle: $('iv-add-sub-cycle'),
 };
+
+let addKind = 'password';
+let dismissedSaveDomains = new Set();
 
 let pendingReveal = null; // { id, pwEl, btnEl, timer }
 let lastStatus = null;
@@ -76,6 +104,7 @@ function showPanel(name) {
   ui.unlockPanel.hidden = name !== 'unlock';
   ui.listPanel.hidden = name !== 'list';
   ui.settingsPanel.hidden = name !== 'settings';
+  if (ui.addPanel) ui.addPanel.hidden = name !== 'add';
 }
 
 function setHeader(unlocked, vaultName) {
@@ -97,6 +126,7 @@ async function refreshState() {
       setHeader(true, status.vaultName);
       showPanel('list');
       await loadList('');
+      await refreshSaveBanner();
     } else if (status.signedIn) {
       setHeader(false);
       showPanel('unlock');
@@ -443,6 +473,194 @@ ui.signout.addEventListener('click', async () => {
   } catch (err) {
     ui.settingsMsg.hidden = false;
     ui.settingsMsg.textContent = err.message;
+  }
+});
+
+// ── Save-this-site banner ──────────────────────────────────────────────────
+function getDomainFromUrl(u) {
+  if (!u) return '';
+  try {
+    const x = new URL(u.includes('://') ? u : `https://${u}`);
+    return x.hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+async function getActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab || null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshSaveBanner() {
+  if (!ui.saveBanner) return;
+  ui.saveBanner.hidden = true;
+  const tab = await getActiveTab();
+  if (!tab?.url) return;
+  const url = tab.url;
+  // Skip non-http schemes (chrome://, about:, file:, etc.)
+  if (!/^https?:\/\//i.test(url)) return;
+  const domain = getDomainFromUrl(url);
+  if (!domain) return;
+  if (dismissedSaveDomains.has(domain)) return;
+  // Skip if a password for this domain is already in the vault
+  try {
+    const r = await send({ type: 'GET_DOMAIN_MATCHES', url });
+    if (r.matches && r.matches.length > 0) return;
+  } catch {
+    return;
+  }
+  ui.saveBannerDomain.textContent = domain;
+  ui.saveBanner.hidden = false;
+  ui.saveBanner.dataset.url = url;
+  ui.saveBanner.dataset.domain = domain;
+}
+
+ui.saveBannerBtn?.addEventListener('click', () => {
+  const url = ui.saveBanner.dataset.url || '';
+  const domain = ui.saveBanner.dataset.domain || '';
+  openAddPanel('password', { url, title: domain });
+});
+
+ui.saveBannerDismiss?.addEventListener('click', () => {
+  const d = ui.saveBanner.dataset.domain;
+  if (d) dismissedSaveDomains.add(d);
+  ui.saveBanner.hidden = true;
+});
+
+// ── Add-entry panel ─────────────────────────────────────────────────────────
+function setAddKind(kind) {
+  addKind = kind;
+  for (const tab of document.querySelectorAll('.iv-add-tab')) {
+    tab.classList.toggle('is-active', tab.dataset.addKind === kind);
+  }
+  for (const sec of document.querySelectorAll('.iv-add-section')) {
+    sec.hidden = sec.dataset.addSection !== kind;
+  }
+  // Submit-button label tracks the chosen kind so the action is unambiguous.
+  const label = ui.addSubmit?.querySelector('.iv-btn-label');
+  if (label) {
+    label.textContent = kind === 'password' ? 'Save password'
+      : kind === 'note' ? 'Save note'
+      : 'Save subscription';
+  }
+}
+
+function clearAddForm() {
+  ui.addPwTitle.value = '';
+  ui.addPwUrl.value = '';
+  ui.addPwUsername.value = '';
+  ui.addPwPassword.value = '';
+  ui.addNoteTitle.value = '';
+  ui.addNoteContent.value = '';
+  ui.addSubName.value = '';
+  ui.addSubCost.value = '';
+  ui.addSubCurrency.value = 'USD';
+  ui.addSubBilling.value = '';
+  ui.addSubCycle.value = 'monthly';
+  ui.addMaster.value = '';
+  showAddError('');
+  showAddMsg('');
+}
+
+function openAddPanel(kind, prefill) {
+  cancelReveal();
+  clearAddForm();
+  setAddKind(kind || 'password');
+  if (prefill) {
+    if (prefill.url) ui.addPwUrl.value = prefill.url;
+    if (prefill.title) ui.addPwTitle.value = prefill.title;
+  }
+  showPanel('add');
+  // Sensible default focus per kind
+  if (addKind === 'password') ui.addPwTitle.focus();
+  else if (addKind === 'note') ui.addNoteTitle.focus();
+  else ui.addSubName.focus();
+}
+
+function showAddError(msg) {
+  ui.addError.textContent = msg;
+  ui.addError.hidden = !msg;
+}
+
+function showAddMsg(msg) {
+  ui.addMsg.textContent = msg;
+  ui.addMsg.hidden = !msg;
+}
+
+ui.addBtn?.addEventListener('click', () => openAddPanel('password'));
+
+ui.addCancel?.addEventListener('click', () => {
+  showPanel('list');
+});
+
+document.querySelectorAll('.iv-add-tab').forEach((btn) => {
+  btn.addEventListener('click', () => setAddKind(btn.dataset.addKind));
+});
+
+ui.addForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  showAddError('');
+  showAddMsg('');
+  if (!ui.addMaster.value) {
+    showAddError('Master password is required to re-encrypt the vault.');
+    return;
+  }
+
+  let item;
+  if (addKind === 'password') {
+    const title = ui.addPwTitle.value.trim();
+    const url = ui.addPwUrl.value.trim();
+    const password = ui.addPwPassword.value;
+    if (!title && !url) { showAddError('Title or URL is required.'); return; }
+    if (!password) { showAddError('Password is required.'); return; }
+    item = {
+      kind: 'password',
+      title: title || getDomainFromUrl(url) || 'Untitled',
+      url,
+      username: ui.addPwUsername.value.trim(),
+      password,
+    };
+  } else if (addKind === 'note') {
+    const title = ui.addNoteTitle.value.trim();
+    const content = ui.addNoteContent.value;
+    if (!title) { showAddError('Title is required.'); return; }
+    if (!content) { showAddError('Note content is required.'); return; }
+    item = { kind: 'note', title, content };
+  } else {
+    const name = ui.addSubName.value.trim();
+    const costRaw = ui.addSubCost.value;
+    if (!name) { showAddError('Service name is required.'); return; }
+    const cost = costRaw ? Number(costRaw) : 0;
+    if (!Number.isFinite(cost) || cost < 0) { showAddError('Cost must be a non-negative number.'); return; }
+    item = {
+      kind: 'subscription',
+      title: name,
+      cost,
+      currency: (ui.addSubCurrency.value.trim() || 'USD').toUpperCase().slice(0, 3),
+      billingDate: ui.addSubBilling.value || '',
+      billingCycle: ui.addSubCycle.value || 'monthly',
+    };
+  }
+
+  ui.addSubmit.disabled = true;
+  ui.addSubmit.querySelector('.iv-btn-label').textContent = 'Saving…';
+  try {
+    await send({ type: 'ADD_ITEM', masterPassword: ui.addMaster.value, item });
+    ui.addMaster.value = '';
+    showAddMsg(`${item.kind.charAt(0).toUpperCase()}${item.kind.slice(1)} saved to vault.`);
+    setTimeout(async () => {
+      await refreshState();
+    }, 600);
+  } catch (err) {
+    showAddError(err.message || 'Failed to save.');
+  } finally {
+    ui.addSubmit.disabled = false;
+    setAddKind(addKind); // restore label
   }
 });
 

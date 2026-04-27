@@ -18,6 +18,7 @@
 
 import {
   decryptCloudBlob,
+  encryptCloudBlob,
   generateSessionKey,
   exportRawKey,
   importSessionKey,
@@ -27,11 +28,20 @@ import {
   b64Decode,
   sha256Hex,
 } from './lib/crypto.js';
-import { authToken, listCloudVaults, downloadCloudVault } from './lib/api.js';
+import {
+  authToken,
+  listCloudVaults,
+  downloadCloudVault,
+  uploadVaultBlob,
+  checkSession,
+  logActivity,
+} from './lib/api.js';
 
 const DEFAULT_AUTOLOCK_MIN = 5;
 const ALLOWED_AUTOLOCK_MIN = [1, 5, 15, 30];
 const ALARM_NAME = 'ironvault-autolock';
+const SESSION_CHECK_ALARM = 'ironvault-session-check';
+const SESSION_CHECK_PERIOD_MIN = 5;
 
 // Persistent (chrome.storage.local) — keyed for clarity:
 //   K_CACHE: { encryptedBlob, vaultId, vaultName, token, email, syncedAt }
@@ -90,6 +100,7 @@ async function getBiometric() {
 
 async function clearAccount() {
   await chrome.storage.local.remove([K_CACHE, K_BIO, 'rememberedEmail']);
+  chrome.alarms.clear(SESSION_CHECK_ALARM);
   await lock();
 }
 
@@ -158,7 +169,7 @@ async function performLogin({ email, accountPassword, masterPassword, vaultId })
 
   // Step 1: account auth → JWT
   const accountPasswordHash = await sha256Hex(accountPassword);
-  const token = await authToken(normalizedEmail, accountPasswordHash);
+  const { token, sessionId } = await authToken(normalizedEmail, accountPasswordHash);
 
   // Step 2: list cloud vaults — if multiple and none chosen, return for picker
   const vaults = await listCloudVaults(token);
@@ -202,6 +213,7 @@ async function performLogin({ email, accountPassword, masterPassword, vaultId })
     vaultId: chosen.vaultId,
     vaultName: chosen.vaultName,
     token,
+    sessionId: sessionId || null,
     email: normalizedEmail,
     syncedAt: Date.now(),
   });
@@ -230,14 +242,23 @@ async function performLogin({ email, accountPassword, masterPassword, vaultId })
     }
   }
 
+  // Wrap master password under the session key. This lets us re-encrypt the
+  // vault when the user adds a new entry without re-prompting for it. The
+  // wrap key (sessionKey) is itself stored only in chrome.storage.session,
+  // which is in-memory and cleared on browser close — same boundary as the
+  // already-wrapped per-entry password ciphertexts.
+  const wrappedMaster = await aesGcmEncrypt(masterPassword, sessionKey);
+
   // payload (full plaintext) goes out of scope after this function returns.
   await chrome.storage.session.set({
     unlocked: true,
     email: normalizedEmail,
     token,
+    sessionId: sessionId || null,
     vaultId: chosen.vaultId,
     vaultName: chosen.vaultName,
     sessionKeyB64: b64Encode(sessionKeyRaw),
+    wrappedMaster: { ct: b64Encode(wrappedMaster.ciphertext), iv: b64Encode(wrappedMaster.iv) },
     passwordIndex,
     wrappedSecrets,
     lastActivity: Date.now(),
@@ -245,6 +266,7 @@ async function performLogin({ email, accountPassword, masterPassword, vaultId })
   });
   await rememberEmail(normalizedEmail);
   await ensureAutoLockAlarm();
+  await ensureSessionCheckAlarm();
   await updateBadge();
 
   return {
@@ -297,19 +319,23 @@ async function performUnlock({ masterPassword }) {
     }
   }
 
+  const wrappedMaster = await aesGcmEncrypt(masterPassword, sessionKey);
   await chrome.storage.session.set({
     unlocked: true,
     email: cache.email,
     token: cache.token,
+    sessionId: cache.sessionId || null,
     vaultId: cache.vaultId,
     vaultName: cache.vaultName,
     sessionKeyB64: b64Encode(sessionKeyRaw),
+    wrappedMaster: { ct: b64Encode(wrappedMaster.ciphertext), iv: b64Encode(wrappedMaster.iv) },
     passwordIndex,
     wrappedSecrets,
     lastActivity: Date.now(),
     autoLockMinutes: await getAutoLockMinutes(),
   });
   await ensureAutoLockAlarm();
+  await ensureSessionCheckAlarm();
   await updateBadge();
 
   return {
@@ -409,6 +435,153 @@ async function decryptOne(id) {
     password: new TextDecoder().decode(pt),
   };
 }
+
+// ── Add new entry (password / note / subscription) ─────────────────────────
+// Decrypts the cached blob with the supplied master password, appends the
+// new item to the matching collection, re-encrypts with a fresh salt+IV, and
+// pushes the new blob to /api/vault/items/add. The web app will see it on the
+// next cloud sync. Master password is required — supplied either from the
+// add-entry form or unwrapped from chrome.storage.session.
+async function addItem({ masterPassword, item }) {
+  if (!item || !item.kind) throw new Error('item required');
+
+  const cache = await getCache();
+  if (!cache?.encryptedBlob || !cache?.token || !cache?.vaultId) {
+    throw new Error('Sign in first.');
+  }
+
+  // Always re-derive against the current master password — the user may have
+  // typed a fresh one in the form, which wouldn't match the wrapped one.
+  let payload;
+  try {
+    payload = await decryptCloudBlob(cache.encryptedBlob, masterPassword);
+  } catch (err) {
+    if (err && err.message === 'WRONG_MASTER_PASSWORD') {
+      throw new Error('Wrong master password.');
+    }
+    throw new Error('Could not decrypt vault.');
+  }
+
+  const nowIso = new Date().toISOString();
+  const id = (crypto.randomUUID && crypto.randomUUID()) ||
+    `iv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  if (item.kind === 'password') {
+    if (!Array.isArray(payload.passwords)) payload.passwords = [];
+    payload.passwords.push({
+      id,
+      name: item.title || '',
+      url: item.url || '',
+      username: item.username || '',
+      password: item.password || '',
+      notes: '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+  } else if (item.kind === 'note') {
+    if (!Array.isArray(payload.notes)) payload.notes = [];
+    payload.notes.push({
+      id,
+      title: item.title || '',
+      content: item.content || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+  } else if (item.kind === 'subscription') {
+    if (!Array.isArray(payload.subscriptions)) payload.subscriptions = [];
+    payload.subscriptions.push({
+      id,
+      name: item.title || '',
+      cost: typeof item.cost === 'number' ? item.cost : Number(item.cost) || 0,
+      currency: item.currency || 'USD',
+      billingDate: item.billingDate || '',
+      billingCycle: item.billingCycle || 'monthly',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+  } else {
+    throw new Error(`Unknown item kind: ${item.kind}`);
+  }
+
+  // Re-encrypt with the same master password (fresh salt+IV).
+  const newBlob = await encryptCloudBlob(payload, masterPassword);
+
+  // Push to server. /api/vault/items/add returns 401 if our session was
+  // revoked; surface that distinctly so we can wipe local state.
+  try {
+    await uploadVaultBlob(cache.token, cache.vaultId, newBlob, {
+      itemType: item.kind,
+      title: item.title || '',
+    });
+  } catch (err) {
+    if (err && err.message === 'SESSION_REVOKED') {
+      await clearAccount();
+      throw new Error('Your session was revoked. Please sign in again.');
+    }
+    throw err;
+  }
+
+  // Persist the new blob locally so future offline unlocks see the new entry.
+  await setCache({ ...cache, encryptedBlob: newBlob, syncedAt: Date.now() });
+
+  // Update the unlocked-session indices so the UI reflects the new entry
+  // without needing a full re-unlock.
+  const session = await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedSecrets', 'passwordIndex']);
+  if (session.unlocked && session.sessionKeyB64 && item.kind === 'password') {
+    const sessionKey = await importSessionKey(b64Decode(session.sessionKeyB64));
+    const wrapped = await aesGcmEncrypt(item.password || '', sessionKey);
+    const newWrapped = { ...(session.wrappedSecrets || {}), [id]: { ct: b64Encode(wrapped.ciphertext), iv: b64Encode(wrapped.iv) } };
+    const newIndex = [
+      ...(session.passwordIndex || []),
+      {
+        id,
+        name: item.title || '',
+        url: item.url || '',
+        username: item.username || '',
+        domain: extractDomain(item.url || ''),
+      },
+    ];
+    await chrome.storage.session.set({ wrappedSecrets: newWrapped, passwordIndex: newIndex });
+    await updateBadge();
+  }
+
+  await touchActivity();
+  return { success: true, id, kind: item.kind };
+}
+
+// ── Session-check alarm ────────────────────────────────────────────────────
+// Polls /api/auth/session/check every SESSION_CHECK_PERIOD_MIN minutes.
+// On 401 we wipe ALL local extension data — encrypted blob, biometric wrap,
+// session storage — so the user can't recover from a revoked session by
+// re-entering the master password offline.
+async function ensureSessionCheckAlarm() {
+  await chrome.alarms.create(SESSION_CHECK_ALARM, { periodInMinutes: SESSION_CHECK_PERIOD_MIN });
+}
+
+async function runSessionCheck() {
+  const cache = await getCache();
+  if (!cache?.token) {
+    chrome.alarms.clear(SESSION_CHECK_ALARM);
+    return;
+  }
+  let res;
+  try {
+    res = await checkSession(cache.token);
+  } catch {
+    return; // network error — assume valid, retry next tick
+  }
+  if (res && res.valid === false) {
+    console.log('[ironvault] session revoked — wiping local data');
+    await clearAccount();
+    chrome.alarms.clear(SESSION_CHECK_ALARM);
+    await updateBadge();
+  }
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== SESSION_CHECK_ALARM) return;
+  await runSessionCheck();
+});
 
 // ── Status / queries ────────────────────────────────────────────────────────
 async function getStatus() {
@@ -543,6 +716,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // (only fires on click in the in-page picker).
           const cred = await decryptOne(msg.id);
           sendResponse({ ok: true, credential: cred });
+          // Log autofill (only when triggered from a content script, i.e.
+          // an actual page fill — not a popup reveal/copy, which is logged
+          // separately or not at all to avoid double-counting).
+          if (fromContent) {
+            const sess = await chrome.storage.session.get(['token']);
+            if (sess.token) {
+              logActivity(sess.token, 'filled', 'password', cred.name).catch(() => {});
+            }
+          }
+          break;
+        }
+
+        case 'ADD_ITEM': {
+          if (fromContent) throw new Error('Adding entries must come from the popup.');
+          sendResponse({ ok: true, ...(await addItem(msg)) });
           break;
         }
 
@@ -584,6 +772,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Re-arm the badge whenever the SW spins up. Lock on browser startup so
 // session storage's "cleared on browser close" guarantee is reflected in UI.
-chrome.runtime.onInstalled.addListener(() => updateBadge());
-chrome.runtime.onStartup.addListener(() => lock().then(updateBadge));
+chrome.runtime.onInstalled.addListener(async () => {
+  const c = await getCache();
+  if (c?.token) await ensureSessionCheckAlarm();
+  await updateBadge();
+});
+chrome.runtime.onStartup.addListener(async () => {
+  await lock();
+  const c = await getCache();
+  if (c?.token) {
+    await ensureSessionCheckAlarm();
+    // Run an immediate check on startup so a session revoked while the
+    // browser was closed wipes data the moment the user reopens Chrome.
+    runSessionCheck().catch(() => {});
+  }
+  await updateBadge();
+});
 self.addEventListener('activate', () => updateBadge());

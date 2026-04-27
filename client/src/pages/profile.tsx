@@ -219,6 +219,21 @@ export default function Profile() {
   // Delete account state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  // Clear-all-local-data state (Feature 3 — internet-café wipe)
+  const [showClearLocalDialog, setShowClearLocalDialog] = useState(false);
+  const [isClearingLocal, setIsClearingLocal] = useState(false);
+
+  // Active sessions (Feature 5)
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string>('');
+
+  // Activity log (Feature 6)
+  const [activity, setActivity] = useState<any[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityFilterType, setActivityFilterType] = useState<string>('all');
+  const [activityFilterAction, setActivityFilterAction] = useState<string>('all');
   
   // Export/Backup state
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -939,6 +954,187 @@ export default function Profile() {
     // Reset file input
     if (importFileRef.current) importFileRef.current.value = '';
   };
+
+  // ── Clear all local data (Feature 3 — internet café wipe) ──────────────────
+  // Wipes every local store the app uses: IndexedDB databases, localStorage,
+  // sessionStorage, registered service workers, and CacheStorage. The user can
+  // then walk away from a shared device confident nothing remains.
+  const handleClearLocalData = async () => {
+    setIsClearingLocal(true);
+    try {
+      // 1. IndexedDB — list every DB and delete it. indexedDB.databases()
+      //    isn't on Safari yet, so fall back to a known list of vault DBs.
+      try {
+        const dbList = (indexedDB as any).databases ? await (indexedDB as any).databases() : [];
+        const names = (dbList as any[]).map(d => d?.name).filter(Boolean);
+        // Belt-and-braces: also wipe well-known names the app uses.
+        const fallback = ['IronVaultDB', 'vault-storage', 'iv_vault_metadata'];
+        const targets = Array.from(new Set([...names, ...fallback]));
+        await Promise.all(targets.map((n: string) => new Promise<void>((resolve) => {
+          try {
+            const req = indexedDB.deleteDatabase(n);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+          } catch { resolve(); }
+        })));
+      } catch (e) { console.warn('[clear-local] IndexedDB:', e); }
+
+      // 2. CacheStorage
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+      } catch (e) { console.warn('[clear-local] caches:', e); }
+
+      // 3. Service workers — unregister all so no SW fetches stale data.
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+      } catch (e) { console.warn('[clear-local] service workers:', e); }
+
+      // 4. Web storage — last so the toast doesn't disappear with localStorage.
+      try { sessionStorage.clear(); } catch {}
+      try { localStorage.clear(); } catch {}
+
+      toast({
+        title: 'Local data cleared',
+        description: 'All IronVault data removed from this browser.',
+      });
+      setShowClearLocalDialog(false);
+      // Reload so React contexts that cached state are blown away too.
+      setTimeout(() => window.location.replace('/'), 1200);
+    } catch (err: any) {
+      toast({
+        title: 'Clear failed',
+        description: err?.message || 'Could not clear all data.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClearingLocal(false);
+    }
+  };
+
+  // ── Active sessions (Feature 5) ────────────────────────────────────────────
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    setSessionsError('');
+    try {
+      const token = localStorage.getItem('iv_cloud_token');
+      if (!token) { setSessions([]); setSessionsError('Sign in to cloud sync to see active sessions.'); return; }
+      const res = await fetch('/api/auth/sessions', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        if (res.status === 401) setSessionsError('Session expired — please sign in again.');
+        else setSessionsError('Could not load sessions.');
+        setSessions([]);
+        return;
+      }
+      const json = await res.json();
+      setSessions(Array.isArray(json.sessions) ? json.sessions : []);
+    } catch (err: any) {
+      setSessionsError(err?.message || 'Could not load sessions.');
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const handleRevokeSession = async (id: string) => {
+    const token = localStorage.getItem('iv_cloud_token');
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/auth/sessions/${encodeURIComponent(id)}/revoke`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Revoke failed');
+      toast({ title: 'Session revoked', description: 'That device will lose access within ~5 minutes.' });
+      loadSessions();
+    } catch (err: any) {
+      toast({ title: 'Revoke failed', description: err?.message || 'Try again', variant: 'destructive' });
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    const token = localStorage.getItem('iv_cloud_token');
+    if (!token) return;
+    if (!window.confirm('Sign out of every other device? Your current session is preserved.')) return;
+    try {
+      const res = await fetch('/api/auth/sessions/revoke-all', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Revoke-all failed');
+      const j = await res.json();
+      toast({ title: 'Signed out everywhere', description: `${j.revoked || 0} session(s) revoked.` });
+      loadSessions();
+    } catch (err: any) {
+      toast({ title: 'Revoke failed', description: err?.message || 'Try again', variant: 'destructive' });
+    }
+  };
+
+  // ── Activity log (Feature 6) ───────────────────────────────────────────────
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      const token = localStorage.getItem('iv_cloud_token');
+      if (!token) { setActivity([]); return; }
+      const params = new URLSearchParams({ limit: '50', offset: '0' });
+      if (activityFilterType !== 'all') params.set('type', activityFilterType);
+      if (activityFilterAction !== 'all') params.set('action', activityFilterAction);
+      const res = await fetch(`/api/vault/activity?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setActivity([]); return; }
+      const json = await res.json();
+      setActivity(Array.isArray(json.items) ? json.items : []);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [activityFilterType, activityFilterAction]);
+
+  // Load both lists when the Security tab opens.
+  useEffect(() => {
+    if (activeTab !== 'security') return;
+    loadSessions();
+    loadActivity();
+  }, [activeTab, loadSessions, loadActivity]);
+
+  // Re-fetch activity when filters change (already in deps via loadActivity).
+  useEffect(() => {
+    if (activeTab === 'security') loadActivity();
+  }, [activityFilterType, activityFilterAction, activeTab, loadActivity]);
+
+  const browserIconFor = (browser: string | null) => {
+    const b = (browser || '').toLowerCase();
+    if (b.includes('chrome') || b.includes('chromium')) return <Chrome className="w-4 h-4" />;
+    if (b.includes('safari')) return <Globe className="w-4 h-4" />;
+    if (b.includes('firefox') || b.includes('edge') || b.includes('opera')) return <Globe className="w-4 h-4" />;
+    return <Monitor className="w-4 h-4" />;
+  };
+
+  const formatRelativeTime = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const sec = Math.max(1, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (sec < 60) return `${sec}s ago`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  };
+
+  const formatActivityLine = (a: any) => {
+    const type = a.itemType || 'item';
+    const action = a.action || 'event';
+    const where = a.deviceName ? `via ${a.deviceName}` : '';
+    const title = a.itemTitle ? ` "${a.itemTitle}"` : '';
+    return `${capitalize(action)} ${type}${title} ${where}`.trim();
+  };
+
+  const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
   // Delete account handler
   const handleDeleteAccount = () => {
@@ -2193,6 +2389,145 @@ export default function Profile() {
             </CardContent>
           </Card>
 
+          {/* Active Sessions (Feature 5) */}
+          <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-active-sessions">
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Monitor className="w-5 h-5" />
+                  Active Sessions
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={loadSessions} disabled={sessionsLoading}>
+                    <RefreshCw className={`w-4 h-4 mr-1.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={handleRevokeAllSessions} disabled={sessions.length <= 1}>
+                    <UserX className="w-4 h-4 mr-1.5" />
+                    Revoke All
+                  </Button>
+                </div>
+              </div>
+              <CardDescription>
+                Devices and browsers signed into your IronVault account. Revoking a session locks that device within ~5 minutes — its locally cached vault is wiped on the next check-in.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {sessionsError && (
+                <p className="text-sm text-muted-foreground py-4">{sessionsError}</p>
+              )}
+              {!sessionsError && sessionsLoading && sessions.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">Loading sessions…</p>
+              )}
+              {!sessionsError && !sessionsLoading && sessions.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">No active sessions found.</p>
+              )}
+              {sessions.length > 0 && (
+                <ul className="divide-y divide-border/60">
+                  {sessions.map((s) => (
+                    <li key={s.id} className="py-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                        {browserIconFor(s.browser)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium truncate">{s.deviceName || `${s.browser || 'Unknown'} on ${s.os || 'Unknown'}`}</p>
+                          {s.isCurrent && (
+                            <Badge variant="secondary" className="text-[10px]">this device</Badge>
+                          )}
+                          {s.clientKind === 'extension' && (
+                            <Badge variant="outline" className="text-[10px]">extension</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {s.ipAddress || 'IP unknown'} · last active {formatRelativeTime(s.lastActiveAt)}
+                        </p>
+                      </div>
+                      {!s.isCurrent && (
+                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleRevokeSession(s.id)}>
+                          Revoke
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Activity Log (Feature 6) */}
+          <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-activity-log">
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Activity
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={loadActivity} disabled={activityLoading}>
+                  <RefreshCw className={`w-4 h-4 mr-1.5 ${activityLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+              <CardDescription>
+                Recent reads, fills, edits, and exports across all your devices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Select value={activityFilterType} onValueChange={setActivityFilterType}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="All types" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    <SelectItem value="password">Passwords</SelectItem>
+                    <SelectItem value="note">Notes</SelectItem>
+                    <SelectItem value="subscription">Subscriptions</SelectItem>
+                    <SelectItem value="document">Documents</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={activityFilterAction} onValueChange={setActivityFilterAction}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="All actions" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All actions</SelectItem>
+                    <SelectItem value="viewed">Viewed</SelectItem>
+                    <SelectItem value="filled">Filled</SelectItem>
+                    <SelectItem value="created">Created</SelectItem>
+                    <SelectItem value="updated">Updated</SelectItem>
+                    <SelectItem value="deleted">Deleted</SelectItem>
+                    <SelectItem value="exported">Exported</SelectItem>
+                    <SelectItem value="imported">Imported</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {activityLoading && activity.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">Loading activity…</p>
+              )}
+              {!activityLoading && activity.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">No activity yet. Autofill a password or save a new entry to start the log.</p>
+              )}
+              {activity.length > 0 && (
+                <ul className="divide-y divide-border/60">
+                  {activity.map((a) => (
+                    <li key={a.id} className="py-2.5 flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {a.action === 'filled' || a.action === 'viewed' ? <Eye className="w-3.5 h-3.5" />
+                          : a.action === 'created' ? <Plus className="w-3.5 h-3.5" />
+                          : a.action === 'deleted' ? <Trash2 className="w-3.5 h-3.5" />
+                          : a.action === 'exported' || a.action === 'imported' ? <Download className="w-3.5 h-3.5" />
+                          : <Info className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">{formatActivityLine(a)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatRelativeTime(a.createdAt)} · {a.ipAddress || 'IP unknown'}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Data Management */}
           <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader>
@@ -2228,8 +2563,58 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Clear All Local Data (Feature 3 — internet café wipe) */}
+          <Card className="rounded-2xl shadow-sm border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20" data-testid="card-clear-local-data">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-800 dark:text-red-300">
+                <AlertTriangle className="w-5 h-5" />
+                Clear All Local Data
+              </CardTitle>
+              <CardDescription>
+                For internet cafés or shared devices. Wipes IndexedDB, localStorage, sessionStorage, service workers, and all browser caches for IronVault. Cloud-synced vaults are untouched — sign back in on your own device to restore.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                className="w-full sm:w-auto"
+                onClick={() => setShowClearLocalDialog(true)}
+                data-testid="button-clear-local-data"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear All Local Data
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Clear-local-data confirmation dialog (Feature 3) */}
+      <AlertDialog open={showClearLocalDialog} onOpenChange={setShowClearLocalDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Clear all local IronVault data?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This wipes the encrypted vault, settings, session, and caches from this browser. Your cloud-synced vaults are not affected — you can sign in again on your own device. This cannot be undone on this browser.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearingLocal}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearLocalData}
+              disabled={isClearingLocal}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              data-testid="button-confirm-clear-local"
+            >
+              {isClearingLocal ? 'Clearing…' : 'Clear everything'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Change Master Password (email-verified) */}
       <ChangeMasterPasswordDialog
