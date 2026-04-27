@@ -947,6 +947,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── GET /api/vault/autofill ────────────────────────────────────────────────
+  // Returns the encrypted blob of the user's default cloud vault. Used by the
+  // IronVault browser extension — the extension decrypts client-side using
+  // the user's master password (zero-knowledge). The server never sees the
+  // plaintext credentials.
+  if (path === '/api/vault/autofill' && req.method === 'GET') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { rows } = await db.query(
+        `SELECT vault_id, vault_name, is_default, encrypted_blob, client_modified_at, server_updated_at
+           FROM cloud_vaults
+          WHERE user_id = $1
+          ORDER BY is_default DESC, created_at DESC
+          LIMIT 1`,
+        [cloudUser.userId]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'No cloud vault found' });
+      const r = rows[0];
+      // Set short cache so the extension doesn't hammer the endpoint on every
+      // tab. The encrypted blob is opaque, so caching is safe.
+      res.setHeader('Cache-Control', 'private, max-age=15');
+      return res.json({
+        success: true,
+        vaultId: r.vault_id,
+        vaultName: r.vault_name,
+        isDefault: r.is_default,
+        encryptedBlob: r.encrypted_blob,
+        clientModifiedAt: r.client_modified_at?.toISOString(),
+        serverUpdatedAt: r.server_updated_at?.toISOString(),
+      });
+    } catch (err: any) {
+      console.error('vault/autofill error:', err.message);
+      return res.status(500).json({ error: 'Failed to load vault' });
+    }
+  }
+
   // ── POST /api/crm/migrate ────────────────────────────────────────────────────
   // Creates / alters tables needed for BUG-023 schema improvements.
   // Idempotent — safe to re-run.

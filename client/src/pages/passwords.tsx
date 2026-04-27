@@ -14,6 +14,7 @@ import { PasswordGenerator } from '@/lib/password-generator';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
+import { GuidedImportButton } from '@/components/guided-import';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Passwords() {
@@ -175,6 +176,7 @@ export default function Passwords() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <GuidedImportButton />
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl">
               <LayoutTemplate className="w-4 h-4 mr-1" />
               Templates

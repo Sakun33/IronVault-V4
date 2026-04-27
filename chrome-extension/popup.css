@@ -1,0 +1,250 @@
+:root {
+  color-scheme: light dark;
+  --iv-bg: #fafafa;
+  --iv-surface: #ffffff;
+  --iv-border: #e5e7eb;
+  --iv-text: #111827;
+  --iv-muted: #6b7280;
+  --iv-primary: #4f46e5;
+  --iv-primary-hover: #4338ca;
+  --iv-danger: #dc2626;
+  --iv-success: #059669;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --iv-bg: #0f172a;
+    --iv-surface: #1e293b;
+    --iv-border: #334155;
+    --iv-text: #f1f5f9;
+    --iv-muted: #94a3b8;
+    --iv-primary: #818cf8;
+    --iv-primary-hover: #a5b4fc;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  background: var(--iv-bg);
+  color: var(--iv-text);
+}
+
+body {
+  width: 340px;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.iv-header {
+  background: var(--iv-surface);
+  border-bottom: 1px solid var(--iv-border);
+  padding: 12px 14px;
+}
+
+.iv-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iv-logo-tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: white;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+.iv-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.iv-subtitle {
+  color: var(--iv-muted);
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.iv-view.hidden {
+  display: none;
+}
+
+.iv-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.iv-view h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.iv-muted {
+  color: var(--iv-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.iv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.iv-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--iv-muted);
+  font-weight: 500;
+}
+
+.iv-form input {
+  border: 1px solid var(--iv-border);
+  background: var(--iv-surface);
+  color: var(--iv-text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+}
+
+.iv-form input:focus {
+  border-color: var(--iv-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.iv-btn {
+  border: 1px solid var(--iv-border);
+  background: var(--iv-surface);
+  color: var(--iv-text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.iv-btn:hover {
+  background: var(--iv-bg);
+}
+
+.iv-btn-primary {
+  background: var(--iv-primary);
+  border-color: var(--iv-primary);
+  color: white;
+  text-align: center;
+}
+
+.iv-btn-primary:hover {
+  background: var(--iv-primary-hover);
+  border-color: var(--iv-primary-hover);
+}
+
+.iv-btn-ghost {
+  border-color: transparent;
+  color: var(--iv-muted);
+}
+
+.iv-error {
+  color: var(--iv-danger);
+  font-size: 11px;
+  padding: 6px 8px;
+  background: rgba(220, 38, 38, 0.08);
+  border-radius: 4px;
+}
+
+.iv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--iv-surface);
+  border: 1px solid var(--iv-border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.iv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.iv-row-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.iv-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.iv-pill-ok {
+  background: rgba(5, 150, 105, 0.12);
+  color: var(--iv-success);
+}
+
+.iv-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--iv-text);
+}
+
+.iv-steps code {
+  background: var(--iv-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.iv-footer {
+  border-top: 1px solid var(--iv-border);
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--iv-muted);
+  background: var(--iv-surface);
+}
+
+.iv-footer a {
+  color: var(--iv-primary);
+  text-decoration: none;
+}

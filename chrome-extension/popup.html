@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronVault</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="iv-header">
+    <div class="iv-logo">
+      <div class="iv-logo-tile">IV</div>
+      <div>
+        <div class="iv-title">IronVault</div>
+        <div class="iv-subtitle" id="status-line">Not connected</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Signed-out state -->
+    <section id="view-signin" class="iv-view hidden">
+      <h2>Sign in to your vault</h2>
+      <p class="iv-muted">
+        Use the email and master password from your IronVault account. We'll
+        decrypt your vault locally so this extension can autofill on
+        websites you visit.
+      </p>
+      <form id="signin-form" class="iv-form">
+        <label>
+          Email
+          <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" />
+        </label>
+        <label>
+          Account password
+          <input type="password" id="signin-password" autocomplete="current-password" required placeholder="••••••••" />
+        </label>
+        <label>
+          Master password
+          <input type="password" id="signin-master" required placeholder="Used to decrypt your vault" />
+        </label>
+        <button type="submit" class="iv-btn iv-btn-primary" id="signin-btn">Connect vault</button>
+        <div class="iv-error" id="signin-error" hidden></div>
+      </form>
+    </section>
+
+    <!-- Signed-in state -->
+    <section id="view-home" class="iv-view hidden">
+      <div class="iv-section">
+        <div class="iv-row">
+          <div>
+            <div class="iv-row-title">Autofill</div>
+            <div class="iv-muted" id="autofill-status">Ready</div>
+          </div>
+          <span class="iv-pill iv-pill-ok" id="autofill-pill">on</span>
+        </div>
+      </div>
+
+      <div class="iv-section">
+        <div class="iv-row-title">Quick actions</div>
+        <button class="iv-btn" id="btn-fill-here">Fill on this page</button>
+        <button class="iv-btn" id="btn-import">Import from Chrome</button>
+        <button class="iv-btn" id="btn-open-vault">Open IronVault dashboard</button>
+      </div>
+
+      <div class="iv-section">
+        <div class="iv-row-title">Vault</div>
+        <div class="iv-muted" id="vault-info">No vault loaded</div>
+        <button class="iv-btn" id="btn-resync">Re-sync vault</button>
+        <button class="iv-btn iv-btn-ghost" id="btn-signout">Sign out</button>
+      </div>
+    </section>
+
+    <!-- Import flow -->
+    <section id="view-import" class="iv-view hidden">
+      <h2>Import from Chrome</h2>
+      <ol class="iv-steps">
+        <li>
+          We'll open <code>chrome://settings/passwords</code> in a new tab.
+        </li>
+        <li>
+          Click the <strong>⋮</strong> menu next to "Saved passwords" and
+          choose <strong>Export passwords</strong>.
+        </li>
+        <li>
+          Download the CSV. We'll detect it automatically and offer to send
+          it to your IronVault account.
+        </li>
+      </ol>
+      <button class="iv-btn iv-btn-primary" id="btn-open-chrome-passwords">Open Chrome passwords</button>
+      <button class="iv-btn iv-btn-ghost" id="btn-back-home">Back</button>
+      <div class="iv-muted" id="import-status"></div>
+    </section>
+  </main>
+
+  <footer class="iv-footer">
+    <span>IronVault Extension v0.1</span>
+    <a href="https://www.ironvault.app" target="_blank" rel="noreferrer">ironvault.app</a>
+  </footer>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
