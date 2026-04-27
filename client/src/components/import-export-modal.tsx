@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { isNativeApp } from '@/native/platform';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
+import ImportPasswords from '@/components/import-passwords';
 
 interface ImportExportModalProps {
   open: boolean;
@@ -537,67 +538,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
           </TabsContent>
           
           <TabsContent value="csv-import" className="space-y-4">
-            <div className="rounded-lg bg-muted p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Database className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">CSV Import</span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Import passwords from popular password managers. Select your password manager format and CSV export file.
-                Duplicates will be skipped automatically.
-              </p>
-            </div>
-            
-            <form onSubmit={handleCSVImport} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="parser-select">Password Manager Format</Label>
-                <Select value={selectedParser} onValueChange={setSelectedParser} disabled={isImportingCSV}>
-                  <SelectTrigger data-testid="select-csv-parser">
-                    <SelectValue placeholder="Choose password manager format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {csvParsers.map((parser) => (
-                      <SelectItem key={parser.id} value={parser.id}>
-                        {parser.name} - {parser.description}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="csv-file">CSV File</Label>
-                <Input
-                  id="csv-file"
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleCSVFileChange}
-                  data-testid="input-csv-file"
-                  disabled={isImportingCSV}
-                />
-                {csvFile && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {csvFile.name}
-                  </p>
-                )}
-              </div>
-              
-              <Button 
-                type="submit" 
-                disabled={isImportingCSV || !csvFile || !selectedParser}
-                className="w-full"
-                data-testid="button-csv-import"
-              >
-                {isImportingCSV ? (
-                  "Importing..."
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import CSV
-                  </>
-                )}
-              </Button>
-            </form>
+            <ImportPasswords />
           </TabsContent>
           
           <TabsContent value="templates" className="space-y-4">
