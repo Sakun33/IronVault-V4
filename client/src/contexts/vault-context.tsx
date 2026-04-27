@@ -264,6 +264,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       const { vaultManager } = await import('@/lib/vault-manager');
       const vaultId = vaultManager.getActiveVaultId();
       if (!vaultId) return { ok: false, reason: 'No active vault' };
+      // Vault isolation: the open DB must belong to this vault. If it
+      // doesn't, exporting would read another vault's data and pushing
+      // would overwrite this vault's cloud entry with that wrong data.
+      if (vaultStorage.getCurrentVaultId() !== vaultId) {
+        const reason =
+          `Storage on vault "${vaultStorage.getCurrentVaultId()}" but expected "${vaultId}" — ` +
+          `refusing to push (vault isolation guard).`;
+        console.error('[CLOUD-PUSH]', reason);
+        return { ok: false, reason };
+      }
       localStorage.setItem(`iv_dirty_${vaultId}`, '1');
       const blob = await vaultStorage.exportVault(mp);
       const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
@@ -881,6 +891,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         const cloudToken = getCloudToken();
         const vaultId = vaultManager.getActiveVaultId();
         if (cloudToken && vaultId) {
+          // Vault isolation: refuse to publish if the open DB doesn't
+          // belong to this vault.
+          if (vaultStorage.getCurrentVaultId() !== vaultId) {
+            console.error(
+              `[IMPORT] Storage on vault "${vaultStorage.getCurrentVaultId()}" but expected "${vaultId}" — ` +
+              `skipping cloud push to avoid cross-vault leak.`,
+            );
+            window.dispatchEvent(new CustomEvent('vault:import:complete'));
+            return;
+          }
           const blob = await vaultStorage.exportVault(masterPassword);
           const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
           const vaultName = vaultMeta?.name ?? 'My Vault';

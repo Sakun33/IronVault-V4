@@ -33,6 +33,17 @@ export function useCloudAutoSync(
   // Only advances lastPull and clears dirty flag on actual success.
   const executePush = useCallback(async (vid: string, mpwd: string): Promise<boolean> => {
     try {
+      // Vault isolation: the singleton's open DB MUST be the vault we're
+      // about to export. If they've drifted (e.g. a UI path forgot to call
+      // vaultStorage.switchToVault), refuse rather than push the wrong
+      // vault's data to this vault's cloud entry.
+      if (vaultStorage.getCurrentVaultId() !== vid) {
+        console.error(
+          `[SYNC] Refusing push: storage is on vault "${vaultStorage.getCurrentVaultId()}" ` +
+          `but auto-sync expected "${vid}". This would leak data across vaults.`,
+        );
+        return false;
+      }
       // Anti-wipe gate: if local item count has collapsed compared to the
       // last successful sync, refuse to push. This protects against the race
       // where an unmount/cleanup fires before in-memory state has hydrated
@@ -135,6 +146,16 @@ export function useCloudAutoSync(
     const handleImportComplete = async () => {
       if (!getCloudToken()) return;
       if (!vaultId || !masterPassword) return;
+      // Vault isolation: refuse to export+push if the open DB doesn't
+      // belong to this vault — that would publish another vault's data
+      // under our cloud entry.
+      if (vaultStorage.getCurrentVaultId() !== vaultId) {
+        console.error(
+          `[IMPORT] Refusing post-import push: storage is on "${vaultStorage.getCurrentVaultId()}", ` +
+          `expected "${vaultId}".`,
+        );
+        return;
+      }
 
       pushPendingRef.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -251,6 +272,18 @@ export function useCloudAutoSync(
         return;
       }
 
+      // Vault isolation: refuse to wipe the open DB if it doesn't belong
+      // to the vault whose cloud blob we just downloaded. Without this
+      // check, a pull while the singleton is mis-routed would overwrite
+      // the wrong vault's local data.
+      if (vaultStorage.getCurrentVaultId() !== vaultId) {
+        console.error(
+          `[SYNC] Refusing pull replace: storage is on "${vaultStorage.getCurrentVaultId()}", ` +
+          `expected "${vaultId}".`,
+        );
+        window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
+        return;
+      }
       await vaultStorage.replaceVaultFromBlob(full.encryptedBlob, masterPassword);
       localStorage.setItem(lastPullKey, meta.serverUpdatedAt);
       localStorage.setItem(hashKey, blobHash);

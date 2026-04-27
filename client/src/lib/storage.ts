@@ -11,6 +11,13 @@ export class VaultStorage {
   private maxFailedAttempts: number = 3;
   private lastFailedAttempt: number = 0;
   private lockoutDuration: number = 5 * 60 * 1000; // 5 minutes
+  // Vault ID this singleton's open DB belongs to. Mirrors `dbName` in a
+  // form callers can match against vaultManager.getActiveVaultId(). Without
+  // this, the singleton's DB can drift out of sync with the registry's
+  // active-vault pointer, causing cross-vault data leaks (writes/exports
+  // hit the wrong DB when the dropdown switch path forgot to call
+  // switchToVault).
+  private currentVaultId: string | null = null;
 
   // Public method to get database
   getDatabase(): IDBDatabase | undefined {
@@ -22,6 +29,40 @@ export class VaultStorage {
     return this.db !== undefined;
   }
 
+  /** Vault ID this storage instance is currently bound to. */
+  getCurrentVaultId(): string | null {
+    return this.currentVaultId;
+  }
+
+  /**
+   * Throw if the open DB does not belong to `expectedVaultId`. Use at every
+   * push/pull/import/export boundary that takes a vault ID — refusing to
+   * proceed is far better than silently writing to the wrong vault.
+   */
+  assertActiveVault(expectedVaultId: string): void {
+    if (this.currentVaultId !== expectedVaultId) {
+      const msg =
+        `[VAULT-ISOLATION] Storage is on vault "${this.currentVaultId}" ` +
+        `but caller expected "${expectedVaultId}". Refusing to proceed to ` +
+        `prevent cross-vault data leak.`;
+      console.error(msg);
+      throw new Error(msg);
+    }
+  }
+
+  // Derive vault ID from the current dbName ("IronVault" → "default",
+  // "IronVault_<id>" → "<id>"). Mirrors switchToVault's mapping so that
+  // assertActiveVault('default') matches the legacy bare-IronVault DB.
+  private syncCurrentVaultIdFromDbName(): void {
+    if (this.dbName === 'IronVault') {
+      this.currentVaultId = 'default';
+    } else if (this.dbName.startsWith('IronVault_')) {
+      this.currentVaultId = this.dbName.slice('IronVault_'.length);
+    } else {
+      this.currentVaultId = null;
+    }
+  }
+
   // Initialize IndexedDB with proper migration handling
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -29,7 +70,8 @@ export class VaultStorage {
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('✅ Database initialized successfully with version:', this.version);
+        this.syncCurrentVaultIdFromDbName();
+        console.log('✅ Database initialized successfully with version:', this.version, 'vault:', this.currentVaultId ?? '(default)');
         resolve();
       };
 
@@ -137,6 +179,7 @@ export class VaultStorage {
       this.db = undefined;
     }
     this.encryptionKey = undefined;
+    this.currentVaultId = null;
     this.failedAttempts = 0;
     this.lastFailedAttempt = 0;
     console.log('✅ vaultStorage state reset');
@@ -145,22 +188,26 @@ export class VaultStorage {
   // Switch to a different vault database
   async switchToVault(vaultId: string): Promise<void> {
     console.log(`🔄 Switching to vault: ${vaultId}`);
-    
+
     // Close existing connection
     if (this.db) {
       this.db.close();
       this.db = undefined;
     }
-    
-    // Clear encryption key from previous vault
+
+    // Clear encryption key from previous vault — never reuse across DBs.
     this.encryptionKey = undefined;
-    
+    // Clear the vault-ID tag immediately so any operation that lands between
+    // here and the end of init() refuses to run instead of silently writing
+    // to the previous vault.
+    this.currentVaultId = null;
+
     // Set new database name
     this.dbName = vaultId === 'default' ? 'IronVault' : `IronVault_${vaultId}`;
-    
-    // Initialize the new database
+
+    // Initialize the new database (which also tags currentVaultId).
     await this.init();
-    console.log(`✅ Switched to vault database: ${this.dbName}`);
+    console.log(`✅ Switched to vault database: ${this.dbName} (vault: ${this.currentVaultId ?? '(default)'})`);
   }
 
   // Get current database name

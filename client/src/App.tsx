@@ -107,6 +107,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         if (!cloudEntry) return;
         // Vault exists in cloud — ensure local tracking flag is set
         markVaultAsCloudSynced(activeVault.id);
+        // Vault isolation: only heal if the open DB belongs to this vault.
+        // Healing while mis-routed would push another vault's data to
+        // this vault's cloud entry.
+        if (vaultStorage.getCurrentVaultId() !== activeVault.id) {
+          console.warn(
+            `[HEAL] Skipping push: storage on "${vaultStorage.getCurrentVaultId()}", expected "${activeVault.id}".`,
+          );
+          return;
+        }
         // Push current local items to cloud (heals empty/stale blobs)
         const blob = await vaultStorage.exportVault(masterPassword);
         if (cancelled) return;

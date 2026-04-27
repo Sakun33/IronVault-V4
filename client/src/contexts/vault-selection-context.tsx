@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
+import { vaultStorage } from '@/lib/storage';
 import { useLicense } from './license-context';
 import { useAuth } from './auth-context';
 import {
@@ -92,9 +93,15 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     return newVault;
   };
 
-  /** Low-level switch: just updates active vault ID + refreshes list. No auth check. */
+  /** Low-level switch: updates active vault ID, swaps the open IndexedDB
+   * connection, and refreshes the vault list. No auth check — caller is
+   * expected to have verified the password (or the vault is already
+   * unlocked). The `vaultStorage.switchToVault` call is *critical*:
+   * without it, the singleton's open DB stays on the previous vault and
+   * subsequent reads/writes silently target the wrong vault. */
   const switchVault = async (vaultId: string): Promise<void> => {
     vaultManager.setActiveVaultId(vaultId);
+    await vaultStorage.switchToVault(vaultId);
     const vault = vaultManager.getVaultInfo(vaultId);
     if (vault) {
       setActiveVault(vault);
@@ -123,8 +130,15 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
 
     const previousId = vaultManager.getActiveVaultId();
     try {
-      // Point vaultStorage at the new vault so unlockVault reads its data
+      // Point vaultStorage at the new vault BEFORE login() so unlockVault
+      // verifies the password against the target vault's DB. Without the
+      // switchToVault call here, login() would unlock the *previous*
+      // vault's DB — and if both vaults share a master password, that
+      // unlock silently succeeds while the registry now claims the new
+      // vault is active. Subsequent imports / cloud pushes then leak
+      // data across vault boundaries.
       vaultManager.setActiveVaultId(pendingSwitchId);
+      await vaultStorage.switchToVault(pendingSwitchId);
 
       const success = await login(switchPassword);
       if (success) {
@@ -133,12 +147,18 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
         await loadVaults();
         setPendingSwitchId(null);
       } else {
-        // Wrong password — revert
-        if (previousId) vaultManager.setActiveVaultId(previousId);
+        // Wrong password — revert both the registry pointer and the open DB.
+        if (previousId) {
+          vaultManager.setActiveVaultId(previousId);
+          try { await vaultStorage.switchToVault(previousId); } catch { /* noop */ }
+        }
         setSwitchError('Incorrect master password. Please try again.');
       }
     } catch {
-      if (previousId) vaultManager.setActiveVaultId(previousId);
+      if (previousId) {
+        vaultManager.setActiveVaultId(previousId);
+        try { await vaultStorage.switchToVault(previousId); } catch { /* noop */ }
+      }
       setSwitchError('Failed to switch vault. Please try again.');
     } finally {
       setIsSwitching(false);
