@@ -224,10 +224,30 @@ export default function ImportPasswords() {
       setImportSummary({ imported: summary.imported, duplicates: summary.duplicates, skipped: summary.skipped });
 
       if (summary.imported > 0) {
-        toast({
-          title: 'Import complete',
-          description: `${summary.imported} password${summary.imported === 1 ? '' : 's'} added to your vault.`,
-        });
+        // Cloud-sync status is the load-bearing signal: a "success" toast
+        // when the cloud push didn't actually land would lull the user into
+        // signing out, which then wipes the imports on next cloud unlock.
+        if (summary.cloudSync === 'success') {
+          toast({
+            title: 'Import complete & synced',
+            description: `${summary.imported} password${summary.imported === 1 ? '' : 's'} saved and synced to cloud.`,
+          });
+        } else if (summary.cloudSync === 'skipped') {
+          toast({
+            title: 'Import complete',
+            description: `${summary.imported} password${summary.imported === 1 ? '' : 's'} saved to your local vault.`,
+          });
+        } else {
+          // cloudSync === 'failed' — DO NOT log the user into a false sense of
+          // safety. Show a destructive toast that says exactly what to do.
+          toast({
+            title: '⚠️ Saved locally, NOT synced to cloud',
+            description:
+              `${summary.imported} imported on this device. Cloud sync failed${summary.cloudError ? ` (${summary.cloudError})` : ''}. Stay signed in and try again — signing out before sync completes will lose them.`,
+            variant: 'destructive',
+            duration: 12000,
+          });
+        }
       } else {
         toast({
           title: 'Nothing to import',

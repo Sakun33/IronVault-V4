@@ -108,7 +108,17 @@ interface VaultContextType {
   bulkImportPasswords: (
     entries: Array<Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>>,
     onProgress?: (done: number, total: number) => void,
-  ) => Promise<{ imported: number; skipped: number; duplicates: number }>;
+  ) => Promise<{
+    imported: number;
+    skipped: number;
+    duplicates: number;
+    /** Whether the post-import cloud push completed before this returned. */
+    cloudSync: 'success' | 'failed' | 'skipped';
+    /** Server-confirmed blob length, when cloudSync === 'success'. */
+    cloudBlobLength?: number;
+    /** Reason for failure when cloudSync === 'failed'. */
+    cloudError?: string;
+  }>;
   getAvailableCSVParsers: () => ParserConfig[];
   getKDFConfig: () => Promise<CryptoKDFConfig | null>;
   updateKDFConfig: (masterPassword: string, newKdfConfig: CryptoKDFConfig, onProgress?: (progress: number) => void) => Promise<void>;
@@ -228,60 +238,104 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isUnlocked, isLockedOut]);
 
-  // Fire-and-forget cloud push after every vault mutation.
-  // Bypasses the event system — directly exports and PUTs the encrypted blob.
-  const pushToCloud = () => {
+  // Push the current encrypted vault blob to the server. Returns a structured
+  // result so callers can decide whether to surface a hard error to the user.
+  // The dirty flag (iv_dirty_<vaultId>) is set BEFORE the push and only
+  // cleared after a confirmed-success server response — so a logout race
+  // leaves the dirty flag set for next-login recovery.
+  type PushResult =
+    | { ok: true; blobLength: number }
+    | { ok: false; reason: string; status?: number };
+
+  const pushToCloudNow = async (): Promise<PushResult> => {
     const token = localStorage.getItem('iv_cloud_token');
     if (!token) {
-      console.error('[CLOUD-PUSH] NO TOKEN — push skipped! iv_cloud_token not in localStorage');
-      return;
+      const reason = 'No cloud token — local-only vault, push skipped';
+      console.warn('[CLOUD-PUSH]', reason);
+      return { ok: false, reason };
     }
     if (!masterPassword) {
-      console.error('[CLOUD-PUSH] No master password — push skipped');
-      return;
+      const reason = 'No master password in memory';
+      console.error('[CLOUD-PUSH]', reason);
+      return { ok: false, reason };
     }
     const mp = masterPassword;
-    (async () => {
-      try {
-        const { vaultManager } = await import('@/lib/vault-manager');
-        const vaultId = vaultManager.getActiveVaultId();
-        if (!vaultId) return;
-        localStorage.setItem(`iv_dirty_${vaultId}`, '1');
-        const blob = await vaultStorage.exportVault(mp);
-        const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
-        const vaultName = vaultMeta?.name ?? 'My Vault';
-        const clientModifiedAt = new Date().toISOString();
-        const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-        let ok = false;
-        const res = await fetch(`https://www.ironvault.app/api/vaults/cloud/${vaultId}`, {
-          method: 'PUT',
+    try {
+      const { vaultManager } = await import('@/lib/vault-manager');
+      const vaultId = vaultManager.getActiveVaultId();
+      if (!vaultId) return { ok: false, reason: 'No active vault' };
+      localStorage.setItem(`iv_dirty_${vaultId}`, '1');
+      const blob = await vaultStorage.exportVault(mp);
+      const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
+      const vaultName = vaultMeta?.name ?? 'My Vault';
+      const clientModifiedAt = new Date().toISOString();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+      const res = await fetch(`https://www.ironvault.app/api/vaults/cloud/${vaultId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ encryptedBlob: blob, vaultName, isDefault: false, clientModifiedAt }),
+      });
+      let ok = false;
+      let status = res.status;
+      let serverNewer = false;
+      if (res.status === 404) {
+        const { getOrCreateDeviceId } = await import('@/lib/cloud-vault-sync');
+        const postRes = await fetch(`https://www.ironvault.app/api/vaults/cloud`, {
+          method: 'POST',
           headers,
-          body: JSON.stringify({ encryptedBlob: blob, vaultName, isDefault: false, clientModifiedAt }),
+          body: JSON.stringify({
+            vaultId, vaultName, encryptedBlob: blob, isDefault: false,
+            clientModifiedAt, sourceDeviceId: getOrCreateDeviceId(),
+          }),
         });
-        if (res.status === 404) {
-          const { getOrCreateDeviceId } = await import('@/lib/cloud-vault-sync');
-          const postRes = await fetch(`https://www.ironvault.app/api/vaults/cloud`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ vaultId, vaultName, encryptedBlob: blob, isDefault: false, clientModifiedAt, sourceDeviceId: getOrCreateDeviceId() }),
-          });
-          ok = postRes.ok;
-        } else {
-          ok = res.ok;
-        }
-        if (ok) {
-          localStorage.removeItem(`iv_dirty_${vaultId}`);
-          toastRef.current({ title: '☁️ Synced', description: 'Vault saved to cloud', duration: 2000 });
-        } else {
-          console.error('[CLOUD-PUSH] Server returned not-ok:', res.status);
-          toastRef.current({ title: '⚠️ Cloud sync failed', description: `Server error ${res.status}`, variant: 'destructive', duration: 3000 });
-        }
-      } catch (e) {
-        console.error('[CLOUD-PUSH]', e);
-        toastRef.current({ title: '⚠️ Cloud sync error', description: String(e), variant: 'destructive', duration: 3000 });
+        ok = postRes.ok;
+        status = postRes.status;
+      } else if (res.ok) {
+        // Server may indicate a conflict (its data is newer than ours) — that
+        // counts as a push failure; do NOT clear the dirty flag.
+        try {
+          const body = await res.json();
+          if (body && body.serverNewer === true) serverNewer = true;
+        } catch { /* body not JSON */ }
+        ok = !serverNewer;
+      } else {
+        ok = false;
       }
-    })();
+      if (ok) {
+        localStorage.removeItem(`iv_dirty_${vaultId}`);
+        toastRef.current({ title: '☁️ Synced', description: 'Vault saved to cloud', duration: 2000 });
+        return { ok: true, blobLength: blob.length };
+      }
+      const reason = serverNewer
+        ? 'Server has newer data — please pull before retrying'
+        : `Server error ${status}`;
+      console.error('[CLOUD-PUSH]', reason);
+      toastRef.current({
+        title: '⚠️ Cloud sync failed',
+        description: reason,
+        variant: 'destructive',
+        duration: 5000,
+      });
+      return { ok: false, reason, status };
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      console.error('[CLOUD-PUSH]', e);
+      toastRef.current({
+        title: '⚠️ Cloud sync error',
+        description: reason,
+        variant: 'destructive',
+        duration: 5000,
+      });
+      return { ok: false, reason };
+    }
   };
+
+  // Fire-and-forget wrapper used by every CRUD mutation — keeps existing
+  // call sites unchanged while routing through the same hardened logic.
+  const pushToCloud = () => { void pushToCloudNow(); };
 
   const refreshData = async () => {
     if (!isUnlocked) return;
@@ -861,8 +915,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addLog('Import Passwords', 'password', `Imported ${result.imported} passwords from CSV (${result.skipped} skipped)`);
 
     await refreshData();
-    if (result.imported > 0) {
-      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    // Await the cloud push so a logout race doesn't lose the import. The
+    // dirty flag stays set on failure for next-login recovery.
+    if (result.imported > 0 && localStorage.getItem('iv_cloud_token')) {
+      await pushToCloudNow();
     }
     return result;
   };
@@ -874,9 +930,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const bulkImportPasswords = async (
     entries: Array<Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>>,
     onProgress?: (done: number, total: number) => void,
-  ): Promise<{ imported: number; skipped: number; duplicates: number }> => {
+  ): Promise<{
+    imported: number; skipped: number; duplicates: number;
+    cloudSync: 'success' | 'failed' | 'skipped';
+    cloudBlobLength?: number;
+    cloudError?: string;
+  }> => {
     if (!entries.length) {
-      return { imported: 0, skipped: 0, duplicates: 0 };
+      return { imported: 0, skipped: 0, duplicates: 0, cloudSync: 'skipped' };
     }
 
     const existing = await vaultStorage.getAllPasswords();
@@ -916,17 +977,40 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       if (onProgress) onProgress(i + 1, total);
     }
 
-    if (fresh.length > 0) {
-      setPasswords(prev => [...prev, ...fresh]);
-      addLog(
-        'Import Passwords',
-        'password',
-        `Bulk imported ${imported} passwords (${duplicates} duplicates, ${skipped} errors)`,
-      );
-      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    if (fresh.length === 0) {
+      return { imported, skipped, duplicates, cloudSync: 'skipped' };
     }
 
-    return { imported, skipped, duplicates };
+    setPasswords(prev => [...prev, ...fresh]);
+    addLog(
+      'Import Passwords',
+      'password',
+      `Bulk imported ${imported} passwords (${duplicates} duplicates, ${skipped} errors)`,
+    );
+
+    // Cloud push must complete BEFORE this returns, otherwise the user can
+    // close the import modal / log out before the encrypted blob lands on
+    // the server — and the next cloud-vault unlock will overwrite the
+    // unsynced local data with the stale cloud blob, silently losing the
+    // import. (See use-cloud-auto-sync's handleCloudUnlock.)
+    if (!localStorage.getItem('iv_cloud_token')) {
+      // Local-only vault — no cloud to push to.
+      return { imported, skipped, duplicates, cloudSync: 'skipped' };
+    }
+    const result = await pushToCloudNow();
+    if (result.ok) {
+      console.log(`[bulkImport] cloud push verified — blob length ${result.blobLength}`);
+      return {
+        imported, skipped, duplicates,
+        cloudSync: 'success',
+        cloudBlobLength: result.blobLength,
+      };
+    }
+    return {
+      imported, skipped, duplicates,
+      cloudSync: 'failed',
+      cloudError: result.reason,
+    };
   };
 
   const getAvailableCSVParsers = () => {
