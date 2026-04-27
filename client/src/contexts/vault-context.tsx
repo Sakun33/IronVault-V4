@@ -101,6 +101,10 @@ interface VaultContextType {
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
   importPasswordsFromCSV: (csvContent: string, parserId: string) => Promise<{ imported: number; skipped: number }>;
+  bulkImportPasswords: (
+    entries: Array<Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>>,
+    onProgress?: (done: number, total: number) => void,
+  ) => Promise<{ imported: number; skipped: number; duplicates: number }>;
   getAvailableCSVParsers: () => ParserConfig[];
   getKDFConfig: () => Promise<CryptoKDFConfig | null>;
   updateKDFConfig: (masterPassword: string, newKdfConfig: CryptoKDFConfig, onProgress?: (progress: number) => void) => Promise<void>;
@@ -805,7 +809,72 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addLog('Import Passwords', 'password', `Imported ${result.imported} passwords from CSV (${result.skipped} skipped)`);
 
     await refreshData();
+    if (result.imported > 0) {
+      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    }
     return result;
+  };
+
+  // Batch import: writes each entry directly via vaultStorage.savePassword and
+  // dispatches a single cloud push at the end. Avoids the N×fetch storm that
+  // would happen if we routed every entry through addPassword (which fires
+  // pushToCloud on every call).
+  const bulkImportPasswords = async (
+    entries: Array<Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>>,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ imported: number; skipped: number; duplicates: number }> => {
+    if (!entries.length) {
+      return { imported: 0, skipped: 0, duplicates: 0 };
+    }
+
+    const existing = await vaultStorage.getAllPasswords();
+    const existingKeys = new Set(
+      existing.map(p => `${(p.name || '').toLowerCase()}::${(p.username || '').toLowerCase()}::${(p.url || '').toLowerCase()}`),
+    );
+
+    const fresh: PasswordEntry[] = [];
+    let imported = 0;
+    let skipped = 0;
+    let duplicates = 0;
+    const total = entries.length;
+
+    for (let i = 0; i < entries.length; i++) {
+      const data = entries[i];
+      try {
+        const key = `${(data.name || '').toLowerCase()}::${(data.username || '').toLowerCase()}::${(data.url || '').toLowerCase()}`;
+        if (existingKeys.has(key)) {
+          duplicates++;
+          if (onProgress) onProgress(i + 1, total);
+          continue;
+        }
+        const password: PasswordEntry = {
+          ...data,
+          id: crypto.randomUUID(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await vaultStorage.savePassword(password);
+        existingKeys.add(key);
+        fresh.push(password);
+        imported++;
+      } catch (e) {
+        console.warn('[bulkImport] save failed:', e);
+        skipped++;
+      }
+      if (onProgress) onProgress(i + 1, total);
+    }
+
+    if (fresh.length > 0) {
+      setPasswords(prev => [...prev, ...fresh]);
+      addLog(
+        'Import Passwords',
+        'password',
+        `Bulk imported ${imported} passwords (${duplicates} duplicates, ${skipped} errors)`,
+      );
+      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    }
+
+    return { imported, skipped, duplicates };
   };
 
   const getAvailableCSVParsers = () => {
@@ -911,6 +980,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     exportVault,
     importVault,
     importPasswordsFromCSV,
+    bulkImportPasswords,
     getAvailableCSVParsers,
     getKDFConfig,
     updateKDFConfig,

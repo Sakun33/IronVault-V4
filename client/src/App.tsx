@@ -36,6 +36,7 @@ import Documents from "@/pages/documents";
 import APIKeys from "@/pages/api-keys";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
+import ImportPasswords from "@/components/import-passwords";
 import AboutPage from "@/pages/info/about";
 import FAQPage from "@/pages/info/faq";
 import FeaturesPage from "@/pages/info/features";
@@ -931,6 +932,11 @@ function Router() {
       <Route path="/settings" component={() => (
         <MainLayout>
           <Settings />
+        </MainLayout>
+      )} />
+      <Route path="/import-passwords" component={() => (
+        <MainLayout>
+          <ImportPasswords />
         </MainLayout>
       )} />
       <Route path="/qa" component={() => (

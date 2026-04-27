@@ -41,6 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/contexts/theme-context';
 import ThemeSelector from '@/components/theme-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Link } from 'wouter';
 
 export default function SettingsPage() {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(
@@ -473,6 +474,29 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Import Passwords */}
+      <Card className="rounded-2xl shadow-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Import Passwords
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Bring passwords in from any major password manager or browser — Apple Passwords,
+            Chrome, Firefox, Safari, Edge, 1Password, LastPass, Bitwarden, Dashlane, KeePass,
+            and more. Files are parsed locally on this device.
+          </p>
+          <Link href="/import-passwords">
+            <Button className="w-full" data-testid="settings-import-passwords-cta">
+              <Upload className="w-4 h-4 mr-2" />
+              Import from CSV
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 
