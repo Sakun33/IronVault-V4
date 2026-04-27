@@ -36,6 +36,7 @@ import {
   checkSession,
   logActivity,
 } from './lib/api.js';
+import { parseCsv, mapBrowserCsvRow, normalizeDomain } from './lib/csv.js';
 
 const DEFAULT_AUTOLOCK_MIN = 5;
 const ALLOWED_AUTOLOCK_MIN = [1, 5, 15, 30];
@@ -635,6 +636,188 @@ async function searchEntries(query) {
   };
 }
 
+// ── Sync from Chrome's password manager ────────────────────────────────────
+// User exports their Chrome passwords (chrome://settings/passwords → Export),
+// then either drops the CSV into the popup file picker or — if "Allow access
+// to file URLs" is enabled — we auto-fetch it from the downloaded path.
+//
+// Dedup: same normalized hostname + same username (case-insensitive) is
+// treated as the same identity.
+//   - same identity, same password → skip (unchanged)
+//   - same identity, different password → update existing entry's password
+//   - no match → add a new entry
+//
+// All work happens in-memory: decrypt blob → mutate arrays → encrypt → push.
+// The CSV string is dropped on completion; nothing about Chrome's plaintext
+// passwords is persisted by the extension.
+function csvUsernameMatch(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
+async function syncFromBrowser({ csvText, masterPassword }) {
+  if (!csvText || typeof csvText !== 'string') {
+    throw new Error('CSV content is empty.');
+  }
+  if (!masterPassword) {
+    throw new Error('Master password is required to re-encrypt the vault.');
+  }
+
+  const cache = await getCache();
+  if (!cache?.encryptedBlob || !cache?.token || !cache?.vaultId) {
+    throw new Error('Sign in first.');
+  }
+
+  // Verify the master password against the cached blob before we do any
+  // CSV parsing — otherwise the user types CSV-Y, then a wrong-password
+  // toast at the very end.
+  let payload;
+  try {
+    payload = await decryptCloudBlob(cache.encryptedBlob, masterPassword);
+  } catch (err) {
+    if (err && err.message === 'WRONG_MASTER_PASSWORD') {
+      throw new Error('Wrong master password.');
+    }
+    throw new Error('Could not decrypt vault.');
+  }
+
+  const { rows } = parseCsv(csvText);
+  if (rows.length === 0) {
+    throw new Error('No password rows found in this CSV.');
+  }
+
+  if (!Array.isArray(payload.passwords)) payload.passwords = [];
+
+  // Pre-index existing vault entries by (normalizedDomain, lowercaseUsername)
+  // so the merge is O(N+M) instead of O(N*M) on big vaults.
+  const indexByKey = new Map();
+  for (const p of payload.passwords) {
+    if (!p) continue;
+    const key = `${normalizeDomain(p.url || '')}::${(p.username || '').toLowerCase()}`;
+    indexByKey.set(key, p);
+  }
+
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+  const nowIso = new Date().toISOString();
+
+  for (const raw of rows) {
+    const row = mapBrowserCsvRow(raw);
+    if (!row) continue;
+    const domain = normalizeDomain(row.url);
+    const usernameKey = (row.username || '').toLowerCase();
+    if (!domain && !usernameKey) continue;
+    const key = `${domain}::${usernameKey}`;
+    const existing = indexByKey.get(key);
+
+    if (existing) {
+      // Same identity. If the password differs, refresh it; everything
+      // else (title, notes) stays as the user has it.
+      if (String(existing.password || '') === String(row.password || '')) {
+        unchanged++;
+      } else {
+        existing.password = row.password;
+        existing.updatedAt = nowIso;
+        updated++;
+      }
+    } else {
+      const id = (crypto.randomUUID && crypto.randomUUID()) ||
+        `iv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const newEntry = {
+        id,
+        name: row.name || domain || row.url || 'Untitled',
+        url: row.url || (domain ? `https://${domain}` : ''),
+        username: row.username || '',
+        password: row.password || '',
+        notes: row.note || '',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      payload.passwords.push(newEntry);
+      indexByKey.set(key, newEntry);
+      added++;
+    }
+  }
+
+  // Nothing changed → don't burn a server roundtrip + a fresh blob.
+  if (added === 0 && updated === 0) {
+    return { success: true, added: 0, updated: 0, unchanged };
+  }
+
+  const newBlob = await encryptCloudBlob(payload, masterPassword);
+  try {
+    await uploadVaultBlob(cache.token, cache.vaultId, newBlob, {
+      itemType: 'password',
+      title: `Sync from Chrome (${added} new, ${updated} updated)`,
+    });
+  } catch (err) {
+    if (err && err.message === 'SESSION_REVOKED') {
+      await clearAccount();
+      throw new Error('Your session was revoked. Please sign in again.');
+    }
+    throw err;
+  }
+
+  await setCache({ ...cache, encryptedBlob: newBlob, syncedAt: Date.now() });
+
+  // Refresh in-session indices so the unlocked list immediately reflects
+  // the imports without a re-unlock.
+  const sess = await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedSecrets', 'passwordIndex']);
+  if (sess.unlocked && sess.sessionKeyB64) {
+    const sessionKey = await importSessionKey(b64Decode(sess.sessionKeyB64));
+    const wrapped = { ...(sess.wrappedSecrets || {}) };
+    const index = [];
+    for (const p of payload.passwords) {
+      if (!p?.id) continue;
+      index.push({
+        id: String(p.id),
+        name: String(p.name || ''),
+        url: String(p.url || ''),
+        username: String(p.username || ''),
+        domain: extractDomain(p.url || ''),
+      });
+      if (typeof p.password === 'string' && p.password.length > 0) {
+        const w = await aesGcmEncrypt(p.password, sessionKey);
+        wrapped[String(p.id)] = { ct: b64Encode(w.ciphertext), iv: b64Encode(w.iv) };
+      }
+    }
+    await chrome.storage.session.set({ wrappedSecrets: wrapped, passwordIndex: index });
+    await updateBadge();
+  }
+
+  await touchActivity();
+  return { success: true, added, updated, unchanged };
+}
+
+// Detect when the user finishes the Chrome password CSV export and notify
+// any open popup so it can prompt them to pick the file. We deliberately
+// don't fetch the file ourselves — Chrome blocks fetch('file://...') from
+// service workers without the per-extension "Allow access to file URLs"
+// toggle, which we don't want to require.
+function looksLikeBrowserPasswordCsv(item) {
+  if (!item || item.state !== 'complete') return false;
+  const name = (item.filename || '').toLowerCase();
+  if (!name.endsWith('.csv')) return false;
+  return /password/i.test(name) || /\bchrome\b.*\bpasswords\b/i.test(name);
+}
+
+chrome.downloads?.onChanged?.addListener?.(async (delta) => {
+  // Fires on every state change. We only care about the "complete" transition.
+  if (!delta?.state || delta.state.current !== 'complete') return;
+  try {
+    const [item] = await chrome.downloads.search({ id: delta.id });
+    if (!looksLikeBrowserPasswordCsv(item)) return;
+    // Best-effort fan-out — popup may not be open. chrome.runtime.sendMessage
+    // throws if there's no listener; we swallow that to keep it noiseless.
+    chrome.runtime.sendMessage({
+      type: 'BROWSER_CSV_DETECTED',
+      filename: item.filename,
+      basename: (item.filename || '').split(/[\\/]/).pop(),
+      downloadId: item.id,
+    }).catch(() => {});
+  } catch {}
+});
+
 // ── Message router ──────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Distinguish content-script callers (have sender.tab) from popup (no tab).
@@ -731,6 +914,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case 'ADD_ITEM': {
           if (fromContent) throw new Error('Adding entries must come from the popup.');
           sendResponse({ ok: true, ...(await addItem(msg)) });
+          break;
+        }
+
+        case 'SYNC_FROM_BROWSER': {
+          if (fromContent) throw new Error('Sync must come from the popup.');
+          const result = await syncFromBrowser({ csvText: msg.csvText, masterPassword: msg.masterPassword });
+          sendResponse({ ok: true, ...result });
           break;
         }
 

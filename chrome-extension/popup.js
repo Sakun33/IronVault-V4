@@ -79,10 +79,24 @@ const ui = {
   addSubCurrency: $('iv-add-sub-currency'),
   addSubBilling: $('iv-add-sub-billing'),
   addSubCycle: $('iv-add-sub-cycle'),
+
+  syncPanel: $('iv-sync-panel'),
+  syncChromeBtn: $('iv-sync-chrome-btn'),
+  syncOpenTab: $('iv-sync-open-tab'),
+  syncFile: $('iv-sync-file'),
+  syncMaster: $('iv-sync-master'),
+  syncSubmit: $('iv-sync-submit'),
+  syncCancel: $('iv-sync-cancel'),
+  syncError: $('iv-sync-error'),
+  syncMsg: $('iv-sync-msg'),
+  syncResult: $('iv-sync-result'),
+  syncDetected: $('iv-sync-detected'),
+  syncDetectedName: $('iv-sync-detected-name'),
 };
 
 let addKind = 'password';
 let dismissedSaveDomains = new Set();
+let syncDetectedFilename = '';
 
 let pendingReveal = null; // { id, pwEl, btnEl, timer }
 let lastStatus = null;
@@ -105,6 +119,7 @@ function showPanel(name) {
   ui.listPanel.hidden = name !== 'list';
   ui.settingsPanel.hidden = name !== 'settings';
   if (ui.addPanel) ui.addPanel.hidden = name !== 'add';
+  if (ui.syncPanel) ui.syncPanel.hidden = name !== 'sync';
 }
 
 function setHeader(unlocked, vaultName) {
@@ -661,6 +676,103 @@ ui.addForm?.addEventListener('submit', async (ev) => {
   } finally {
     ui.addSubmit.disabled = false;
     setAddKind(addKind); // restore label
+  }
+});
+
+// ── Sync from Chrome's password manager ─────────────────────────────────────
+function showSyncError(msg) {
+  ui.syncError.textContent = msg || '';
+  ui.syncError.hidden = !msg;
+}
+function showSyncMsg(msg) {
+  ui.syncMsg.textContent = msg || '';
+  ui.syncMsg.hidden = !msg;
+}
+
+function resetSyncPanel() {
+  showSyncError('');
+  showSyncMsg('');
+  ui.syncResult.hidden = true;
+  ui.syncResult.classList.remove('is-success');
+  ui.syncResult.innerHTML = '';
+  ui.syncFile.value = '';
+  ui.syncMaster.value = '';
+  ui.syncDetected.hidden = true;
+  syncDetectedFilename = '';
+  ui.syncSubmit.disabled = true;
+  ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
+}
+
+ui.syncChromeBtn?.addEventListener('click', async () => {
+  cancelReveal();
+  resetSyncPanel();
+  showPanel('sync');
+});
+
+ui.syncOpenTab?.addEventListener('click', async () => {
+  // chrome:// URLs can only be opened via the chrome.tabs API — window.open
+  // is blocked by Chrome's URL filter for non-http(s) schemes.
+  try {
+    await chrome.tabs.create({ url: 'chrome://settings/passwords' });
+  } catch (err) {
+    showSyncError('Could not open Chrome settings. Paste chrome://settings/passwords into a new tab.');
+  }
+});
+
+ui.syncFile?.addEventListener('change', () => {
+  ui.syncSubmit.disabled = !ui.syncFile.files?.length;
+  showSyncError('');
+  showSyncMsg('');
+});
+
+ui.syncCancel?.addEventListener('click', () => {
+  resetSyncPanel();
+  showPanel('list');
+});
+
+ui.syncSubmit?.addEventListener('click', async () => {
+  showSyncError('');
+  showSyncMsg('');
+  const file = ui.syncFile.files?.[0];
+  if (!file) { showSyncError('Pick the CSV file you exported from Chrome.'); return; }
+  if (!ui.syncMaster.value) { showSyncError('Master password is required to re-encrypt the vault.'); return; }
+
+  ui.syncSubmit.disabled = true;
+  ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Importing…';
+  try {
+    const csvText = await file.text();
+    const result = await send({
+      type: 'SYNC_FROM_BROWSER',
+      csvText,
+      masterPassword: ui.syncMaster.value,
+    });
+    ui.syncMaster.value = '';
+    const summary = `${result.added} new · ${result.updated} updated · ${result.unchanged} unchanged`;
+    showSyncMsg('Sync complete.');
+    ui.syncResult.classList.add('is-success');
+    ui.syncResult.innerHTML = `
+      <div class="iv-sync-result-row"><span>Added</span><strong>${result.added}</strong></div>
+      <div class="iv-sync-result-row"><span>Updated</span><strong>${result.updated}</strong></div>
+      <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>`;
+    ui.syncResult.hidden = false;
+    ui.syncSubmit.querySelector('.iv-btn-label').textContent = summary;
+  } catch (err) {
+    showSyncError(err.message || 'Sync failed.');
+    ui.syncSubmit.disabled = false;
+    ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
+  }
+});
+
+// Listen for the background's "we saw a passwords-CSV download" broadcast.
+// Just an informational hint — the user still picks the file via the input
+// (Chrome blocks SW fetch on file:// without per-extension toggle).
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== 'BROWSER_CSV_DETECTED') return;
+  if (!ui.syncPanel || ui.syncPanel.hidden) return;
+  syncDetectedFilename = msg.basename || msg.filename || '';
+  if (syncDetectedFilename) {
+    ui.syncDetectedName.textContent = syncDetectedFilename;
+    ui.syncDetected.hidden = false;
   }
 });
 
