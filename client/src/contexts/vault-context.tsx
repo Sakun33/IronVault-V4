@@ -306,6 +306,10 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       }
       if (ok) {
         localStorage.removeItem(`iv_dirty_${vaultId}`);
+        // Advance lastPull so the 60-s doPull poll doesn't immediately
+        // re-download what we just pushed (and trigger a no-op
+        // replaceVaultFromBlob, which wipes encrypted_data mid-session).
+        localStorage.setItem(`iv_last_pull_${vaultId}`, new Date().toISOString());
         toastRef.current({ title: '☁️ Synced', description: 'Vault saved to cloud', duration: 2000 });
         return { ok: true, blobLength: blob.length };
       }

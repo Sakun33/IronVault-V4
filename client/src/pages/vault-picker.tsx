@@ -271,60 +271,86 @@ export default function VaultPickerPage() {
         });
       }
 
-      // ── Dirty-data rescue ────────────────────────────────────────────────
-      // If a previous session imported records but the cloud push didn't land
-      // before logout, the dirty flag is still set in localStorage. The rest
-      // of this function generates a NEW salt and wipes local data — which
-      // would silently destroy those imports. Before wiping, try to unlock
-      // the existing local IDB with the same password and push it up so the
-      // re-download below brings the rescued data back.
+      // ── Always-rescue local data ─────────────────────────────────────────
+      // The previous fix only ran rescue when `iv_dirty_<id>` was set, but
+      // that flag is cleared on push success — and a push can *appear* to
+      // succeed (HTTP 200) without actually landing the imports on the
+      // server (silent failures, races, server-side partial writes). When
+      // that happens, the rescue is skipped and clearEncryptedItems()
+      // unconditionally destroys the local imports.
+      //
+      // Defensive approach: ALWAYS try to push local data first. The PUT
+      // endpoint's optimistic concurrency handles the multi-device case:
+      //   - rescue.success    → local was newer/equal; cloud now matches
+      //                         local. Keep local; skip the wipe.
+      //   - rescue.serverNewer → cloud is newer (another device updated).
+      //                          Fall through to wipe-and-replace.
+      //   - other failure      → if dirty flag is set, refuse to wipe (we
+      //                          have unsynced changes the user should not
+      //                          silently lose). Else fall through.
       const dirtyKey = `iv_dirty_${cloudVault.vaultId}`;
-      const isDirty = localStorage.getItem(dirtyKey) === '1';
-      if (isDirty) {
-        try {
-          const localUnlocked = await vaultStorage.unlockVault(pw);
-          if (localUnlocked) {
-            const localBlob = await vaultStorage.exportVault(pw);
+      let preservedLocal = false;
+      try {
+        const localUnlocked = await vaultStorage.unlockVault(pw);
+        if (localUnlocked) {
+          const localBlob = await vaultStorage.exportVault(pw);
+          // Don't push trivially-empty blobs (no metadata + empty arrays
+          // serialize to ~600 bytes). >1000 bytes means real content.
+          if (localBlob.length > 1000) {
+            console.log('[CLOUD-UNLOCK] Local has content — pushing before any wipe', { blobLength: localBlob.length });
             const rescue = await pushCloudVault(
               cloudVault.vaultId, cloudVault.vaultName, localBlob,
               cloudVault.isDefault || false,
             );
             if (rescue.success) {
+              preservedLocal = true;
               localStorage.removeItem(dirtyKey);
-              console.log('[CLOUD-UNLOCK] Rescued unsynced local imports — pushed to cloud before download');
-              toast({
-                title: 'Synced unsaved changes',
-                description: 'Pushed pending local imports to cloud before unlocking.',
-                duration: 4000,
-              });
+              console.log('[CLOUD-UNLOCK] Preserved local data — push succeeded');
             } else if (rescue.serverNewer) {
-              // Multi-device conflict. Don't silently destroy local data.
-              console.error('[CLOUD-UNLOCK] Rescue blocked: server has newer data — refusing to wipe local imports');
+              // Cloud is newer — wipe-and-replace below is the right call.
+              // Clear dirty since cloud is now authoritative.
+              localStorage.removeItem(dirtyKey);
+              console.log('[CLOUD-UNLOCK] Cloud is newer than local — will replace');
+            } else if (localStorage.getItem(dirtyKey) === '1') {
+              // Push failed AND we have explicitly-marked unsynced changes —
+              // refuse to wipe.
+              console.error('[CLOUD-UNLOCK] Push failed with dirty flag set — refusing to wipe', rescue);
               setCloudErrors(e => ({
                 ...e,
                 [cloudVault.vaultId]:
-                  'You have unsynced changes that conflict with newer data on the server. Open the vault on the device where you imported, sync, then try again.',
+                  'Cloud sync failed and you have unsynced local changes. Check your network and try again.',
               }));
               return;
             } else {
-              console.error('[CLOUD-UNLOCK] Rescue push failed — refusing to wipe local imports', rescue);
-              setCloudErrors(e => ({
-                ...e,
-                [cloudVault.vaultId]:
-                  'You have unsynced local changes and the cloud push failed. Check your network and try again.',
-              }));
-              return;
+              console.warn('[CLOUD-UNLOCK] Push failed but dirty flag not set — proceeding with cloud download', rescue);
             }
           } else {
-            console.warn('[CLOUD-UNLOCK] Dirty flag set but local unlock failed — proceeding with cloud download');
+            console.log('[CLOUD-UNLOCK] Local blob is empty/tiny — falling through to cloud download', { blobLength: localBlob.length });
           }
-        } catch (rescueErr) {
-          console.error('[CLOUD-UNLOCK] Rescue attempt threw — proceeding with cloud download', rescueErr);
+        } else {
+          console.log('[CLOUD-UNLOCK] Local unlock failed (no usable local data) — falling through to cloud download');
         }
+      } catch (rescueErr) {
+        console.error('[CLOUD-UNLOCK] Rescue attempt threw — falling through to cloud download', rescueErr);
+      }
+
+      if (preservedLocal) {
+        // Local IDB has the authoritative data and it's now on the server.
+        // Just unlock — auto-sync will pull any future updates from other devices.
+        loginWithoutVerification(pw);
+        markVaultAsCloudSynced(cloudVault.vaultId);
+        // Set lastPull to NOW so doPull doesn't immediately re-download (our
+        // push set serverUpdatedAt on the server; using NOW avoids a redundant
+        // round-trip and replaceVaultFromBlob with the same data).
+        localStorage.setItem(`iv_last_pull_${cloudVault.vaultId}`, new Date().toISOString());
+        resetViewportZoom();
+        toast({ title: 'Vault Unlocked', description: `Welcome back to "${cloudVault.vaultName}"` });
+        setLocation('/');
+        return;
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      // Always fetch fresh blob from server — never trust stale local copy
+      // Local data unusable, empty, or cloud is newer: wipe and replace.
       const full = await downloadCloudVault(cloudVault.vaultId);
       if (!full) throw new Error('Failed to download vault from cloud');
 
