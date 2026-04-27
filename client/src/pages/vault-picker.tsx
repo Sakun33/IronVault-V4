@@ -9,6 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -105,6 +109,27 @@ export default function VaultPickerPage() {
     id: string; name: string; isLocal: boolean; isCloud: boolean;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePw, setShowDeletePw] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newVaultName, setNewVaultName] = useState('');
+  const [newVaultPassword, setNewVaultPassword] = useState('');
+  const [newVaultConfirm, setNewVaultConfirm] = useState('');
+  const [newVaultType, setNewVaultType] = useState<'local' | 'cloud'>(isNativeApp() ? 'local' : 'cloud');
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const resetCreateForm = () => {
+    setNewVaultName('');
+    setNewVaultPassword('');
+    setNewVaultConfirm('');
+    setNewVaultType(isNativeApp() ? 'local' : 'cloud');
+    setShowNewPw(false);
+    setCreateError('');
+  };
 
   useEffect(() => {
     // Always re-read local vaults from the (now email-scoped) registry
@@ -398,8 +423,36 @@ export default function VaultPickerPage() {
     }
   };
 
+  const verifyVaultPassword = async (vaultId: string, password: string): Promise<boolean> => {
+    // Path 1: locally-stored verification hash (set on creation)
+    if (await vaultManager.tryUnlockVault(vaultId, password)) return true;
+    // Path 2: IDB verification entry (set after first unlock — covers cloud-synced vaults
+    // that don't have a local hash entry yet).
+    const previousActive = vaultManager.getActiveVaultId();
+    try {
+      vaultManager.setActiveVaultId(vaultId);
+      await vaultStorage.switchToVault(vaultId);
+      const ok = await vaultStorage.unlockVault(password);
+      return ok;
+    } catch {
+      return false;
+    } finally {
+      if (previousActive && previousActive !== vaultId) {
+        vaultManager.setActiveVaultId(previousActive);
+        try { await vaultStorage.switchToVault(previousActive); } catch { /* noop */ }
+      }
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!vaultToDelete) return;
+    setDeleteError('');
+
+    if (!deletePassword) {
+      setDeleteError('Enter the master password to confirm deletion.');
+      return;
+    }
+
     const totalVaults = new Set([
       ...vaults.map(v => v.id),
       ...cloudVaults.map(c => c.vaultId),
@@ -410,20 +463,21 @@ export default function VaultPickerPage() {
         description: 'You must keep at least one vault. Create another vault first.',
         variant: 'destructive',
       });
-      setVaultToDelete(null);
       return;
     }
 
     setIsDeleting(true);
     try {
+      const passwordOk = await verifyVaultPassword(vaultToDelete.id, deletePassword);
+      if (!passwordOk) {
+        setDeleteError('Incorrect master password.');
+        return;
+      }
+
       if (vaultToDelete.isCloud) {
         const ok = await deleteCloudVault(vaultToDelete.id);
         if (!ok) {
-          toast({
-            title: 'Cloud delete failed',
-            description: 'Could not remove from cloud. Please retry.',
-            variant: 'destructive',
-          });
+          setDeleteError('Could not remove vault from the cloud. Please retry.');
           return;
         }
         markVaultAsNotCloudSynced(vaultToDelete.id);
@@ -438,15 +492,84 @@ export default function VaultPickerPage() {
         description: `"${vaultToDelete.name}" and all its data have been removed.`,
       });
       setVaultToDelete(null);
+      setDeletePassword('');
+      setShowDeletePw(false);
       await refreshVaultLists();
     } catch (err) {
-      toast({
-        title: 'Delete failed',
-        description: err instanceof Error ? err.message : 'Could not delete vault',
-        variant: 'destructive',
-      });
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete vault.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCreateVault = async () => {
+    setCreateError('');
+    if (!newVaultName.trim()) { setCreateError('Vault name is required'); return; }
+    if (newVaultPassword.length < 8) { setCreateError('Master password must be at least 8 characters'); return; }
+    if (newVaultPassword !== newVaultConfirm) { setCreateError('Passwords do not match'); return; }
+
+    setIsCreating(true);
+    const previousActive = vaultManager.getActiveVaultId();
+    try {
+      const newVault = await vaultManager.createVault(
+        newVaultName.trim(),
+        vaults.length === 0,
+        localVaultLimit,
+      );
+
+      vaultManager.setActiveVaultId(newVault.id);
+      await vaultStorage.switchToVault(newVault.id);
+      await vaultStorage.createVault(newVaultPassword);
+      await vaultManager.createVaultPassword(newVault.id, newVaultPassword);
+
+      const wantsCloud = newVaultType === 'cloud' || !isNativeApp();
+      if (wantsCloud) {
+        try {
+          const blob = await vaultStorage.exportVault(newVaultPassword);
+          const result = await pushCloudVault(newVault.id, newVault.name, blob, false);
+          if (result.planError) {
+            toast({
+              title: 'Cloud sync requires Pro',
+              description: 'Vault was created locally. Upgrade to enable cloud sync.',
+              variant: 'destructive',
+            });
+          } else if (result.success) {
+            markVaultAsCloudSynced(newVault.id);
+          } else {
+            toast({
+              title: 'Cloud sync failed',
+              description: 'Vault was created locally — sync will retry when online.',
+              variant: 'destructive',
+            });
+          }
+        } catch {
+          toast({
+            title: 'Cloud sync failed',
+            description: 'Vault was created locally.',
+            variant: 'destructive',
+          });
+        }
+      }
+
+      // Restore previous active vault — picker should not silently switch the user.
+      if (previousActive && previousActive !== newVault.id) {
+        vaultManager.setActiveVaultId(previousActive);
+        try { await vaultStorage.switchToVault(previousActive); } catch { /* noop */ }
+      }
+
+      toast({
+        title: 'Vault created',
+        description: `"${newVault.name}" is ready. Enter your password to unlock it.`,
+      });
+
+      setShowCreateDialog(false);
+      resetCreateForm();
+      await refreshVaultLists();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create vault';
+      setCreateError(message.startsWith('PLAN_LIMIT:') ? message.slice('PLAN_LIMIT:'.length).trim() : message);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -607,7 +730,7 @@ export default function VaultPickerPage() {
                   data-testid="button-create-new-vault"
                   variant="outline"
                   className="w-full mb-8 gap-2"
-                  onClick={() => setLocation('/auth/create-vault')}
+                  onClick={() => { resetCreateForm(); setShowCreateDialog(true); }}
                 >
                   <Plus className="w-4 h-4" />
                   Add a vault
@@ -701,7 +824,7 @@ export default function VaultPickerPage() {
                       size="sm"
                       className="mt-3 gap-2"
                       variant={isNativeApp() ? 'outline' : 'default'}
-                      onClick={() => setLocation('/auth/create-vault?type=cloud')}
+                      onClick={() => { resetCreateForm(); setNewVaultType('cloud'); setShowCreateDialog(true); }}
                     >
                       <Plus className="w-4 h-4" /> Create cloud vault
                     </Button>
@@ -710,12 +833,32 @@ export default function VaultPickerPage() {
               </div>
             )
           )}
+
+          {/* Always-visible "+ New Vault" card-button */}
+          {(isNativeApp() || isPaid) && (
+            <button
+              type="button"
+              data-testid="button-add-new-vault"
+              onClick={() => { resetCreateForm(); setShowCreateDialog(true); }}
+              className="w-full rounded-xl border border-dashed border-border bg-card/40 hover:bg-card hover:border-primary/50 transition-colors p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground mb-4"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-medium">New Vault</span>
+            </button>
+          )}
         </div>
       </main>
 
       <AlertDialog
         open={!!vaultToDelete}
-        onOpenChange={(open) => { if (!open && !isDeleting) setVaultToDelete(null); }}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) {
+            setVaultToDelete(null);
+            setDeletePassword('');
+            setDeleteError('');
+            setShowDeletePw(false);
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -723,24 +866,59 @@ export default function VaultPickerPage() {
               <Trash2 className="w-5 h-5 text-destructive" />
               Delete vault?
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <span className="block">
-                This will permanently delete <strong>"{vaultToDelete?.name}"</strong>
-                {vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device and the cloud'}
-                {vaultToDelete?.isCloud && !vaultToDelete?.isLocal && ' from the cloud'}
-                {!vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device'}.
-              </span>
-              <span className="block text-destructive font-medium">
-                All passwords, notes, and other data inside it will be lost. This cannot be undone.
-              </span>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This will permanently delete <strong>"{vaultToDelete?.name}"</strong>
+                  {vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device and the cloud'}
+                  {vaultToDelete?.isCloud && !vaultToDelete?.isLocal && ' from the cloud'}
+                  {!vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device'}.
+                </p>
+                <p className="text-destructive font-medium">
+                  All passwords, notes, and other data inside it will be lost. This cannot be undone.
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="delete-master-password">
+              Enter the master password for this vault to confirm
+            </Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="delete-master-password"
+                data-testid="input-delete-master-password"
+                type={showDeletePw ? 'text' : 'password'}
+                placeholder="Master password"
+                value={deletePassword}
+                onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isDeleting) handleConfirmDelete(); }}
+                disabled={isDeleting}
+                className="pl-10 pr-10"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowDeletePw((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+              >
+                {showDeletePw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {deleteError && (
+              <p className="text-destructive text-sm" data-testid="text-delete-error">{deleteError}</p>
+            )}
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               data-testid="button-confirm-delete-vault"
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
+              onClick={(e) => { e.preventDefault(); handleConfirmDelete(); }}
+              disabled={isDeleting || !deletePassword}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeleting ? 'Deleting…' : 'Delete vault'}
@@ -748,6 +926,146 @@ export default function VaultPickerPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={showCreateDialog}
+        onOpenChange={(open) => { if (!open && !isCreating) { setShowCreateDialog(false); resetCreateForm(); } }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-primary" />
+              Create a new vault
+            </DialogTitle>
+            <DialogDescription>
+              Each vault is encrypted with its own master password. You'll need this password every time you unlock it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-vault-name">Vault name</Label>
+              <Input
+                id="new-vault-name"
+                data-testid="input-new-vault-name"
+                placeholder="e.g. Personal, Work, Family"
+                value={newVaultName}
+                onChange={(e) => setNewVaultName(e.target.value)}
+                disabled={isCreating}
+                autoFocus
+              />
+            </div>
+
+            {isNativeApp() && (
+              <div className="space-y-2">
+                <Label>Storage type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    data-testid="button-vault-type-local"
+                    onClick={() => setNewVaultType('local')}
+                    disabled={isCreating}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      newVaultType === 'local'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-primary" />
+                      <span className="font-medium text-sm">Local</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Stored only on this device.</p>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="button-vault-type-cloud"
+                    onClick={() => setNewVaultType('cloud')}
+                    disabled={isCreating || !isPaid}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      newVaultType === 'cloud'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/40'
+                    } ${!isPaid ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Cloud className="w-4 h-4 text-blue-500" />
+                      <span className="font-medium text-sm">Cloud {!isPaid && <span className="text-xs text-amber-600">(Pro)</span>}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Synced across your devices.</p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="new-vault-password">Master password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="new-vault-password"
+                  data-testid="input-new-vault-password"
+                  type={showNewPw ? 'text' : 'password'}
+                  placeholder="At least 8 characters"
+                  value={newVaultPassword}
+                  onChange={(e) => setNewVaultPassword(e.target.value)}
+                  disabled={isCreating}
+                  className="pl-10 pr-10"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-vault-confirm">Confirm master password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="new-vault-confirm"
+                  data-testid="input-new-vault-confirm"
+                  type={showNewPw ? 'text' : 'password'}
+                  placeholder="Re-enter password"
+                  value={newVaultConfirm}
+                  onChange={(e) => setNewVaultConfirm(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !isCreating) handleCreateVault(); }}
+                  disabled={isCreating}
+                  className="pl-10"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            {createError && (
+              <p className="text-destructive text-sm" data-testid="text-create-error">{createError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setShowCreateDialog(false); resetCreateForm(); }}
+              disabled={isCreating}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-testid="button-confirm-create-vault"
+              onClick={handleCreateVault}
+              disabled={isCreating}
+            >
+              {isCreating ? 'Creating…' : 'Create vault'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
