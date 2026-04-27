@@ -1,313 +1,589 @@
-/**
- * IronVault background service worker.
- *
- * Responsibilities:
- *  1. Sign in to api.ironvault.app and cache the JWT.
- *  2. Pull the encrypted vault blob from the server and decrypt it locally
- *     using the user's master password (zero-knowledge — the server never
- *     sees the master password).
- *  3. Serve queries from the content script: "give me credentials for
- *     domain X".
- *  4. Watch the downloads folder for a Chrome passwords CSV and offer to
- *     import it.
- */
+// IronVault background service worker.
+//
+// Security model:
+//   1. Master password is sent from the popup, used to derive an AES-GCM key,
+//      then immediately discarded. The derived master key never leaves WebCrypto
+//      and is not persisted.
+//   2. After decrypting the cloud blob once, every individual password is
+//      RE-WRAPPED with a per-session AES-GCM key generated locally. Only
+//      metadata (id, name, url, username, domain) is stored in the clear.
+//      The master plaintext is then dropped.
+//   3. State lives in chrome.storage.session — browser-protected, in memory only,
+//      cleared on browser close. Service-worker globals would die after ~30s of
+//      idle, so we always re-import the session key from session storage.
+//   4. A single password is decrypted ONLY in response to an explicit fill
+//      request, and only the requested credential ever reaches a content script.
+//   5. Auto-lock: alarm checks lastActivity each minute; configurable timeout
+//      (default 5 min) wipes session storage.
 
-const API_BASE = 'https://www.ironvault.app';
-const SIGNED_IN_KEY = 'ironvault.session';
-const VAULT_KEY = 'ironvault.vault';
+import {
+  decryptCloudBlob,
+  generateSessionKey,
+  exportRawKey,
+  importSessionKey,
+  aesGcmEncrypt,
+  aesGcmDecrypt,
+  b64Encode,
+  b64Decode,
+  sha256Hex,
+} from './lib/crypto.js';
+import { authToken, listCloudVaults, downloadCloudVault } from './lib/api.js';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const DEFAULT_AUTOLOCK_MIN = 5;
+const ALLOWED_AUTOLOCK_MIN = [1, 5, 15, 30];
+const ALARM_NAME = 'ironvault-autolock';
 
-async function getSession() {
-  const { [SIGNED_IN_KEY]: s } = await chrome.storage.local.get(SIGNED_IN_KEY);
-  return s || null;
-}
+// Persistent (chrome.storage.local) — keyed for clarity:
+//   K_CACHE: { encryptedBlob, vaultId, vaultName, token, email, syncedAt }
+//   K_BIO:   { credentialId, prfSaltB64, wrap: { ct, iv } }
+//   autoLockMinutes (number)
+//   rememberedEmail (string)
+const K_CACHE = 'ironvault.cache';
+const K_BIO = 'ironvault.biometric';
 
-async function setSession(s) {
-  await chrome.storage.local.set({ [SIGNED_IN_KEY]: s });
-}
-
-async function getVault() {
-  const { [VAULT_KEY]: v } = await chrome.storage.local.get(VAULT_KEY);
-  return v || null;
-}
-
-async function setVault(v) {
-  await chrome.storage.local.set({ [VAULT_KEY]: v });
-}
-
-async function clearAll() {
-  await chrome.storage.local.remove([SIGNED_IN_KEY, VAULT_KEY]);
-}
-
-// ── Crypto: derive key from master password and decrypt vault ────────────────
-
-async function deriveKey(masterPassword, salt, iterations = 250_000) {
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(masterPassword),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt']
-  );
-}
-
-function b64ToBytes(b64) {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-/**
- * Decrypt the encrypted vault blob.
- *
- * The blob format produced by the IronVault web app is JSON of the shape:
- *   { v: 1, salt: <b64>, iv: <b64>, ct: <b64>, iterations: 250000 }
- *
- * Older blobs may use slightly different field names; this function tolerates
- * a couple of common variants without throwing.
- */
-async function decryptVaultBlob(blobJson, masterPassword) {
-  let parsed;
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function extractDomain(url) {
+  if (!url) return null;
   try {
-    parsed = typeof blobJson === 'string' ? JSON.parse(blobJson) : blobJson;
+    const u = new URL(url.includes('://') ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, '').toLowerCase();
   } catch {
-    throw new Error('Vault blob is not valid JSON');
+    return null;
+  }
+}
+
+function domainMatches(pageDomain, entryDomain) {
+  if (!pageDomain || !entryDomain) return false;
+  if (pageDomain === entryDomain) return true;
+  // Match subdomains in either direction: mail.google.com ↔ google.com
+  return pageDomain.endsWith('.' + entryDomain) || entryDomain.endsWith('.' + pageDomain);
+}
+
+async function getAutoLockMinutes() {
+  const { autoLockMinutes } = await chrome.storage.local.get('autoLockMinutes');
+  return typeof autoLockMinutes === 'number' && autoLockMinutes > 0
+    ? autoLockMinutes
+    : DEFAULT_AUTOLOCK_MIN;
+}
+
+async function setAutoLockMinutes(minutes) {
+  if (!ALLOWED_AUTOLOCK_MIN.includes(minutes)) {
+    throw new Error(`Auto-lock must be one of ${ALLOWED_AUTOLOCK_MIN.join(', ')} minutes.`);
+  }
+  await chrome.storage.local.set({ autoLockMinutes: minutes });
+  await chrome.storage.session.set({ autoLockMinutes: minutes });
+}
+
+async function getCache() {
+  const { [K_CACHE]: c } = await chrome.storage.local.get(K_CACHE);
+  return c || null;
+}
+
+async function setCache(c) {
+  await chrome.storage.local.set({ [K_CACHE]: c });
+}
+
+async function getBiometric() {
+  const { [K_BIO]: b } = await chrome.storage.local.get(K_BIO);
+  return b || null;
+}
+
+async function clearAccount() {
+  await chrome.storage.local.remove([K_CACHE, K_BIO, 'rememberedEmail']);
+  await lock();
+}
+
+async function getRememberedEmail() {
+  const { rememberedEmail } = await chrome.storage.local.get('rememberedEmail');
+  return rememberedEmail || '';
+}
+
+async function rememberEmail(email) {
+  await chrome.storage.local.set({ rememberedEmail: email });
+}
+
+async function touchActivity() {
+  await chrome.storage.session.set({ lastActivity: Date.now() });
+}
+
+async function updateBadge() {
+  const { unlocked, passwordIndex } = await chrome.storage.session.get([
+    'unlocked', 'passwordIndex',
+  ]);
+  if (unlocked && Array.isArray(passwordIndex)) {
+    chrome.action.setBadgeText({ text: '' });
+    chrome.action.setTitle({ title: `IronVault — ${passwordIndex.length} entries` });
+  } else {
+    chrome.action.setBadgeText({ text: '🔒' });
+    chrome.action.setBadgeBackgroundColor({ color: '#1f1f1f' });
+    chrome.action.setTitle({ title: 'IronVault — Locked' });
+  }
+}
+
+// ── Lock / unlock ───────────────────────────────────────────────────────────
+async function lock() {
+  await chrome.storage.session.clear();
+  chrome.alarms.clear(ALARM_NAME);
+  await updateBadge();
+}
+
+async function ensureAutoLockAlarm() {
+  // Periodic check — fires every minute, decides whether to lock based on
+  // configured timeout vs lastActivity. Cheaper than scheduling a new alarm
+  // on every interaction.
+  await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1 });
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== ALARM_NAME) return;
+  const { unlocked, lastActivity, autoLockMinutes } = await chrome.storage.session.get([
+    'unlocked', 'lastActivity', 'autoLockMinutes',
+  ]);
+  if (!unlocked) {
+    chrome.alarms.clear(ALARM_NAME);
+    return;
+  }
+  const limitMs = (autoLockMinutes || DEFAULT_AUTOLOCK_MIN) * 60 * 1000;
+  if (Date.now() - (lastActivity || 0) > limitMs) {
+    await lock();
+  }
+});
+
+// ── Core unlock flow ────────────────────────────────────────────────────────
+async function performLogin({ email, accountPassword, masterPassword, vaultId }) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Email is required.');
+  if (!accountPassword) throw new Error('Account password is required.');
+  if (!masterPassword) throw new Error('Master password is required.');
+
+  // Step 1: account auth → JWT
+  const accountPasswordHash = await sha256Hex(accountPassword);
+  const token = await authToken(normalizedEmail, accountPasswordHash);
+
+  // Step 2: list cloud vaults — if multiple and none chosen, return for picker
+  const vaults = await listCloudVaults(token);
+  if (vaults.length === 0) {
+    throw new Error('No cloud vaults found on this account. Sync a vault from the IronVault app first.');
+  }
+  let chosen;
+  if (vaultId) {
+    chosen = vaults.find(v => v.vaultId === vaultId);
+    if (!chosen) throw new Error('Selected vault no longer exists.');
+  } else if (vaults.length === 1) {
+    chosen = vaults[0];
+  } else {
+    chosen = vaults.find(v => v.isDefault) || null;
+  }
+  if (!chosen) {
+    return {
+      needsVaultSelection: true,
+      vaults: vaults.map(v => ({
+        vaultId: v.vaultId, vaultName: v.vaultName, isDefault: !!v.isDefault,
+      })),
+    };
   }
 
-  const saltB64 = parsed.salt || parsed.s;
-  const ivB64 = parsed.iv || parsed.nonce;
-  const ctB64 = parsed.ct || parsed.ciphertext || parsed.data;
-  const iterations = parsed.iterations || parsed.iter || 250_000;
-
-  if (!saltB64 || !ivB64 || !ctB64) {
-    throw new Error('Vault blob is missing salt/iv/ciphertext');
-  }
-
-  const key = await deriveKey(masterPassword, b64ToBytes(saltB64), iterations);
-  const plain = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: b64ToBytes(ivB64) },
-    key,
-    b64ToBytes(ctB64)
-  );
-  return JSON.parse(new TextDecoder().decode(plain));
-}
-
-// ── API calls ────────────────────────────────────────────────────────────────
-
-async function apiSignIn(email, password) {
-  const res = await fetch(`${API_BASE}/api/auth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Sign-in failed: ${res.status} ${detail.slice(0, 120)}`);
-  }
-  return res.json();
-}
-
-async function apiFetchEncryptedVault(token) {
-  const list = await fetch(`${API_BASE}/api/vaults/cloud`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!list.ok) throw new Error(`Vault list failed: ${list.status}`);
-  const { vaults } = await list.json();
-  if (!vaults?.length) throw new Error('No cloud vaults found on this account');
-  const target = vaults.find(v => v.isDefault) || vaults[0];
-
-  const blob = await fetch(`${API_BASE}/api/vaults/cloud/${encodeURIComponent(target.vaultId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!blob.ok) throw new Error(`Vault fetch failed: ${blob.status}`);
-  const data = await blob.json();
-  return { vaultId: target.vaultId, vaultName: target.vaultName, encryptedBlob: data.encryptedBlob };
-}
-
-// ── Sign-in + sync flow ──────────────────────────────────────────────────────
-
-async function signIn(email, password, masterPassword) {
-  const auth = await apiSignIn(email, password);
-  const token = auth.token || auth.accessToken;
-  if (!token) throw new Error('Server did not return a token');
-
-  const vaultRaw = await apiFetchEncryptedVault(token);
-  const decrypted = await decryptVaultBlob(vaultRaw.encryptedBlob, masterPassword)
-    .catch(() => { throw new Error('Could not decrypt vault — wrong master password?'); });
-
-  const entries = normalizeEntries(decrypted);
-
-  await setSession({ email, token, signedInAt: Date.now() });
-  await setVault({
-    vaultId: vaultRaw.vaultId,
-    vaultName: vaultRaw.vaultName,
-    entries,
-    entryCount: entries.length,
-    syncedAt: Date.now(),
-    /**
-     * We keep the master password in `chrome.storage.local` so we can re-sync
-     * later without prompting again. This is encrypted-at-rest by Chrome's
-     * profile storage but is NOT a perfect secret. Users who don't want this
-     * can sign out from the popup.
-     */
-    masterPassword,
-  });
-  return { ok: true };
-}
-
-function normalizeEntries(decrypted) {
-  // The web app stores passwords under various shapes depending on schema
-  // version. Flatten them to { name, username, password, url }.
-  const list = Array.isArray(decrypted)
-    ? decrypted
-    : decrypted?.passwords || decrypted?.entries || decrypted?.items || [];
-  return list.map(e => ({
-    id: e.id || crypto.randomUUID(),
-    name: e.name || e.title || e.label || '',
-    username: e.username || e.user || e.email || '',
-    password: e.password || e.pass || '',
-    url: e.url || e.uri || e.website || '',
-  })).filter(e => e.password);
-}
-
-async function resync() {
-  const session = await getSession();
-  const vault = await getVault();
-  if (!session || !vault?.masterPassword) return { ok: false, error: 'Not signed in' };
+  // Step 3: download blob and decrypt with master password
+  const full = await downloadCloudVault(token, chosen.vaultId);
+  let payload;
   try {
-    const vaultRaw = await apiFetchEncryptedVault(session.token);
-    const decrypted = await decryptVaultBlob(vaultRaw.encryptedBlob, vault.masterPassword);
-    const entries = normalizeEntries(decrypted);
-    await setVault({
-      ...vault,
-      vaultId: vaultRaw.vaultId,
-      vaultName: vaultRaw.vaultName,
-      entries,
-      entryCount: entries.length,
-      syncedAt: Date.now(),
-    });
-    return { ok: true };
+    payload = await decryptCloudBlob(full.encryptedBlob, masterPassword);
   } catch (err) {
-    return { ok: false, error: err.message };
+    if (err && err.message === 'WRONG_MASTER_PASSWORD') {
+      throw new Error('Wrong master password for this vault.');
+    }
+    throw new Error('Could not decrypt vault.');
   }
-}
 
-// ── Domain matching ──────────────────────────────────────────────────────────
-
-function hostFromUrl(raw) {
-  if (!raw) return '';
-  try {
-    const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
-    return u.hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-}
-
-function matchEntries(entries, targetDomain) {
-  if (!targetDomain) return [];
-  const target = targetDomain.toLowerCase().replace(/^www\./, '');
-  return entries.filter(e => {
-    const host = hostFromUrl(e.url);
-    if (!host) return false;
-    if (host === target) return true;
-    // suffix match: foo.example.com matches example.com
-    return host.endsWith(`.${target}`) || target.endsWith(`.${host}`);
+  // Cache the still-encrypted blob + token so future unlocks can run offline
+  // (no API roundtrip — only the master password is needed).
+  await setCache({
+    encryptedBlob: full.encryptedBlob,
+    vaultId: chosen.vaultId,
+    vaultName: chosen.vaultName,
+    token,
+    email: normalizedEmail,
+    syncedAt: Date.now(),
   });
+
+  // Step 4: re-wrap each password with a fresh per-session key, drop master
+  const sessionKey = await generateSessionKey();
+  const sessionKeyRaw = await exportRawKey(sessionKey);
+
+  const passwordIndex = [];
+  const wrappedSecrets = {};
+  const list = Array.isArray(payload.passwords) ? payload.passwords : [];
+
+  for (const p of list) {
+    if (!p || typeof p !== 'object' || !p.id) continue;
+    const meta = {
+      id: String(p.id),
+      name: String(p.name || ''),
+      url: String(p.url || ''),
+      username: String(p.username || ''),
+      domain: extractDomain(p.url),
+    };
+    passwordIndex.push(meta);
+    if (typeof p.password === 'string' && p.password.length > 0) {
+      const { ciphertext, iv } = await aesGcmEncrypt(p.password, sessionKey);
+      wrappedSecrets[meta.id] = { ct: b64Encode(ciphertext), iv: b64Encode(iv) };
+    }
+  }
+
+  // payload (full plaintext) goes out of scope after this function returns.
+  await chrome.storage.session.set({
+    unlocked: true,
+    email: normalizedEmail,
+    token,
+    vaultId: chosen.vaultId,
+    vaultName: chosen.vaultName,
+    sessionKeyB64: b64Encode(sessionKeyRaw),
+    passwordIndex,
+    wrappedSecrets,
+    lastActivity: Date.now(),
+    autoLockMinutes: await getAutoLockMinutes(),
+  });
+  await rememberEmail(normalizedEmail);
+  await ensureAutoLockAlarm();
+  await updateBadge();
+
+  return {
+    success: true,
+    email: normalizedEmail,
+    vaultName: chosen.vaultName,
+    entryCount: passwordIndex.length,
+  };
 }
 
-// ── Message router ───────────────────────────────────────────────────────────
+// ── Offline re-unlock from the cached encrypted blob ────────────────────────
+// After auto-lock / manual lock / browser-restart while still signed in: the
+// server token + encrypted blob are already cached in chrome.storage.local.
+// We just need the master password to decrypt the blob — no API call.
+async function performUnlock({ masterPassword }) {
+  if (!masterPassword) throw new Error('Master password is required.');
+  const cache = await getCache();
+  if (!cache || !cache.encryptedBlob) throw new Error('NO_CACHED_VAULT');
 
+  let payload;
+  try {
+    payload = await decryptCloudBlob(cache.encryptedBlob, masterPassword);
+  } catch (err) {
+    if (err && err.message === 'WRONG_MASTER_PASSWORD') {
+      throw new Error('Wrong master password for this vault.');
+    }
+    throw new Error('Could not decrypt vault.');
+  }
+
+  const sessionKey = await generateSessionKey();
+  const sessionKeyRaw = await exportRawKey(sessionKey);
+
+  const passwordIndex = [];
+  const wrappedSecrets = {};
+  const list = Array.isArray(payload.passwords) ? payload.passwords : [];
+
+  for (const p of list) {
+    if (!p || typeof p !== 'object' || !p.id) continue;
+    const meta = {
+      id: String(p.id),
+      name: String(p.name || ''),
+      url: String(p.url || ''),
+      username: String(p.username || ''),
+      domain: extractDomain(p.url),
+    };
+    passwordIndex.push(meta);
+    if (typeof p.password === 'string' && p.password.length > 0) {
+      const { ciphertext, iv } = await aesGcmEncrypt(p.password, sessionKey);
+      wrappedSecrets[meta.id] = { ct: b64Encode(ciphertext), iv: b64Encode(iv) };
+    }
+  }
+
+  await chrome.storage.session.set({
+    unlocked: true,
+    email: cache.email,
+    token: cache.token,
+    vaultId: cache.vaultId,
+    vaultName: cache.vaultName,
+    sessionKeyB64: b64Encode(sessionKeyRaw),
+    passwordIndex,
+    wrappedSecrets,
+    lastActivity: Date.now(),
+    autoLockMinutes: await getAutoLockMinutes(),
+  });
+  await ensureAutoLockAlarm();
+  await updateBadge();
+
+  return {
+    success: true,
+    email: cache.email,
+    vaultName: cache.vaultName,
+    entryCount: passwordIndex.length,
+  };
+}
+
+// ── Biometric unlock (WebAuthn PRF) ─────────────────────────────────────────
+// The popup performs the WebAuthn ceremony (service workers can't reach the
+// platform authenticator). After a successful PRF assertion, the popup
+// forwards the 32-byte PRF output here as a one-shot secret. We use it to
+// AES-wrap the master password. The PRF output is bound to the credential
+// and the per-install salt — it is NOT a stored secret on its own.
+async function biometricEnable({ credentialId, prfSaltB64, prfOutputB64, masterPassword }) {
+  if (!credentialId || !prfSaltB64 || !prfOutputB64 || !masterPassword) {
+    throw new Error('Biometric setup is missing fields.');
+  }
+  const cache = await getCache();
+  if (!cache || !cache.encryptedBlob) throw new Error('Sign in first.');
+  // Verify the master password actually unlocks the cached blob before we
+  // wrap it — otherwise we'd persist a bad password under biometrics.
+  try {
+    await decryptCloudBlob(cache.encryptedBlob, masterPassword);
+  } catch {
+    throw new Error('Master password did not unlock the vault.');
+  }
+  const wrapKey = await importSessionKey(b64Decode(prfOutputB64));
+  const { ciphertext, iv } = await aesGcmEncrypt(masterPassword, wrapKey);
+  await chrome.storage.local.set({
+    [K_BIO]: {
+      credentialId,
+      prfSaltB64,
+      wrap: { ct: b64Encode(ciphertext), iv: b64Encode(iv) },
+    },
+  });
+  return { success: true };
+}
+
+async function biometricDisable() {
+  await chrome.storage.local.remove(K_BIO);
+  return { success: true };
+}
+
+async function biometricUnlock({ prfOutputB64 }) {
+  if (!prfOutputB64) throw new Error('Biometric did not produce a key.');
+  const bio = await getBiometric();
+  if (!bio) throw new Error('Biometric is not configured.');
+  const wrapKey = await importSessionKey(b64Decode(prfOutputB64));
+  let masterPassword;
+  try {
+    const pt = await aesGcmDecrypt(b64Decode(bio.wrap.ct), wrapKey, b64Decode(bio.wrap.iv));
+    masterPassword = new TextDecoder().decode(pt);
+  } catch {
+    throw new Error('Biometric authentication did not match.');
+  }
+  const result = await performUnlock({ masterPassword });
+  // best-effort: drop reference (JS GC reclaims when collected).
+  masterPassword = null;
+  return result;
+}
+
+// ── Re-sync cached blob from cloud ──────────────────────────────────────────
+async function resync() {
+  const cache = await getCache();
+  if (!cache?.token || !cache?.vaultId) {
+    return { success: false, error: 'Sign in first.' };
+  }
+  try {
+    const dl = await downloadCloudVault(cache.token, cache.vaultId);
+    await setCache({ ...cache, encryptedBlob: dl.encryptedBlob, syncedAt: Date.now() });
+    return { success: true, syncedAt: Date.now() };
+  } catch (err) {
+    return { success: false, error: (err && err.message) || 'Re-sync failed' };
+  }
+}
+
+// ── Single-credential decrypt ───────────────────────────────────────────────
+async function decryptOne(id) {
+  const { unlocked, sessionKeyB64, wrappedSecrets, passwordIndex } =
+    await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedSecrets', 'passwordIndex']);
+  if (!unlocked || !sessionKeyB64) throw new Error('LOCKED');
+  const wrapped = wrappedSecrets && wrappedSecrets[id];
+  if (!wrapped) throw new Error('Entry not found.');
+  const meta = (passwordIndex || []).find(p => p.id === id);
+  if (!meta) throw new Error('Entry not found.');
+  const sessionKey = await importSessionKey(b64Decode(sessionKeyB64));
+  const pt = await aesGcmDecrypt(b64Decode(wrapped.ct), sessionKey, b64Decode(wrapped.iv));
+  await touchActivity();
+  return {
+    id: meta.id,
+    name: meta.name,
+    url: meta.url,
+    username: meta.username,
+    password: new TextDecoder().decode(pt),
+  };
+}
+
+// ── Status / queries ────────────────────────────────────────────────────────
+async function getStatus() {
+  const s = await chrome.storage.session.get([
+    'unlocked', 'email', 'vaultName', 'passwordIndex', 'autoLockMinutes',
+  ]);
+  const cache = await getCache();
+  const bio = await getBiometric();
+  return {
+    unlocked: !!s.unlocked,
+    signedIn: !!cache,
+    email: s.email || cache?.email || (await getRememberedEmail()),
+    vaultName: s.vaultName || cache?.vaultName || null,
+    entryCount: Array.isArray(s.passwordIndex) ? s.passwordIndex.length : 0,
+    autoLockMinutes: s.autoLockMinutes || (await getAutoLockMinutes()),
+    autoLockOptions: ALLOWED_AUTOLOCK_MIN,
+    biometricEnabled: !!bio,
+    biometricCredentialId: bio?.credentialId || null,
+    biometricPrfSaltB64: bio?.prfSaltB64 || null,
+    syncedAt: cache?.syncedAt || null,
+  };
+}
+
+async function getDomainMatches(pageUrl) {
+  const { unlocked, passwordIndex } = await chrome.storage.session.get(['unlocked', 'passwordIndex']);
+  if (!unlocked) return { unlocked: false, matches: [] };
+  const pageDomain = extractDomain(pageUrl);
+  if (!pageDomain) return { unlocked: true, matches: [] };
+  await touchActivity();
+  const matches = (passwordIndex || []).filter(p => domainMatches(pageDomain, p.domain));
+  return {
+    unlocked: true,
+    matches: matches.map(m => ({ id: m.id, name: m.name, username: m.username, url: m.url })),
+  };
+}
+
+async function searchEntries(query) {
+  const { unlocked, passwordIndex } = await chrome.storage.session.get(['unlocked', 'passwordIndex']);
+  if (!unlocked) return { unlocked: false, entries: [] };
+  await touchActivity();
+  const q = String(query || '').trim().toLowerCase();
+  const list = passwordIndex || [];
+  const filtered = q
+    ? list.filter(p => p.name.toLowerCase().includes(q)
+                    || p.username.toLowerCase().includes(q)
+                    || (p.domain || '').includes(q))
+    : list;
+  return {
+    unlocked: true,
+    entries: filtered.map(p => ({ id: p.id, name: p.name, username: p.username, url: p.url })),
+  };
+}
+
+// ── Message router ──────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Distinguish content-script callers (have sender.tab) from popup (no tab).
+  const fromContent = !!sender.tab;
+
   (async () => {
     try {
-      switch (msg?.type) {
-        case 'GET_STATE': {
-          const session = await getSession();
-          const vault = await getVault();
+      switch (msg && msg.type) {
+        case 'STATUS':
+          sendResponse({ ok: true, ...(await getStatus()) });
+          break;
+
+        case 'LOGIN': {
+          if (fromContent) throw new Error('Login must come from the popup.');
+          const result = await performLogin(msg);
+          sendResponse({ ok: true, ...result });
+          break;
+        }
+
+        case 'UNLOCK': {
+          if (fromContent) throw new Error('Unlock must come from the popup.');
+          const result = await performUnlock(msg);
+          sendResponse({ ok: true, ...result });
+          break;
+        }
+
+        case 'SIGN_OUT': {
+          if (fromContent) throw new Error('Sign-out must come from the popup.');
+          await clearAccount();
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case 'BIOMETRIC_ENABLE': {
+          if (fromContent) throw new Error('Biometric setup must come from the popup.');
+          sendResponse({ ok: true, ...(await biometricEnable(msg)) });
+          break;
+        }
+
+        case 'BIOMETRIC_DISABLE': {
+          if (fromContent) throw new Error('Biometric setup must come from the popup.');
+          sendResponse({ ok: true, ...(await biometricDisable()) });
+          break;
+        }
+
+        case 'BIOMETRIC_UNLOCK': {
+          if (fromContent) throw new Error('Biometric unlock must come from the popup.');
+          sendResponse({ ok: true, ...(await biometricUnlock(msg)) });
+          break;
+        }
+
+        case 'RESYNC': {
+          if (fromContent) throw new Error('Re-sync must come from the popup.');
+          sendResponse({ ok: true, ...(await resync()) });
+          break;
+        }
+
+        case 'LOCK':
+          await lock();
+          sendResponse({ ok: true });
+          break;
+
+        case 'SEARCH': {
+          if (fromContent) throw new Error('Listing is popup-only.');
+          sendResponse({ ok: true, ...(await searchEntries(msg.query)) });
+          break;
+        }
+
+        case 'GET_DOMAIN_MATCHES': {
+          // Use sender.tab.url so a malicious page can't lie about its origin.
+          const url = fromContent && sender.tab ? sender.tab.url : msg.url;
+          sendResponse({ ok: true, ...(await getDomainMatches(url)) });
+          break;
+        }
+
+        case 'GET_PASSWORD_FOR_FILL': {
+          // Returns the single requested credential. Both popup (reveal-eye)
+          // and content (autofill) call this. Content is gated by user gesture
+          // (only fires on click in the in-page picker).
+          const cred = await decryptOne(msg.id);
+          sendResponse({ ok: true, credential: cred });
+          break;
+        }
+
+        case 'GET_SETTINGS':
           sendResponse({
-            signedIn: !!session,
-            email: session?.email,
-            vault: vault ? { entryCount: vault.entryCount, syncedAt: vault.syncedAt } : null,
+            ok: true,
+            autoLockMinutes: await getAutoLockMinutes(),
+            rememberedEmail: await getRememberedEmail(),
           });
           break;
-        }
-        case 'SIGN_IN': {
-          const res = await signIn(msg.email, msg.password, msg.masterPassword);
-          sendResponse(res);
-          break;
-        }
-        case 'SIGN_OUT': {
-          await clearAll();
+
+        case 'SET_AUTOLOCK': {
+          // setAutoLockMinutes enforces the ALLOWED_AUTOLOCK_MIN whitelist.
+          await setAutoLockMinutes(Number(msg.minutes));
           sendResponse({ ok: true });
           break;
         }
-        case 'RESYNC': {
-          const res = await resync();
-          sendResponse(res);
+
+        case 'GET_AUTOLOCK_OPTIONS':
+          sendResponse({ ok: true, options: ALLOWED_AUTOLOCK_MIN });
           break;
-        }
-        case 'GET_MATCHES': {
-          const vault = await getVault();
-          if (!vault?.entries) { sendResponse({ matches: [] }); break; }
-          const matches = matchEntries(vault.entries, msg.domain).map(e => ({
-            id: e.id,
-            name: e.name,
-            username: e.username,
-            url: e.url,
-          }));
-          sendResponse({ matches });
-          break;
-        }
-        case 'GET_CREDENTIAL': {
-          const vault = await getVault();
-          const entry = vault?.entries?.find(e => e.id === msg.id);
-          if (!entry) { sendResponse({ ok: false, error: 'Not found' }); break; }
-          sendResponse({ ok: true, username: entry.username, password: entry.password });
-          break;
-        }
-        case 'WATCH_DOWNLOADS': {
-          await chrome.storage.local.set({ 'ironvault.watching': Date.now() });
+
+        case 'TOUCH_ACTIVITY':
+          await touchActivity();
           sendResponse({ ok: true });
           break;
-        }
+
         default:
-          sendResponse({ ok: false, error: 'Unknown message type' });
+          sendResponse({ ok: false, error: 'Unknown message type.' });
       }
     } catch (err) {
-      sendResponse({ ok: false, error: err.message });
+      sendResponse({ ok: false, error: (err && err.message) || 'Internal error.' });
     }
   })();
-  return true; // async response
+
+  // Keep the message channel open for the async response.
+  return true;
 });
 
-// ── Download watcher: pick up Chrome password CSV exports ───────────────────
-
-chrome.downloads?.onChanged?.addListener(async (delta) => {
-  if (delta.state?.current !== 'complete') return;
-  const watchTs = (await chrome.storage.local.get('ironvault.watching'))['ironvault.watching'];
-  if (!watchTs || Date.now() - watchTs > 30 * 60_000) return; // 30 min window
-  const item = await new Promise(resolve => chrome.downloads.search({ id: delta.id }, items => resolve(items?.[0])));
-  if (!item?.filename) return;
-  const lower = item.filename.toLowerCase();
-  const looksLikeChromeExport =
-    lower.includes('passwords') && (lower.endsWith('.csv') || lower.endsWith('.tsv'));
-  if (!looksLikeChromeExport) return;
-  await chrome.notifications?.create?.({
-    type: 'basic',
-    iconUrl: 'icons/icon-128.png',
-    title: 'Chrome passwords detected',
-    message: 'Open the IronVault popup to upload them to your vault.',
-    priority: 1,
-  });
-});
+// Re-arm the badge whenever the SW spins up. Lock on browser startup so
+// session storage's "cleared on browser close" guarantee is reflected in UI.
+chrome.runtime.onInstalled.addListener(() => updateBadge());
+chrome.runtime.onStartup.addListener(() => lock().then(updateBadge));
+self.addEventListener('activate', () => updateBadge());

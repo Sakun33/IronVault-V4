@@ -1,120 +1,118 @@
-# IronVault Chrome Extension
+# IronVault — Secure Autofill (Chrome Extension)
 
-Chrome extension for IronVault that adds two features to the browser:
+Zero-knowledge browser extension that fills passwords from your IronVault
+encrypted vault on any website. The vault never leaves your IronVault account
+unencrypted — the extension fetches the same end-to-end encrypted blob the
+mobile/web app uses, decrypts it locally with your master password, and only
+ever exposes one credential at a time.
 
-1. **Autofill** — detects login forms, matches them against credentials in
-   your IronVault vault by domain, and fills the username/password with one
-   click.
-2. **Guided import** — opens `chrome://settings/passwords`, watches your
-   downloads folder for the resulting CSV, and offers to upload it to your
-   vault.
+## Install (developer / unpacked)
 
-The extension is **zero-knowledge**: your master password never leaves the
-browser. The vault blob is fetched from `api.ironvault.app` already
-encrypted, and decrypted locally inside the extension's service worker.
+1. Download or clone this folder (`chrome-extension/`) to your computer.
+2. Open `chrome://extensions` in Chrome (or any Chromium browser).
+3. Toggle **Developer mode** (top-right).
+4. Click **Load unpacked** and pick this folder.
+5. Pin the IronVault icon to the toolbar.
 
-## Project layout
+The extension requires Chrome 116+ (Manifest V3, modular service worker).
+
+## How to use
+
+1. Click the IronVault toolbar icon.
+2. Sign in with:
+   - your **IronVault account email + account password** (same one you use on
+     the web/mobile app), and
+   - the **master password** for the vault you want to unlock.
+3. If your account has multiple cloud-synced vaults, pick one.
+4. The popup shows a list of saved logins. Use the search box to filter.
+5. **👁 reveal** shows a password for 5 seconds. **⎘ copy** copies it (auto-clears
+   from clipboard after 30s).
+6. On any login form, the **🛡 IronVault badge** appears next to the password
+   field. Click it → pick a credential → it autofills both username and password.
+
+## Security model
+
+- **End-to-end encrypted at rest and in transit.** The cloud server only stores
+  the same `{ salt, iv, data }` AES-GCM blob produced by the IronVault app
+  (PBKDF2-HMAC-SHA256, 600 000 iterations → 256-bit key). The server never sees
+  your master password.
+- **Master password is never stored.** It's used to derive the AES-GCM master
+  key once at unlock, and immediately discarded.
+- **Per-session re-wrap.** After the cloud blob is decrypted, every individual
+  password is re-encrypted with a freshly-generated session AES-GCM key. Only
+  metadata (id, name, url, username, domain) lives in the clear in the
+  extension's session memory.
+- **One credential at a time.** A password is only decrypted in response to an
+  explicit user gesture (reveal-eye, copy, or in-page picker click) — and only
+  the requested credential ever crosses to the popup or content script. The
+  full vault is never reconstructed.
+- **Browser-isolated session storage.** State lives in `chrome.storage.session`
+  — held in browser memory, never written to disk, automatically wiped when
+  the browser closes.
+- **Auto-lock.** Configurable in Settings (default 5 min, range 1–120). A
+  background alarm checks `lastActivity` every minute and wipes session state
+  on timeout.
+- **No `eval`, no inline scripts.** CSP is `script-src 'self'; object-src 'self'`.
+- **Minimum permissions.** `storage`, `activeTab`, `alarms`, plus host
+  permissions only for `ironvault.app` (so we can call the auth and vault APIs).
+  No `<all_urls>` host permission — content-script matches give access without
+  granting cross-origin fetch.
+- **Content scripts get only one credential.** Domain-matched lookups are done
+  in the background using `sender.tab.url` (so a hostile page can't lie about
+  its origin); only the picked credential is sent to the page.
+
+## Architecture
 
 ```
 chrome-extension/
-├── manifest.json       # Manifest V3
-├── background.js       # Service worker — auth, vault sync, decryption,
-│                       #   message router, downloads watcher
-├── popup.html          # Toolbar popup UI
-├── popup.css
-├── popup.js            # Sign-in form + quick actions
-├── content.js          # Injected on every page — detects login forms
-│                       #   and renders the IronVault badge / picker
-├── content.css
-└── icons/              # 16 / 32 / 48 / 128 px PNG plus source SVG
+├─ manifest.json          MV3 manifest, minimum permissions
+├─ background.js          Service worker — auth + decrypt + state + auto-lock
+├─ popup.html             Login → vault list → settings (modules)
+├─ popup.css
+├─ popup.js               Renders state, forwards user actions to background
+├─ content.js             Detects login forms, shows IronVault badge
+├─ content.css            Badge + picker styles (prefixed iv-autofill-*)
+├─ lib/
+│  ├─ crypto.js           PBKDF2 + AES-GCM + b64 (byte-compatible w/ web)
+│  └─ api.js              authToken, listCloudVaults, downloadCloudVault
+└─ icons/                 16/32/48/128
 ```
 
-## Build & install (development)
+### Message types (popup ↔ background ↔ content)
 
-There's no build step — the extension runs as plain ES modules.
+| Type                   | From    | Notes                                           |
+|------------------------|---------|-------------------------------------------------|
+| `STATUS`               | popup   | Returns unlock state + remembered email.        |
+| `LOGIN`                | popup   | `{email, accountPassword, masterPassword, vaultId?}`. |
+| `LOCK`                 | popup   | Wipe session storage.                           |
+| `SEARCH`               | popup   | Filtered metadata-only list.                    |
+| `GET_DOMAIN_MATCHES`   | content | Origin from `sender.tab.url`, never trusted.    |
+| `GET_PASSWORD_FOR_FILL`| both    | Decrypts ONE entry. Caller drops it after use.  |
+| `GET_SETTINGS` / `SET_AUTOLOCK` | popup | Auto-lock minutes (1–120).             |
 
-1. Clone the repo, then in Chrome go to `chrome://extensions`.
-2. Toggle **Developer mode** on (top right).
-3. Click **Load unpacked**.
-4. Select this `chrome-extension/` directory.
-5. Pin the IronVault icon to the toolbar (puzzle-piece menu → pin).
+## What's NOT in this version
 
-To reload after editing a file, click the ↻ button on the extension's card
-in `chrome://extensions`. Reload the page you're testing on too — the
-content script only re-injects on a fresh navigation.
+- **Biometric / WebAuthn unlock.** Designed but deferred to v1.1. The plan is
+  a `navigator.credentials.create({ userVerification: 'required',
+  authenticatorAttachment: 'platform' })` flow, with the master-password-derived
+  key wrapped under a Chrome-protected secret that biometric verification
+  gates access to. Not shipped here because it adds substantial cross-platform
+  testing surface; password unlock works on every Chromium browser today.
+- **Saving new passwords from the page.** The extension is read-only for now.
+  Use the IronVault app to add or edit entries; they sync to the extension
+  next time you re-unlock.
 
-## How sign-in works
+## Verifying byte-compatibility with the web app
 
-The popup collects three values:
+The extension's `lib/crypto.js` is intentionally a slim re-implementation of
+`client/src/lib/crypto.ts`:
 
-- **Email** + **account password** — sent to `POST /api/auth/token` to get
-  a JWT.
-- **Master password** — used locally to decrypt the encrypted vault blob.
-  Never sent to the server.
+- PBKDF2 iterations: **600 000** (matches `KDF_PRESETS.standard`)
+- Hash: **SHA-256**
+- Salt: **16 bytes** (matches `generateSalt`)
+- IV: **12 bytes** (matches `generateIV`)
+- Wire format: `JSON.stringify({ version: 2, salt: b64, iv: b64, data: b64 })`
+  — exactly what `VaultStorage.exportVault()` produces.
 
-The extension then calls `GET /api/vaults/cloud` to find the user's default
-vault, downloads the encrypted blob from `GET /api/vaults/cloud/:vaultId`,
-and decrypts it with the master password. The decrypted entry list is
-cached in `chrome.storage.local` for fast lookup; the master password is
-stored alongside it so the extension can re-sync on demand without
-prompting.
-
-To wipe everything: open the popup → **Sign out**.
-
-## How autofill works
-
-`content.js` runs on every page (`<all_urls>`):
-
-1. On `focusin`, it locates `input[type=password]` fields.
-2. It asks the background worker for credentials matching
-   `location.hostname` (and parent domains).
-3. If matches exist, a small **IV** badge appears next to the password
-   field.
-4. Clicking the badge opens a picker; clicking an entry fills both the
-   username and password fields, dispatching `input` and `change` events
-   so React/Vue listeners pick up the new value.
-
-Matching is suffix-based: a credential saved for `example.com` will fill
-on `app.example.com`. Cross-domain credentials are *not* surfaced to keep
-zero-knowledge guarantees against a malicious page.
-
-## How the import flow works
-
-1. The user clicks **Import from Chrome** in the popup.
-2. The extension opens a new tab to `chrome://settings/passwords` and
-   begins watching `chrome.downloads.onChanged`.
-3. When a file matching `*passwords*.csv` finishes downloading, a
-   notification fires: "Chrome passwords detected".
-4. The user opens the IronVault dashboard (or popup) and uploads the CSV
-   through the standard guided-import flow on the web app.
-
-> **Note**: Chrome's CSV export is *plaintext*. Delete it from your
-> downloads folder once the import completes.
-
-## Security notes
-
-- All network calls are TLS-only and target `https://www.ironvault.app`.
-- The master password is held in `chrome.storage.local`. Chrome encrypts
-  this at rest using the OS keychain, but a user with full filesystem
-  access could decrypt it. If you'd rather not persist it, sign out at the
-  end of each session — the popup re-prompts on next use.
-- Decryption uses Web Crypto's AES-GCM + PBKDF2 (250k iterations,
-  SHA-256). Compatible with the IronVault web app's vault format.
-- The extension does not request `tabs` permission — it uses
-  `activeTab` + `scripting` only when you explicitly trigger an action.
-
-## Roadmap
-
-- Save-new-credential prompt when filling a brand-new login form.
-- Biometric unlock via WebAuthn instead of master password.
-- Per-domain ignore list.
-- Auto-resync on a 15-minute timer.
-
-## API endpoints used
-
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| POST   | `/api/auth/token` | Sign in, returns JWT. |
-| GET    | `/api/vaults/cloud` | List the user's cloud vaults. |
-| GET    | `/api/vaults/cloud/:id` | Fetch the encrypted vault blob. |
-| GET    | `/api/vault/autofill` | Convenience endpoint that returns the encrypted blob for the default vault — same data as `/api/vaults/cloud/:id` but doesn't require listing first. |
+Any vault exported by the IronVault web/mobile app and synced to the cloud is
+decryptable by this extension with the same master password, and vice versa.

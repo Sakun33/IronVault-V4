@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,7 +79,11 @@ import {
   ChevronDown,
   Users,
   UserPlus,
-  UserX
+  UserX,
+  Chrome,
+  KeyRound,
+  Fingerprint,
+  Timer
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { useVault } from '@/contexts/vault-context';
@@ -2120,6 +2124,71 @@ export default function Profile() {
                   <p className="text-sm text-muted-foreground">Receive product updates and offers</p>
                 </div>
                 <Switch checked={userProfile.preferences.privacy.marketing} onCheckedChange={(v) => handlePrivacyToggle('marketing', v)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Browser Extension */}
+          <Card className="rounded-2xl shadow-sm border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Chrome className="w-5 h-5" />
+                Browser Extension
+              </CardTitle>
+              <CardDescription>
+                Auto-fill passwords on any website from your vault — without ever decrypting more than the one credential you need.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <KeyRound className="w-4 h-4 text-primary mb-1.5" />
+                  <p className="text-xs font-semibold">Zero-knowledge</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Master password never leaves your browser. The cloud only stores the AES-256-GCM blob.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <Timer className="w-4 h-4 text-primary mb-1.5" />
+                  <p className="text-xs font-semibold">Auto-lock</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Wipes session memory after 5 min of inactivity (1, 5, 15 or 30 min in settings).
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <Fingerprint className="w-4 h-4 text-primary mb-1.5" />
+                  <p className="text-xs font-semibold">One credential at a time</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Passwords show as ••••• by default. Reveal lasts 5 seconds. Web pages only get the one you pick.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/60 p-4 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Install (developer / unpacked)
+                </h4>
+                <ol className="text-sm space-y-1.5 list-decimal pl-5 text-muted-foreground">
+                  <li>
+                    <a
+                      href="https://github.com/Sakun33/IronVault-V4/tree/main/chrome-extension"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Download the chrome-extension folder
+                    </a>{' '}
+                    from the IronVault repo (or clone the repo locally).
+                  </li>
+                  <li>Open <code className="px-1 py-0.5 rounded bg-muted text-[12px]">chrome://extensions</code> in Chrome.</li>
+                  <li>Toggle <strong>Developer mode</strong> in the top-right.</li>
+                  <li>Click <strong>Load unpacked</strong> and pick the <code className="px-1 py-0.5 rounded bg-muted text-[12px]">chrome-extension/</code> folder.</li>
+                  <li>Pin the IronVault icon to the toolbar — click it and sign in with your account password + master password.</li>
+                </ol>
+                <p className="text-[11px] text-muted-foreground">
+                  Requires Chrome 116+ (or any modern Chromium browser). The extension only requests permissions for <code className="px-1 rounded bg-muted text-[10px]">ironvault.app</code> — it never asks for cross-site host access.
+                </p>
               </div>
             </CardContent>
           </Card>

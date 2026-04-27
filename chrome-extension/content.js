@@ -1,193 +1,257 @@
-/**
- * IronVault content script.
- *
- * Detects login forms, asks the background worker for matching credentials,
- * and shows a small floating "fill" badge next to the username/password
- * fields. On click, fills both fields and dispatches input events so React
- * apps notice.
- */
+// IronVault content script — runs on every http(s) page (no host permissions).
+//
+// Responsibilities:
+//   1. Find login forms (visible password inputs).
+//   2. Show a small IronVault badge anchored to each one.
+//   3. On click: ask the background for credential metadata matching this
+//      page's origin (background uses sender.tab.url, not our claim).
+//   4. User picks an entry → background returns the single decrypted password.
+//   5. Fill the username/password fields, dispatch native events, then drop
+//      the plaintext from this scope.
+//
+// We never receive the full vault — only the one credential the user picks.
 
 (() => {
-  const STATE = {
-    badge: null,
-    activeField: null,
-    matches: null,
-    domain: location.hostname.replace(/^www\./, ''),
-  };
+  const BADGE_CLASS = 'iv-autofill-badge';
+  const PICKER_CLASS = 'iv-autofill-picker';
+  const RUNTIME = chrome.runtime;
+  if (!RUNTIME || !RUNTIME.sendMessage) return;
 
-  /** Heuristic: is this an element that could be a username/email input? */
-  function looksLikeUsernameField(el) {
-    if (!(el instanceof HTMLInputElement)) return false;
-    const type = (el.type || '').toLowerCase();
-    if (!['text', 'email', 'tel', ''].includes(type)) return false;
-    const hint = `${el.name} ${el.id} ${el.autocomplete} ${el.placeholder}`.toLowerCase();
-    return /user|email|login|account|phone|mobile/.test(hint);
+  // Avoid double-injection if the content script is somehow loaded twice.
+  if (window.__ironvaultInjected) return;
+  window.__ironvaultInjected = true;
+
+  const trackedInputs = new WeakSet();
+  const badgesByInput = new WeakMap();
+
+  function send(msg) {
+    return new Promise((resolve) => {
+      try {
+        RUNTIME.sendMessage(msg, (resp) => {
+          if (RUNTIME.lastError) return resolve({ ok: false, error: RUNTIME.lastError.message });
+          resolve(resp || { ok: false, error: 'No response' });
+        });
+      } catch {
+        resolve({ ok: false, error: 'Extension unavailable' });
+      }
+    });
   }
 
-  function findUsernameFieldFor(passwordEl) {
-    // Walk back through the DOM looking for the nearest preceding
-    // text/email input within the same form.
-    const form = passwordEl.form;
+  function isVisible(el) {
+    if (!el || !el.isConnected) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 20 || rect.height < 10) return false;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return false;
+    return true;
+  }
+
+  function findUsernameInputFor(passwordInput) {
+    const form = passwordInput.form;
     const candidates = form
       ? Array.from(form.querySelectorAll('input'))
       : Array.from(document.querySelectorAll('input'));
-    let last = null;
+    // Prefer inputs that come BEFORE the password in the DOM.
+    const beforePw = [];
+    let seenPw = false;
     for (const el of candidates) {
-      if (el === passwordEl) break;
-      if (looksLikeUsernameField(el)) last = el;
+      if (el === passwordInput) { seenPw = true; continue; }
+      if (seenPw) continue;
+      const t = (el.type || '').toLowerCase();
+      if (t === 'email' || t === 'text' || t === 'tel' || t === '' ) {
+        if (isVisible(el)) beforePw.push(el);
+      }
     }
-    return last;
-  }
-
-  function getPasswordFields() {
-    return Array.from(document.querySelectorAll('input[type="password"]'))
-      .filter(el => el.offsetParent !== null);
-  }
-
-  async function fetchMatches() {
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'GET_MATCHES', domain: STATE.domain });
-      STATE.matches = res?.matches || [];
-    } catch {
-      STATE.matches = [];
+    if (beforePw.length > 0) return beforePw[beforePw.length - 1];
+    // Fallback: any visible text/email input
+    for (const el of candidates) {
+      const t = (el.type || '').toLowerCase();
+      if ((t === 'email' || t === 'text') && isVisible(el)) return el;
     }
+    return null;
   }
 
-  function ensureBadge() {
-    if (STATE.badge) return STATE.badge;
-    const badge = document.createElement('button');
-    badge.type = 'button';
-    badge.setAttribute('aria-label', 'Fill from IronVault');
-    badge.className = 'ironvault-badge';
-    badge.textContent = 'IV';
-    badge.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openPicker();
-    });
-    document.body.appendChild(badge);
-    STATE.badge = badge;
-    return badge;
+  function fillNatively(input, value) {
+    // React/Vue intercept setters on the element prototype — use the native
+    // descriptor so dispatched events trigger framework state updates.
+    const proto = input instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (setter && setter.set) setter.set.call(input, value);
+    else input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function positionBadge(target) {
-    const badge = ensureBadge();
-    const rect = target.getBoundingClientRect();
-    badge.style.top = `${window.scrollY + rect.top + (rect.height - 22) / 2}px`;
-    badge.style.left = `${window.scrollX + rect.right - 26}px`;
-    badge.style.display = STATE.matches?.length ? 'flex' : 'none';
+  function removePicker() {
+    document.querySelectorAll('.' + PICKER_CLASS).forEach((el) => el.remove());
   }
 
-  function openPicker() {
-    if (!STATE.matches?.length) return;
-    closePicker();
+  function positionPicker(picker, anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const top = window.scrollY + rect.bottom + 4;
+    const left = window.scrollX + rect.left;
+    picker.style.top = top + 'px';
+    picker.style.left = left + 'px';
+    picker.style.minWidth = Math.max(220, rect.width) + 'px';
+  }
+
+  async function openPicker(passwordInput, anchorEl) {
+    removePicker();
+
     const picker = document.createElement('div');
-    picker.className = 'ironvault-picker';
-    const header = document.createElement('div');
-    header.className = 'ironvault-picker-header';
-    header.innerHTML = `<span class="ironvault-picker-title">IronVault</span><span class="ironvault-picker-host">${STATE.domain}</span>`;
-    picker.appendChild(header);
-    for (const m of STATE.matches) {
+    picker.className = PICKER_CLASS;
+    picker.setAttribute('role', 'menu');
+
+    // Initial loading state
+    const loading = document.createElement('div');
+    loading.className = 'iv-autofill-msg';
+    loading.textContent = 'Looking up matches…';
+    picker.appendChild(loading);
+
+    document.body.appendChild(picker);
+    positionPicker(picker, anchorEl);
+
+    const result = await send({ type: 'GET_DOMAIN_MATCHES' });
+    picker.innerHTML = '';
+
+    if (!result.ok) {
+      const err = document.createElement('div');
+      err.className = 'iv-autofill-msg iv-autofill-err';
+      err.textContent = result.error || 'Could not reach IronVault.';
+      picker.appendChild(err);
+      return;
+    }
+
+    if (!result.unlocked) {
+      const locked = document.createElement('div');
+      locked.className = 'iv-autofill-msg';
+      locked.innerHTML = '🔒 IronVault is locked. Open the extension to unlock.';
+      picker.appendChild(locked);
+      return;
+    }
+
+    const matches = result.matches || [];
+    if (matches.length === 0) {
+      const none = document.createElement('div');
+      none.className = 'iv-autofill-msg';
+      none.textContent = 'No saved logins for this site.';
+      picker.appendChild(none);
+      return;
+    }
+
+    for (const m of matches) {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'ironvault-picker-row';
-      row.innerHTML = `
-        <div class="ironvault-picker-row-name">${escapeHtml(m.name || m.username || 'Untitled')}</div>
-        <div class="ironvault-picker-row-user">${escapeHtml(m.username || '')}</div>
-      `;
-      row.addEventListener('click', () => {
-        fillCredential(m.id);
-        closePicker();
+      row.className = 'iv-autofill-row';
+      row.innerHTML =
+        `<div class="iv-autofill-name"></div>` +
+        `<div class="iv-autofill-user"></div>`;
+      row.querySelector('.iv-autofill-name').textContent = m.name || '(untitled)';
+      row.querySelector('.iv-autofill-user').textContent = m.username || '—';
+      row.addEventListener('click', async () => {
+        row.textContent = 'Filling…';
+        const decrypted = await send({ type: 'GET_PASSWORD_FOR_FILL', id: m.id });
+        if (!decrypted.ok) {
+          row.textContent = '⚠ ' + (decrypted.error || 'Failed');
+          return;
+        }
+        const cred = decrypted.credential;
+        try {
+          const userInput = findUsernameInputFor(passwordInput);
+          if (userInput && cred.username) fillNatively(userInput, cred.username);
+          fillNatively(passwordInput, cred.password);
+        } finally {
+          // Drop the plaintext password ASAP. The fillNatively call has
+          // already pushed it into the input value, which the page can read,
+          // but that's intentional — the user is logging in.
+          cred.password = '';
+        }
+        removePicker();
       });
       picker.appendChild(row);
     }
-    const badge = ensureBadge();
-    const r = badge.getBoundingClientRect();
-    picker.style.top = `${window.scrollY + r.bottom + 6}px`;
-    picker.style.left = `${window.scrollX + r.right - 240}px`;
-    document.body.appendChild(picker);
-    STATE.picker = picker;
-    setTimeout(() => document.addEventListener('click', dismissOnOutside, { once: true }), 0);
   }
 
-  function dismissOnOutside(e) {
-    if (STATE.picker && !STATE.picker.contains(e.target) && e.target !== STATE.badge) {
-      closePicker();
-    } else {
-      setTimeout(() => document.addEventListener('click', dismissOnOutside, { once: true }), 0);
-    }
+  function attachBadge(passwordInput) {
+    if (trackedInputs.has(passwordInput)) return;
+    trackedInputs.add(passwordInput);
+
+    const badge = document.createElement('button');
+    badge.type = 'button';
+    badge.className = BADGE_CLASS;
+    badge.title = 'IronVault — autofill';
+    badge.setAttribute('aria-label', 'IronVault autofill');
+    badge.textContent = '🛡';
+    badge.tabIndex = -1; // don't grab tab focus from the form
+    badge.addEventListener('mousedown', (ev) => {
+      // Prevent the password input from losing focus on click.
+      ev.preventDefault();
+    });
+    badge.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openPicker(passwordInput, badge);
+    });
+    document.body.appendChild(badge);
+    badgesByInput.set(passwordInput, badge);
+    repositionBadge(passwordInput, badge);
   }
 
-  function closePicker() {
-    if (STATE.picker) {
-      STATE.picker.remove();
-      STATE.picker = null;
-    }
-  }
-
-  async function fillCredential(id) {
-    const res = await chrome.runtime.sendMessage({ type: 'GET_CREDENTIAL', id });
-    if (!res?.ok) return;
-    const passwordEl = STATE.activeField;
-    if (!passwordEl) return;
-    const userEl = findUsernameFieldFor(passwordEl);
-    if (userEl) setReactNativeValue(userEl, res.username);
-    setReactNativeValue(passwordEl, res.password);
-  }
-
-  /**
-   * Setting `.value` directly on a React-managed input does not trigger
-   * React's onChange handlers because React tracks the previous value
-   * internally. We use the native value setter to bypass React's tracking.
-   */
-  function setReactNativeValue(el, value) {
-    const proto = Object.getPrototypeOf(el);
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-    if (setter) setter.call(el, value); else el.value = value;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[c]));
-  }
-
-  // ── Wiring ────────────────────────────────────────────────────────────────
-
-  function onFocus(e) {
-    if (e.target instanceof HTMLInputElement && e.target.type === 'password') {
-      STATE.activeField = e.target;
-      positionBadge(e.target);
-    }
-  }
-
-  function rescan() {
-    const fields = getPasswordFields();
-    if (!fields.length) {
-      if (STATE.badge) STATE.badge.style.display = 'none';
+  function repositionBadge(input, badge) {
+    if (!input.isConnected || !isVisible(input)) {
+      badge.style.display = 'none';
       return;
     }
-    if (STATE.activeField && document.contains(STATE.activeField)) {
-      positionBadge(STATE.activeField);
-    } else {
-      STATE.activeField = fields[0];
-      positionBadge(fields[0]);
+    const r = input.getBoundingClientRect();
+    badge.style.display = 'flex';
+    const top = window.scrollY + r.top + (r.height - 22) / 2;
+    const left = window.scrollX + r.right - 26;
+    badge.style.top = top + 'px';
+    badge.style.left = left + 'px';
+  }
+
+  function scan() {
+    const pwInputs = Array.from(document.querySelectorAll('input[type="password"]'));
+    for (const el of pwInputs) {
+      if (!isVisible(el)) continue;
+      attachBadge(el);
+    }
+    // Reposition existing badges
+    for (const el of pwInputs) {
+      const b = badgesByInput.get(el);
+      if (b) repositionBadge(el, b);
     }
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === 'IRONVAULT_OPEN_PICKER') openPicker();
+  // Re-scan when DOM changes (SPAs, dynamically rendered forms).
+  let scanScheduled = false;
+  const observer = new MutationObserver(() => {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    requestAnimationFrame(() => { scanScheduled = false; scan(); });
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener('scroll', () => {
+    for (const input of document.querySelectorAll('input[type="password"]')) {
+      const b = badgesByInput.get(input);
+      if (b) repositionBadge(input, b);
+    }
+  }, { passive: true });
+
+  window.addEventListener('resize', scan, { passive: true });
+
+  // Close picker on outside click or escape
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('.' + PICKER_CLASS) && !ev.target.classList.contains(BADGE_CLASS)) {
+      removePicker();
+    }
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') removePicker();
   });
 
-  document.addEventListener('focusin', onFocus, true);
-  window.addEventListener('resize', rescan);
-  window.addEventListener('scroll', rescan, true);
-
-  const observer = new MutationObserver(() => rescan());
-  observer.observe(document.documentElement, { subtree: true, childList: true });
-
-  // Kick things off
-  fetchMatches().then(rescan);
+  scan();
 })();
