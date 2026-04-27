@@ -3,8 +3,12 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Eye, EyeOff, Lock, Plus, Cloud, ShieldCheck, LogOut, Fingerprint, Zap,
+  Eye, EyeOff, Lock, Plus, Cloud, ShieldCheck, LogOut, Fingerprint, Zap, Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +16,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
-import { listCloudVaults, downloadCloudVault, pushCloudVault, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
+import { listCloudVaults, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures, clearPlanCache } from '@/hooks/use-plan-features';
@@ -96,6 +100,11 @@ export default function VaultPickerPage() {
   const [cloudPasswordInput, setCloudPasswordInput] = useState<Record<string, string>>({});
   const [cloudShowPw, setCloudShowPw] = useState<Record<string, boolean>>({});
   const [cloudErrors, setCloudErrors] = useState<Record<string, string>>({});
+
+  const [vaultToDelete, setVaultToDelete] = useState<{
+    id: string; name: string; isLocal: boolean; isCloud: boolean;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     // Always re-read local vaults from the (now email-scoped) registry
@@ -351,6 +360,70 @@ export default function VaultPickerPage() {
     setLocation('/');
   };
 
+  const refreshVaultLists = async () => {
+    setVaults(vaultManager.getExistingVaults());
+    if (accountEmail) {
+      try {
+        const remote = await listCloudVaults();
+        setCloudVaults(remote);
+      } catch {
+        // Offline — keep last-known list
+      }
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!vaultToDelete) return;
+    const totalVaults = new Set([
+      ...vaults.map(v => v.id),
+      ...cloudVaults.map(c => c.vaultId),
+    ]).size;
+    if (totalVaults <= 1) {
+      toast({
+        title: 'Cannot delete last vault',
+        description: 'You must keep at least one vault. Create another vault first.',
+        variant: 'destructive',
+      });
+      setVaultToDelete(null);
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      if (vaultToDelete.isCloud) {
+        const ok = await deleteCloudVault(vaultToDelete.id);
+        if (!ok) {
+          toast({
+            title: 'Cloud delete failed',
+            description: 'Could not remove from cloud. Please retry.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        markVaultAsNotCloudSynced(vaultToDelete.id);
+      }
+      if (vaultToDelete.isLocal) {
+        await vaultManager.deleteVault(vaultToDelete.id);
+        vaultManager.removeVaultPassword(vaultToDelete.id);
+        vaultManager.removeBiometricKey(vaultToDelete.id);
+      }
+      toast({
+        title: 'Vault deleted',
+        description: `"${vaultToDelete.name}" and all its data have been removed.`,
+      });
+      setVaultToDelete(null);
+      await refreshVaultLists();
+    } catch (err) {
+      toast({
+        title: 'Delete failed',
+        description: err instanceof Error ? err.message : 'Could not delete vault',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -436,6 +509,15 @@ export default function VaultPickerPage() {
                           <span className="ml-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">Default</span>
                         )}
                         <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Local</span>
+                        <button
+                          type="button"
+                          aria-label={`Delete vault ${vault.name}`}
+                          data-testid="button-delete-vault"
+                          onClick={() => setVaultToDelete({ id: vault.id, name: vault.name, isLocal: true, isCloud: false })}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                       {errors[vault.id] && (
                         <p className="text-destructive text-sm mb-2">{errors[vault.id]}</p>
@@ -522,6 +604,20 @@ export default function VaultPickerPage() {
                         <span className="ml-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">Default</span>
                       )}
                       <span className="ml-auto text-xs text-blue-500 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">Cloud</span>
+                      <button
+                        type="button"
+                        aria-label={`Delete vault ${cv.vaultName}`}
+                        data-testid="button-delete-cloud-vault"
+                        onClick={() => setVaultToDelete({
+                          id: cv.vaultId,
+                          name: cv.vaultName,
+                          isLocal: vaults.some(v => v.id === cv.vaultId),
+                          isCloud: true,
+                        })}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                     {cloudErrors[cv.vaultId] && (
                       <p className="text-destructive text-sm mb-2">{cloudErrors[cv.vaultId]}</p>
@@ -590,6 +686,42 @@ export default function VaultPickerPage() {
           )}
         </div>
       </main>
+
+      <AlertDialog
+        open={!!vaultToDelete}
+        onOpenChange={(open) => { if (!open && !isDeleting) setVaultToDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete vault?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                This will permanently delete <strong>"{vaultToDelete?.name}"</strong>
+                {vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device and the cloud'}
+                {vaultToDelete?.isCloud && !vaultToDelete?.isLocal && ' from the cloud'}
+                {!vaultToDelete?.isCloud && vaultToDelete?.isLocal && ' from this device'}.
+              </span>
+              <span className="block text-destructive font-medium">
+                All passwords, notes, and other data inside it will be lost. This cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-confirm-delete-vault"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting…' : 'Delete vault'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
