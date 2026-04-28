@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Eye, EyeOff, Lock, Plus, Cloud, ShieldCheck, LogOut, Fingerprint, Zap, Trash2,
+  Check, Sparkles, Crown, Users,
 } from 'lucide-react';
+import { getPlan, formatINR } from '@/lib/plans';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -40,10 +42,18 @@ export default function VaultPickerPage() {
 
   const { vaultLimit, isPaid, isLoading: planLoading } = usePlanFeatures();
 
-  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  // Loading state is keyed by the chosen plan so we can show a spinner only
+  // on the card the user clicked, not blanket-disable every checkout button.
+  const [upgradeLoading, setUpgradeLoading] = useState<null | 'pro_monthly' | 'pro_family' | 'lifetime'>(null);
 
-  const handleUpgrade = async () => {
-    setUpgradeLoading(true);
+  const PLAN_DESCRIPTIONS: Record<'pro_monthly' | 'pro_family' | 'lifetime', string> = {
+    pro_monthly: 'IronVault Pro Monthly',
+    pro_family: 'IronVault Pro Family',
+    lifetime: 'IronVault Lifetime',
+  };
+
+  const handleUpgrade = async (planKey: 'pro_monthly' | 'pro_family' | 'lifetime') => {
+    setUpgradeLoading(planKey);
     try {
       if (typeof window.Razorpay === 'undefined') {
         await new Promise<void>((resolve, reject) => {
@@ -59,7 +69,7 @@ export default function VaultPickerPage() {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'pro_monthly', email }),
+        body: JSON.stringify({ plan: planKey, email }),
       });
       const { orderId, amount, currency, keyId } = await res.json();
       const rzp = new window.Razorpay({
@@ -67,13 +77,13 @@ export default function VaultPickerPage() {
         amount,
         currency,
         name: 'IronVault',
-        description: 'IronVault Pro Monthly',
+        description: PLAN_DESCRIPTIONS[planKey],
         order_id: orderId,
         handler: async (response: any) => {
           const verify = await fetch('/api/payments/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...response, plan: 'pro_monthly', email }),
+            body: JSON.stringify({ ...response, plan: planKey, email }),
           });
           if ((await verify.json()).success) {
             window.location.reload();
@@ -87,7 +97,7 @@ export default function VaultPickerPage() {
       console.error('Payment error:', err);
       toast({ title: 'Payment error', description: 'Could not open checkout. Try again.', variant: 'destructive' });
     } finally {
-      setUpgradeLoading(false);
+      setUpgradeLoading(null);
     }
   };
 
@@ -633,31 +643,172 @@ export default function VaultPickerPage() {
       </header>
 
       <main className="flex-1 flex items-start justify-center px-4 py-10">
-        <div className="w-full max-w-md">
+        {/* Web upgrade gate gets a wider container so three plan cards fit
+            comfortably side-by-side on tablet/desktop without squishing. */}
+        <div className={`w-full ${!isNativeApp() && !isPaid && !planLoading ? 'max-w-5xl' : 'max-w-md'}`}>
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold tracking-tight mb-2">Your Vaults</h1>
-            <p className="text-muted-foreground">Enter your master password to unlock a vault.</p>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">
+              {!isNativeApp() && !isPaid && !planLoading ? 'Unlock IronVault Web' : 'Your Vaults'}
+            </h1>
+            <p className="text-muted-foreground">
+              {!isNativeApp() && !isPaid && !planLoading
+                ? 'Choose a plan to access your vaults from any browser.'
+                : 'Enter your master password to unlock a vault.'}
+            </p>
           </div>
 
-          {/* Web upgrade gate — free users on web must upgrade */}
-          {!isNativeApp() && !isPaid && !planLoading && (
-            <div className="text-center py-10">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Cloud className="w-8 h-8 text-primary" />
+          {/* Web upgrade gate — free users on web see an inline plan picker
+              with three side-by-side cards (stacks on mobile). Each card
+              fires Razorpay directly via handleUpgrade(planKey). */}
+          {!isNativeApp() && !isPaid && !planLoading && (() => {
+            const proPlan = getPlan('pro')!;
+            const familyPlan = getPlan('family')!;
+            const lifetimePlan = getPlan('lifetime')!;
+            const cards = [
+              {
+                key: 'pro_monthly' as const,
+                plan: proPlan,
+                price: formatINR(proPlan.priceMonthly!),
+                priceSuffix: '/mo',
+                priceSub: '14-day free trial',
+                badge: null as string | null,
+                accent: 'indigo',
+                icon: Sparkles,
+                features: [
+                  'Up to 5 vaults (local + cloud)',
+                  'Web app + Mobile app',
+                  'Cross-device cloud sync',
+                  'Unlimited passwords & notes',
+                  'Bank statement import (OCR)',
+                  'Expense & investment tracking',
+                  'Biometric authentication',
+                  'Priority support',
+                ],
+                ctaLabel: 'Choose Pro',
+              },
+              {
+                key: 'pro_family' as const,
+                plan: familyPlan,
+                price: formatINR(familyPlan.priceMonthly!),
+                priceSuffix: '/mo',
+                priceSub: 'Up to 6 family members',
+                badge: 'Coming Soon',
+                accent: 'rose',
+                icon: Users,
+                features: [
+                  'Everything in Pro',
+                  'Up to 6 family seats',
+                  '5 vaults per member',
+                  'Shared family vault',
+                  'Individual private vaults',
+                  'Family spending dashboard',
+                  'Priority support',
+                ],
+                ctaLabel: 'Choose Family',
+              },
+              {
+                key: 'lifetime' as const,
+                plan: lifetimePlan,
+                price: formatINR(lifetimePlan.priceOneTime!),
+                priceSuffix: '',
+                priceSub: 'one-time payment',
+                badge: 'Best Value',
+                accent: 'amber',
+                icon: Crown,
+                features: [
+                  'Everything in Pro — forever',
+                  'Web app + Mobile app',
+                  'Up to 5 vaults (local + cloud)',
+                  'No recurring payments',
+                  'All future updates included',
+                  'Early access to new features',
+                  'Premium support',
+                ],
+                ctaLabel: 'Choose Lifetime',
+              },
+            ];
+
+            const accentClasses: Record<string, { ring: string; bg: string; text: string; cta: string; badge: string }> = {
+              indigo: {
+                ring: 'border-border hover:border-indigo-500/40',
+                bg: 'bg-indigo-500/10',
+                text: 'text-indigo-500',
+                cta: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+                badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/20',
+              },
+              rose: {
+                ring: 'border-border hover:border-rose-500/40',
+                bg: 'bg-rose-500/10',
+                text: 'text-rose-500',
+                cta: 'bg-rose-600 hover:bg-rose-700 text-white',
+                badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/20',
+              },
+              amber: {
+                ring: 'border-amber-500/60 ring-2 ring-amber-500/30 shadow-xl shadow-amber-500/10',
+                bg: 'bg-gradient-to-br from-amber-500/20 to-orange-500/20',
+                text: 'text-amber-600 dark:text-amber-400',
+                cta: 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-amber-500/30',
+                badge: 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0',
+              },
+            };
+
+            return (
+              <div className="mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {cards.map(card => {
+                    const c = accentClasses[card.accent];
+                    const Icon = card.icon;
+                    const isAvailable = card.plan.available;
+                    const isLoading = upgradeLoading === card.key;
+                    const isHighlight = card.accent === 'amber';
+                    return (
+                      <div
+                        key={card.key}
+                        className={`relative rounded-2xl border bg-card p-5 flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-lg ${c.ring} ${isHighlight ? 'md:scale-[1.02]' : ''}`}
+                      >
+                        {card.badge && (
+                          <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${c.badge}`}>
+                            {card.badge}
+                          </span>
+                        )}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${c.bg}`}>
+                          <Icon className={`w-5 h-5 ${c.text}`} />
+                        </div>
+                        <h3 className="text-lg font-bold tracking-tight">{card.plan.name}</h3>
+                        <p className="text-xs text-muted-foreground mb-3 min-h-[2rem]">{card.plan.description}</p>
+                        <div className="mb-1">
+                          <span className="text-3xl font-bold tabular-nums tracking-tight">{card.price}</span>
+                          {card.priceSuffix && (
+                            <span className="text-sm text-muted-foreground ml-1">{card.priceSuffix}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-4">{card.priceSub}</p>
+                        <ul className="space-y-2 mb-5 flex-1">
+                          {card.features.map(f => (
+                            <li key={f} className="flex items-start gap-2 text-xs text-foreground/80">
+                              <Check className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${c.text}`} />
+                              <span>{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <Button
+                          onClick={() => handleUpgrade(card.key)}
+                          disabled={!isAvailable || isLoading || upgradeLoading !== null}
+                          className={`w-full rounded-xl ${c.cta} disabled:opacity-60`}
+                          data-testid={`button-choose-${card.key}`}
+                        >
+                          {isLoading ? 'Loading…' : !isAvailable ? 'Coming Soon' : card.ctaLabel}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-center text-xs text-muted-foreground mt-6">
+                  Free plan: Mobile app only · 1 local vault · No web access
+                </p>
               </div>
-              <h2 className="text-xl font-bold mb-2">Pro plan required for web access</h2>
-              <p className="text-sm text-muted-foreground mb-1">
-                IronVault Web requires a Pro, Family, or Lifetime plan.
-              </p>
-              <p className="text-sm text-muted-foreground mb-6">
-                Free plan users can access IronVault on the mobile app with local storage.
-              </p>
-              <Button onClick={handleUpgrade} disabled={upgradeLoading} className="gap-2">
-                <Zap className="w-4 h-4" />
-                {upgradeLoading ? 'Loading…' : 'Upgrade to Pro'}
-              </Button>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Biometric shortcut (native only) */}
           {isNativeApp() && biometricAvailable && biometricVaultId && (
