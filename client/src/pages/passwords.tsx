@@ -556,6 +556,31 @@ export default function Passwords() {
           onBulkDelete={handleBulkDelete}
         />
       )}
+
+      {/* Mobile floating "Add Password" button.
+          The header has Import / Templates / Select / Add lined up on the
+          right, which overflows past the viewport on phones — Add (last
+          child) gets clipped off-screen. The FAB guarantees the primary
+          action stays reachable. Hidden on lg+ where the header button is
+          fully visible, and suppressed during selection mode so it doesn't
+          collide with the SelectionBar. */}
+      {!selection.isSelectionMode && (
+        <Button
+          onClick={() => {
+            if (!isPro && passwords.length >= getLimit('passwords')) {
+              toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
+              return;
+            }
+            setEditingPassword(null);
+            setShowAddModal(true);
+          }}
+          className="lg:hidden fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30 z-40 p-0"
+          aria-label={!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade to add more passwords' : 'Add password'}
+          data-testid="add-password-fab"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+      )}
     </div>
   );
 }
