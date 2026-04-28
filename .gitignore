@@ -69,3 +69,7 @@ dependency-check/
 .claude/
 .vercel
 .env*.local
+
+# Vercel-pulled env files (any depth)
+admin-console/.env*
+**/.env.vercel*
