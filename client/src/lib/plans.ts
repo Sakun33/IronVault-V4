@@ -103,8 +103,8 @@ export const PLANS: Plan[] = [
     priceOneTime: null,
     seats: 6,
     vaultLimit: 5,
-    available: false, // Coming soon
-    badge: 'Coming Soon',
+    available: true,
+    badge: null,
     features: [
       'Everything in Pro',
       'Web app + Mobile app',

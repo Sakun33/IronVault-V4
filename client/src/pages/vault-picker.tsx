@@ -46,6 +46,11 @@ export default function VaultPickerPage() {
   // on the card the user clicked, not blanket-disable every checkout button.
   const [upgradeLoading, setUpgradeLoading] = useState<null | 'pro_monthly' | 'pro_family' | 'lifetime'>(null);
 
+  // Lets a free web user dismiss the upgrade gate and continue with the
+  // limited free experience (1 local IndexedDB vault, no cloud sync). We
+  // never want a paying-curious user to feel trapped at this screen.
+  const [paywallBypassed, setPaywallBypassed] = useState(false);
+
   const PLAN_DESCRIPTIONS: Record<'pro_monthly' | 'pro_family' | 'lifetime', string> = {
     pro_monthly: 'IronVault Pro Monthly',
     pro_family: 'IronVault Pro Family',
@@ -127,7 +132,11 @@ export default function VaultPickerPage() {
   const [newVaultName, setNewVaultName] = useState('');
   const [newVaultPassword, setNewVaultPassword] = useState('');
   const [newVaultConfirm, setNewVaultConfirm] = useState('');
-  const [newVaultType, setNewVaultType] = useState<'local' | 'cloud'>(isNativeApp() ? 'local' : 'cloud');
+  // Default storage type: native app and free-web (no cloud entitlement)
+  // both default to local; only paid web users default to cloud.
+  const [newVaultType, setNewVaultType] = useState<'local' | 'cloud'>(
+    isNativeApp() || !isPaid ? 'local' : 'cloud',
+  );
   const [showNewPw, setShowNewPw] = useState(false);
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -136,7 +145,7 @@ export default function VaultPickerPage() {
     setNewVaultName('');
     setNewVaultPassword('');
     setNewVaultConfirm('');
-    setNewVaultType(isNativeApp() ? 'local' : 'cloud');
+    setNewVaultType(isNativeApp() || !isPaid ? 'local' : 'cloud');
     setShowNewPw(false);
     setCreateError('');
   };
@@ -559,7 +568,10 @@ export default function VaultPickerPage() {
       await vaultStorage.createVault(newVaultPassword);
       await vaultManager.createVaultPassword(newVault.id, newVaultPassword);
 
-      const wantsCloud = newVaultType === 'cloud' || !isNativeApp();
+      // Web defaults to cloud, but free users have no cloud entitlement —
+      // honor the local choice so we don't churn through a guaranteed-fail
+      // push and surface a confusing "cloud sync requires Pro" toast.
+      const wantsCloud = newVaultType === 'cloud' || (!isNativeApp() && isPaid);
       if (wantsCloud) {
         try {
           const blob = await vaultStorage.exportVault(newVaultPassword);
@@ -645,13 +657,33 @@ export default function VaultPickerPage() {
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         {/* Web upgrade gate gets a wider container so three plan cards fit
             comfortably side-by-side on tablet/desktop without squishing. */}
-        <div className={`w-full ${!isNativeApp() && !isPaid && !planLoading ? 'max-w-5xl' : 'max-w-md'}`}>
+        <div className={`w-full ${!isNativeApp() && !isPaid && !planLoading && !paywallBypassed ? 'max-w-5xl' : 'max-w-md'}`}>
+          {/* Free-plan banner — shown only after the user dismisses the
+              paywall on web. Keeps the upgrade prompt one click away
+              without forcing it on every visit. */}
+          {!isNativeApp() && !isPaid && !planLoading && paywallBypassed && (
+            <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
+              <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <p className="text-sm text-amber-800 dark:text-amber-200 flex-1">
+                You're on the Free plan. Upgrade for cloud sync and more vaults.
+              </p>
+              <button
+                type="button"
+                onClick={() => setPaywallBypassed(false)}
+                className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 whitespace-nowrap underline underline-offset-2"
+                data-testid="button-show-upgrade"
+              >
+                See plans →
+              </button>
+            </div>
+          )}
+
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold tracking-tight mb-2">
-              {!isNativeApp() && !isPaid && !planLoading ? 'Unlock IronVault Web' : 'Your Vaults'}
+              {!isNativeApp() && !isPaid && !planLoading && !paywallBypassed ? 'Unlock IronVault Web' : 'Your Vaults'}
             </h1>
             <p className="text-muted-foreground">
-              {!isNativeApp() && !isPaid && !planLoading
+              {!isNativeApp() && !isPaid && !planLoading && !paywallBypassed
                 ? 'Choose a plan to access your vaults from any browser.'
                 : 'Enter your master password to unlock a vault.'}
             </p>
@@ -660,7 +692,7 @@ export default function VaultPickerPage() {
           {/* Web upgrade gate — free users on web see an inline plan picker
               with three side-by-side cards (stacks on mobile). Each card
               fires Razorpay directly via handleUpgrade(planKey). */}
-          {!isNativeApp() && !isPaid && !planLoading && (() => {
+          {!isNativeApp() && !isPaid && !planLoading && !paywallBypassed && (() => {
             const proPlan = getPlan('pro')!;
             const familyPlan = getPlan('family')!;
             const lifetimePlan = getPlan('lifetime')!;
@@ -692,7 +724,7 @@ export default function VaultPickerPage() {
                 price: formatINR(familyPlan.priceMonthly!),
                 priceSuffix: '/mo',
                 priceSub: 'Up to 6 family members',
-                badge: 'Coming Soon',
+                badge: null,
                 accent: 'rose',
                 icon: Users,
                 features: [
@@ -806,6 +838,19 @@ export default function VaultPickerPage() {
                 <p className="text-center text-xs text-muted-foreground mt-6">
                   Free plan: Mobile app only · 1 local vault · No web access
                 </p>
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setPaywallBypassed(true)}
+                    className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                    data-testid="button-continue-free"
+                  >
+                    Continue with Free Plan →
+                  </button>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Limited to 1 local vault, no cloud sync
+                  </p>
+                </div>
               </div>
             );
           })()}
@@ -824,8 +869,8 @@ export default function VaultPickerPage() {
             </Button>
           )}
 
-          {/* Local vaults — mobile only; cloud-cached entries hidden (appear under Cloud Vaults) */}
-          {isNativeApp() && (
+          {/* Local vaults — mobile or free-web-bypassed; cloud-cached entries hidden (appear under Cloud Vaults) */}
+          {(isNativeApp() || paywallBypassed) && (
             <>
               {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1022,7 +1067,7 @@ export default function VaultPickerPage() {
           )}
 
           {/* Always-visible "+ New Vault" card-button */}
-          {(isNativeApp() || isPaid) && (
+          {(isNativeApp() || isPaid || paywallBypassed) && (
             <>
               <button
                 type="button"
