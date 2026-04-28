@@ -917,15 +917,17 @@ export default function Documents() {
         </Card>
       </div>
       
-      {/* Subscription Limit Warning */}
-      {!isPaidUser && (
+      {/* Subscription Limit Warning — only when free user is at or over the
+          cap. Showing it on every visit ("you've used 0/5 documents") feels
+          like an upsell ad, not helpful information. */}
+      {!isPaidUser && vaultStats.totalDocuments >= maxDocuments && (
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-6 h-6 text-orange-600" />
                 <div>
-                  <p className="text-orange-800 font-medium">Free Plan Limit</p>
+                  <p className="text-orange-800 font-medium">Free Plan Limit Reached</p>
                   <p className="text-orange-700 text-sm">
                     {vaultStats.totalDocuments} / {maxDocuments} documents used
                   </p>
@@ -939,9 +941,9 @@ export default function Documents() {
                 Upgrade Plan
               </Button>
             </div>
-            <Progress 
-              value={(vaultStats.totalDocuments / maxDocuments) * 100} 
-              className="mt-3 h-2" 
+            <Progress
+              value={(vaultStats.totalDocuments / maxDocuments) * 100}
+              className="mt-3 h-2"
             />
           </CardContent>
         </Card>

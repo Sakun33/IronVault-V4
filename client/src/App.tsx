@@ -12,7 +12,6 @@ import { ThemeProvider, useTheme } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
-import { UpgradeGate } from "@/components/upgrade-gate";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
 import { vaultStorage } from "@/lib/storage";
@@ -86,16 +85,6 @@ import { Footer } from "@/components/footer";
 import { QuickAddMenu } from "@/components/quick-add-fab";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
 import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
-
-// Free users are restricted from sections that require paid features
-// (expenses analytics, bank import, investments, api-keys). Renders the
-// existing UpgradeGate inside the normal layout instead of the page.
-function ProRoute({ feature, children }: { feature: string; children: React.ReactNode }) {
-  const { isPro, isLoading } = useSubscription();
-  if (isLoading) return <>{children}</>;
-  if (!isPro) return <UpgradeGate feature={feature} />;
-  return <>{children}</>;
-}
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -604,11 +593,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   >
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>
-                    {item.requiresPro && !isPro ? (
-                      <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
-                        Pro
-                      </span>
-                    ) : 'limitLabel' in item && item.limitLabel !== null ? (
+                    {'limitLabel' in item && item.limitLabel !== null ? (
                       <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                         {item.limitLabel}
                       </span>
@@ -638,11 +623,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   >
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>
-                    {item.requiresPro && !isPro ? (
-                      <span className="ml-auto bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
-                        Pro
-                      </span>
-                    ) : 'limitLabel' in item && item.limitLabel !== null ? (
+                    {'limitLabel' in item && item.limitLabel !== null ? (
                       <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                         {item.limitLabel}
                       </span>
@@ -657,9 +638,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               })}
             </div>
           </div>
-          {/* Pinned bottom utility items — always visible */}
+          {/* Pinned bottom utility items. Hide the "Upgrade to Pro" entry
+              entirely for paying users — there's nothing left to upgrade to
+              and the link in their nav is just noise. */}
           <div className="border-t border-border/50 pt-2 mt-2 space-y-0.5 flex-shrink-0">
-            {bottomNavItems.map((item) => {
+            {bottomNavItems
+              .filter((item) => !(item.id === 'upgrade' && isPro))
+              .map((item) => {
               const itemPath = `/${item.id}`;
               const isActive = location === itemPath;
               return (
@@ -670,9 +655,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
-                  {item.id === 'upgrade' && !isPro && (
-                    <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">↑</span>
-                  )}
                 </Button>
               </Link>
               );
@@ -874,6 +856,10 @@ function Router() {
           {/* Redirect signup/login to vault picker (already logged in) */}
           <Route path="/auth/signup" component={VaultPickerPage} />
           <Route path="/auth/login" component={VaultPickerPage} />
+          {/* /upgrade must be reachable from the vault picker too — without
+              this it hits the catch-all and silently re-renders the picker,
+              looking like a blank page where plans should be. */}
+          <Route path="/upgrade" component={UpgradePage} />
           {PUBLIC_INFO_ROUTES}
           {/* Default → vault picker */}
           <Route component={VaultPickerPage} />
@@ -906,9 +892,7 @@ function Router() {
       )} />
       <Route path="/expenses" component={() => (
         <MainLayout>
-          <ProRoute feature="Expense Tracking">
-            <Expenses />
-          </ProRoute>
+          <Expenses />
         </MainLayout>
       )} />
       <Route path="/reminders" component={() => (
@@ -918,23 +902,17 @@ function Router() {
       )} />
       <Route path="/bank-statements" component={() => (
         <MainLayout>
-          <ProRoute feature="Bank Statement Import">
-            <BankStatements />
-          </ProRoute>
+          <BankStatements />
         </MainLayout>
       )} />
       <Route path="/investments" component={() => (
         <MainLayout>
-          <ProRoute feature="Investment Tracking">
-            <Investments />
-          </ProRoute>
+          <Investments />
         </MainLayout>
       )} />
       <Route path="/goals" component={() => (
         <MainLayout>
-          <ProRoute feature="Financial Goals">
-            <Goals />
-          </ProRoute>
+          <Goals />
         </MainLayout>
       )} />
       <Route path="/profile" component={() => (
@@ -949,9 +927,7 @@ function Router() {
       )} />
       <Route path="/api-keys" component={() => (
         <MainLayout>
-          <ProRoute feature="API Keys Vault">
-            <APIKeys />
-          </ProRoute>
+          <APIKeys />
         </MainLayout>
       )} />
       <Route path="/logging" component={() => (
