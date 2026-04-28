@@ -91,7 +91,11 @@ export function useCloudAutoSync(
 
     const handleItemSaved = () => {
       if (!getCloudToken()) return;
-      if (!isVaultCloudSynced(vaultId)) markVaultAsCloudSynced(vaultId);
+      // Local-only vaults must NEVER be auto-promoted to cloud-synced — the
+      // user explicitly chose local storage (Free plan or "create local
+      // vault"). Auto-marking would cause every save to attempt a cloud
+      // push and surface confusing "cloud sync failed" toasts.
+      if (!isVaultCloudSynced(vaultId)) return;
       // Mark dirty immediately — survives if logout races before debounce fires
       pushPendingRef.current = true;
       localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
@@ -193,7 +197,10 @@ export function useCloudAutoSync(
 
     const handleForcePush = async () => {
       if (!getCloudToken()) return;
-      if (!isVaultCloudSynced(vaultId)) markVaultAsCloudSynced(vaultId);
+      // Same gate as handleItemSaved — local vaults stay local. The CRUD
+      // flows that fire `vault:force-cloud-push` already check the active
+      // vault is cloud-synced; this is the safety net.
+      if (!isVaultCloudSynced(vaultId)) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       pushPendingRef.current = true;
       localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');

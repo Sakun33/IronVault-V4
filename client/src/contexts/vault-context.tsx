@@ -264,6 +264,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       const { vaultManager } = await import('@/lib/vault-manager');
       const vaultId = vaultManager.getActiveVaultId();
       if (!vaultId) return { ok: false, reason: 'No active vault' };
+      // Local vault check: a local-only vault has no cloud entry — pushing
+      // would either silently fail or unexpectedly create one. Skip cleanly.
+      const { isVaultCloudSynced } = await import('@/lib/cloud-vault-sync');
+      if (!isVaultCloudSynced(vaultId)) {
+        const reason = 'Active vault is local-only — cloud push skipped';
+        console.log('[CLOUD-PUSH]', reason);
+        return { ok: false, reason };
+      }
       // Vault isolation: the open DB must belong to this vault. If it
       // doesn't, exporting would read another vault's data and pushing
       // would overwrite this vault's cloud entry with that wrong data.

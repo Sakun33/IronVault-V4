@@ -48,8 +48,20 @@ export default function VaultPickerPage() {
 
   // Lets a free web user dismiss the upgrade gate and continue with the
   // limited free experience (1 local IndexedDB vault, no cloud sync). We
-  // never want a paying-curious user to feel trapped at this screen.
-  const [paywallBypassed, setPaywallBypassed] = useState(false);
+  // never want a paying-curious user to feel trapped at this screen, and
+  // we don't want to re-prompt every login — persist the choice so
+  // returning free users land directly on their vault list.
+  const [paywallBypassed, setPaywallBypassed] = useState(() => {
+    try { return localStorage.getItem('iv_paywall_bypassed') === '1'; } catch { return false; }
+  });
+
+  const persistPaywallBypassed = (value: boolean) => {
+    setPaywallBypassed(value);
+    try {
+      if (value) localStorage.setItem('iv_paywall_bypassed', '1');
+      else localStorage.removeItem('iv_paywall_bypassed');
+    } catch { /* localStorage unavailable */ }
+  };
 
   const PLAN_DESCRIPTIONS: Record<'pro_monthly' | 'pro_family' | 'lifetime', string> = {
     pro_monthly: 'IronVault Pro Monthly',
@@ -60,50 +72,121 @@ export default function VaultPickerPage() {
   const handleUpgrade = async (planKey: 'pro_monthly' | 'pro_family' | 'lifetime') => {
     setUpgradeLoading(planKey);
     try {
+      // Step 1: Razorpay script — surface a clear error rather than a generic crash.
       if (typeof window.Razorpay === 'undefined') {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error('Razorpay failed to load'));
-          setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
-          document.head.appendChild(s);
-        });
-      }
-      const email = accountEmail || localStorage.getItem('iv_account_email') || '';
-      const res = await fetch('/api/payments/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planKey, email }),
-      });
-      const { orderId, amount, currency, keyId } = await res.json();
-      const rzp = new window.Razorpay({
-        key: keyId,
-        amount,
-        currency,
-        name: 'IronVault',
-        description: PLAN_DESCRIPTIONS[planKey],
-        order_id: orderId,
-        handler: async (response: any) => {
-          const verify = await fetch('/api/payments/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...response, plan: planKey, email }),
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('Razorpay failed to load'));
+            setTimeout(() => reject(new Error('Razorpay load timeout')), 10000);
+            document.head.appendChild(s);
           });
-          if ((await verify.json()).success) {
-            window.location.reload();
-          }
-        },
-        prefill: { email },
-        theme: { color: '#4f46e5' },
-      });
-      rzp.open();
+        } catch (loadErr) {
+          throw new Error('Could not load Razorpay. Please check your connection.');
+        }
+      }
+      if (typeof window.Razorpay === 'undefined') {
+        throw new Error('Razorpay script unavailable.');
+      }
+
+      const email = accountEmail || localStorage.getItem('iv_account_email') || '';
+      if (!email) {
+        throw new Error('Sign in first to upgrade.');
+      }
+
+      // Step 2: Create order — server may return non-JSON HTML (e.g. 502),
+      // so explicitly verify both HTTP status and the parsed payload before
+      // we hand anything to Razorpay.
+      let orderResp: Response;
+      try {
+        orderResp = await fetch('/api/payments/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: planKey, email }),
+        });
+      } catch {
+        throw new Error('Network error. Please try again.');
+      }
+      if (!orderResp.ok) {
+        throw new Error(`Order creation failed (HTTP ${orderResp.status}).`);
+      }
+      let orderData: any;
+      try {
+        orderData = await orderResp.json();
+      } catch {
+        throw new Error('Invalid response from payment server.');
+      }
+      const { orderId, amount, currency, keyId } = orderData || {};
+      if (!orderId || !amount || !currency || !keyId) {
+        throw new Error('Payment server returned incomplete order details.');
+      }
+
+      // Step 3: Open Razorpay — `new Razorpay()` and `.open()` can both throw
+      // synchronously (bad key, blocked popup); bubble them up to the user.
+      try {
+        const rzp = new window.Razorpay({
+          key: keyId,
+          amount,
+          currency,
+          name: 'IronVault',
+          description: PLAN_DESCRIPTIONS[planKey],
+          order_id: orderId,
+          handler: async (response: any) => {
+            try {
+              const verify = await fetch('/api/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...response, plan: planKey, email }),
+              });
+              const verifyData = await verify.json().catch(() => ({}));
+              if (verifyData?.success) {
+                window.location.reload();
+              } else {
+                toast({
+                  title: 'Payment verification failed',
+                  description: 'If your card was charged, contact support.',
+                  variant: 'destructive',
+                });
+              }
+            } catch (verifyErr) {
+              console.error('[upgrade] verify failed:', verifyErr);
+              toast({
+                title: 'Payment verification error',
+                description: 'Please reload — if charged, contact support.',
+                variant: 'destructive',
+              });
+            }
+          },
+          modal: {
+            ondismiss: () => setUpgradeLoading(null),
+          },
+          prefill: { email },
+          theme: { color: '#4f46e5' },
+        });
+        rzp.on?.('payment.failed', (response: any) => {
+          console.error('[upgrade] payment failed:', response);
+          toast({
+            title: 'Payment failed',
+            description: response?.error?.description || 'Please try again.',
+            variant: 'destructive',
+          });
+        });
+        rzp.open();
+      } catch (openErr) {
+        console.error('[upgrade] Razorpay open failed:', openErr);
+        throw new Error('Could not open checkout. Please try again.');
+      }
     } catch (err) {
-      console.error('Payment error:', err);
-      toast({ title: 'Payment error', description: 'Could not open checkout. Try again.', variant: 'destructive' });
-    } finally {
+      console.error('[upgrade] Payment error:', err);
+      const description = err instanceof Error ? err.message : 'Could not open checkout. Try again.';
+      toast({ title: 'Upgrade unavailable', description, variant: 'destructive' });
       setUpgradeLoading(null);
     }
+    // Note: we no longer clear `upgradeLoading` in finally — the modal stays
+    // open while Razorpay UI is up. It's cleared via `modal.ondismiss` or
+    // on payment.failed/success above.
   };
 
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
@@ -189,6 +272,19 @@ export default function VaultPickerPage() {
     };
     loadCloudVaults();
   }, [accountEmail]); // re-run when email is set (e.g. after initializeAuth completes)
+
+  // Auto-bypass the paywall for returning free users who already have at
+  // least one vault (local or cloud). Forcing the upgrade gate on every
+  // login when they've already created a vault is hostile UX — surface a
+  // small "See plans" banner instead so they can upgrade later.
+  useEffect(() => {
+    if (planLoading) return;
+    if (isPaid) return;
+    if (paywallBypassed) return;
+    if (vaults.length > 0 || cloudVaults.length > 0) {
+      persistPaywallBypassed(true);
+    }
+  }, [vaults.length, cloudVaults.length, isPaid, planLoading, paywallBypassed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Consume pending family invite — checks both URL params and localStorage.
   // URL params are present when the user is already logged in and clicks the invite link
@@ -669,7 +765,7 @@ export default function VaultPickerPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setPaywallBypassed(false)}
+                onClick={() => persistPaywallBypassed(false)}
                 className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 whitespace-nowrap underline underline-offset-2"
                 data-testid="button-show-upgrade"
               >
@@ -841,7 +937,7 @@ export default function VaultPickerPage() {
                 <div className="mt-4 text-center">
                   <button
                     type="button"
-                    onClick={() => setPaywallBypassed(true)}
+                    onClick={() => persistPaywallBypassed(true)}
                     className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
                     data-testid="button-continue-free"
                   >

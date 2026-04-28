@@ -145,7 +145,19 @@ export default function PricingPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-5xl mx-auto">
-        {PLANS.map((plan) => {
+        {PLANS.filter(plan => {
+          // Hide internal/invitee-only plan from public pricing.
+          if (plan.id === 'pro_family_member') return false;
+          // If the user is already on Lifetime, hide Family — it's a sideways
+          // (different feature shape) rather than an upgrade and showing it as
+          // a "Downgrade" button is just confusing. Family users see the rest
+          // of the cards but their Family card renders as Current via isCurrent.
+          if (currentTier === 'lifetime' && plan.id === 'family') return false;
+          // If the user is already on Family, hide Lifetime as a "downgrade".
+          // (Lifetime is single-seat; Family seats remain a step up.)
+          // Keep all other plans visible.
+          return true;
+        }).map((plan) => {
           const Icon = PLAN_ICONS[plan.id];
           const btn = getButtonProps(plan.id);
           const isCurrent = plan.id === currentTier;

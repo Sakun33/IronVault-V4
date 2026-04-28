@@ -501,12 +501,38 @@ ui.lockBtn.addEventListener('click', async () => {
 ui.logoutBtn.addEventListener('click', async () => {
   if (!confirm('Sync & sign out? All local IronVault data on this device will be cleared.')) return;
   cancelReveal();
+  const originalLabel = ui.logoutBtn.textContent;
   ui.logoutBtn.disabled = true;
   ui.logoutBtn.textContent = 'Signing out…';
   try {
-    await send({ type: 'LOGOUT_AND_CLEAN' });
-  } catch {}
-  await refreshState();
+    // LOGOUT_AND_CLEAN does best-effort cloud resync then fullWipe(). If the
+    // service worker fails to respond (port closed, extension reload) we
+    // still need to reset the popup UI so the user isn't stranded on the
+    // connected screen. Belt-and-braces: also clear local extension storage
+    // directly from the popup as a last-resort fallback.
+    try {
+      await send({ type: 'LOGOUT_AND_CLEAN' });
+    } catch (err) {
+      console.warn('[popup] LOGOUT_AND_CLEAN failed, falling back:', err);
+      try {
+        await chrome.storage.local.remove(['ironvault.cache.v1', 'ironvault.biometric', 'rememberedEmail']);
+      } catch {}
+      try { await chrome.storage.session.clear(); } catch {}
+    }
+  } finally {
+    // Always reset the button — refreshState will route to the connect
+    // screen on success, but if we ever stay on the connected screen due
+    // to an unexpected error, the button must remain usable.
+    ui.logoutBtn.disabled = false;
+    ui.logoutBtn.textContent = originalLabel;
+  }
+  // Force the popup back to the connect screen even if STATUS round-trips
+  // a stale "connected" reading — the user just signed out.
+  try {
+    await refreshState();
+  } catch {
+    showScreen('connect');
+  }
 });
 
 // ── Sync from Chrome ───────────────────────────────────────────────────────

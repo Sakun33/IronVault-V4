@@ -12,6 +12,7 @@ import { ThemeProvider, useTheme } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
+import { UpgradeGate } from "@/components/upgrade-gate";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
 import { vaultStorage } from "@/lib/storage";
@@ -85,6 +86,16 @@ import { Footer } from "@/components/footer";
 import { QuickAddMenu } from "@/components/quick-add-fab";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
 import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
+
+// Free users are restricted from sections that require paid features
+// (expenses analytics, bank import, investments, api-keys). Renders the
+// existing UpgradeGate inside the normal layout instead of the page.
+function ProRoute({ feature, children }: { feature: string; children: React.ReactNode }) {
+  const { isPro, isLoading } = useSubscription();
+  if (isLoading) return <>{children}</>;
+  if (!isPro) return <UpgradeGate feature={feature} />;
+  return <>{children}</>;
+}
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -248,7 +259,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl">
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl" title="Menu" aria-label="Menu">
                   <Menu className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
@@ -286,7 +297,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl">
+                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl" title="Search" aria-label="Search">
                   <Search className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -294,7 +305,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl">
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl" title="Quick Add" aria-label="Quick Add">
                   <Plus className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -303,7 +314,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <NotificationBell userId="current-user" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" title="More" aria-label="More options">
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -419,10 +430,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>
+                <span title="Security Settings">
                   <SecuritySettingsModal
                     trigger={
-                      <Button variant="ghost" size="sm" className="p-2 rounded-xl">
+                      <Button variant="ghost" size="sm" className="p-2 rounded-xl" title="Security Settings" aria-label="Security Settings">
                         <SettingsIcon className="w-5 h-5" />
                       </Button>
                     }
@@ -435,7 +446,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => setShowQuickAdd(true)} className="p-2 rounded-xl">
+                <Button variant="ghost" size="sm" onClick={() => setShowQuickAdd(true)} className="p-2 rounded-xl" title="Quick Add" aria-label="Quick Add">
                   <Plus className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
@@ -443,7 +454,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }} className="p-2 rounded-xl">
+                <Button variant="ghost" size="sm" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }} className="p-2 rounded-xl" title="Support Chat" aria-label="Support Chat">
                   <MessageCircle className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
@@ -452,13 +463,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <span><NotificationBell userId="current-user" /></span>
+                <span title="Notifications"><NotificationBell userId="current-user" /></span>
               </TooltipTrigger>
               <TooltipContent>Notifications</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span><ThemeToggle /></span>
+                <span title="Toggle Theme"><ThemeToggle /></span>
               </TooltipTrigger>
               <TooltipContent>Toggle Theme</TooltipContent>
             </Tooltip>
@@ -467,7 +478,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => setLocation('/profile')} className="p-2 rounded-xl hover:bg-accent text-foreground">
+                <Button variant="ghost" size="sm" onClick={() => setLocation('/profile')} className="p-2 rounded-xl hover:bg-accent text-foreground" title="Profile" aria-label="Profile">
                   <User className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
@@ -476,7 +487,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={handleLockVault} className="p-2 rounded-xl hover:bg-accent text-foreground">
+                <Button variant="ghost" size="sm" onClick={handleLockVault} className="p-2 rounded-xl hover:bg-accent text-foreground" title="Lock Vault" aria-label="Lock Vault">
                   <Lock className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
@@ -895,7 +906,9 @@ function Router() {
       )} />
       <Route path="/expenses" component={() => (
         <MainLayout>
-          <Expenses />
+          <ProRoute feature="Expense Tracking">
+            <Expenses />
+          </ProRoute>
         </MainLayout>
       )} />
       <Route path="/reminders" component={() => (
@@ -905,17 +918,23 @@ function Router() {
       )} />
       <Route path="/bank-statements" component={() => (
         <MainLayout>
-          <BankStatements />
+          <ProRoute feature="Bank Statement Import">
+            <BankStatements />
+          </ProRoute>
         </MainLayout>
       )} />
       <Route path="/investments" component={() => (
         <MainLayout>
-          <Investments />
+          <ProRoute feature="Investment Tracking">
+            <Investments />
+          </ProRoute>
         </MainLayout>
       )} />
       <Route path="/goals" component={() => (
         <MainLayout>
-          <Goals />
+          <ProRoute feature="Financial Goals">
+            <Goals />
+          </ProRoute>
         </MainLayout>
       )} />
       <Route path="/profile" component={() => (
@@ -930,7 +949,9 @@ function Router() {
       )} />
       <Route path="/api-keys" component={() => (
         <MainLayout>
-          <APIKeys />
+          <ProRoute feature="API Keys Vault">
+            <APIKeys />
+          </ProRoute>
         </MainLayout>
       )} />
       <Route path="/logging" component={() => (

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useVault } from '@/contexts/vault-context';
+import { useSubscription } from '@/hooks/use-subscription';
 import {
   parseCsvText,
   decodeBuffer,
@@ -58,7 +59,8 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export default function ImportPasswords() {
   const { toast } = useToast();
-  const { bulkImportPasswords } = useVault();
+  const { bulkImportPasswords, passwords } = useVault();
+  const { getLimit, isPro } = useSubscription();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -200,7 +202,7 @@ export default function ImportPasswords() {
         : rebuildPreview(rawText, result, effectiveMapping));
 
       // Map our ParsedPassword → vault PasswordEntry shape
-      const items = finalEntries
+      let items = finalEntries
         .map(e => ({
           name: (e.title || '').slice(0, 256),
           url: e.url || '',
@@ -214,6 +216,35 @@ export default function ImportPasswords() {
         }))
         // Skip rows with empty password — vault schema rejects them
         .filter(e => e.password && e.password.length > 0 && e.username.length > 0 && e.name.length > 0);
+
+      // Free plan: enforce password cap. The vault already has `passwords.length`
+      // entries; only `headroom` more will fit. Truncate the import and warn
+      // the user explicitly so they can choose to upgrade and import the rest.
+      if (!isPro) {
+        const limit = getLimit('passwords');
+        const headroom = Math.max(0, limit - passwords.length);
+        if (items.length > headroom) {
+          const dropped = items.length - headroom;
+          if (headroom === 0) {
+            toast({
+              title: 'Free plan limit reached',
+              description: `You've already saved ${passwords.length} of ${limit} passwords on the Free plan. Upgrade to import more.`,
+              variant: 'destructive',
+              duration: 10000,
+            });
+            setImporting(false);
+            setImportSummary({ imported: 0, duplicates: 0, skipped: items.length });
+            return;
+          }
+          items = items.slice(0, headroom);
+          toast({
+            title: `Free plan limit (${limit} passwords)`,
+            description: `Importing first ${headroom} entries — ${dropped} skipped. Upgrade to Pro for unlimited imports.`,
+            variant: 'destructive',
+            duration: 10000,
+          });
+        }
+      }
 
       setProgress({ done: 0, total: items.length });
 
@@ -266,7 +297,7 @@ export default function ImportPasswords() {
     } finally {
       setImporting(false);
     }
-  }, [result, rawText, overrideMapping, effectiveMapping, bulkImportPasswords, toast]);
+  }, [result, rawText, overrideMapping, effectiveMapping, bulkImportPasswords, toast, isPro, getLimit, passwords.length]);
 
   /* ----------------------------- render ----------------------------- */
 
