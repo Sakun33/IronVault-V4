@@ -565,7 +565,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Browser Extension */}
-      <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-browser-extension">
+      <Card id="browser-extension" className="rounded-2xl shadow-sm border-border/50 scroll-mt-24" data-testid="card-browser-extension">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Monitor className="w-5 h-5" />

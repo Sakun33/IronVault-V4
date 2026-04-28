@@ -7,31 +7,33 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header class="iv-header">
-    <div class="iv-brand">
-      <img src="icons/icon-48.png" width="22" height="22" alt="" class="iv-brand-icon">
-      <span>IronVault</span>
-    </div>
-    <div class="iv-header-right">
-      <span id="iv-vault-name" class="iv-vault-name" hidden></span>
-      <button id="iv-lock-btn" class="iv-icon-btn" title="Lock vault" hidden>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      </button>
-      <button id="iv-settings-btn" class="iv-icon-btn" title="Settings">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      </button>
-    </div>
-  </header>
-
   <main id="iv-main">
-    <!-- Login panel — first-time sign-in (downloads encrypted blob) -->
-    <section id="iv-login-panel" class="iv-panel" hidden>
-      <h1 class="iv-title">Connect to IronVault</h1>
-      <p class="iv-sub">Sign in once. The encrypted vault is cached locally; future unlocks use only your master password.</p>
+    <!-- Connect screen — first-time / signed-out / session-expired -->
+    <section id="iv-connect" class="iv-screen iv-connect-screen" hidden>
+      <div class="iv-hero">
+        <img src="icons/icon-128.png" width="56" height="56" alt="" class="iv-hero-logo">
+        <h1 class="iv-hero-title">Connect to IronVault</h1>
+        <p class="iv-hero-sub">Securely auto-fill passwords from your vault.</p>
+      </div>
+      <button type="button" id="iv-connect-cta" class="iv-btn iv-btn-primary">Connect vault</button>
+      <button type="button" id="iv-connect-signup" class="iv-btn iv-btn-text">Don't have an account? Visit ironvault.app</button>
+      <p class="iv-foot iv-center">
+        Zero-knowledge. Your master password never leaves this device.
+      </p>
+    </section>
+
+    <!-- Login form — sign in + pick session duration -->
+    <section id="iv-login" class="iv-screen" hidden>
+      <header class="iv-screen-header">
+        <button type="button" id="iv-login-back" class="iv-icon-btn" title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <h1 class="iv-screen-title">Sign in</h1>
+      </header>
 
       <form id="iv-login-form" class="iv-form" novalidate>
         <label class="iv-field">
-          <span>Account email</span>
+          <span>Email</span>
           <input id="iv-email" type="email" autocomplete="username" required>
         </label>
         <label class="iv-field">
@@ -39,10 +41,21 @@
           <input id="iv-account-password" type="password" autocomplete="current-password" required>
         </label>
         <label class="iv-field">
-          <span>Vault master password</span>
+          <span>Master password</span>
           <input id="iv-master-password" type="password" autocomplete="off" required>
         </label>
-        <div id="iv-vault-picker" class="iv-vault-picker" hidden>
+        <label class="iv-field">
+          <span>Session duration</span>
+          <select id="iv-session-duration">
+            <option value="1">1 hour</option>
+            <option value="4" selected>4 hours</option>
+            <option value="8">8 hours</option>
+            <option value="24">24 hours</option>
+            <option value="168">1 week</option>
+            <option value="0">Until logout</option>
+          </select>
+        </label>
+        <div id="iv-vault-picker" class="iv-field" hidden>
           <span>Choose vault</span>
           <select id="iv-vault-select"></select>
         </div>
@@ -51,17 +64,16 @@
           <span class="iv-btn-label">Connect vault</span>
         </button>
       </form>
-      <p class="iv-foot">
-        Zero-knowledge: your master password never leaves this device. The vault
-        is decrypted locally with AES-256-GCM + PBKDF2 (600,000 iterations).
-      </p>
     </section>
 
-    <!-- Unlock panel — already signed in, just need master password / biometric -->
-    <section id="iv-unlock-panel" class="iv-panel" hidden>
-      <h1 class="iv-title">Unlock vault</h1>
-      <p class="iv-sub" id="iv-unlock-sub">Enter your master password.</p>
-      <form id="iv-unlock-form" class="iv-form" novalidate>
+    <!-- Unlock screen — soft lock, master password to re-derive session key -->
+    <section id="iv-unlock" class="iv-screen" hidden>
+      <div class="iv-hero">
+        <img src="icons/icon-128.png" width="48" height="48" alt="" class="iv-hero-logo">
+        <h1 class="iv-hero-title">Unlock vault</h1>
+        <p class="iv-hero-sub" id="iv-unlock-sub">Enter your master password.</p>
+      </div>
+      <form id="iv-unlock-form" class="iv-form">
         <label class="iv-field">
           <span>Master password</span>
           <input id="iv-unlock-master" type="password" autocomplete="off" required>
@@ -70,214 +82,126 @@
         <button type="submit" class="iv-btn iv-btn-primary" id="iv-unlock-submit">
           <span class="iv-btn-label">Unlock</span>
         </button>
-        <button type="button" class="iv-btn iv-btn-ghost" id="iv-biometric-btn" hidden>
-          <span aria-hidden="true">🔐</span>
-          <span>Use biometric / Touch ID / Face ID</span>
-        </button>
-      </form>
-      <button id="iv-signout-link" class="iv-btn iv-btn-ghost iv-link" type="button">Sign out of this account</button>
-    </section>
-
-    <!-- Vault list panel -->
-    <section id="iv-list-panel" class="iv-panel" hidden>
-      <div id="iv-save-banner" class="iv-save-banner" hidden>
-        <div class="iv-save-banner-text">
-          <strong>Save this site?</strong>
-          <span id="iv-save-banner-domain"></span>
-        </div>
-        <button id="iv-save-banner-btn" type="button" class="iv-btn iv-btn-primary iv-btn-sm">Save</button>
-        <button id="iv-save-banner-dismiss" type="button" class="iv-icon-btn" title="Dismiss">✕</button>
-      </div>
-      <div class="iv-list-toolbar">
-        <input id="iv-search" class="iv-search" type="search" placeholder="Search by site or username">
-        <button id="iv-add-btn" type="button" class="iv-icon-btn iv-add-btn" title="Add new entry">＋</button>
-      </div>
-      <button id="iv-sync-chrome-btn" type="button" class="iv-btn iv-btn-ghost iv-sync-chrome-btn">
-        <span aria-hidden="true">⤓</span>
-        <span>Sync from Chrome</span>
-      </button>
-      <div id="iv-list-empty" class="iv-empty" hidden>No matching entries.</div>
-      <ul id="iv-list" class="iv-list"></ul>
-      <p class="iv-foot">
-        Click <span class="iv-kbd">👁</span> to reveal a password for 5 seconds.
-        Click <span class="iv-kbd">⎘</span> to copy.
-      </p>
-    </section>
-
-    <!-- Add entry panel -->
-    <section id="iv-add-panel" class="iv-panel" hidden>
-      <h1 class="iv-title">Add to vault</h1>
-      <div class="iv-add-tabs" role="tablist">
-        <button type="button" class="iv-add-tab is-active" data-add-kind="password" role="tab">Password</button>
-        <button type="button" class="iv-add-tab" data-add-kind="note" role="tab">Note</button>
-        <button type="button" class="iv-add-tab" data-add-kind="subscription" role="tab">Subscription</button>
-      </div>
-
-      <form id="iv-add-form" class="iv-form" novalidate>
-        <!-- Password fields -->
-        <div class="iv-add-section" data-add-section="password">
-          <label class="iv-field">
-            <span>Title</span>
-            <input id="iv-add-pw-title" type="text" autocomplete="off" placeholder="e.g. Gmail">
-          </label>
-          <label class="iv-field">
-            <span>Site URL</span>
-            <input id="iv-add-pw-url" type="url" autocomplete="off" placeholder="https://example.com">
-          </label>
-          <label class="iv-field">
-            <span>Username / email</span>
-            <input id="iv-add-pw-username" type="text" autocomplete="off">
-          </label>
-          <label class="iv-field">
-            <span>Password</span>
-            <input id="iv-add-pw-password" type="password" autocomplete="off">
-          </label>
-        </div>
-
-        <!-- Note fields -->
-        <div class="iv-add-section" data-add-section="note" hidden>
-          <label class="iv-field">
-            <span>Title</span>
-            <input id="iv-add-note-title" type="text" autocomplete="off" placeholder="e.g. Wifi password">
-          </label>
-          <label class="iv-field">
-            <span>Content</span>
-            <textarea id="iv-add-note-content" rows="5"></textarea>
-          </label>
-        </div>
-
-        <!-- Subscription fields -->
-        <div class="iv-add-section" data-add-section="subscription" hidden>
-          <label class="iv-field">
-            <span>Service name</span>
-            <input id="iv-add-sub-name" type="text" autocomplete="off" placeholder="e.g. Netflix">
-          </label>
-          <label class="iv-field">
-            <span>Cost</span>
-            <input id="iv-add-sub-cost" type="number" step="0.01" min="0" autocomplete="off" placeholder="9.99">
-          </label>
-          <label class="iv-field">
-            <span>Currency</span>
-            <input id="iv-add-sub-currency" type="text" maxlength="3" autocomplete="off" placeholder="USD" value="USD">
-          </label>
-          <label class="iv-field">
-            <span>Next billing date</span>
-            <input id="iv-add-sub-billing" type="date" autocomplete="off">
-          </label>
-          <label class="iv-field">
-            <span>Billing cycle</span>
-            <select id="iv-add-sub-cycle">
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="weekly">Weekly</option>
-              <option value="quarterly">Quarterly</option>
-            </select>
-          </label>
-        </div>
-
-        <label class="iv-field">
-          <span>Master password (to re-encrypt vault)</span>
-          <input id="iv-add-master" type="password" autocomplete="off" required>
-        </label>
-
-        <p id="iv-add-error" class="iv-error" hidden></p>
-        <p id="iv-add-msg" class="iv-foot" hidden></p>
-
-        <div class="iv-add-actions">
-          <button type="submit" class="iv-btn iv-btn-primary" id="iv-add-submit">
-            <span class="iv-btn-label">Save to vault</span>
-          </button>
-          <button type="button" class="iv-btn iv-btn-ghost" id="iv-add-cancel">Cancel</button>
-        </div>
+        <button type="button" id="iv-unlock-logout" class="iv-btn iv-btn-text">Sign out instead</button>
       </form>
     </section>
 
-    <!-- Sync from Chrome panel -->
-    <section id="iv-sync-panel" class="iv-panel" hidden>
-      <h1 class="iv-title">Sync from Chrome</h1>
-      <p class="iv-sub">Import passwords saved in Chrome — duplicates are skipped, changed passwords get updated.</p>
-
-      <ol class="iv-sync-steps">
-        <li>
-          <strong>Open Chrome's password manager.</strong>
-          <button id="iv-sync-open-tab" type="button" class="iv-btn iv-btn-ghost iv-btn-sm">Open chrome://settings/passwords</button>
-        </li>
-        <li>
-          <strong>Export passwords.</strong>
-          Click the <span class="iv-kbd">⋮</span> menu next to "Saved passwords" → <em>Export passwords…</em> → save the CSV file.
-        </li>
-        <li>
-          <strong>Pick the CSV file you just saved.</strong>
-          <div id="iv-sync-detected" class="iv-sync-detected" hidden>
-            Detected: <code id="iv-sync-detected-name"></code>
+    <!-- Connected screen — main thin-client view -->
+    <section id="iv-connected" class="iv-screen" hidden>
+      <header class="iv-connected-header">
+        <div class="iv-connected-brand">
+          <img src="icons/icon-48.png" width="22" height="22" alt="">
+          <div class="iv-connected-vault">
+            <strong id="iv-vault-name">Vault</strong>
+            <small id="iv-vault-email"></small>
           </div>
-          <input id="iv-sync-file" type="file" accept=".csv,text/csv">
+        </div>
+        <div class="iv-connected-status">
+          <span id="iv-session-pill" class="iv-session-pill" title="Time remaining"></span>
+          <button id="iv-lock-btn" class="iv-icon-btn" title="Lock vault" aria-label="Lock">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="iv-search-row">
+        <svg class="iv-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="iv-search" class="iv-search" type="search" placeholder="Search vault…" autocomplete="off">
+      </div>
+
+      <div id="iv-results" class="iv-results">
+        <div id="iv-empty" class="iv-empty">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="iv-empty-icon"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <p class="iv-empty-title">Visit a site to auto-fill</p>
+          <p class="iv-empty-sub">Or search your vault above.</p>
+        </div>
+        <ul id="iv-cards" class="iv-cards"></ul>
+      </div>
+
+      <footer class="iv-connected-footer">
+        <button id="iv-sync-btn" class="iv-btn iv-btn-text iv-btn-sm" type="button" title="Sync passwords from Chrome">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          Sync from Chrome
+        </button>
+        <button id="iv-logout-btn" class="iv-btn iv-btn-danger iv-btn-sm" type="button">Sync &amp; Logout</button>
+      </footer>
+    </section>
+
+    <!-- Sync from Chrome — sub-panel of connected -->
+    <section id="iv-sync" class="iv-screen" hidden>
+      <header class="iv-screen-header">
+        <button type="button" id="iv-sync-back" class="iv-icon-btn" title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <h1 class="iv-screen-title">Sync from Chrome</h1>
+      </header>
+
+      <ol class="iv-steps">
+        <li>
+          <span class="iv-step-num">1</span>
+          <div>
+            <strong>Open Chrome's password manager.</strong>
+            <button id="iv-sync-open-tab" type="button" class="iv-btn iv-btn-text iv-btn-sm">Open chrome://settings/passwords</button>
+          </div>
+        </li>
+        <li>
+          <span class="iv-step-num">2</span>
+          <div>
+            <strong>Export passwords.</strong>
+            <p class="iv-step-text">⋮ menu → <em>Export passwords…</em> → save the CSV.</p>
+          </div>
+        </li>
+        <li>
+          <span class="iv-step-num">3</span>
+          <div>
+            <strong>Pick the CSV file.</strong>
+            <input id="iv-sync-file" type="file" accept=".csv,text/csv">
+            <div id="iv-sync-detected" class="iv-sync-detected" hidden>
+              Detected: <code id="iv-sync-detected-name"></code>
+            </div>
+          </div>
         </li>
       </ol>
 
       <label class="iv-field">
-        <span>Master password (to re-encrypt vault)</span>
+        <span>Master password</span>
         <input id="iv-sync-master" type="password" autocomplete="off">
       </label>
 
       <p id="iv-sync-error" class="iv-error" hidden></p>
-      <p id="iv-sync-msg" class="iv-foot" hidden></p>
-
       <div id="iv-sync-result" class="iv-sync-result" hidden></div>
 
-      <div class="iv-add-actions">
-        <button type="button" class="iv-btn iv-btn-primary" id="iv-sync-submit" disabled>
-          <span class="iv-btn-label">Import &amp; sync</span>
-        </button>
-        <button type="button" class="iv-btn iv-btn-ghost" id="iv-sync-cancel">Done</button>
-      </div>
+      <button type="button" class="iv-btn iv-btn-primary" id="iv-sync-submit" disabled>
+        <span class="iv-btn-label">Import &amp; sync</span>
+      </button>
 
       <p class="iv-foot">
-        The CSV is read in your browser only. Plaintext passwords from Chrome
-        are dropped after merging — IronVault re-encrypts and pushes the
-        updated blob back to your vault. Delete the CSV from Downloads when
-        you're done.
+        The CSV is read locally only. IronVault re-encrypts and pushes the
+        updated blob to your vault, then auto-deletes the CSV from disk.
       </p>
     </section>
-
-    <!-- Settings panel -->
-    <section id="iv-settings-panel" class="iv-panel" hidden>
-      <h1 class="iv-title">Settings</h1>
-      <label class="iv-field">
-        <span>Auto-lock after</span>
-        <select id="iv-autolock-input">
-          <!-- Options populated from background's GET_AUTOLOCK_OPTIONS so the
-               UI never drifts from the whitelist enforced by setAutoLockMinutes. -->
-        </select>
-      </label>
-      <p id="iv-settings-msg" class="iv-foot" hidden></p>
-      <button id="iv-settings-save" class="iv-btn iv-btn-primary">Save</button>
-      <button id="iv-settings-back" class="iv-btn iv-btn-ghost">Back</button>
-
-      <div class="iv-divider"></div>
-      <h2 class="iv-section-title">Biometric unlock</h2>
-      <p class="iv-foot" id="iv-bio-status">Use Touch ID / Windows Hello / Face ID instead of typing the master password.</p>
-      <button id="iv-bio-enable" class="iv-btn iv-btn-ghost" type="button">Enable biometric unlock</button>
-      <button id="iv-bio-disable" class="iv-btn iv-btn-ghost" type="button" hidden>Disable biometric unlock</button>
-      <p id="iv-bio-msg" class="iv-foot" hidden></p>
-
-      <div class="iv-divider"></div>
-      <h2 class="iv-section-title">Account</h2>
-      <button id="iv-resync" class="iv-btn iv-btn-ghost" type="button">Re-sync vault from cloud</button>
-      <button id="iv-signout" class="iv-btn iv-btn-ghost iv-danger-link" type="button">Sign out and clear local data</button>
-
-      <div class="iv-divider"></div>
-      <h2 class="iv-section-title">Security model</h2>
-      <ul class="iv-bullets">
-        <li>Zero-knowledge: passwords decrypted locally, never sent to server.</li>
-        <li>Master password is never stored — only a per-session AES-GCM wrap key in <code>chrome.storage.session</code>.</li>
-        <li>Each entry's password is individually re-wrapped after unlock; only ONE password is decrypted on demand (reveal/copy/fill).</li>
-        <li>Auto-lock wipes the session after inactivity (1, 5, 15, or 30 min).</li>
-        <li>Session storage is wiped automatically when the browser closes.</li>
-        <li>No <code>eval()</code>, no inline scripts. Strict CSP: <code>script-src 'self'; object-src 'self'</code>.</li>
-      </ul>
-    </section>
   </main>
+
+  <!-- Master password modal — required to reveal/copy any password -->
+  <div id="iv-modal-overlay" class="iv-modal-overlay" hidden>
+    <div class="iv-modal" role="dialog" aria-modal="true" aria-labelledby="iv-modal-title">
+      <h2 id="iv-modal-title" class="iv-modal-title">Verify master password</h2>
+      <p id="iv-modal-sub" class="iv-modal-sub">Re-enter your master password to reveal this entry.</p>
+      <form id="iv-modal-form" class="iv-form">
+        <label class="iv-field">
+          <span>Master password</span>
+          <input id="iv-modal-master" type="password" autocomplete="off" required>
+        </label>
+        <p id="iv-modal-error" class="iv-error" hidden></p>
+        <div class="iv-modal-actions">
+          <button type="button" id="iv-modal-cancel" class="iv-btn iv-btn-ghost iv-btn-sm">Cancel</button>
+          <button type="submit" id="iv-modal-submit" class="iv-btn iv-btn-primary iv-btn-sm">
+            <span class="iv-btn-label">Verify</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script type="module" src="popup.js"></script>
 </body>

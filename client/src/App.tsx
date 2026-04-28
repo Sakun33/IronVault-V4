@@ -74,7 +74,7 @@ import { ImportExportModal } from "@/components/import-export-modal";
 import { ExtensionPairingModal } from "@/components/extension-pairing-modal";
 import { SecuritySettingsModal } from "@/components/security-settings-modal";
 import { PWAOfflineIndicator } from "@/components/pwa-offline-indicator";
-import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
+import { BrowserExtensionPrompt } from "@/components/browser-extension-prompt";
 import { SimpleThemeToggle, ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationService } from "@/lib/notifications";
@@ -1014,9 +1014,9 @@ function App() {
                         <Toaster />
                         <ZohoSalesIQIdentity />
                         <Router />
-                        {/* PWA Components */}
+                        {/* PWA / extension nudges */}
                         <PWAOfflineIndicator />
-                        <PWAInstallPrompt />
+                        <BrowserExtensionPrompt />
                       </VaultSelectionProvider>
                     </LicenseProvider>
                   </VaultProvider>

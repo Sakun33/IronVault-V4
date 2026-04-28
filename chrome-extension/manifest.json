@@ -10,7 +10,8 @@
     "activeTab",
     "alarms",
     "downloads",
-    "tabs"
+    "tabs",
+    "notifications"
   ],
   "host_permissions": [
     "https://www.ironvault.app/*",

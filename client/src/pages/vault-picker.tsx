@@ -685,7 +685,7 @@ export default function VaultPickerPage() {
                         <p className="text-destructive text-sm mb-2">{errors[vault.id]}</p>
                       )}
                       <div className="relative mb-3">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                         <Input
                           data-testid="input-unlock-password"
                           type={showPw[vault.id] ? 'text' : 'password'}
@@ -693,7 +693,7 @@ export default function VaultPickerPage() {
                           value={passwords[vault.id] || ''}
                           onChange={e => setPasswords(p => ({ ...p, [vault.id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && handleUnlock(vault.id, vault.name)}
-                          className="pl-10 pr-10"
+                          className="pl-10 pr-11"
                           autoComplete="current-password"
                         />
                         <button
@@ -787,7 +787,7 @@ export default function VaultPickerPage() {
                       <p className="text-destructive text-sm mb-2">{cloudErrors[cv.vaultId]}</p>
                     )}
                     <div className="relative mb-3">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                       <Input
                         data-testid="input-unlock-password"
                         type={cloudShowPw[cv.vaultId] ? 'text' : 'password'}
@@ -795,13 +795,13 @@ export default function VaultPickerPage() {
                         value={cloudPasswordInput[cv.vaultId] || ''}
                         onChange={e => setCloudPasswordInput(p => ({ ...p, [cv.vaultId]: e.target.value }))}
                         onKeyDown={e => e.key === 'Enter' && handleCloudUnlock(cv)}
-                        className="pl-10 pr-10"
+                        className="pl-10 pr-11"
                         autoComplete="current-password"
                       />
                       <button
                         type="button"
                         onClick={() => setCloudShowPw(s => ({ ...s, [cv.vaultId]: !s[cv.vaultId] }))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors z-10"
                         tabIndex={-1}
                       >
                         {cloudShowPw[cv.vaultId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -926,7 +926,7 @@ export default function VaultPickerPage() {
               Enter the master password for this vault to confirm
             </Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
               <Input
                 id="delete-master-password"
                 data-testid="input-delete-master-password"
@@ -1056,7 +1056,7 @@ export default function VaultPickerPage() {
             <div className="space-y-2">
               <Label htmlFor="new-vault-password">Master password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                 <Input
                   id="new-vault-password"
                   data-testid="input-new-vault-password"
@@ -1082,7 +1082,7 @@ export default function VaultPickerPage() {
             <div className="space-y-2">
               <Label htmlFor="new-vault-confirm">Confirm master password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                 <Input
                   id="new-vault-confirm"
                   data-testid="input-new-vault-confirm"

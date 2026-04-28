@@ -1,106 +1,92 @@
-// IronVault popup. Four views: login (first-time), unlock (signed-in/locked),
-// list (unlocked), settings.
-// All sensitive ops live in background.js — the popup only renders state and
-// forwards user actions over chrome.runtime.sendMessage. WebAuthn ceremonies
-// happen here because service workers can't reach the platform authenticator;
-// the resulting PRF output is forwarded as a one-shot secret.
+// IronVault popup — thin client.
+//
+// Five screens: connect, login, unlock, connected, sync. The popup forwards
+// all sensitive operations to background.js over chrome.runtime.sendMessage.
+// Master password is required every time a password is revealed or copied —
+// it is verified against the in-session wrappedMaster (no PBKDF2 round-trip),
+// never cached in popup memory.
+//
+// The session-duration model replaces inactivity auto-lock: when the chosen
+// duration elapses, background wipes ALL local data and the popup falls back
+// to the connect screen.
 
 const REVEAL_TIMEOUT_MS = 5000;
 const COPY_CLEAR_TIMEOUT_MS = 30000;
-const ALLOWED_AUTOLOCK = [1, 5, 15, 30];
-const PRF_SALT_LABEL = 'ironvault.prf.v1'; // bound to credential, never secret on its own
+const IRONVAULT_URL = 'https://www.ironvault.app';
 
 const $ = (id) => document.getElementById(id);
 
 const ui = {
-  loginPanel: $('iv-login-panel'),
-  unlockPanel: $('iv-unlock-panel'),
-  listPanel: $('iv-list-panel'),
-  settingsPanel: $('iv-settings-panel'),
-  addPanel: $('iv-add-panel'),
+  // Screens
+  connect: $('iv-connect'),
+  login: $('iv-login'),
+  unlock: $('iv-unlock'),
+  connected: $('iv-connected'),
+  sync: $('iv-sync'),
 
+  // Connect
+  connectCta: $('iv-connect-cta'),
+  connectSignup: $('iv-connect-signup'),
+
+  // Login
+  loginBack: $('iv-login-back'),
   loginForm: $('iv-login-form'),
-  emailInput: $('iv-email'),
-  accountPwInput: $('iv-account-password'),
-  masterPwInput: $('iv-master-password'),
+  email: $('iv-email'),
+  accountPw: $('iv-account-password'),
+  masterPw: $('iv-master-password'),
+  sessionDuration: $('iv-session-duration'),
   vaultPicker: $('iv-vault-picker'),
   vaultSelect: $('iv-vault-select'),
   loginError: $('iv-login-error'),
   loginSubmit: $('iv-login-submit'),
 
-  unlockForm: $('iv-unlock-form'),
+  // Unlock
   unlockSub: $('iv-unlock-sub'),
+  unlockForm: $('iv-unlock-form'),
   unlockMaster: $('iv-unlock-master'),
   unlockError: $('iv-unlock-error'),
   unlockSubmit: $('iv-unlock-submit'),
-  biometricBtn: $('iv-biometric-btn'),
-  signoutLink: $('iv-signout-link'),
+  unlockLogout: $('iv-unlock-logout'),
 
-  vaultNameLabel: $('iv-vault-name'),
+  // Connected
+  vaultName: $('iv-vault-name'),
+  vaultEmail: $('iv-vault-email'),
+  sessionPill: $('iv-session-pill'),
   lockBtn: $('iv-lock-btn'),
-  settingsBtn: $('iv-settings-btn'),
-
   search: $('iv-search'),
-  list: $('iv-list'),
-  listEmpty: $('iv-list-empty'),
+  empty: $('iv-empty'),
+  cards: $('iv-cards'),
+  syncBtn: $('iv-sync-btn'),
+  logoutBtn: $('iv-logout-btn'),
 
-  autoLockInput: $('iv-autolock-input'),
-  settingsMsg: $('iv-settings-msg'),
-  settingsSave: $('iv-settings-save'),
-  settingsBack: $('iv-settings-back'),
-
-  bioStatus: $('iv-bio-status'),
-  bioEnable: $('iv-bio-enable'),
-  bioDisable: $('iv-bio-disable'),
-  bioMsg: $('iv-bio-msg'),
-  resync: $('iv-resync'),
-  signout: $('iv-signout'),
-
-  saveBanner: $('iv-save-banner'),
-  saveBannerDomain: $('iv-save-banner-domain'),
-  saveBannerBtn: $('iv-save-banner-btn'),
-  saveBannerDismiss: $('iv-save-banner-dismiss'),
-
-  addBtn: $('iv-add-btn'),
-  addForm: $('iv-add-form'),
-  addError: $('iv-add-error'),
-  addMsg: $('iv-add-msg'),
-  addSubmit: $('iv-add-submit'),
-  addCancel: $('iv-add-cancel'),
-  addMaster: $('iv-add-master'),
-  addPwTitle: $('iv-add-pw-title'),
-  addPwUrl: $('iv-add-pw-url'),
-  addPwUsername: $('iv-add-pw-username'),
-  addPwPassword: $('iv-add-pw-password'),
-  addNoteTitle: $('iv-add-note-title'),
-  addNoteContent: $('iv-add-note-content'),
-  addSubName: $('iv-add-sub-name'),
-  addSubCost: $('iv-add-sub-cost'),
-  addSubCurrency: $('iv-add-sub-currency'),
-  addSubBilling: $('iv-add-sub-billing'),
-  addSubCycle: $('iv-add-sub-cycle'),
-
-  syncPanel: $('iv-sync-panel'),
-  syncChromeBtn: $('iv-sync-chrome-btn'),
+  // Sync
+  syncBack: $('iv-sync-back'),
   syncOpenTab: $('iv-sync-open-tab'),
   syncFile: $('iv-sync-file'),
-  syncMaster: $('iv-sync-master'),
-  syncSubmit: $('iv-sync-submit'),
-  syncCancel: $('iv-sync-cancel'),
-  syncError: $('iv-sync-error'),
-  syncMsg: $('iv-sync-msg'),
-  syncResult: $('iv-sync-result'),
   syncDetected: $('iv-sync-detected'),
   syncDetectedName: $('iv-sync-detected-name'),
+  syncMaster: $('iv-sync-master'),
+  syncError: $('iv-sync-error'),
+  syncResult: $('iv-sync-result'),
+  syncSubmit: $('iv-sync-submit'),
+
+  // Modal
+  modalOverlay: $('iv-modal-overlay'),
+  modalTitle: $('iv-modal-title'),
+  modalSub: $('iv-modal-sub'),
+  modalForm: $('iv-modal-form'),
+  modalMaster: $('iv-modal-master'),
+  modalError: $('iv-modal-error'),
+  modalCancel: $('iv-modal-cancel'),
+  modalSubmit: $('iv-modal-submit'),
 };
 
-let addKind = 'password';
-let dismissedSaveDomains = new Set();
+let pendingReveal = null; // { id, pwEl, btnEl, timer }
+let sessionTimer = null;
+let lastStatus = null;
 let syncDetectedFilename = '';
 let syncDetectedDownloadId = null;
-
-let pendingReveal = null; // { id, pwEl, btnEl, timer }
-let lastStatus = null;
+let modalResolver = null; // resolves to true (verified) or false (cancelled)
 
 // ── Bridge ──────────────────────────────────────────────────────────────────
 function send(msg) {
@@ -113,81 +99,78 @@ function send(msg) {
   });
 }
 
-// ── View routing ────────────────────────────────────────────────────────────
-function showPanel(name) {
-  ui.loginPanel.hidden = name !== 'login';
-  ui.unlockPanel.hidden = name !== 'unlock';
-  ui.listPanel.hidden = name !== 'list';
-  ui.settingsPanel.hidden = name !== 'settings';
-  if (ui.addPanel) ui.addPanel.hidden = name !== 'add';
-  if (ui.syncPanel) ui.syncPanel.hidden = name !== 'sync';
-}
-
-function setHeader(unlocked, vaultName) {
-  ui.lockBtn.hidden = !unlocked;
-  if (unlocked && vaultName) {
-    ui.vaultNameLabel.hidden = false;
-    ui.vaultNameLabel.textContent = vaultName;
-  } else {
-    ui.vaultNameLabel.hidden = true;
+// ── Screen routing ──────────────────────────────────────────────────────────
+function showScreen(name) {
+  for (const key of ['connect', 'login', 'unlock', 'connected', 'sync']) {
+    ui[key].hidden = key !== name;
   }
+  if (name !== 'connected') stopSessionTimer();
 }
 
 async function refreshState() {
   cancelReveal();
+  let status;
   try {
-    const status = await send({ type: 'STATUS' });
-    lastStatus = status;
-    if (status.unlocked) {
-      setHeader(true, status.vaultName);
-      showPanel('list');
-      await loadList('');
-      await refreshSaveBanner();
-    } else if (status.signedIn) {
-      setHeader(false);
-      showPanel('unlock');
-      ui.unlockSub.textContent = status.email
-        ? `Signed in as ${status.email}. Enter your master password.`
-        : 'Enter your master password.';
-      const supported = await prfSupported();
-      ui.biometricBtn.hidden = !status.biometricEnabled || !supported;
-      ui.unlockMaster.value = '';
-      ui.unlockMaster.focus();
-    } else {
-      setHeader(false);
-      showPanel('login');
-      const settings = await send({ type: 'GET_SETTINGS' });
-      if (settings.rememberedEmail && !ui.emailInput.value) {
-        ui.emailInput.value = settings.rememberedEmail;
-        ui.accountPwInput.focus();
-      } else {
-        ui.emailInput.focus();
-      }
-    }
-  } catch (err) {
-    setHeader(false);
-    showPanel('login');
-    showLoginError(err.message);
+    status = await send({ type: 'STATUS' });
+  } catch {
+    showScreen('connect');
+    return;
+  }
+  lastStatus = status;
+  if (status.unlocked) {
+    showConnected(status);
+  } else if (status.signedIn) {
+    showUnlock(status);
+  } else {
+    showScreen('connect');
   }
 }
 
-// ── Login (first-time sign-in) ──────────────────────────────────────────────
-function showLoginError(msg) {
-  ui.loginError.textContent = msg;
+// ── Connect ────────────────────────────────────────────────────────────────
+ui.connectCta.addEventListener('click', async () => {
+  showScreen('login');
+  setLoginError('');
+  // Pre-fill remembered email so the user doesn't retype it.
+  try {
+    const settings = await send({ type: 'GET_SETTINGS' });
+    if (settings.rememberedEmail && !ui.email.value) {
+      ui.email.value = settings.rememberedEmail;
+      ui.accountPw.focus();
+      return;
+    }
+  } catch {}
+  ui.email.focus();
+});
+
+ui.connectSignup.addEventListener('click', () => {
+  chrome.tabs.create({ url: IRONVAULT_URL }).catch(() => {
+    window.open(IRONVAULT_URL, '_blank');
+  });
+});
+
+// ── Login ───────────────────────────────────────────────────────────────────
+function setLoginError(msg) {
+  ui.loginError.textContent = msg || '';
   ui.loginError.hidden = !msg;
 }
 
+ui.loginBack.addEventListener('click', () => {
+  setLoginError('');
+  showScreen('connect');
+});
+
 ui.loginForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  showLoginError('');
+  setLoginError('');
   ui.loginSubmit.disabled = true;
   ui.loginSubmit.querySelector('.iv-btn-label').textContent = 'Connecting…';
   try {
     const payload = {
       type: 'LOGIN',
-      email: ui.emailInput.value,
-      accountPassword: ui.accountPwInput.value,
-      masterPassword: ui.masterPwInput.value,
+      email: ui.email.value,
+      accountPassword: ui.accountPw.value,
+      masterPassword: ui.masterPw.value,
+      sessionDurationHours: Number(ui.sessionDuration.value),
     };
     if (!ui.vaultPicker.hidden && ui.vaultSelect.value) {
       payload.vaultId = ui.vaultSelect.value;
@@ -202,29 +185,34 @@ ui.loginForm.addEventListener('submit', async (ev) => {
         ui.vaultSelect.appendChild(opt);
       });
       ui.vaultPicker.hidden = false;
-      showLoginError('Choose which vault to unlock and click again.');
+      setLoginError('Choose which vault to unlock and click Connect again.');
       return;
     }
-    ui.masterPwInput.value = '';
-    ui.accountPwInput.value = '';
+    ui.masterPw.value = '';
+    ui.accountPw.value = '';
     await refreshState();
   } catch (err) {
-    showLoginError(err.message);
+    setLoginError(err.message);
   } finally {
     ui.loginSubmit.disabled = false;
     ui.loginSubmit.querySelector('.iv-btn-label').textContent = 'Connect vault';
   }
 });
 
-// ── Unlock (signed-in, master password or biometric) ───────────────────────
-function showUnlockError(msg) {
-  ui.unlockError.textContent = msg;
-  ui.unlockError.hidden = !msg;
+// ── Unlock (after soft lock) ────────────────────────────────────────────────
+function showUnlock(status) {
+  ui.unlockSub.textContent = status.email
+    ? `Signed in as ${status.email}.`
+    : 'Enter your master password.';
+  ui.unlockMaster.value = '';
+  ui.unlockError.hidden = true;
+  showScreen('unlock');
+  ui.unlockMaster.focus();
 }
 
 ui.unlockForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  showUnlockError('');
+  ui.unlockError.hidden = true;
   ui.unlockSubmit.disabled = true;
   ui.unlockSubmit.querySelector('.iv-btn-label').textContent = 'Unlocking…';
   try {
@@ -232,469 +220,324 @@ ui.unlockForm.addEventListener('submit', async (ev) => {
     ui.unlockMaster.value = '';
     await refreshState();
   } catch (err) {
-    showUnlockError(err.message);
+    ui.unlockError.textContent = err.message;
+    ui.unlockError.hidden = false;
   } finally {
     ui.unlockSubmit.disabled = false;
     ui.unlockSubmit.querySelector('.iv-btn-label').textContent = 'Unlock';
   }
 });
 
-ui.biometricBtn.addEventListener('click', async () => {
-  showUnlockError('');
-  if (!lastStatus?.biometricEnabled) return;
-  try {
-    const prfOutputB64 = await runWebAuthnPrf({
-      mode: 'get',
-      credentialIdB64: lastStatus.biometricCredentialId,
-      prfSaltB64: lastStatus.biometricPrfSaltB64,
-    });
-    await send({ type: 'BIOMETRIC_UNLOCK', prfOutputB64 });
-    await refreshState();
-  } catch (err) {
-    showUnlockError(err.message);
-  }
-});
-
-ui.signoutLink.addEventListener('click', async () => {
+ui.unlockLogout.addEventListener('click', async () => {
   if (!confirm('Sign out and clear all local IronVault data on this device?')) return;
-  await send({ type: 'SIGN_OUT' }).catch(() => {});
+  await send({ type: 'LOGOUT_AND_CLEAN' }).catch(() => {});
   await refreshState();
 });
 
-// ── List + reveal ───────────────────────────────────────────────────────────
-async function loadList(query) {
-  const { entries } = await send({ type: 'SEARCH', query });
-  renderList(entries);
+// ── Connected screen ────────────────────────────────────────────────────────
+function showConnected(status) {
+  ui.vaultName.textContent = status.vaultName || 'Vault';
+  ui.vaultEmail.textContent = status.email || '';
+  ui.search.value = '';
+  showScreen('connected');
+  renderEmpty(); // empty by default — no list until search
+  startSessionTimer(status);
+  // Auto-search the active site so the popup is useful even before typing.
+  prefillSearchForActiveTab();
 }
 
-function renderList(entries) {
-  ui.list.innerHTML = '';
-  ui.listEmpty.hidden = entries.length > 0;
+async function prefillSearchForActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url) return;
+    if (!/^https?:\/\//i.test(tab.url)) return;
+    const r = await send({ type: 'GET_DOMAIN_MATCHES', url: tab.url });
+    if (r.matches && r.matches.length > 0) {
+      renderCards(r.matches);
+    }
+  } catch {}
+}
+
+ui.search.addEventListener('input', async () => {
+  const q = ui.search.value.trim();
+  if (!q) {
+    // No search → show empty state (or domain matches if we had any).
+    renderEmpty();
+    prefillSearchForActiveTab();
+    return;
+  }
+  try {
+    const { entries } = await send({ type: 'SEARCH', query: q });
+    renderCards(entries);
+  } catch (err) {
+    renderEmpty();
+  }
+});
+
+function renderEmpty() {
+  ui.cards.innerHTML = '';
+  ui.empty.hidden = false;
+  ui.cards.hidden = true;
+}
+
+function renderCards(entries) {
+  ui.empty.hidden = entries.length > 0;
+  ui.cards.hidden = entries.length === 0;
+  ui.cards.innerHTML = '';
   for (const e of entries) {
-    const li = document.createElement('li');
-    li.className = 'iv-row';
-    li.dataset.id = e.id;
-
-    const info = document.createElement('div');
-    info.className = 'iv-row-info';
-    const name = document.createElement('div');
-    name.className = 'iv-row-name';
-    name.textContent = e.name || '(untitled)';
-    const meta = document.createElement('div');
-    meta.className = 'iv-row-meta';
-    meta.textContent = e.username || '—';
-    const pw = document.createElement('div');
-    pw.className = 'iv-row-pw';
-    pw.textContent = '•••••••••';
-    info.append(name, meta, pw);
-
-    const actions = document.createElement('div');
-    actions.className = 'iv-row-actions';
-    const eyeBtn = makeAction('👁', `Reveal "${e.name}" for 5s`);
-    eyeBtn.addEventListener('click', () => toggleReveal(e.id, pw, eyeBtn));
-    const copyBtn = makeAction('⎘', `Copy "${e.name}" password`);
-    copyBtn.addEventListener('click', () => copyPassword(e.id, copyBtn));
-    actions.append(eyeBtn, copyBtn);
-
-    li.append(info, actions);
-    ui.list.appendChild(li);
+    ui.cards.appendChild(buildCard(e));
   }
 }
 
-function makeAction(label, title) {
+function buildCard(entry) {
+  const li = document.createElement('li');
+  li.className = 'iv-card';
+  li.dataset.id = entry.id;
+
+  const fav = document.createElement('div');
+  fav.className = 'iv-card-favicon';
+  const faviconUrl = getFaviconUrl(entry.url);
+  if (faviconUrl) {
+    const img = document.createElement('img');
+    img.src = faviconUrl;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = () => {
+      img.remove();
+      fav.textContent = (entry.name || '?').charAt(0).toUpperCase();
+    };
+    fav.appendChild(img);
+  } else {
+    fav.textContent = (entry.name || '?').charAt(0).toUpperCase();
+  }
+
+  const body = document.createElement('div');
+  body.className = 'iv-card-body';
+  const name = document.createElement('div');
+  name.className = 'iv-card-name';
+  name.textContent = entry.name || '(untitled)';
+  const username = document.createElement('div');
+  username.className = 'iv-card-username';
+  username.textContent = entry.username || '—';
+  const pw = document.createElement('div');
+  pw.className = 'iv-card-password';
+  pw.textContent = '•••••••••';
+  body.append(name, username, pw);
+
+  const actions = document.createElement('div');
+  actions.className = 'iv-card-actions';
+  const fillBtn = makeIconBtn(svgFill(), `Fill "${entry.name}" on active tab`);
+  fillBtn.addEventListener('click', () => fillEntry(entry));
+  const eyeBtn = makeIconBtn(svgEye(), `Reveal "${entry.name}" for 5s`);
+  eyeBtn.addEventListener('click', () => toggleReveal(entry, pw, eyeBtn));
+  const copyBtn = makeIconBtn(svgCopy(), `Copy "${entry.name}" password`);
+  copyBtn.addEventListener('click', () => copyEntry(entry, copyBtn));
+  actions.append(fillBtn, eyeBtn, copyBtn);
+
+  li.append(fav, body, actions);
+  return li;
+}
+
+function makeIconBtn(svg, title) {
   const b = document.createElement('button');
-  b.className = 'iv-row-action';
   b.type = 'button';
-  b.textContent = label;
+  b.className = 'iv-card-action';
   b.title = title;
+  b.innerHTML = svg;
   return b;
 }
 
-function cancelReveal() {
-  if (pendingReveal) {
-    clearTimeout(pendingReveal.timer);
-    if (pendingReveal.pwEl) pendingReveal.pwEl.textContent = '•••••••••';
-    if (pendingReveal.btnEl) pendingReveal.btnEl.classList.remove('is-active');
-    pendingReveal = null;
+function svgEye() {
+  return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+function svgCopy() {
+  return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+}
+function svgFill() {
+  return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 10l7 7 7-7"/></svg>`;
+}
+
+function getFaviconUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url.includes('://') ? url : `https://${url}`);
+    return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
+  } catch {
+    return '';
   }
 }
 
-async function toggleReveal(id, pwEl, btnEl) {
-  if (pendingReveal && pendingReveal.id === id) {
+// ── Reveal / copy / fill (master-password-gated) ───────────────────────────
+function cancelReveal() {
+  if (!pendingReveal) return;
+  clearTimeout(pendingReveal.timer);
+  if (pendingReveal.pwEl) {
+    pendingReveal.pwEl.textContent = '•••••••••';
+    pendingReveal.pwEl.classList.remove('is-revealed');
+  }
+  if (pendingReveal.btnEl) pendingReveal.btnEl.classList.remove('is-active');
+  pendingReveal = null;
+}
+
+async function toggleReveal(entry, pwEl, btnEl) {
+  if (pendingReveal && pendingReveal.id === entry.id) {
     cancelReveal();
     return;
   }
   cancelReveal();
+  const verified = await promptMasterPassword({
+    title: 'Reveal password',
+    sub: `Enter your master password to reveal "${entry.name}" for 5 seconds.`,
+  });
+  if (!verified) return;
   try {
-    const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id });
+    const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id: entry.id });
     pwEl.textContent = credential.password;
+    pwEl.classList.add('is-revealed');
     btnEl.classList.add('is-active');
     const timer = setTimeout(() => cancelReveal(), REVEAL_TIMEOUT_MS);
-    pendingReveal = { id, pwEl, btnEl, timer };
+    pendingReveal = { id: entry.id, pwEl, btnEl, timer };
     setTimeout(() => { credential.password = ''; }, REVEAL_TIMEOUT_MS);
   } catch (err) {
     pwEl.textContent = '⚠ ' + err.message;
   }
 }
 
-async function copyPassword(id, btnEl) {
+async function copyEntry(entry, btnEl) {
+  const verified = await promptMasterPassword({
+    title: 'Copy password',
+    sub: `Enter your master password to copy "${entry.name}". Clipboard auto-clears in 30s.`,
+  });
+  if (!verified) return;
   try {
-    const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id });
+    const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id: entry.id });
     await navigator.clipboard.writeText(credential.password);
     credential.password = '';
-    const original = btnEl.textContent;
-    btnEl.textContent = '✓';
     btnEl.classList.add('is-active');
-    setTimeout(() => {
-      btnEl.textContent = original;
-      btnEl.classList.remove('is-active');
-    }, 1200);
-    // Auto-clear clipboard after 30s — best-effort, browsers may deny.
+    setTimeout(() => btnEl.classList.remove('is-active'), 1500);
     setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, COPY_CLEAR_TIMEOUT_MS);
   } catch (err) {
-    btnEl.textContent = '⚠';
-    setTimeout(() => { btnEl.textContent = '⎘'; }, 1500);
+    btnEl.title = '⚠ ' + err.message;
   }
 }
 
-ui.search.addEventListener('input', () => {
-  loadList(ui.search.value).catch(() => {});
+async function fillEntry(entry) {
+  // Auto-fill does NOT require master password — vault is already
+  // decrypted in memory for the session duration. Background sends the
+  // single credential to the active tab's content script.
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id: entry.id });
+    await chrome.tabs.sendMessage(tab.id, {
+      type: 'IV_FILL_FROM_POPUP',
+      credential,
+    }).catch(() => {});
+    // Drop reference ASAP.
+    credential.password = '';
+    window.close();
+  } catch {}
+}
+
+// ── Master-password modal ──────────────────────────────────────────────────
+function promptMasterPassword({ title, sub }) {
+  return new Promise((resolve) => {
+    ui.modalTitle.textContent = title || 'Verify master password';
+    ui.modalSub.textContent = sub || 'Re-enter your master password.';
+    ui.modalMaster.value = '';
+    ui.modalError.hidden = true;
+    ui.modalOverlay.hidden = false;
+    setTimeout(() => ui.modalMaster.focus(), 30);
+    modalResolver = resolve;
+  });
+}
+
+function closeModal(result) {
+  ui.modalOverlay.hidden = true;
+  ui.modalMaster.value = '';
+  if (modalResolver) {
+    const r = modalResolver;
+    modalResolver = null;
+    r(result);
+  }
+}
+
+ui.modalForm.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  ui.modalError.hidden = true;
+  ui.modalSubmit.disabled = true;
+  try {
+    await send({ type: 'VERIFY_MASTER', masterPassword: ui.modalMaster.value });
+    closeModal(true);
+  } catch (err) {
+    ui.modalError.textContent = err.message || 'Wrong master password.';
+    ui.modalError.hidden = false;
+    ui.modalMaster.value = '';
+    ui.modalMaster.focus();
+  } finally {
+    ui.modalSubmit.disabled = false;
+  }
 });
 
-// ── Lock / settings ─────────────────────────────────────────────────────────
+ui.modalCancel.addEventListener('click', () => closeModal(false));
+ui.modalOverlay.addEventListener('click', (ev) => {
+  if (ev.target === ui.modalOverlay) closeModal(false);
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !ui.modalOverlay.hidden) closeModal(false);
+});
+
+// ── Lock / logout ──────────────────────────────────────────────────────────
 ui.lockBtn.addEventListener('click', async () => {
   cancelReveal();
   await send({ type: 'LOCK' }).catch(() => {});
-  ui.search.value = '';
   await refreshState();
 });
 
-ui.settingsBtn.addEventListener('click', async () => {
+ui.logoutBtn.addEventListener('click', async () => {
+  if (!confirm('Sync & sign out? All local IronVault data on this device will be cleared.')) return;
   cancelReveal();
-  await openSettings();
+  ui.logoutBtn.disabled = true;
+  ui.logoutBtn.textContent = 'Signing out…';
+  try {
+    await send({ type: 'LOGOUT_AND_CLEAN' });
+  } catch {}
+  await refreshState();
 });
 
-async function openSettings() {
-  populateAutolockOptions();
-  const s = await send({ type: 'GET_SETTINGS' }).catch(() => null);
-  if (s) ui.autoLockInput.value = String(s.autoLockMinutes);
-  ui.settingsMsg.hidden = true;
-  await refreshBiometricUi();
-  showPanel('settings');
-}
-
-function populateAutolockOptions() {
-  if (ui.autoLockInput && ui.autoLockInput.tagName === 'SELECT' && ui.autoLockInput.options.length === 0) {
-    for (const m of ALLOWED_AUTOLOCK) {
-      const opt = document.createElement('option');
-      opt.value = String(m);
-      opt.textContent = `${m} minute${m === 1 ? '' : 's'}`;
-      ui.autoLockInput.appendChild(opt);
-    }
-  }
-}
-
-ui.settingsSave.addEventListener('click', async () => {
-  ui.settingsMsg.hidden = false;
-  ui.settingsMsg.textContent = '';
-  try {
-    const minutes = Number(ui.autoLockInput.value);
-    if (!ALLOWED_AUTOLOCK.includes(minutes)) {
-      throw new Error(`Auto-lock must be one of ${ALLOWED_AUTOLOCK.join(', ')} minutes.`);
-    }
-    await send({ type: 'SET_AUTOLOCK', minutes });
-    ui.settingsMsg.textContent = 'Saved.';
-  } catch (err) {
-    ui.settingsMsg.textContent = err.message;
-  }
+// ── Sync from Chrome ───────────────────────────────────────────────────────
+ui.syncBtn.addEventListener('click', () => {
+  resetSyncPanel();
+  showScreen('sync');
 });
 
-ui.settingsBack.addEventListener('click', () => refreshState());
-
-// ── Biometric (settings) ────────────────────────────────────────────────────
-async function refreshBiometricUi() {
-  const status = await send({ type: 'STATUS' }).catch(() => null);
-  const supported = await prfSupported();
-  if (!supported) {
-    ui.bioStatus.textContent = 'This device does not support a WebAuthn platform authenticator (Touch ID / Windows Hello / Face ID).';
-    ui.bioEnable.disabled = true;
-    ui.bioDisable.hidden = true;
-    return;
-  }
-  if (status?.biometricEnabled) {
-    ui.bioStatus.textContent = 'Biometric unlock is enabled.';
-    ui.bioEnable.hidden = true;
-    ui.bioDisable.hidden = false;
-  } else {
-    ui.bioStatus.textContent = 'Use Touch ID / Windows Hello / Face ID instead of typing the master password.';
-    ui.bioEnable.hidden = false;
-    ui.bioDisable.hidden = true;
-  }
-  ui.bioMsg.hidden = true;
-}
-
-ui.bioEnable.addEventListener('click', async () => {
-  ui.bioMsg.hidden = true;
-  // Need master password to bind to biometric. Prompt only inside an explicit
-  // user-gesture handler so the WebAuthn dialog is allowed to surface.
-  const master = window.prompt('Enter your master password to bind biometric unlock:');
-  if (!master) return;
-  try {
-    const { credentialIdB64, prfSaltB64, prfOutputB64 } = await runWebAuthnPrf({ mode: 'create' });
-    await send({
-      type: 'BIOMETRIC_ENABLE',
-      credentialId: credentialIdB64,
-      prfSaltB64,
-      prfOutputB64,
-      masterPassword: master,
-    });
-    ui.bioMsg.hidden = false;
-    ui.bioMsg.textContent = 'Biometric unlock enabled.';
-    await refreshBiometricUi();
-  } catch (err) {
-    ui.bioMsg.hidden = false;
-    ui.bioMsg.textContent = err.message;
-  }
+ui.syncBack.addEventListener('click', () => {
+  resetSyncPanel();
+  refreshState();
 });
 
-ui.bioDisable.addEventListener('click', async () => {
-  if (!confirm('Disable biometric unlock?')) return;
+ui.syncOpenTab.addEventListener('click', async () => {
   try {
-    await send({ type: 'BIOMETRIC_DISABLE' });
-    ui.bioMsg.hidden = false;
-    ui.bioMsg.textContent = 'Biometric unlock disabled.';
-    await refreshBiometricUi();
-  } catch (err) {
-    ui.bioMsg.hidden = false;
-    ui.bioMsg.textContent = err.message;
-  }
-});
-
-ui.resync.addEventListener('click', async () => {
-  ui.settingsMsg.hidden = false;
-  ui.settingsMsg.textContent = 'Re-syncing…';
-  try {
-    const r = await send({ type: 'RESYNC' });
-    ui.settingsMsg.textContent = r.success ? 'Vault re-synced.' : (r.error || 'Re-sync failed.');
-  } catch (err) {
-    ui.settingsMsg.textContent = err.message;
-  }
-});
-
-ui.signout.addEventListener('click', async () => {
-  if (!confirm('Sign out and clear all local IronVault data on this device?')) return;
-  try {
-    await send({ type: 'SIGN_OUT' });
-    await refreshState();
-  } catch (err) {
-    ui.settingsMsg.hidden = false;
-    ui.settingsMsg.textContent = err.message;
-  }
-});
-
-// ── Save-this-site banner ──────────────────────────────────────────────────
-function getDomainFromUrl(u) {
-  if (!u) return '';
-  try {
-    const x = new URL(u.includes('://') ? u : `https://${u}`);
-    return x.hostname.replace(/^www\./, '').toLowerCase();
+    await chrome.tabs.create({ url: 'chrome://settings/passwords' });
   } catch {
-    return '';
-  }
-}
-
-async function getActiveTab() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tab || null;
-  } catch {
-    return null;
-  }
-}
-
-async function refreshSaveBanner() {
-  if (!ui.saveBanner) return;
-  ui.saveBanner.hidden = true;
-  const tab = await getActiveTab();
-  if (!tab?.url) return;
-  const url = tab.url;
-  // Skip non-http schemes (chrome://, about:, file:, etc.)
-  if (!/^https?:\/\//i.test(url)) return;
-  const domain = getDomainFromUrl(url);
-  if (!domain) return;
-  if (dismissedSaveDomains.has(domain)) return;
-  // Skip if a password for this domain is already in the vault
-  try {
-    const r = await send({ type: 'GET_DOMAIN_MATCHES', url });
-    if (r.matches && r.matches.length > 0) return;
-  } catch {
-    return;
-  }
-  ui.saveBannerDomain.textContent = domain;
-  ui.saveBanner.hidden = false;
-  ui.saveBanner.dataset.url = url;
-  ui.saveBanner.dataset.domain = domain;
-}
-
-ui.saveBannerBtn?.addEventListener('click', () => {
-  const url = ui.saveBanner.dataset.url || '';
-  const domain = ui.saveBanner.dataset.domain || '';
-  openAddPanel('password', { url, title: domain });
-});
-
-ui.saveBannerDismiss?.addEventListener('click', () => {
-  const d = ui.saveBanner.dataset.domain;
-  if (d) dismissedSaveDomains.add(d);
-  ui.saveBanner.hidden = true;
-});
-
-// ── Add-entry panel ─────────────────────────────────────────────────────────
-function setAddKind(kind) {
-  addKind = kind;
-  for (const tab of document.querySelectorAll('.iv-add-tab')) {
-    tab.classList.toggle('is-active', tab.dataset.addKind === kind);
-  }
-  for (const sec of document.querySelectorAll('.iv-add-section')) {
-    sec.hidden = sec.dataset.addSection !== kind;
-  }
-  // Submit-button label tracks the chosen kind so the action is unambiguous.
-  const label = ui.addSubmit?.querySelector('.iv-btn-label');
-  if (label) {
-    label.textContent = kind === 'password' ? 'Save password'
-      : kind === 'note' ? 'Save note'
-      : 'Save subscription';
-  }
-}
-
-function clearAddForm() {
-  ui.addPwTitle.value = '';
-  ui.addPwUrl.value = '';
-  ui.addPwUsername.value = '';
-  ui.addPwPassword.value = '';
-  ui.addNoteTitle.value = '';
-  ui.addNoteContent.value = '';
-  ui.addSubName.value = '';
-  ui.addSubCost.value = '';
-  ui.addSubCurrency.value = 'USD';
-  ui.addSubBilling.value = '';
-  ui.addSubCycle.value = 'monthly';
-  ui.addMaster.value = '';
-  showAddError('');
-  showAddMsg('');
-}
-
-function openAddPanel(kind, prefill) {
-  cancelReveal();
-  clearAddForm();
-  setAddKind(kind || 'password');
-  if (prefill) {
-    if (prefill.url) ui.addPwUrl.value = prefill.url;
-    if (prefill.title) ui.addPwTitle.value = prefill.title;
-  }
-  showPanel('add');
-  // Sensible default focus per kind
-  if (addKind === 'password') ui.addPwTitle.focus();
-  else if (addKind === 'note') ui.addNoteTitle.focus();
-  else ui.addSubName.focus();
-}
-
-function showAddError(msg) {
-  ui.addError.textContent = msg;
-  ui.addError.hidden = !msg;
-}
-
-function showAddMsg(msg) {
-  ui.addMsg.textContent = msg;
-  ui.addMsg.hidden = !msg;
-}
-
-ui.addBtn?.addEventListener('click', () => openAddPanel('password'));
-
-ui.addCancel?.addEventListener('click', () => {
-  showPanel('list');
-});
-
-document.querySelectorAll('.iv-add-tab').forEach((btn) => {
-  btn.addEventListener('click', () => setAddKind(btn.dataset.addKind));
-});
-
-ui.addForm?.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  showAddError('');
-  showAddMsg('');
-  if (!ui.addMaster.value) {
-    showAddError('Master password is required to re-encrypt the vault.');
-    return;
-  }
-
-  let item;
-  if (addKind === 'password') {
-    const title = ui.addPwTitle.value.trim();
-    const url = ui.addPwUrl.value.trim();
-    const password = ui.addPwPassword.value;
-    if (!title && !url) { showAddError('Title or URL is required.'); return; }
-    if (!password) { showAddError('Password is required.'); return; }
-    item = {
-      kind: 'password',
-      title: title || getDomainFromUrl(url) || 'Untitled',
-      url,
-      username: ui.addPwUsername.value.trim(),
-      password,
-    };
-  } else if (addKind === 'note') {
-    const title = ui.addNoteTitle.value.trim();
-    const content = ui.addNoteContent.value;
-    if (!title) { showAddError('Title is required.'); return; }
-    if (!content) { showAddError('Note content is required.'); return; }
-    item = { kind: 'note', title, content };
-  } else {
-    const name = ui.addSubName.value.trim();
-    const costRaw = ui.addSubCost.value;
-    if (!name) { showAddError('Service name is required.'); return; }
-    const cost = costRaw ? Number(costRaw) : 0;
-    if (!Number.isFinite(cost) || cost < 0) { showAddError('Cost must be a non-negative number.'); return; }
-    item = {
-      kind: 'subscription',
-      title: name,
-      cost,
-      currency: (ui.addSubCurrency.value.trim() || 'USD').toUpperCase().slice(0, 3),
-      billingDate: ui.addSubBilling.value || '',
-      billingCycle: ui.addSubCycle.value || 'monthly',
-    };
-  }
-
-  ui.addSubmit.disabled = true;
-  ui.addSubmit.querySelector('.iv-btn-label').textContent = 'Saving…';
-  try {
-    await send({ type: 'ADD_ITEM', masterPassword: ui.addMaster.value, item });
-    ui.addMaster.value = '';
-    showAddMsg(`${item.kind.charAt(0).toUpperCase()}${item.kind.slice(1)} saved to vault.`);
-    setTimeout(async () => {
-      await refreshState();
-    }, 600);
-  } catch (err) {
-    showAddError(err.message || 'Failed to save.');
-  } finally {
-    ui.addSubmit.disabled = false;
-    setAddKind(addKind); // restore label
+    setSyncError('Could not open Chrome settings. Paste chrome://settings/passwords into a new tab.');
   }
 });
 
-// ── Sync from Chrome's password manager ─────────────────────────────────────
-function showSyncError(msg) {
+ui.syncFile.addEventListener('change', () => {
+  ui.syncSubmit.disabled = !ui.syncFile.files?.length;
+  setSyncError('');
+});
+
+function setSyncError(msg) {
   ui.syncError.textContent = msg || '';
   ui.syncError.hidden = !msg;
 }
-function showSyncMsg(msg) {
-  ui.syncMsg.textContent = msg || '';
-  ui.syncMsg.hidden = !msg;
-}
 
 function resetSyncPanel() {
-  showSyncError('');
-  showSyncMsg('');
+  setSyncError('');
   ui.syncResult.hidden = true;
-  ui.syncResult.classList.remove('is-success', 'is-warning');
+  ui.syncResult.classList.remove('is-success');
   ui.syncResult.innerHTML = '';
   ui.syncFile.value = '';
   ui.syncMaster.value = '';
@@ -705,43 +548,12 @@ function resetSyncPanel() {
   ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
 }
 
-ui.syncChromeBtn?.addEventListener('click', async () => {
-  cancelReveal();
-  resetSyncPanel();
-  showPanel('sync');
-});
-
-ui.syncOpenTab?.addEventListener('click', async () => {
-  // chrome:// URLs can only be opened via the chrome.tabs API — window.open
-  // is blocked by Chrome's URL filter for non-http(s) schemes.
-  try {
-    await chrome.tabs.create({ url: 'chrome://settings/passwords' });
-  } catch (err) {
-    showSyncError('Could not open Chrome settings. Paste chrome://settings/passwords into a new tab.');
-  }
-});
-
-ui.syncFile?.addEventListener('change', () => {
-  ui.syncSubmit.disabled = !ui.syncFile.files?.length;
-  showSyncError('');
-  showSyncMsg('');
-});
-
-ui.syncCancel?.addEventListener('click', () => {
-  resetSyncPanel();
-  showPanel('list');
-});
-
-ui.syncSubmit?.addEventListener('click', async () => {
-  showSyncError('');
-  showSyncMsg('');
+ui.syncSubmit.addEventListener('click', async () => {
+  setSyncError('');
   const file = ui.syncFile.files?.[0];
-  if (!file) { showSyncError('Pick the CSV file you exported from Chrome.'); return; }
-  if (!ui.syncMaster.value) { showSyncError('Master password is required to re-encrypt the vault.'); return; }
+  if (!file) { setSyncError('Pick the CSV file you exported from Chrome.'); return; }
+  if (!ui.syncMaster.value) { setSyncError('Master password is required to re-encrypt the vault.'); return; }
 
-  // Only forward the detected downloadId when the picked filename matches —
-  // we don't want to delete an unrelated CSV the user happened to have
-  // downloaded earlier.
   const downloadId = (syncDetectedFilename && file.name === syncDetectedFilename)
     ? syncDetectedDownloadId
     : null;
@@ -756,48 +568,38 @@ ui.syncSubmit?.addEventListener('click', async () => {
       masterPassword: ui.syncMaster.value,
       downloadId,
     });
-    // Scrub the in-memory CSV string ASAP. JS strings are immutable so this
-    // is a hint for GC, not a guarantee — but it shortens the window where
-    // Chrome's plaintext passwords sit in this popup's heap. Also drop the
-    // File reference so the browser frees the underlying blob.
     csvText = '';
     try { ui.syncFile.value = ''; } catch {}
     ui.syncMaster.value = '';
 
-    const summary = `${result.added} new · ${result.updated} updated · ${result.unchanged} unchanged`;
-    ui.syncResult.classList.add('is-success');
     let footer = '';
     if (result.fileDeleted) {
       footer = `<div class="iv-sync-result-note iv-sync-result-note-success">
-        ✓ Exported passwords file has been securely deleted from your Downloads folder.
+        ✓ Exported CSV securely deleted from your Downloads folder.
       </div>`;
-      showSyncMsg('Sync complete · CSV deleted from disk.');
     } else if (downloadId && result.deleteError) {
-      // We tried but couldn't delete — warn so the user finishes the job.
       footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
         ⚠️ Couldn't auto-delete the exported CSV (${escapeHtml(result.deleteError)}).
-        For security, please delete the file from your Downloads folder.
+        Please delete it from your Downloads folder.
       </div>`;
-      showSyncMsg('Sync complete · CSV not deleted.');
     } else {
-      // Manual pick — we never had a downloadId, so we can't delete.
       footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
-        ⚠️ For security, please delete the exported CSV file from your Downloads folder now.
-        IronVault never sees the file path when you pick it manually.
+        ⚠️ Please delete the exported CSV from your Downloads folder now.
       </div>`;
-      showSyncMsg('Sync complete.');
     }
 
+    ui.syncResult.classList.add('is-success');
     ui.syncResult.innerHTML = `
       <div class="iv-sync-result-row"><span>Added</span><strong>${result.added}</strong></div>
       <div class="iv-sync-result-row"><span>Updated</span><strong>${result.updated}</strong></div>
       <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>
       ${footer}`;
     ui.syncResult.hidden = false;
-    ui.syncSubmit.querySelector('.iv-btn-label').textContent = summary;
+    ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Done';
+    ui.syncSubmit.disabled = false;
   } catch (err) {
-    csvText = ''; // scrub even on failure
-    showSyncError(err.message || 'Sync failed.');
+    csvText = '';
+    setSyncError(err.message || 'Sync failed.');
     ui.syncSubmit.disabled = false;
     ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
   }
@@ -809,12 +611,9 @@ function escapeHtml(s) {
   }[c]));
 }
 
-// Listen for the background's "we saw a passwords-CSV download" broadcast.
-// Just an informational hint — the user still picks the file via the input
-// (Chrome blocks SW fetch on file:// without per-extension toggle).
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== 'BROWSER_CSV_DETECTED') return;
-  if (!ui.syncPanel || ui.syncPanel.hidden) return;
+  if (ui.sync.hidden) return;
   syncDetectedFilename = msg.basename || msg.filename || '';
   syncDetectedDownloadId = typeof msg.downloadId === 'number' ? msg.downloadId : null;
   if (syncDetectedFilename) {
@@ -823,107 +622,67 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-// ── WebAuthn PRF ────────────────────────────────────────────────────────────
-async function prfSupported() {
-  if (!('credentials' in navigator) || !window.PublicKeyCredential) return false;
-  try {
-    const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.();
-    return !!ok;
-  } catch {
-    return false;
-  }
+// ── Session timer ──────────────────────────────────────────────────────────
+function stopSessionTimer() {
+  if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
 }
 
-function bytesToB64(bytes) {
-  const a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let s = '';
-  for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
-  return btoa(s);
-}
-function b64ToBytes(b64) {
-  const s = atob(b64);
-  const a = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
-  return a;
-}
-
-async function deriveSaltBytes(label) {
-  const data = new TextEncoder().encode(label);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return new Uint8Array(hash);
-}
-
-async function runWebAuthnPrf({ mode, credentialIdB64, prfSaltB64 }) {
-  const saltBytes = prfSaltB64 ? b64ToBytes(prfSaltB64) : await deriveSaltBytes(PRF_SALT_LABEL);
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const rpId = location.hostname || 'localhost'; // chrome-extension hostname
-
-  if (mode === 'create') {
-    const userId = crypto.getRandomValues(new Uint8Array(16));
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        rp: { name: 'IronVault Extension', id: rpId },
-        user: { id: userId, name: 'ironvault-user', displayName: 'IronVault' },
-        pubKeyCredParams: [
-          { type: 'public-key', alg: -7 },   // ES256
-          { type: 'public-key', alg: -257 }, // RS256
-        ],
-        challenge,
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          userVerification: 'required',
-          residentKey: 'preferred',
-        },
-        timeout: 60000,
-        extensions: { prf: { eval: { first: saltBytes } } },
-      },
-    });
-    if (!cred) throw new Error('Biometric registration was cancelled.');
-    let prfFirst = cred.getClientExtensionResults?.()?.prf?.results?.first;
-    if (!prfFirst) {
-      // Many authenticators only emit PRF on assertion, not on registration.
-      const second = await navigator.credentials.get({
-        publicKey: {
-          challenge: crypto.getRandomValues(new Uint8Array(32)),
-          allowCredentials: [{ id: cred.rawId, type: 'public-key' }],
-          userVerification: 'required',
-          timeout: 60000,
-          rpId,
-          extensions: { prf: { eval: { first: saltBytes } } },
-        },
-      });
-      prfFirst = second?.getClientExtensionResults?.()?.prf?.results?.first;
+function startSessionTimer(status) {
+  stopSessionTimer();
+  updateSessionPill(status);
+  sessionTimer = setInterval(async () => {
+    if (lastStatus && !lastStatus.sessionExpiresAt) {
+      // Until-logout — no countdown to update.
+      return;
     }
-    if (!prfFirst) {
-      throw new Error('This authenticator does not support WebAuthn PRF (required for biometric unlock).');
+    // Re-fetch status periodically (every 10s) so we notice background-side
+    // wipes (e.g. session expired in another popup, remote revocation).
+    if (Date.now() % 10000 < 1000) {
+      try {
+        const s = await send({ type: 'STATUS' });
+        lastStatus = s;
+        if (!s.unlocked) { await refreshState(); return; }
+      } catch {}
     }
-    return {
-      credentialIdB64: bytesToB64(cred.rawId),
-      prfSaltB64: bytesToB64(saltBytes),
-      prfOutputB64: bytesToB64(prfFirst),
-    };
-  }
+    updateSessionPill(lastStatus);
+  }, 1000);
+}
 
-  // mode === 'get'
-  const assertion = await navigator.credentials.get({
-    publicKey: {
-      challenge,
-      allowCredentials: credentialIdB64
-        ? [{ id: b64ToBytes(credentialIdB64), type: 'public-key' }]
-        : undefined,
-      userVerification: 'required',
-      timeout: 60000,
-      rpId,
-      extensions: { prf: { eval: { first: saltBytes } } },
-    },
-  });
-  if (!assertion) throw new Error('Biometric authentication was cancelled.');
-  const r = assertion.getClientExtensionResults?.()?.prf?.results?.first;
-  if (!r) throw new Error('Authenticator did not return a PRF value.');
-  return bytesToB64(r);
+function updateSessionPill(status) {
+  if (!status) { ui.sessionPill.hidden = true; return; }
+  ui.sessionPill.hidden = false;
+  ui.sessionPill.classList.remove('is-warning', 'is-infinite');
+  if (!status.sessionExpiresAt) {
+    ui.sessionPill.textContent = 'Until logout';
+    ui.sessionPill.classList.add('is-infinite');
+    return;
+  }
+  const remaining = status.sessionExpiresAt - Date.now();
+  if (remaining <= 0) {
+    ui.sessionPill.textContent = 'Expired';
+    ui.sessionPill.classList.add('is-warning');
+    refreshState();
+    return;
+  }
+  ui.sessionPill.textContent = formatRemaining(remaining) + ' left';
+  if (remaining < 5 * 60 * 1000) ui.sessionPill.classList.add('is-warning');
+}
+
+function formatRemaining(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hrs = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (days > 0) return `${days}d ${hrs}h`;
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  if (mins > 0) return `${mins}m`;
+  return `${secs}s`;
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
-window.addEventListener('beforeunload', cancelReveal);
-populateAutolockOptions();
+window.addEventListener('beforeunload', () => {
+  cancelReveal();
+  stopSessionTimer();
+});
 refreshState();

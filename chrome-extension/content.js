@@ -21,6 +21,12 @@
   if (window.__ironvaultInjected) return;
   window.__ironvaultInjected = true;
 
+  // Don't inject the autofill badge into the IronVault web app itself —
+  // its own UI already manages master-password inputs, and our badge would
+  // collide visually with the in-app eye/lock icons.
+  const host = (location.hostname || '').toLowerCase();
+  if (host === 'ironvault.app' || host.endsWith('.ironvault.app')) return;
+
   const trackedInputs = new WeakSet();
   const badgesByInput = new WeakMap();
 
@@ -280,6 +286,31 @@
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') removePicker();
+  });
+
+  // Receive a "Fill" action from the popup. The popup has already decrypted
+  // the credential — we just inject it into the most relevant visible
+  // password input on this tab.
+  RUNTIME.onMessage?.addListener?.((msg, _sender, sendResponse) => {
+    if (msg?.type !== 'IV_FILL_FROM_POPUP' || !msg.credential) {
+      return false;
+    }
+    try {
+      const candidates = Array.from(document.querySelectorAll('input[type="password"]'))
+        .filter(isVisible);
+      const passwordInput = candidates[0];
+      if (!passwordInput) {
+        sendResponse?.({ ok: false, error: 'No password field on this page.' });
+        return false;
+      }
+      const userInput = findUsernameInputFor(passwordInput);
+      if (userInput && msg.credential.username) fillNatively(userInput, msg.credential.username);
+      fillNatively(passwordInput, msg.credential.password || '');
+      sendResponse?.({ ok: true });
+    } catch (err) {
+      sendResponse?.({ ok: false, error: err?.message || 'Fill failed.' });
+    }
+    return false;
   });
 
   scan();
