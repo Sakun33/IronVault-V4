@@ -690,12 +690,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         postalCode: postalCode || undefined,
       }).catch(() => {});
 
-      // Fire-and-forget: trigger n8n onboarding-drip workflow
-      triggerN8n(N8N_SIGNUP_WEBHOOK, {
-        email: normalizedEmail,
-        name: safeFullName,
-        plan: planType || 'free',
-      });
+      // n8n onboarding-drip is intentionally NOT fired here — we only kick
+      // it off after the user verifies their email (see /api/auth/verify-email
+      // below). Otherwise the welcome/drip email collides with the
+      // verification email and arrives before the account is usable.
 
       const APP_URL_REG = process.env.APP_URL || 'https://www.ironvault.app';
       const verifyLink = `${APP_URL_REG}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
@@ -733,6 +731,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Send welcome email now that the account is verified
       const displayName = user.full_name || normalizedEmail.split('@')[0];
       sendEmail({ to: normalizedEmail, ...welcomeEmail(displayName) }).catch(() => {});
+
+      // Fire-and-forget: kick off the n8n onboarding-drip workflow now that
+      // the email is verified. Plan lives on entitlements (crm_users has
+      // no plan column), so look it up — fall back to 'free' if missing.
+      let onboardingPlan = 'free';
+      try {
+        const { rows: entRows } = await db.query(
+          `SELECT plan FROM entitlements WHERE user_id = $1 LIMIT 1`,
+          [user.id]
+        );
+        if (entRows[0]?.plan) onboardingPlan = entRows[0].plan;
+      } catch { /* ignore — webhook still fires with default */ }
+      triggerN8n(N8N_SIGNUP_WEBHOOK, {
+        email: normalizedEmail,
+        name: displayName,
+        plan: onboardingPlan,
+      });
+
       return res.json({ success: true, message: 'Email verified! You can now log in.' });
     } catch (err: any) {
       console.error('verify-email error:', err.message);
