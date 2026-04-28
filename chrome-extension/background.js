@@ -393,6 +393,24 @@ function constantTimeEquals(a, b) {
   return diff === 0;
 }
 
+// Recover the master password from the in-session wrap. Returns null if the
+// vault is locked or the wrap is missing — caller falls back to manual flow.
+async function getSessionMaster() {
+  const sess = await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedMaster']);
+  if (!sess.unlocked || !sess.sessionKeyB64 || !sess.wrappedMaster) return null;
+  try {
+    const sessionKey = await importSessionKey(b64Decode(sess.sessionKeyB64));
+    const pt = await aesGcmDecrypt(
+      b64Decode(sess.wrappedMaster.ct),
+      sessionKey,
+      b64Decode(sess.wrappedMaster.iv),
+    );
+    return new TextDecoder().decode(pt);
+  } catch {
+    return null;
+  }
+}
+
 // ── Re-sync cached blob from cloud ──────────────────────────────────────────
 async function resync() {
   const cache = await getCache();
@@ -641,19 +659,108 @@ function looksLikeBrowserPasswordCsv(item) {
   return /password/i.test(name) || /\bchrome\b.*\bpasswords\b/i.test(name);
 }
 
+// When Chrome finishes downloading a passwords CSV, try to auto-sync it.
+// Path:
+//   1. If the vault is unlocked AND the user has granted "Allow access to
+//      file URLs" for this extension, fetch the file from disk, run the
+//      merge using the in-session master password, delete the CSV, and
+//      fire a Chrome notification with the results.
+//   2. If anything in (1) fails (vault locked, file URL access denied,
+//      fetch fails), broadcast BROWSER_CSV_DETECTED to the popup so the
+//      user can finish the sync manually with the file picker.
 chrome.downloads?.onChanged?.addListener?.(async (delta) => {
   if (!delta?.state || delta.state.current !== 'complete') return;
+  let item;
   try {
-    const [item] = await chrome.downloads.search({ id: delta.id });
-    if (!looksLikeBrowserPasswordCsv(item)) return;
+    [item] = await chrome.downloads.search({ id: delta.id });
+  } catch { return; }
+  if (!looksLikeBrowserPasswordCsv(item)) return;
+
+  const basename = (item.filename || '').split(/[\\/]/).pop();
+  const reason = await tryAutoSyncFromCsv(item);
+  if (reason === 'ok') return; // auto-sync handled it end-to-end
+
+  // Fall back to popup-driven manual flow.
+  chrome.runtime.sendMessage({
+    type: 'BROWSER_CSV_DETECTED',
+    filename: item.filename,
+    basename,
+    downloadId: item.id,
+    autoSyncReason: reason,
+  }).catch(() => {});
+});
+
+// Returns 'ok' on success, or a short reason string the popup can show.
+async function tryAutoSyncFromCsv(item) {
+  if (!item?.filename) return 'no-path';
+  const master = await getSessionMaster();
+  if (!master) return 'locked';
+
+  // Confirm Chrome will let us read file:// URLs from this extension.
+  let allowFile = false;
+  try {
+    if (typeof chrome.extension?.isAllowedFileSchemeAccess === 'function') {
+      allowFile = await new Promise((resolve) => {
+        try { chrome.extension.isAllowedFileSchemeAccess((v) => resolve(!!v)); }
+        catch { resolve(false); }
+      });
+    }
+  } catch { allowFile = false; }
+  if (!allowFile) return 'no-file-access';
+
+  let csvText;
+  try {
+    const fileUrl = pathToFileUrl(item.filename);
+    const resp = await fetch(fileUrl);
+    if (!resp.ok) return 'fetch-failed';
+    csvText = await resp.text();
+  } catch {
+    return 'fetch-failed';
+  }
+
+  try {
+    const result = await syncFromBrowser({
+      csvText,
+      masterPassword: master,
+      downloadId: item.id,
+    });
+    csvText = '';
+    const summary = `${result.added} added · ${result.updated} updated · ${result.unchanged} unchanged`;
+    await notifySessionEvent({
+      title: 'IronVault sync complete',
+      message: summary + (result.fileDeleted ? ' · CSV cleaned up.' : ''),
+    });
     chrome.runtime.sendMessage({
-      type: 'BROWSER_CSV_DETECTED',
+      type: 'BROWSER_AUTO_SYNC_RESULT',
+      ok: true,
+      result,
+    }).catch(() => {});
+    return 'ok';
+  } catch (err) {
+    chrome.runtime.sendMessage({
+      type: 'BROWSER_AUTO_SYNC_RESULT',
+      ok: false,
+      error: err?.message || 'Sync failed.',
+      downloadId: item.id,
       filename: item.filename,
       basename: (item.filename || '').split(/[\\/]/).pop(),
-      downloadId: item.id,
     }).catch(() => {});
-  } catch {}
-});
+    return 'sync-failed';
+  }
+}
+
+// Convert a local filesystem path to a file:// URL with proper encoding.
+// Handles both POSIX (/Users/...) and Windows (C:\\Users\\...) layouts.
+function pathToFileUrl(filename) {
+  let p = String(filename).replace(/\\/g, '/');
+  // Windows drive paths come out as "C:/Users/..." — file URLs need three
+  // slashes after "file:".
+  if (/^[A-Za-z]:\//.test(p)) p = '/' + p;
+  if (!p.startsWith('/')) p = '/' + p;
+  // Encode each path segment so spaces, parentheses, etc. survive fetch.
+  const encoded = p.split('/').map((seg) => encodeURIComponent(seg)).join('/');
+  return 'file://' + encoded;
+}
 
 // ── Session-check alarm (remote revocation) ─────────────────────────────────
 async function ensureSessionCheckAlarm() {

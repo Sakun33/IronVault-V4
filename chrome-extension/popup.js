@@ -62,6 +62,10 @@ const ui = {
   // Sync
   syncBack: $('iv-sync-back'),
   syncOpenTab: $('iv-sync-open-tab'),
+  syncOpenExtSettings: $('iv-sync-open-ext-settings'),
+  syncWaiting: $('iv-sync-waiting'),
+  syncNeedsAccess: $('iv-sync-needs-file-access'),
+  syncManual: $('iv-sync-manual'),
   syncFile: $('iv-sync-file'),
   syncDetected: $('iv-sync-detected'),
   syncDetectedName: $('iv-sync-detected-name'),
@@ -506,9 +510,23 @@ ui.logoutBtn.addEventListener('click', async () => {
 });
 
 // ── Sync from Chrome ───────────────────────────────────────────────────────
-ui.syncBtn.addEventListener('click', () => {
+// Default flow is "waiting" — the user clicks Sync from Chrome, the extension
+// opens chrome://settings/passwords, and the background download watcher
+// auto-merges the exported CSV using the in-session master password. If the
+// user has not granted "Allow access to file URLs" we surface a one-tap link
+// to that toggle plus a manual file-picker fallback.
+function showSyncSubState(name) {
+  ui.syncWaiting.hidden = name !== 'waiting';
+  ui.syncNeedsAccess.hidden = name !== 'needs-access';
+  ui.syncManual.hidden = name !== 'manual';
+}
+
+ui.syncBtn.addEventListener('click', async () => {
   resetSyncPanel();
   showScreen('sync');
+  showSyncSubState('waiting');
+  // Open chrome://settings/passwords so the user has one click less to make.
+  try { await chrome.tabs.create({ url: 'chrome://settings/passwords' }); } catch {}
 });
 
 ui.syncBack.addEventListener('click', () => {
@@ -522,6 +540,13 @@ ui.syncOpenTab.addEventListener('click', async () => {
   } catch {
     setSyncError('Could not open Chrome settings. Paste chrome://settings/passwords into a new tab.');
   }
+});
+
+ui.syncOpenExtSettings.addEventListener('click', async () => {
+  try {
+    const id = chrome.runtime.id;
+    await chrome.tabs.create({ url: `chrome://extensions/?id=${id}` });
+  } catch {}
 });
 
 ui.syncFile.addEventListener('change', () => {
@@ -546,6 +571,40 @@ function resetSyncPanel() {
   syncDetectedDownloadId = null;
   ui.syncSubmit.disabled = true;
   ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Import & sync';
+  showSyncSubState('waiting');
+}
+
+function renderSyncSuccess(result, autoSynced) {
+  let footer = '';
+  if (result.fileDeleted) {
+    footer = `<div class="iv-sync-result-note iv-sync-result-note-success">
+      ✓ Exported CSV securely deleted from your Downloads folder.
+    </div>`;
+  } else if (result.deleteError) {
+    footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
+      ⚠️ Couldn't auto-delete the CSV (${escapeHtml(result.deleteError)}).
+      Please delete it from your Downloads folder.
+    </div>`;
+  } else {
+    footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
+      ⚠️ Please delete the exported CSV from your Downloads folder now.
+    </div>`;
+  }
+  const banner = autoSynced
+    ? `<div class="iv-sync-result-note iv-sync-result-note-success">✨ Auto-synced from Chrome.</div>`
+    : '';
+  ui.syncResult.classList.add('is-success');
+  ui.syncResult.innerHTML = `
+    ${banner}
+    <div class="iv-sync-result-row"><span>Added</span><strong>${result.added}</strong></div>
+    <div class="iv-sync-result-row"><span>Updated</span><strong>${result.updated}</strong></div>
+    <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>
+    ${footer}`;
+  ui.syncResult.hidden = false;
+  showSyncSubState(null); // hide all substates
+  ui.syncWaiting.hidden = true;
+  ui.syncNeedsAccess.hidden = true;
+  ui.syncManual.hidden = true;
 }
 
 ui.syncSubmit.addEventListener('click', async () => {
@@ -571,32 +630,7 @@ ui.syncSubmit.addEventListener('click', async () => {
     csvText = '';
     try { ui.syncFile.value = ''; } catch {}
     ui.syncMaster.value = '';
-
-    let footer = '';
-    if (result.fileDeleted) {
-      footer = `<div class="iv-sync-result-note iv-sync-result-note-success">
-        ✓ Exported CSV securely deleted from your Downloads folder.
-      </div>`;
-    } else if (downloadId && result.deleteError) {
-      footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
-        ⚠️ Couldn't auto-delete the exported CSV (${escapeHtml(result.deleteError)}).
-        Please delete it from your Downloads folder.
-      </div>`;
-    } else {
-      footer = `<div class="iv-sync-result-note iv-sync-result-note-warning">
-        ⚠️ Please delete the exported CSV from your Downloads folder now.
-      </div>`;
-    }
-
-    ui.syncResult.classList.add('is-success');
-    ui.syncResult.innerHTML = `
-      <div class="iv-sync-result-row"><span>Added</span><strong>${result.added}</strong></div>
-      <div class="iv-sync-result-row"><span>Updated</span><strong>${result.updated}</strong></div>
-      <div class="iv-sync-result-row"><span>Unchanged</span><strong>${result.unchanged}</strong></div>
-      ${footer}`;
-    ui.syncResult.hidden = false;
-    ui.syncSubmit.querySelector('.iv-btn-label').textContent = 'Done';
-    ui.syncSubmit.disabled = false;
+    renderSyncSuccess(result, false);
   } catch (err) {
     csvText = '';
     setSyncError(err.message || 'Sync failed.');
@@ -612,13 +646,47 @@ function escapeHtml(s) {
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type !== 'BROWSER_CSV_DETECTED') return;
-  if (ui.sync.hidden) return;
-  syncDetectedFilename = msg.basename || msg.filename || '';
-  syncDetectedDownloadId = typeof msg.downloadId === 'number' ? msg.downloadId : null;
-  if (syncDetectedFilename) {
-    ui.syncDetectedName.textContent = syncDetectedFilename;
-    ui.syncDetected.hidden = false;
+  if (!msg || typeof msg !== 'object') return;
+
+  // Auto-sync from background succeeded — render the success card.
+  if (msg.type === 'BROWSER_AUTO_SYNC_RESULT') {
+    if (ui.sync.hidden) return; // popup not on sync screen
+    if (msg.ok && msg.result) {
+      renderSyncSuccess(msg.result, true);
+    } else {
+      // Auto-sync attempted but failed (e.g. wrong master, decrypt failure).
+      // Drop into manual mode so the user can finish the job.
+      syncDetectedFilename = msg.basename || '';
+      syncDetectedDownloadId = typeof msg.downloadId === 'number' ? msg.downloadId : null;
+      if (syncDetectedFilename) {
+        ui.syncDetectedName.textContent = syncDetectedFilename;
+        ui.syncDetected.hidden = false;
+      }
+      setSyncError(msg.error || 'Auto-sync failed.');
+      showSyncSubState('manual');
+    }
+    return;
+  }
+
+  // CSV detected but background couldn't auto-sync — pick the right fallback.
+  if (msg.type === 'BROWSER_CSV_DETECTED') {
+    if (ui.sync.hidden) return;
+    syncDetectedFilename = msg.basename || msg.filename || '';
+    syncDetectedDownloadId = typeof msg.downloadId === 'number' ? msg.downloadId : null;
+    if (syncDetectedFilename) {
+      ui.syncDetectedName.textContent = syncDetectedFilename;
+      ui.syncDetected.hidden = false;
+    }
+    if (msg.autoSyncReason === 'no-file-access') {
+      showSyncSubState('needs-access');
+    } else if (msg.autoSyncReason === 'locked') {
+      setSyncError('Vault is locked — unlock the extension and try the export again.');
+      showSyncSubState('manual');
+    } else {
+      // 'no-path', 'fetch-failed', or undefined (no file URL access checked
+      // because vault was locked / first run). Drop into manual.
+      showSyncSubState('manual');
+    }
   }
 });
 

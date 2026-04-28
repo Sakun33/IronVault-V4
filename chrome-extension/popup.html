@@ -136,44 +136,55 @@
         <h1 class="iv-screen-title">Sync from Chrome</h1>
       </header>
 
-      <ol class="iv-steps">
-        <li>
-          <span class="iv-step-num">1</span>
-          <div>
-            <strong>Open Chrome's password manager.</strong>
-            <button id="iv-sync-open-tab" type="button" class="iv-btn iv-btn-text iv-btn-sm">Open chrome://settings/passwords</button>
-          </div>
-        </li>
-        <li>
-          <span class="iv-step-num">2</span>
-          <div>
-            <strong>Export passwords.</strong>
-            <p class="iv-step-text">⋮ menu → <em>Export passwords…</em> → save the CSV.</p>
-          </div>
-        </li>
-        <li>
-          <span class="iv-step-num">3</span>
-          <div>
-            <strong>Pick the CSV file.</strong>
-            <input id="iv-sync-file" type="file" accept=".csv,text/csv">
-            <div id="iv-sync-detected" class="iv-sync-detected" hidden>
-              Detected: <code id="iv-sync-detected-name"></code>
-            </div>
-          </div>
-        </li>
-      </ol>
+      <!-- Waiting state — shown after clicking Sync from Chrome -->
+      <div id="iv-sync-waiting" class="iv-sync-state" hidden>
+        <div class="iv-spinner" aria-hidden="true"></div>
+        <p class="iv-sync-state-title">Waiting for export…</p>
+        <p class="iv-sync-state-sub">
+          In Chrome: tap the <span class="iv-kbd">⋮</span> menu next to
+          <em>Saved passwords</em> → <strong>Export passwords…</strong> → save
+          the CSV. IronVault will detect it and merge automatically.
+        </p>
+        <button id="iv-sync-open-tab" type="button" class="iv-btn iv-btn-ghost iv-btn-sm">
+          Open chrome://settings/passwords
+        </button>
+      </div>
 
-      <label class="iv-field">
-        <span>Master password</span>
-        <input id="iv-sync-master" type="password" autocomplete="off">
-      </label>
+      <!-- Auto-sync needs file URL access -->
+      <div id="iv-sync-needs-file-access" class="iv-sync-state" hidden>
+        <p class="iv-sync-state-title">Enable one-tap auto-sync</p>
+        <p class="iv-sync-state-sub">
+          To finish exports automatically without picking a file, enable
+          <strong>Allow access to file URLs</strong> for IronVault on the
+          extension settings page.
+        </p>
+        <button id="iv-sync-open-ext-settings" type="button" class="iv-btn iv-btn-primary iv-btn-sm">
+          Open extension settings
+        </button>
+        <p class="iv-foot iv-center">Or pick the CSV manually below.</p>
+      </div>
 
-      <p id="iv-sync-error" class="iv-error" hidden></p>
+      <!-- Manual fallback — file picker -->
+      <div id="iv-sync-manual" class="iv-sync-state" hidden>
+        <label class="iv-field">
+          <span>Pick the exported CSV</span>
+          <input id="iv-sync-file" type="file" accept=".csv,text/csv">
+        </label>
+        <div id="iv-sync-detected" class="iv-sync-detected" hidden>
+          Detected: <code id="iv-sync-detected-name"></code>
+        </div>
+        <label class="iv-field">
+          <span>Master password</span>
+          <input id="iv-sync-master" type="password" autocomplete="off">
+        </label>
+        <p id="iv-sync-error" class="iv-error" hidden></p>
+        <button type="button" class="iv-btn iv-btn-primary" id="iv-sync-submit" disabled>
+          <span class="iv-btn-label">Import &amp; sync</span>
+        </button>
+      </div>
+
+      <!-- Result state — shared by auto and manual -->
       <div id="iv-sync-result" class="iv-sync-result" hidden></div>
-
-      <button type="button" class="iv-btn iv-btn-primary" id="iv-sync-submit" disabled>
-        <span class="iv-btn-label">Import &amp; sync</span>
-      </button>
 
       <p class="iv-foot">
         The CSV is read locally only. IronVault re-encrypts and pushes the

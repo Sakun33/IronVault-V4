@@ -595,3 +595,53 @@ body {
   margin-top: 4px;
 }
 .iv-modal-actions .iv-btn { flex: 1; }
+
+/* ── Sync state cards (waiting / needs-access / manual) ───────────────────── */
+.iv-sync-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 16px 12px;
+  background: var(--iv-surface);
+  border: 1px solid var(--iv-border);
+  border-radius: var(--iv-radius);
+}
+.iv-sync-state-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--iv-text);
+}
+.iv-sync-state-sub {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--iv-text-dim);
+  line-height: 1.5;
+}
+
+#iv-sync-manual { text-align: left; gap: 10px; }
+#iv-sync-manual .iv-field { width: 100%; }
+
+.iv-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--iv-border);
+  border-top-color: var(--iv-primary);
+  border-radius: 50%;
+  animation: iv-spin 0.8s linear infinite;
+}
+@keyframes iv-spin {
+  to { transform: rotate(360deg); }
+}
+
+.iv-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--iv-surface-2);
+  border: 1px solid var(--iv-border);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}

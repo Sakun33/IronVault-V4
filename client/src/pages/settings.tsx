@@ -585,13 +585,11 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              className="gap-2"
-              onClick={() => window.open('https://chrome.google.com/webstore/category/extensions', '_blank', 'noreferrer')}
-              data-testid="button-install-extension"
-            >
-              <Download className="w-4 h-4" />
-              Install from Chrome Web Store
+            <Button asChild className="gap-2" data-testid="button-install-extension">
+              <a href="/chrome-extension.zip" download="ironvault-extension.zip">
+                <Download className="w-4 h-4" />
+                Download .zip
+              </a>
             </Button>
             <Button
               variant="outline"
@@ -600,21 +598,20 @@ export default function SettingsPage() {
               data-testid="button-extension-source"
             >
               <Key className="w-4 h-4" />
-              View source / unpacked install
+              View source on GitHub
             </Button>
           </div>
 
           <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 space-y-2">
             <p className="text-sm font-medium flex items-center gap-2">
               <Info className="w-4 h-4 text-primary" />
-              Manual install (developer mode)
+              Install in 4 steps
             </p>
             <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Download or clone the <code className="bg-muted px-1 rounded text-xs">chrome-extension/</code> folder.</li>
+              <li>Click <strong>Download .zip</strong> above and unzip it somewhere you'll remember.</li>
               <li>Open <code className="bg-muted px-1 rounded text-xs">chrome://extensions</code> in Chrome.</li>
-              <li>Toggle <strong>Developer Mode</strong> on (top right).</li>
-              <li>Click <strong>Load Unpacked</strong> and select the folder.</li>
-              <li>Pin the IronVault icon to the toolbar.</li>
+              <li>Toggle <strong>Developer mode</strong> on (top right corner).</li>
+              <li>Click <strong>Load unpacked</strong> and pick the unzipped folder.</li>
             </ol>
           </div>
 
@@ -634,11 +631,11 @@ export default function SettingsPage() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Auto-lock after 5 min of inactivity (configurable: 1 / 5 / 15 / 30 min)</span>
+                <span>Session duration you choose: 1h / 4h / 8h / 24h / 1 week / Until logout — full local wipe on expiry</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Master password required to unlock; biometric / Touch ID / Face ID via WebAuthn PRF</span>
+                <span>Master password required to reveal or copy any password — every time, never cached</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
