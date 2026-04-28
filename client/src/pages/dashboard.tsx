@@ -7,7 +7,7 @@ import {
   BarChart3, ChevronRight, CreditCard, Activity, Key, Calendar,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
@@ -208,7 +208,6 @@ function ExpenseBars({
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [, setLocation] = useLocation();
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
@@ -407,7 +406,11 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {/* Score + metrics row */}
+          {/* Score + metrics row.
+              Every row uses the same shape: <div flex items-center gap-2><dot /><span /></div>.
+              Clickable rows wrap that same div in a Link so the dot+text
+              column-start matches the static rows pixel-for-pixel — using
+              <button> here previously offset the text via user-agent styles. */}
           <div className="flex items-center gap-5 mb-5">
             <SecurityRing score={securityScore} />
             <div className="flex-1 min-w-0 space-y-1.5">
@@ -418,20 +421,24 @@ export default function Dashboard() {
                 </span>
               </div>
               {mediumPasswords > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                  <button onClick={() => setLocation('/passwords?strength=medium')} className="text-sm text-amber-200 hover:text-amber-100 underline underline-offset-2 text-left">
-                    Medium: {mediumPasswords} — improve
-                  </button>
-                </div>
+                <Link href="/passwords?strength=medium">
+                  <div className="flex items-center gap-2 cursor-pointer group">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                    <span className="text-sm text-amber-200 group-hover:text-amber-100 underline underline-offset-2">
+                      Medium: {mediumPasswords} — improve
+                    </span>
+                  </div>
+                </Link>
               )}
               {weakPasswords > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                  <button onClick={() => setLocation('/passwords?strength=weak')} className="text-sm text-red-300 hover:text-red-100 underline underline-offset-2 text-left">
-                    Weak: {weakPasswords} — fix now
-                  </button>
-                </div>
+                <Link href="/passwords?strength=weak">
+                  <div className="flex items-center gap-2 cursor-pointer group">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                    <span className="text-sm text-red-300 group-hover:text-red-100 underline underline-offset-2">
+                      Weak: {weakPasswords} — fix now
+                    </span>
+                  </div>
+                </Link>
               )}
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-purple-300 flex-shrink-0" />
@@ -570,61 +577,71 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── Weak password alert ────────────────────────────────────────────── */}
+      {/* ── Weak password strip ────────────────────────────────────────────── */}
       {weakPasswords > 0 && (
         <motion.div variants={fadeUp}
-          className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-red-600 dark:text-red-400">
-              {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'} detected
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-2.5">
-              These are too short or lack complexity.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {weakPasswordList.slice(0, 6).map(p => (
-                <Link key={p.id} href="/passwords?strength=weak">
-                  <span className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full hover:bg-red-500/20 transition-colors cursor-pointer border border-red-500/20">
-                    {p.url ? <Favicon url={p.url} name={p.name} size={11} /> : <Lock className="w-2.5 h-2.5" />}
-                    {p.name}
-                  </span>
-                </Link>
+          className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3.5">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
+                {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'}
+              </span>
+            </div>
+            <Link href="/passwords?strength=weak">
+              <span className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 cursor-pointer flex-shrink-0 whitespace-nowrap">
+                Fix →
+              </span>
+            </Link>
+          </div>
+          <Link href="/passwords?strength=weak">
+            <div className="flex items-center gap-1.5 cursor-pointer">
+              {weakPasswordList.slice(0, 5).map(p => (
+                <div key={p.id} className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-red-500/20 flex-shrink-0 bg-card">
+                  <Favicon url={p.url} name={p.name} className="w-full h-full" />
+                </div>
               ))}
-              {weakPasswords > 6 && (
-                <span className="text-xs text-muted-foreground px-2 py-0.5">+{weakPasswords - 6} more</span>
+              {weakPasswords > 5 && (
+                <span className="ml-1 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2.5 py-1 whitespace-nowrap">
+                  +{weakPasswords - 5} more
+                </span>
               )}
             </div>
-          </div>
+          </Link>
         </motion.div>
       )}
 
-      {/* ── Medium password alert ─────────────────────────────────────────── */}
+      {/* ── Medium password strip ─────────────────────────────────────────── */}
       {mediumPasswords > 0 && (
         <motion.div variants={fadeUp}
-          className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
-              {mediumPasswords} medium {mediumPasswords === 1 ? 'password' : 'passwords'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-2.5">
-              Decent, but could be stronger — consider adding length or symbols.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {mediumPasswordList.slice(0, 6).map(p => (
-                <Link key={p.id} href="/passwords?strength=medium">
-                  <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full hover:bg-amber-500/20 transition-colors cursor-pointer border border-amber-500/20">
-                    {p.url ? <Favicon url={p.url} name={p.name} size={11} /> : <Lock className="w-2.5 h-2.5" />}
-                    {p.name}
-                  </span>
-                </Link>
+          className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 truncate">
+                {mediumPasswords} medium {mediumPasswords === 1 ? 'password' : 'passwords'}
+              </span>
+            </div>
+            <Link href="/passwords?strength=medium">
+              <span className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 cursor-pointer flex-shrink-0 whitespace-nowrap">
+                Improve →
+              </span>
+            </Link>
+          </div>
+          <Link href="/passwords?strength=medium">
+            <div className="flex items-center gap-1.5 cursor-pointer">
+              {mediumPasswordList.slice(0, 5).map(p => (
+                <div key={p.id} className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-amber-500/20 flex-shrink-0 bg-card">
+                  <Favicon url={p.url} name={p.name} className="w-full h-full" />
+                </div>
               ))}
-              {mediumPasswords > 6 && (
-                <span className="text-xs text-muted-foreground px-2 py-0.5">+{mediumPasswords - 6} more</span>
+              {mediumPasswords > 5 && (
+                <span className="ml-1 text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-1 whitespace-nowrap">
+                  +{mediumPasswords - 5} more
+                </span>
               )}
             </div>
-          </div>
+          </Link>
         </motion.div>
       )}
 

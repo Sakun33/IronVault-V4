@@ -203,48 +203,72 @@ export default function Passwords() {
   return (
     <div>
       <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Passwords</h1>
-            {!isPro && (
-              <p className="text-xs text-muted-foreground mt-0.5">{passwords.length} / {getLimit('passwords')} used</p>
-            )}
+        {/* Header — top row: title + primary actions (Select, Add) always visible.
+            Import/Templates move to a secondary row below the title on small
+            screens, where the four-button row would otherwise overflow and
+            clip Select/Add off the right edge. */}
+        <div className="space-y-2.5 md:space-y-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Passwords</h1>
+              {!isPro && (
+                <p className="text-xs text-muted-foreground mt-0.5">{passwords.length} / {getLimit('passwords')} used</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Desktop-only Import + Templates */}
+              <div className="hidden md:flex items-center gap-2">
+                <GuidedImportButton />
+                <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl">
+                  <LayoutTemplate className="w-4 h-4 mr-1" />
+                  Templates
+                </Button>
+              </div>
+              {filteredPasswords.length > 0 && !selection.isSelectionMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selection.enterSelectionMode()}
+                  className="rounded-xl px-2.5 sm:px-3"
+                  data-testid="button-enter-selection-passwords"
+                  aria-label="Select passwords"
+                >
+                  <CheckSquare className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Select</span>
+                </Button>
+              )}
+              <Button
+                onClick={() => {
+                  if (!isPro && passwords.length >= getLimit('passwords')) {
+                    toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                    return;
+                  }
+                  setEditingPassword(null);
+                  setShowAddModal(true);
+                }}
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
+                disabled={!isPro && passwords.length >= getLimit('passwords')}
+                data-testid="add-password-button"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                {!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade' : 'Add'}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <GuidedImportButton />
-            <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl">
+          {/* Mobile-only secondary row for Import + Templates */}
+          <div className="flex items-center gap-2 md:hidden">
+            <div className="flex-1">
+              <GuidedImportButton />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTemplatesModal(true)}
+              className="rounded-xl flex-1"
+            >
               <LayoutTemplate className="w-4 h-4 mr-1" />
               Templates
-            </Button>
-            {filteredPasswords.length > 0 && !selection.isSelectionMode && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selection.enterSelectionMode()}
-                className="rounded-xl"
-                data-testid="button-enter-selection-passwords"
-              >
-                <CheckSquare className="w-4 h-4 mr-1" />
-                Select
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (!isPro && passwords.length >= getLimit('passwords')) {
-                  toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
-                  return;
-                }
-                setEditingPassword(null);
-                setShowAddModal(true);
-              }}
-              size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl"
-              disabled={!isPro && passwords.length >= getLimit('passwords')}
-              data-testid="add-password-button"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade' : 'Add'}
             </Button>
           </div>
         </div>
