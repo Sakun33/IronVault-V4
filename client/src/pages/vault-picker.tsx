@@ -223,8 +223,16 @@ export default function VaultPickerPage() {
       } else {
         setErrors(e => ({ ...e, [vaultId]: 'Incorrect master password. Please try again.' }));
       }
-    } catch {
-      setErrors(e => ({ ...e, [vaultId]: 'Failed to unlock vault.' }));
+    } catch (err: any) {
+      const raw = (err?.message || '').toString();
+      const looksLikeWrongPassword =
+        /decrypt/i.test(raw) || /Invalid master key/i.test(raw) || /JSON/i.test(raw);
+      setErrors(e => ({
+        ...e,
+        [vaultId]: looksLikeWrongPassword
+          ? 'Incorrect master password. Please try again.'
+          : 'Failed to unlock vault.',
+      }));
     } finally {
       setLoading(null);
     }
@@ -400,7 +408,20 @@ export default function VaultPickerPage() {
       toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
       setLocation('/');
     } catch (err: any) {
-      setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: err?.message || 'Failed to unlock cloud vault.' }));
+      const raw = (err?.message || '').toString();
+      // Decryption failures, JSON parse errors and "file format not recognized" all
+      // indicate a wrong master password — surface a clean, user-friendly message.
+      const looksLikeWrongPassword =
+        /decrypt/i.test(raw) ||
+        /file format/i.test(raw) ||
+        /JSON/i.test(raw) ||
+        /Invalid master key/i.test(raw) ||
+        /Failed to import vault/i.test(raw) ||
+        /Unsupported state/i.test(raw);
+      const friendly = looksLikeWrongPassword
+        ? 'Incorrect master password. Please try again.'
+        : raw || 'Failed to unlock cloud vault.';
+      setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: friendly }));
     } finally {
       setCloudDownloading(null);
     }

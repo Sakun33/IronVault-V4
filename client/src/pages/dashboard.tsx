@@ -13,6 +13,7 @@ import { format, differenceInCalendarDays, formatDistanceToNow } from "date-fns"
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { Favicon } from "@/components/favicon";
+import { PasswordGenerator } from "@/lib/password-generator";
 import { motion } from "framer-motion";
 
 // ── Animation variants ────────────────────────────────────────────────────────
@@ -23,11 +24,13 @@ const fadeUp = {
 const stagger = { show: { transition: { staggerChildren: 0.07 } } };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function pwdStrength(pwd: string): 'weak' | 'fair' | 'strong' {
-  if (!pwd || pwd.length < 8) return 'weak';
-  const checks = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(pwd)).length;
-  if (pwd.length < 12 || checks < 3) return 'fair';
-  return 'strong';
+type StrengthBucket = 'weak' | 'medium' | 'strong';
+function pwdStrength(pwd: string): StrengthBucket {
+  if (!pwd) return 'weak';
+  const { level } = PasswordGenerator.calculateStrength(pwd);
+  if (level === 'weak') return 'weak';
+  if (level === 'medium') return 'medium';
+  return 'strong'; // 'strong' or 'very-strong'
 }
 
 function maskUsername(u: string): string {
@@ -248,8 +251,11 @@ export default function Dashboard() {
   // ── Derived stats ─────────────────────────────────────────────────────────
   const weakPasswordList = useMemo(() =>
     passwords.filter(p => pwdStrength(p.password || '') === 'weak'), [passwords]);
+  const mediumPasswordList = useMemo(() =>
+    passwords.filter(p => pwdStrength(p.password || '') === 'medium'), [passwords]);
   const weakPasswords = weakPasswordList.length;
-  const strongPasswords = passwords.length - weakPasswords;
+  const mediumPasswords = mediumPasswordList.length;
+  const strongPasswords = Math.max(0, passwords.length - weakPasswords - mediumPasswords);
 
   const monthlySubSpend = useMemo(() =>
     subscriptions.filter(s => s.isActive).reduce((t, s) => {
@@ -282,8 +288,9 @@ export default function Dashboard() {
     if (stats.totalNotes > 0) score += 10;
     if (reminders.length > 0) score += 5;
     score -= weakPasswords * 4;
+    score -= mediumPasswords * 2;
     return Math.max(0, Math.min(100, Math.round(score)));
-  }, [stats, expenses.length, weakPasswords, reminders.length]);
+  }, [stats, expenses.length, weakPasswords, mediumPasswords, reminders.length]);
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, number> = {};
@@ -352,13 +359,14 @@ export default function Dashboard() {
   interface InsightItem { icon: React.ElementType; text: string; sub?: string; variant: 'red' | 'amber' | 'green'; href?: string; }
   const insights = useMemo((): InsightItem[] => {
     const items: InsightItem[] = [];
-    if (weakPasswords > 0) items.push({ icon: AlertTriangle, text: `${weakPasswords} weak password${weakPasswords > 1 ? 's' : ''}`, sub: 'Tap to fix', variant: 'red', href: '/passwords' });
+    if (weakPasswords > 0) items.push({ icon: AlertTriangle, text: `${weakPasswords} weak password${weakPasswords > 1 ? 's' : ''}`, sub: 'Tap to fix', variant: 'red', href: '/passwords?strength=weak' });
+    if (mediumPasswords > 0) items.push({ icon: AlertTriangle, text: `${mediumPasswords} medium password${mediumPasswords > 1 ? 's' : ''}`, sub: 'Could be stronger', variant: 'amber', href: '/passwords?strength=medium' });
     const expiringCount = subscriptions.filter(s => s.isActive && s.nextBillingDate && differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) <= 7).length;
     if (expiringCount > 0) items.push({ icon: Calendar, text: `${expiringCount} renewal${expiringCount > 1 ? 's' : ''} this week`, sub: 'Check billing', variant: 'amber', href: '/subscriptions' });
     if (dueTodayCount > 0) items.push({ icon: Bell, text: `${dueTodayCount} reminder${dueTodayCount > 1 ? 's' : ''} due today`, sub: "Don't miss them", variant: 'red', href: '/reminders' });
     if (items.length === 0) items.push({ icon: CheckCircle, text: 'All clear', sub: 'No action needed', variant: 'green' });
     return items;
-  }, [weakPasswords, subscriptions, dueTodayCount]);
+  }, [weakPasswords, mediumPasswords, subscriptions, dueTodayCount]);
 
   const insightStyles: Record<string, string> = {
     red: 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400',
@@ -369,7 +377,7 @@ export default function Dashboard() {
   // ── Stat items ────────────────────────────────────────────────────────────
   const pinnedNotes = notes.filter(n => n.isPinned).length;
   const statItems = [
-    { icon: Lock, label: 'Passwords', value: stats.totalPasswords, sub: weakPasswords > 0 ? `${weakPasswords} weak` : `${strongPasswords} strong`, subColor: weakPasswords > 0 ? '#ef4444' : '#22c55e', href: '/passwords', accent: '#6366f1' },
+    { icon: Lock, label: 'Passwords', value: stats.totalPasswords, sub: weakPasswords > 0 ? `${weakPasswords} weak` : mediumPasswords > 0 ? `${mediumPasswords} medium` : `${strongPasswords} strong`, subColor: weakPasswords > 0 ? '#ef4444' : mediumPasswords > 0 ? '#f59e0b' : '#22c55e', href: '/passwords', accent: '#6366f1' },
     { icon: FileText, label: 'Notes', value: stats.totalNotes, sub: pinnedNotes > 0 ? `${pinnedNotes} pinned` : undefined, subColor: '#f59e0b', href: '/notes', accent: '#f59e0b' },
     { icon: CreditCard, label: 'Subscriptions', value: stats.activeSubscriptions, sub: monthlySubSpend > 0 ? `${fmtAmt(monthlySubSpend)}/mo` : undefined, subColor: '#a855f7', href: '/subscriptions', accent: '#a855f7' },
     { icon: DollarSign, label: 'Expenses', value: stats.totalExpenses, sub: thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo` : undefined, subColor: '#22c55e', href: '/expenses', accent: '#22c55e' },
@@ -409,10 +417,18 @@ export default function Dashboard() {
                   Strong: <span className="font-semibold">{strongPasswords}/{stats.totalPasswords}</span>
                 </span>
               </div>
+              {mediumPasswords > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                  <button onClick={() => setLocation('/passwords?strength=medium')} className="text-sm text-amber-200 hover:text-amber-100 underline underline-offset-2 text-left">
+                    Medium: {mediumPasswords} — improve
+                  </button>
+                </div>
+              )}
               {weakPasswords > 0 && (
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                  <button onClick={() => setLocation('/passwords')} className="text-sm text-red-300 hover:text-red-100 underline underline-offset-2 text-left">
+                  <button onClick={() => setLocation('/passwords?strength=weak')} className="text-sm text-red-300 hover:text-red-100 underline underline-offset-2 text-left">
                     Weak: {weakPasswords} — fix now
                   </button>
                 </div>
@@ -568,7 +584,7 @@ export default function Dashboard() {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {weakPasswordList.slice(0, 6).map(p => (
-                <Link key={p.id} href="/passwords">
+                <Link key={p.id} href="/passwords?strength=weak">
                   <span className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full hover:bg-red-500/20 transition-colors cursor-pointer border border-red-500/20">
                     {p.url ? <Favicon url={p.url} name={p.name} size={11} /> : <Lock className="w-2.5 h-2.5" />}
                     {p.name}
@@ -577,6 +593,35 @@ export default function Dashboard() {
               ))}
               {weakPasswords > 6 && (
                 <span className="text-xs text-muted-foreground px-2 py-0.5">+{weakPasswords - 6} more</span>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Medium password alert ─────────────────────────────────────────── */}
+      {mediumPasswords > 0 && (
+        <motion.div variants={fadeUp}
+          className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+              {mediumPasswords} medium {mediumPasswords === 1 ? 'password' : 'passwords'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2.5">
+              Decent, but could be stronger — consider adding length or symbols.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {mediumPasswordList.slice(0, 6).map(p => (
+                <Link key={p.id} href="/passwords?strength=medium">
+                  <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full hover:bg-amber-500/20 transition-colors cursor-pointer border border-amber-500/20">
+                    {p.url ? <Favicon url={p.url} name={p.name} size={11} /> : <Lock className="w-2.5 h-2.5" />}
+                    {p.name}
+                  </span>
+                </Link>
+              ))}
+              {mediumPasswords > 6 && (
+                <span className="text-xs text-muted-foreground px-2 py-0.5">+{mediumPasswords - 6} more</span>
               )}
             </div>
           </div>

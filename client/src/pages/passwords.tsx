@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,14 +21,32 @@ import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Passwords() {
-  const { passwords, deletePassword, bulkDeletePasswords, searchQuery, setSearchQuery } = useVault();
+  const { passwords, deletePassword, bulkDeletePasswords } = useVault();
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
+
+  // Local search — independent of the global header search so typing in one
+  // doesn't propagate to the other.
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPassword, setEditingPassword] = useState<any>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [strengthFilter, setStrengthFilter] = useState<string>('all');
+  // Strength filter respects ?strength=weak|medium|strong from the URL so
+  // dashboard "fix now" tiles deep-link straight into a filtered view.
+  // wouter v2 doesn't ship useSearch — useLocation re-renders on in-app
+  // navigation, and we read window.location.search directly inside the effect.
+  const [location] = useLocation();
+  const readStrengthParam = (): 'weak' | 'medium' | 'strong' | null => {
+    if (typeof window === 'undefined') return null;
+    const param = new URLSearchParams(window.location.search).get('strength');
+    return param === 'weak' || param === 'medium' || param === 'strong' ? param : null;
+  };
+  const [strengthFilter, setStrengthFilter] = useState<string>(() => readStrengthParam() ?? 'all');
+  useEffect(() => {
+    const next = readStrengthParam();
+    if (next) setStrengthFilter(next);
+  }, [location]);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedPassword, setSelectedPassword] = useState<any>(null);

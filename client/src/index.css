@@ -4,6 +4,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide native browser reveal/credentials icons on password inputs — we render our own toggle */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-caps-lock-indicator,
+input::-webkit-strong-password-auto-fill-button {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+}
+
 /* =============================================
    IronVault Premium Design System v2.0
    Inspired by: Linear, Arc, Notion, Stripe
