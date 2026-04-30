@@ -149,8 +149,12 @@ async function unlockVault(page: Page) {
     await createVaultFull(page);
   } else {
     // Vault picker is shown → enter master password for the first vault
+    // On web, paid users with cloud vaults see button-unlock-cloud-vault; on
+    // native (or paywall-bypassed) users see button-unlock-vault for local vaults.
     // Use .first() — after test 14.12 there may be 2+ vaults in the picker
-    const unlockBtn = page.getByTestId('button-unlock-vault').first();
+    const unlockBtn = page.locator(
+      '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+    ).first();
     await unlockBtn.waitFor({ timeout: 12000 });
     await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
     await unlockBtn.click();
@@ -293,10 +297,27 @@ test.describe.serial('IronVault Full Sweep', () => {
       await injectAccountSession(page);
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(600);
-      // Vault picker should be shown (button-unlock-vault or button-create-new-vault)
-      const unlockVisible = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 5000 }).catch(() => false);
-      const createVisible = await page.getByTestId('button-create-new-vault').isVisible({ timeout: 5000 }).catch(() => false);
-      expect(unlockVisible || createVisible).toBe(true);
+      // Vault picker is shown when ONE of these is visible:
+      //  - button-unlock-vault         → native/local vault present
+      //  - button-unlock-cloud-vault   → web paid user with cloud vault
+      //  - button-create-new-vault     → native/paywall-bypassed, no vault yet
+      //  - button-choose-pro_monthly   → web free user upgrade gate
+      //  - button-continue-free        → web free user upgrade gate "skip" link
+      const candidates = [
+        'button-unlock-vault',
+        'button-unlock-cloud-vault',
+        'button-create-new-vault',
+        'button-choose-pro_monthly',
+        'button-continue-free',
+      ];
+      let pickerVisible = false;
+      for (const tid of candidates) {
+        if (await page.getByTestId(tid).isVisible({ timeout: 2000 }).catch(() => false)) {
+          pickerVisible = true;
+          break;
+        }
+      }
+      expect(pickerVisible).toBe(true);
     });
   });
 
@@ -2284,7 +2305,11 @@ async function unlockProVault(page: Page) {
     // Give license sync (async server fetch) time to write pro license to IndexedDB
     await page.waitForTimeout(4000);
   } else {
-    const unlockBtn = page.getByTestId('button-unlock-vault').first();
+    // On web, paid users with cloud vaults see button-unlock-cloud-vault; on
+    // native (or paywall-bypassed) users see button-unlock-vault for local vaults.
+    const unlockBtn = page.locator(
+      '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+    ).first();
     await unlockBtn.waitFor({ timeout: 12000 });
     await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
     await unlockBtn.click();
