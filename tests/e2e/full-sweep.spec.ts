@@ -312,7 +312,9 @@ test.describe.serial('IronVault Full Sweep', () => {
       ];
       let pickerVisible = false;
       for (const tid of candidates) {
-        if (await page.getByTestId(tid).isVisible({ timeout: 2000 }).catch(() => false)) {
+        // .first() avoids strict-mode violation when multiple cloud vaults
+        // render the same testid (e.g. 3 cloud vaults each have button-unlock-cloud-vault).
+        if (await page.getByTestId(tid).first().isVisible({ timeout: 2000 }).catch(() => false)) {
           pickerVisible = true;
           break;
         }
