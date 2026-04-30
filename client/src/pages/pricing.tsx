@@ -195,11 +195,12 @@ export default function PricingPage() {
                   ))}
                 </ul>
                 <Button
-                  disabled={btn.disabled || isLoading}
+                  disabled={btn.disabled}
                   className={`w-full rounded-xl ${btn.className}`}
                   onClick={() => handleSelectPlan(plan.id)}
+                  data-testid={`button-choose-${plan.id}`}
                 >
-                  {btn.label}
+                  {isLoading && !btn.disabled ? 'Choose Plan' : btn.label}
                 </Button>
               </CardContent>
             </Card>

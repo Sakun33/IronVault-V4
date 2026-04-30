@@ -1000,7 +1000,7 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={150} skipDelayDuration={300}>
           <ThemeProvider>
             <LoggingProvider>
               <AuthProvider>

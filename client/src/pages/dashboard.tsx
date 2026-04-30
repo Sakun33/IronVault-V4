@@ -104,7 +104,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 // ── Animated security ring ────────────────────────────────────────────────────
-function SecurityRing({ score }: { score: number }) {
+function SecurityRing({ score, isEmpty = false }: { score: number; isEmpty?: boolean }) {
   const [animScore, setAnimScore] = useState(0);
   const size = 84, sw = 7;
   const r = (size - sw) / 2;
@@ -117,17 +117,23 @@ function SecurityRing({ score }: { score: number }) {
     return () => clearTimeout(t);
   }, [score]);
 
-  const label = score >= 90 ? 'EXCELLENT' : score >= 75 ? 'STRONG' : score >= 50 ? 'FAIR' : 'WEAK';
+  const label = isEmpty
+    ? 'EMPTY'
+    : score >= 90 ? 'EXCELLENT' : score >= 75 ? 'STRONG' : score >= 50 ? 'FAIR' : 'WEAK';
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="white" strokeWidth={sw}
-        strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-        strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`}
-        style={{ transition: 'stroke-dasharray 1.3s cubic-bezier(0.4,0,0.2,1)' }} />
+      {!isEmpty && (
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="white" strokeWidth={sw}
+          strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
+          strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: 'stroke-dasharray 1.3s cubic-bezier(0.4,0,0.2,1)' }} />
+      )}
       <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="middle"
-        fontSize="22" fontWeight="800" fill="white">{animScore}</text>
+        fontSize={isEmpty ? '20' : '22'} fontWeight="800" fill="white">
+        {isEmpty ? '—' : animScore}
+      </text>
       <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="middle"
         fontSize="7.5" fontWeight="700" fill="rgba(255,255,255,0.6)" letterSpacing="0.06em">{label}</text>
     </svg>
@@ -412,7 +418,7 @@ export default function Dashboard() {
               column-start matches the static rows pixel-for-pixel — using
               <button> here previously offset the text via user-agent styles. */}
           <div className="flex items-center gap-5 mb-5">
-            <SecurityRing score={securityScore} />
+            <SecurityRing score={securityScore} isEmpty={stats.totalPasswords === 0} />
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
@@ -614,6 +620,7 @@ export default function Dashboard() {
       {/* ── Medium password strip ─────────────────────────────────────────── */}
       {mediumPasswords > 0 && (
         <motion.div variants={fadeUp}
+          data-testid="medium-passwords-section"
           className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5">
           <div className="flex items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2 min-w-0">

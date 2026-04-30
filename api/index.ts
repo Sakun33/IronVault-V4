@@ -262,12 +262,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const path = (req.url || "").replace(/\?.*$/, "");
 
   // ── Health ──────────────────────────────────────────────────────────────────
-  if (path === "/api/health" || path === "/api/health/") {
+  if (path === "/api/health" || path === "/api/health/" || path === "/api/healthz" || path === "/api/healthz/") {
     return res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       env: "vercel",
       db: !!process.env.DATABASE_URL,
+    });
+  }
+
+  // ── Version ─────────────────────────────────────────────────────────────────
+  if (path === "/api/version" || path === "/api/version/") {
+    return res.json({
+      version: "1.0.0",
+      build: process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "dev",
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -898,56 +907,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `SELECT id, account_password_hash, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
-      let userId: string;
       if (!userRows[0]) {
-        // Check legacy customers table to inherit plan for existing customers
-        const { rows: legacyRows } = await db.query(
-          `SELECT full_name, plan_type FROM customers WHERE email = $1 LIMIT 1`,
-          [normalizedEmail]
-        ).catch(() => ({ rows: [] as any[] }));
-        const legacyPlan = legacyRows[0]?.plan_type || 'free';
-        const fullName = legacyRows[0]?.full_name || normalizedEmail.split('@')[0];
-        // Auto-register minimal CRM user and inherit plan from legacy table.
-        // ON CONFLICT handles the race condition where two simultaneous logins
-        // both see "not found" and attempt INSERT at the same time.
-        const { rows: newUser } = await db.query(
-          `INSERT INTO crm_users (email, full_name, country, marketing_consent, support_consent)
-           VALUES ($1, $2, 'US', false, true)
-           ON CONFLICT (email) DO UPDATE SET full_name = COALESCE(EXCLUDED.full_name, crm_users.full_name)
-           RETURNING id`,
-          [normalizedEmail, fullName]
-        );
-        userId = newUser[0].id;
-        const resolvedPlan = ['pro', 'lifetime', 'family'].includes(legacyPlan) ? legacyPlan : 'free';
-        // Check if entitlement already exists before inserting
-        const { rows: existingEnt } = await db.query(
-          `SELECT id FROM entitlements WHERE user_id = $1 LIMIT 1`, [userId]
-        ).catch(() => ({ rows: [] as any[] }));
-        if (!existingEnt[0]) {
-          await db.query(
-            `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
-             VALUES ($1, $2, 'active', false, false, false)`,
-            [userId, resolvedPlan]
-          ).catch(() => {}); // ignore if table doesn't exist or other constraint issue
-        }
-        // Store hash (trust-on-first-use)
-        await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [accountPasswordHash, userId]);
-        // Send welcome email for genuinely new accounts
-        const welcomeTmpl = welcomeEmail(fullName);
-        sendEmail({ to: normalizedEmail, ...welcomeTmpl }).catch(() => {});
-      } else {
-        userId = userRows[0].id;
-        const storedHash = userRows[0].account_password_hash;
-        if (!storedHash) {
-          // First time associating a hash with this account
-          await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [accountPasswordHash, userId]);
-        } else if (storedHash !== accountPasswordHash) {
-          return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        // Block login if email not yet verified
-        if (userRows[0].account_status === 'pending_verification') {
-          return res.status(403).json({ error: 'email_not_verified' });
-        }
+        return res.status(401).json({ error: 'Account not found. Please sign up first.' });
+      }
+      const userId: string = userRows[0].id;
+      const storedHash = userRows[0].account_password_hash;
+      if (!storedHash) {
+        return res.status(401).json({ error: 'Account not found. Please sign up first.' });
+      }
+      if (storedHash !== accountPasswordHash) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      // Block login if email not yet verified
+      if (userRows[0].account_status === 'pending_verification') {
+        return res.status(403).json({ error: 'email_not_verified' });
       }
       // Fire-and-forget: stamp last_active_at for inactive-user re-engagement workflow
       db.query(`UPDATE crm_users SET last_active_at = NOW() WHERE id = $1`, [userId])
@@ -1407,7 +1380,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { rows } = await db.query(
         `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]
       );
-      // Always return success (don't reveal if email exists)
+      // Always return success (don't reveal if email exists). Report
+      // emailSent based on whether SMTP is configured, not on whether
+      // we actually attempted a send for this email.
       if (!rows[0]) {
         return res.json({ success: true, emailSent: emailConfigured });
       }
@@ -1421,7 +1396,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const resetLink = `${APP_URL}/auth/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
       if (emailConfigured) {
         const tmpl = passwordResetEmail(resetLink);
-        const sent = await sendEmail({ to: normalizedEmail, ...tmpl });
+        // Await the email send fully so the response reflects the actual
+        // outcome. Retry once on transient SMTP failure to smooth over
+        // network blips that previously caused intermittent emailSent:false.
+        let sent = await sendEmail({ to: normalizedEmail, ...tmpl });
+        if (!sent) {
+          sent = await sendEmail({ to: normalizedEmail, ...tmpl });
+        }
         return res.json({ success: true, emailSent: sent });
       } else {
         // SMTP not configured — return token for in-app display (dev/demo fallback)

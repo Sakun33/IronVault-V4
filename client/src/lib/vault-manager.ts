@@ -290,27 +290,29 @@ export class VaultManager {
 
     const id = `vault_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const iconColor = ICON_COLORS[registry.length % ICON_COLORS.length];
-    
+
     if (isDefault) {
       registry.forEach(v => { v.isDefault = false; });
     }
-    
+
+    const uniqueName = this.dedupeVaultName(name, registry);
+
     const newVault: VaultListEntry = {
       id,
-      name,
+      name: uniqueName,
       createdAt: new Date().toISOString(),
       lastAccessedAt: new Date().toISOString(),
       isDefault,
       biometricEnabled: false,
       iconColor,
     };
-    
+
     registry.push(newVault);
     this.saveRegistry(registry);
-    
+
     return {
       id,
-      name,
+      name: uniqueName,
       createdAt: new Date(newVault.createdAt),
       lastAccessedAt: new Date(newVault.lastAccessedAt),
       isDefault,
@@ -318,6 +320,20 @@ export class VaultManager {
       itemCount: 0,
       iconColor,
     };
+  }
+
+  /**
+   * Resolve a vault name against the existing registry, appending a suffix
+   * ("My Vault 2", "My Vault 3", …) if the requested name is already taken.
+   * Comparison is case-insensitive on trimmed names.
+   */
+  private dedupeVaultName(requested: string, registry: VaultListEntry[]): string {
+    const base = (requested || '').trim() || 'My Vault';
+    const taken = new Set(registry.map(v => (v.name || '').trim().toLowerCase()));
+    if (!taken.has(base.toLowerCase())) return base;
+    let i = 2;
+    while (taken.has(`${base} ${i}`.toLowerCase())) i++;
+    return `${base} ${i}`;
   }
 
   async updateVault(vaultId: string, updates: Partial<Pick<VaultInfo, 'name' | 'isDefault' | 'biometricEnabled'>>): Promise<void> {
