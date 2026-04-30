@@ -47,7 +47,7 @@ async function injectProSession(page: Page) {
 async function unlockProVault(page: Page) {
   await page.goto(BASE_URL, { waitUntil: 'networkidle' });
   const alreadyIn = await page.evaluate(
-    () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
   ).catch(() => false);
   if (alreadyIn) return;
 
@@ -72,7 +72,7 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-confirm-password').fill(PRO_MASTER_PW);
     await page.getByTestId('button-create-vault').click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 40000 }
     );
     await page.waitForTimeout(4000);
@@ -82,7 +82,7 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
     await unlockBtn.click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 30000 }
     );
     await page.waitForTimeout(3000);
@@ -138,7 +138,7 @@ async function injectFreeSession(page: Page) {
 async function unlockVault(page: Page) {
   await page.goto(BASE_URL, { waitUntil: 'networkidle' });
   const alreadyIn = await page.evaluate(
-    () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
   ).catch(() => false);
   if (alreadyIn) return;
 
@@ -169,7 +169,7 @@ async function unlockVault(page: Page) {
     await page.getByTestId('input-confirm-password').fill(MASTER_PW);
     await page.getByTestId('button-create-vault').click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 40000 }
     );
   } else {
@@ -178,7 +178,7 @@ async function unlockVault(page: Page) {
     await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
     await unlockBtn.click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 30000 }
     );
   }
@@ -205,7 +205,7 @@ async function navigate(page: Page, route: string) {
     await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').first().click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 20000 }
     );
     await page.evaluate((r: string) => {
@@ -1787,7 +1787,7 @@ proTest.describe.serial('J · Dashboard Deep Verify (pro)', () => {
     await page.waitForTimeout(500);
 
     const hasH1 = await page.evaluate(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
     );
     expect(hasH1).toBe(true);
   });

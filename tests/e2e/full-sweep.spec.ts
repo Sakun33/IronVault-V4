@@ -98,7 +98,7 @@ async function createVaultFull(page: Page) {
   // Playwright's visibility model — on mobile the h1 can be inside an overflow-hidden scroll
   // container that clips it, making toBeVisible() fail even though the page is rendered.
   await page.waitForFunction(
-    () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
     { timeout: 40000 }
   );
 }
@@ -115,7 +115,7 @@ async function unlockVault(page: Page) {
   // Use evaluate to check DOM presence (not visibility) — avoids false-negative from
   // overflow-hidden clipping or dialog h1 taking priority in Playwright's first-match
   const alreadyIn = await page.evaluate(
-    () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
   ).catch(() => false);
   if (alreadyIn) return;
 
@@ -156,7 +156,7 @@ async function unlockVault(page: Page) {
     await unlockBtn.click();
     // Use waitForFunction to bypass Playwright's visibility model (mobile overflow-hidden issue)
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 30000 }
     );
   }
@@ -196,7 +196,7 @@ async function navigate(page: Page, route: string) {
     await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').first().click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 20000 }
     );
 
@@ -225,7 +225,7 @@ async function navigate(page: Page, route: string) {
     await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
     await page.getByTestId('button-unlock-vault').first().click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 20000 }
     );
 
@@ -281,7 +281,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       // (mobile overflow-hidden clipping) and handles the 2 h1 "Dashboard" elements
       // that appear on desktop (sidebar nav + main content both render it as h1)
       const onDashboard = await page.evaluate(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
       );
       expect(onDashboard).toBe(true);
     });
@@ -306,7 +306,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await unlockVault(page);
       await navigate(page, '/');
       const onDash = await page.evaluate(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
       );
       expect(onDash).toBe(true);
       // Check Dashboard content via DOM evaluation — bypasses all CSS visibility/clipping issues
@@ -1373,7 +1373,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
       await page.getByTestId('button-unlock-vault').first().click();
       await page.waitForFunction(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
         { timeout: 20000 }
       );
     });
@@ -1557,7 +1557,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.getByTestId('button-create-vault').click();
       // Second vault creation should land on Dashboard (use waitForFunction for mobile compat)
       await page.waitForFunction(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
         { timeout: 25000 }
       );
       // Lock and reload — vault picker should show 2+ vaults
@@ -1571,7 +1571,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.getByTestId('input-unlock-password').nth(1).fill(SECOND_VAULT_PW);
       await page.getByTestId('button-unlock-vault').nth(1).click();
       await page.waitForFunction(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
         { timeout: 20000 }
       );
     });
@@ -2163,7 +2163,7 @@ test.describe.serial('IronVault Full Sweep', () => {
 
       // Wait for Dashboard
       const reached = await page.waitForFunction(
-        () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
         { timeout: 30000 }
       ).then(() => true).catch(() => false);
       expect(reached).toBe(true);
@@ -2253,7 +2253,7 @@ async function injectProSession(page: Page) {
 async function unlockProVault(page: Page) {
   await page.goto(BASE_URL, { waitUntil: 'networkidle' });
   const alreadyIn = await page.evaluate(
-    () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard')
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
   ).catch(() => false);
   if (alreadyIn) return;
 
@@ -2278,7 +2278,7 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-confirm-password').fill(PRO_MASTER_PW);
     await page.getByTestId('button-create-vault').click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 40000 }
     );
     // Give license sync (async server fetch) time to write pro license to IndexedDB
@@ -2289,7 +2289,7 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
     await unlockBtn.click();
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => h.textContent?.trim() === 'Dashboard'),
+      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 30000 }
     );
     // LicenseProvider reloads on vault unlock — give syncFromServer() time to complete
