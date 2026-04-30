@@ -551,26 +551,29 @@ test.describe.serial('IronVault Full Sweep', () => {
     test('4.1 add note', async ({ page }) => {
       await unlockVault(page);
       await navigate(page, '/notes');
-      const addNoteFound = await page.locator('button:has-text("Add"), button:has-text("New Note")').first().isVisible({ timeout: 5000 }).catch(() => false) || await page.locator('button:has-text("Add"), button:has-text("New Note")').first().isEnabled({ timeout: 3000 }).catch(() => false);
-      if (!addNoteFound) return;
-      await page.evaluate(() => { const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Add') || b.textContent?.includes('New Note')) as HTMLElement; btn?.click(); });
+      // Empty state shows button-create-first-note; populated state shows
+      // button-add-note in the header. Try both — whichever opens the modal.
+      const opener = page.locator(
+        '[data-testid="button-add-note"], [data-testid="button-create-first-note"]'
+      ).first();
+      const opened = await opener.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!opened) return;
+      await opener.click();
 
-      // Use force:true fills — mobile overflow:hidden makes isVisible() return false
-      // but fill({ force: true }) bypasses visibility checks while still firing React events
-      await page.waitForTimeout(500);
-      const titleInput2 = page.locator('input[placeholder*="title" i]').first();
-      const titleFound = await titleInput2.count().then(c => c > 0).catch(() => false);
-      if (titleFound) await titleInput2.fill('Sweep Test Note', { force: true }).catch(() => {});
+      // Wait for the modal to actually render the title input before typing.
+      const titleInput = page.getByTestId('input-note-title');
+      await titleInput.waitFor({ state: 'visible', timeout: 8000 });
+      await titleInput.fill('Sweep Test Note');
 
-      const contentArea2 = page.locator('textarea').first();
-      const contentFound = await contentArea2.count().then(c => c > 0).catch(() => false);
-      if (contentFound) await contentArea2.fill('This is an automated sweep note.', { force: true }).catch(() => {});
+      const contentArea = page.getByTestId('input-note-content');
+      if (await contentArea.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await contentArea.fill('This is an automated sweep note.');
+      }
 
-      // Save button has testid "button-save-note" and text "Add Note" (not "Save")
-      await page.evaluate(() => { const btn = document.querySelector('[data-testid="button-save-note"]') as HTMLElement; btn?.click(); });
+      await page.getByTestId('button-save-note').click();
       await page.waitForFunction(
         () => (document.body.textContent || '').includes('Sweep Test Note'),
-        { timeout: 15000 }
+        { timeout: 20000 }
       );
     });
 
@@ -722,8 +725,15 @@ test.describe.serial('IronVault Full Sweep', () => {
         }
         await createBtn.click();
         await page.waitForTimeout(800);
-        // Should either open new-vault dialog or show upgrade gate
-        const dialogOrGate = await page.locator('[role="dialog"], text=/limit|upgrade|pro/i').first().isVisible({ timeout: 5000 }).catch(() => false);
+        // Should either open new-vault dialog OR show upgrade gate. Prefer
+        // testid-based detection for the dialog input — `[role="dialog"]` is
+        // ambiguous when other always-mounted dialogs (e.g. toasts) are present.
+        const dialogOrGate = await page.evaluate(() => {
+          const t = document.body.textContent || '';
+          return !!document.querySelector('[data-testid="input-new-vault-name"]') ||
+                 !!document.querySelector('[role="dialog"][data-state="open"]') ||
+                 /limit|upgrade|pro plan|premium/i.test(t);
+        });
         expect(dialogOrGate).toBe(true);
         await page.keyboard.press('Escape');
       }
@@ -1364,9 +1374,12 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Reload page — vault session (sessionStorage) is lost but account session (localStorage) persists
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(600);
-      // Should see vault picker (Tier 2) not landing page (Tier 1)
-      const vaultPickerShown = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 5000 }).catch(() => false)
-        || await page.getByTestId('button-create-new-vault').isVisible({ timeout: 5000 }).catch(() => false);
+      // Should see vault picker (Tier 2) not landing page (Tier 1).
+      // Web paid users see button-unlock-cloud-vault; native/paywall-bypassed
+      // users see button-unlock-vault or button-create-new-vault.
+      const vaultPickerShown = await page.getByTestId('button-unlock-vault').first().isVisible({ timeout: 5000 }).catch(() => false)
+        || await page.getByTestId('button-unlock-cloud-vault').first().isVisible({ timeout: 5000 }).catch(() => false)
+        || await page.getByTestId('button-create-new-vault').first().isVisible({ timeout: 5000 }).catch(() => false);
       const landingShown = await page.locator('text=Get started free').isVisible({ timeout: 2000 }).catch(() => false);
       expect(vaultPickerShown).toBe(true);
       expect(landingShown).toBe(false);
@@ -1378,9 +1391,10 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(600);
-      // Vault picker should show the vault name
+      // Vault picker should show some unlock affordance (local OR cloud vault button)
       await page.waitForFunction(
-        () => !!document.querySelector('[data-testid="button-unlock-vault"]'),
+        () => !!document.querySelector('[data-testid="button-unlock-vault"]') ||
+              !!document.querySelector('[data-testid="button-unlock-cloud-vault"]'),
         { timeout: 8000 }
       );
     });
@@ -1394,7 +1408,9 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Enter master password in vault picker
       await page.getByTestId('input-unlock-password').first().waitFor({ timeout: 8000 });
       await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
-      await page.getByTestId('button-unlock-vault').first().click();
+      await page.locator(
+        '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+      ).first().click();
       await page.waitForFunction(
         () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
         { timeout: 20000 }

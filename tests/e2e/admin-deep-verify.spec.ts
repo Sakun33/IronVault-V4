@@ -58,7 +58,21 @@ async function login(page: Page) {
     localStorage.setItem('admin_token', t);
   }, token);
 
-  await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' });
+  // Vercel cold-starts on admin.ironvault.app can exceed 30s. Retry once
+  // with a longer per-attempt budget before giving up.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 1) break;
+      await page.waitForTimeout(2000);
+    }
+  }
+  if (lastErr) throw lastErr;
 
   // Wait for the React app to finish loading and show authenticated content
   await page.waitForFunction(
@@ -73,7 +87,20 @@ async function login(page: Page) {
 }
 
 async function nav(page: Page, route: string) {
-  await page.goto(`${ADMIN_URL}${route}`, { waitUntil: 'domcontentloaded' });
+  // Admin URL can cold-start slowly; retry once with extended timeout.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.goto(`${ADMIN_URL}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 1) break;
+      await page.waitForTimeout(2000);
+    }
+  }
+  if (lastErr) throw lastErr;
   await page.waitForTimeout(600);
 }
 
