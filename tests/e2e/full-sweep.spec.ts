@@ -148,21 +148,30 @@ async function unlockVault(page: Page) {
     // No vault yet → create one via create-vault page
     await createVaultFull(page);
   } else {
-    // Vault picker is shown → enter master password for the first vault
-    // On web, paid users with cloud vaults see button-unlock-cloud-vault; on
-    // native (or paywall-bypassed) users see button-unlock-vault for local vaults.
-    // Use .first() — after test 14.12 there may be 2+ vaults in the picker
-    const unlockBtn = page.locator(
-      '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
-    ).first();
-    await unlockBtn.waitFor({ timeout: 12000 });
-    await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
-    await unlockBtn.click();
-    // Use waitForFunction to bypass Playwright's visibility model (mobile overflow-hidden issue)
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-      { timeout: 30000 }
-    );
+    // Vault picker is shown. The prod test account may have many cloud vaults
+    // accumulated from prior E2E runs (e.g. "E2E Cloud Test Vault" from 16.3),
+    // each with its own master password. Try MASTER_PW against each unlock
+    // button in turn until one reaches the dashboard.
+    const unlockSelector = '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]';
+    const inputSelector = '[data-testid="input-unlock-password"]';
+    await page.locator(unlockSelector).first().waitFor({ timeout: 12000 });
+    const total = await page.locator(unlockSelector).count();
+    let unlocked = false;
+    for (let i = 0; i < total && !unlocked; i++) {
+      const inputs = page.locator(inputSelector);
+      const buttons = page.locator(unlockSelector);
+      // Refetch counts each iteration in case the DOM changed.
+      if (i >= await buttons.count()) break;
+      await inputs.nth(i).fill(MASTER_PW).catch(() => {});
+      await buttons.nth(i).click().catch(() => {});
+      unlocked = await page.waitForFunction(
+        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
+        { timeout: 8000 }
+      ).then(() => true).catch(() => false);
+    }
+    if (!unlocked) {
+      throw new Error(`unlockVault: none of the ${total} vault(s) accepted MASTER_PW`);
+    }
   }
 }
 
@@ -1843,12 +1852,17 @@ test.describe.serial('IronVault Full Sweep', () => {
     });
 
     test('16.7 vault picker shows Cloud section after account login (UI)', async ({ page }) => {
-      // Unlock vault then drop vault session so we land on vault picker
-      await unlockVault(page);
+      // This is a UI-only check — don't go through unlockVault (which would
+      // try to unlock a specific vault and is sensitive to prod data state,
+      // e.g. accumulated test cloud vaults whose master passwords differ).
+      // Instead inject the account session and land on the vault picker
+      // (Tier 2). Then verify the Cloud section text is rendered.
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+      const hasAccountSession = await page.evaluate(() => !!localStorage.getItem('iv_account_session'));
+      if (!hasAccountSession) await injectAccountSession(page);
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForTimeout(1000);
-      // The vault picker should contain Cloud-related text (section label, badge, or empty-state)
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1500);
       const hasCloudText = await page.evaluate(
         () => (document.body.textContent ?? '').includes('Cloud')
       );
@@ -2214,28 +2228,26 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(1000);
 
-      // Check if cloud vault unlock button is present
-      const cloudUnlockBtn = page.getByTestId('button-unlock-cloud-vault').first();
-      const hasCloudVault = await cloudUnlockBtn.isVisible({ timeout: 6000 }).catch(() => false);
-      if (!hasCloudVault) {
+      // Check if any cloud vault unlock button is present
+      const cloudButtons = page.getByTestId('button-unlock-cloud-vault');
+      const cloudCount = await cloudButtons.count();
+      if (cloudCount === 0) {
         // Cloud vaults didn't load (no token / no cloud vault) — skip
         return;
       }
-
-      // Enter master password for the cloud vault (same as local vault).
-      // Cloud vault inputs share testid "input-unlock-password"; they come after local vault inputs.
-      const cloudPwInputs = page.getByTestId('input-unlock-password');
-      const inputCount = await cloudPwInputs.count();
-      if (inputCount > 0) {
-        await cloudPwInputs.nth(inputCount - 1).fill(MASTER_PW);
+      // Try MASTER_PW against each cloud vault in turn — prod accumulates
+      // E2E test vaults with different passwords, so .first() may have a
+      // different password than MASTER_PW. Stop on dashboard.
+      const cloudInputs = page.getByTestId('input-unlock-password');
+      let reached = false;
+      for (let i = 0; i < cloudCount && !reached; i++) {
+        await cloudInputs.nth(i).fill(MASTER_PW).catch(() => {});
+        await cloudButtons.nth(i).click().catch(() => {});
+        reached = await page.waitForFunction(
+          () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
+          { timeout: 8000 }
+        ).then(() => true).catch(() => false);
       }
-      await cloudUnlockBtn.click();
-
-      // Wait for Dashboard
-      const reached = await page.waitForFunction(
-        () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-        { timeout: 30000 }
-      ).then(() => true).catch(() => false);
       expect(reached).toBe(true);
     });
 
