@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: ['**/full-sweep.spec.ts', '**/deep-verify.spec.ts', '**/admin-deep-verify.spec.ts'],
+  testMatch: ['**/full-sweep.spec.ts', '**/deep-verify.spec.ts', '**/admin-deep-verify.spec.ts', '**/admin-console.spec.ts'],
 
   fullyParallel: false,   // serial – vault state is shared across tests
   forbidOnly: !!process.env.CI,
