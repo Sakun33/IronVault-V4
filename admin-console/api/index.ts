@@ -87,22 +87,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
     const hash = crypto.createHash("sha256").update(password || "").digest("hex");
     if (username === ADMIN_USERNAME && hash === ADMIN_PASSWORD_HASH) {
+      // Best-effort: persist last_login so /api/admins can surface it. Ignore failures.
+      if (process.env.DATABASE_URL) {
+        getPool().query(
+          `CREATE TABLE IF NOT EXISTS admin_logins (
+             username TEXT PRIMARY KEY,
+             last_login_at TIMESTAMPTZ,
+             created_at TIMESTAMPTZ DEFAULT NOW()
+           );
+           INSERT INTO admin_logins (username, last_login_at)
+           VALUES ($1, NOW())
+           ON CONFLICT (username) DO UPDATE SET last_login_at = EXCLUDED.last_login_at`,
+          [username]
+        ).catch(() => {});
+      }
       return res.json({ token: createJWT({ username, role: "super_admin" }), user: { username, role: "super_admin" } });
     }
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  // ── Plans (public) ──────────────────────────────────────────────────────────
-  if (path === "/api/plans" && method === "GET") {
-    return res.json(PLANS);
-  }
-
   // ── DB-dependent routes require DATABASE_URL ────────────────────────────────
   if (!process.env.DATABASE_URL) {
+    if (path === "/api/plans" && method === "GET") return res.json(PLANS);
     return res.status(503).json({ error: "DATABASE_URL not configured" });
   }
 
   const db = getPool();
+
+  // ── Plans (public, but augmented with customer_count from entitlements) ────
+  // Frontend (PlansPage) expects: plan_id, name, price, billing_cycle, is_active, customer_count
+  if (path === "/api/plans" && method === "GET") {
+    try {
+      const { rows: counts } = await db.query(
+        `SELECT COALESCE(plan,'free') AS plan, COUNT(*)::int AS c FROM entitlements GROUP BY plan`
+      );
+      const countMap: Record<string, number> = {};
+      for (const r of counts) countMap[r.plan] = Number(r.c);
+      // entitlements stores 'premium' for the Pro plan; surface it as the 'pro' plan id
+      const proCount = (countMap.premium || 0) + (countMap.pro || 0);
+      const customerCount = (id: string) =>
+        id === "pro" ? proCount : (countMap[id] || 0);
+      return res.json(PLANS.map(p => ({
+        ...p,
+        plan_id: p.id,
+        billing_cycle: p.interval || "lifetime",
+        customer_count: customerCount(p.id),
+        is_active: customerCount(p.id) > 0,
+      })));
+    } catch (err: any) {
+      // fall back to static list on DB error
+      return res.json(PLANS);
+    }
+  }
 
   // ── Public customer registration (writes to crm_users — same table as main backend) ─
   if (path === "/api/public/customers/register" && method === "POST") {
@@ -379,12 +415,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { customer_email, subject, description, priority } = req.body || {};
       if (!customer_email || !subject) return res.status(400).json({ error: "customer_email and subject required" });
       try {
-        const { rows: cRows } = await db.query(`SELECT id FROM crm_users WHERE email=$1 LIMIT 1`, [customer_email]);
-        const customerId = cRows[0]?.id || null;
+        // tickets.customer_id FK references the legacy `customers` table, but real users
+        // live in `crm_users`. Backfill a `customers` row from `crm_users` so the FK is satisfied.
+        let customerId: string | null = null;
+        const email = customer_email.toLowerCase().trim();
+        const { rows: cRows } = await db.query(`SELECT id FROM customers WHERE email=$1 LIMIT 1`, [email]);
+        if (cRows[0]) {
+          customerId = cRows[0].id;
+        } else {
+          const { rows: crm } = await db.query(
+            `SELECT id, email, full_name, country, platform FROM crm_users WHERE email=$1 LIMIT 1`,
+            [email]
+          );
+          if (crm[0]) {
+            const { rows: ins } = await db.query(
+              `INSERT INTO customers (id, email, full_name, country, platform)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+               RETURNING id`,
+              [crm[0].id, crm[0].email, crm[0].full_name, crm[0].country, crm[0].platform]
+            );
+            customerId = ins[0]?.id ?? null;
+          }
+        }
         const { rows } = await db.query(
           `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
            VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-          [customerId, customer_email, subject, description || null, priority || "normal"]
+          [customerId, email, subject, description || null, priority || "normal"]
         );
         return res.json({ success: true, ticket: rows[0] });
       } catch (err: any) { return res.status(500).json({ error: err.message }); }
@@ -586,14 +643,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── GET /api/audit-log / /api/admin-logs ────────────────────────────────────
+  // /api/audit-log → raw plan_audit_log rows (backward compat for direct API consumers)
+  // /api/admin-logs → {logs:[{log_id, username, action, resource, details, created_at}]}
+  //                   shape consumed by the SettingsPage UI
   if (path === "/api/audit-log" || path === "/api/admin-logs") {
     try {
       const { rows } = await db.query(
         `SELECT * FROM plan_audit_log ORDER BY created_at DESC LIMIT 100`
       );
+      if (path === "/api/admin-logs") {
+        const logs = rows.map((r: any, i: number) => ({
+          log_id: r.id || i + 1,
+          username: r.changed_by || "system",
+          action: `plan change: ${r.old_plan || "?"} → ${r.new_plan || "?"}`,
+          resource: r.customer_email || null,
+          details: { old_plan: r.old_plan, new_plan: r.new_plan, reason: r.reason },
+          ip_address: null,
+          created_at: r.created_at,
+        }));
+        return res.json({ logs, total: logs.length });
+      }
       return res.json(rows);
     } catch {
-      return res.json([]);
+      return res.json(path === "/api/admin-logs" ? { logs: [], total: 0 } : []);
     }
   }
 
@@ -604,19 +676,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/dashboard/kpis" && method === "GET") {
     try {
       const { rows } = await db.query(
-        `SELECT COUNT(*) AS total,
-                COUNT(*) FILTER (WHERE e.status='trial') AS trials,
-                COUNT(*) FILTER (WHERE e.plan IN ('premium','lifetime')) AS paid
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE u.last_active_at >= NOW() - INTERVAL '30 days')::int AS active_30d,
+                COUNT(*) FILTER (WHERE u.created_at >= NOW() - INTERVAL '24 hours')::int AS new_24h,
+                COUNT(*) FILTER (WHERE e.status='trial')::int AS trials,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) IN ('premium','pro','family'))::int AS paid_recurring,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) = 'lifetime')::int AS lifetime,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) IN ('premium','pro','family','lifetime'))::int AS paid
          FROM crm_users u
          LEFT JOIN entitlements e ON e.user_id = u.id`
       );
-      return res.json({ totalCustomers: parseInt(rows[0].total, 10), activeTrials: parseInt(rows[0].trials, 10), paidCustomers: parseInt(rows[0].paid, 10), mrr: 0, churn: 0 });
+      const r = rows[0];
+      const proPrice = PLANS.find(p => p.id === "pro")?.price ?? 0;
+      const lifetimePrice = PLANS.find(p => p.id === "lifetime")?.price ?? 0;
+      const mrr = Number((r.paid_recurring * proPrice).toFixed(2));
+      const totalRevenue = Number(((r.paid_recurring * proPrice) + (r.lifetime * lifetimePrice)).toFixed(2));
+      return res.json({
+        totalCustomers: r.total,
+        activeCustomers: r.active_30d,
+        paidCustomers: r.paid,
+        activeTrials: r.trials,
+        newSignups: r.new_24h,
+        churnRate: 0,
+        mrr,
+        totalRevenue,
+        churn: 0,
+      });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
   // ── GET /api/dashboard/analytics ───────────────────────────────────────────
   if (path === "/api/dashboard/analytics" && method === "GET") {
-    return res.json({ revenue: [], users: [], retention: [] });
+    try {
+      const { rows } = await db.query(
+        `SELECT LOWER(COALESCE(e.plan,'free')) AS plan, COUNT(*)::int AS c
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id
+         GROUP BY LOWER(COALESCE(e.plan,'free'))`
+      );
+      // Surface entitlements 'premium' as 'pro' for the public-facing pie chart
+      const planStats: Record<string, number> = {};
+      for (const r of rows) {
+        const key = r.plan === "premium" ? "pro" : r.plan;
+        planStats[key] = (planStats[key] || 0) + Number(r.c);
+      }
+      return res.json({ revenue: [], users: [], retention: [], planStats });
+    } catch (err: any) {
+      return res.json({ revenue: [], users: [], retention: [], planStats: {} });
+    }
   }
 
   // ── GET /api/dashboard/stats ────────────────────────────────────────────────
@@ -654,9 +760,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ success: true });
   }
 
-  // ── Admins stub ─────────────────────────────────────────────────────────────
+  // ── Admins ──────────────────────────────────────────────────────────────────
+  // Frontend expects: id, username, email, role, is_active, last_login, created_at
   if (path === "/api/admins") {
-    if (method === "GET") return res.json([{ username: ADMIN_USERNAME, role: "super_admin" }]);
+    if (method === "GET") {
+      let lastLogin: string | null = null;
+      try {
+        const { rows } = await db.query(
+          `SELECT last_login_at FROM admin_logins WHERE username = $1 LIMIT 1`,
+          [ADMIN_USERNAME]
+        );
+        lastLogin = rows[0]?.last_login_at ?? null;
+      } catch { /* table may not exist on first deploy */ }
+      return res.json([{
+        id: 1,
+        username: ADMIN_USERNAME,
+        email: process.env.ADMIN_EMAIL || null,
+        role: "super_admin",
+        is_active: true,
+        last_login: lastLogin,
+        created_at: null,
+      }]);
+    }
     return res.json({ success: true });
   }
 
