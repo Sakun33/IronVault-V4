@@ -257,6 +257,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
+  // ── POST /api/customers ─────────────────────────────────────────────────────
+  // Admin-side "Add Customer". Writes to all three tables that the rest of the
+  // app reads from:
+  //   - crm_users        (the source-of-truth user account)
+  //   - customers        (legacy mirror, FK target for tickets)
+  //   - entitlements     (the user's plan)
+  // ON CONFLICT (email) is idempotent — re-creating an existing email updates
+  // the row instead of erroring.
+  if (path === "/api/customers" && method === "POST") {
+    const { name, email, phone, region, plan_name, status } = (req.body as Record<string, string>) || {};
+    if (!email) return res.status(400).json({ error: "email required" });
+    // Map the frontend dropdown labels (Free / Pro Monthly / Pro Family /
+    // Lifetime) to the canonical entitlements.plan keys. Mirrors the mapping
+    // in /api/customers/:id/upgrade — "pro" → "premium" so we use whichever
+    // canonical name is already in use elsewhere.
+    const planLabel = (plan_name || "free").toString().toLowerCase().trim();
+    const planKey =
+      planLabel.includes("lifetime") ? "lifetime" :
+      planLabel.includes("family")   ? "family" :
+      planLabel.includes("pro")      ? "premium" :
+      planLabel.includes("premium")  ? "premium" :
+                                       "free";
+    const cleanEmail = email.toLowerCase().trim();
+    try {
+      // 1. crm_users — source of truth. Use ON CONFLICT so re-submitting an
+      //    existing email is a no-op rather than an error.
+      const { rows: crm } = await db.query(
+        `INSERT INTO crm_users (email, full_name, country, phone, marketing_consent, support_consent, account_status)
+         VALUES ($1, $2, $3, $4, false, true, $5)
+         ON CONFLICT (email) DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           country   = EXCLUDED.country,
+           phone     = EXCLUDED.phone,
+           updated_at = NOW()
+         RETURNING id, email, full_name, country, phone, created_at`,
+        [cleanEmail, name || null, region || null, phone || null, status || 'active']
+      );
+      const userId = crm[0].id;
+
+      // 2. customers — legacy mirror that other endpoints (tickets) FK to.
+      //    Use the SAME id as crm_users so the two tables stay in sync.
+      await db.query(
+        `INSERT INTO customers (id, email, full_name, country, plan_type, status)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (email) DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           country   = EXCLUDED.country,
+           plan_type = EXCLUDED.plan_type,
+           status    = EXCLUDED.status,
+           updated_at = NOW()`,
+        [userId, cleanEmail, name || null, region || null, planKey, status || 'active']
+      );
+
+      // 3. entitlements — the user's plan (admin override, since this is
+      //    an admin-created customer rather than a real subscription).
+      await db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($1, $2, 'active', false, false, true)
+         ON CONFLICT (user_id) DO UPDATE SET
+           plan = EXCLUDED.plan,
+           status = EXCLUDED.status,
+           admin_override = true,
+           updated_at = NOW()`,
+        [userId, planKey]
+      );
+
+      // Return the customer in the same shape as GET /api/customers
+      const rows = await queryCrmCustomers(`WHERE u.id = $1`, [userId]);
+      return res.json({ success: true, customer: rows[0] });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── GET /api/customers/:id ──────────────────────────────────────────────────
   const customerMatch = path.match(/^\/api\/customers\/([^/]+)$/);
   if (customerMatch) {
