@@ -2267,8 +2267,10 @@ test.describe.serial('IronVault Full Sweep', () => {
 
       // The license context for an unknown user should be free → show upgrade prompt
       const body = await page.evaluate(() => document.body.textContent ?? '');
-      // Either the empty state placeholder for free/pro-not-yet-loaded cloud section, or the upgrade message
-      const showsCloudUpgrade = body.includes('Cloud Sync') || body.includes('Pro feature') || body.includes('Upgrade to Pro') || body.includes('cloud vault');
+      // Match upgrade-related copy case-insensitively. The bypassed-paywall
+      // free banner reads "You're on the Free plan. Upgrade for cloud sync
+      // and more vaults." — we accept any of these markers.
+      const showsCloudUpgrade = /cloud sync|pro feature|upgrade to pro|cloud vault|upgrade for|free plan/i.test(body);
       expect(showsCloudUpgrade).toBe(true);
 
       // Restore main account
