@@ -280,6 +280,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       planLabel.includes("premium")  ? "premium" :
                                        "free";
     const cleanEmail = email.toLowerCase().trim();
+    // crm_users.country is NOT NULL — default to '' when the form leaves Region blank.
+    const country = (region || '').toString();
     try {
       // 1. crm_users — source of truth. Use ON CONFLICT so re-submitting an
       //    existing email is a no-op rather than an error.
@@ -292,7 +294,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            phone     = EXCLUDED.phone,
            updated_at = NOW()
          RETURNING id, email, full_name, country, phone, created_at`,
-        [cleanEmail, name || null, region || null, phone || null, status || 'active']
+        [cleanEmail, name || null, country, phone || null, status || 'active']
       );
       const userId = crm[0].id;
 
@@ -307,7 +309,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            plan_type = EXCLUDED.plan_type,
            status    = EXCLUDED.status,
            updated_at = NOW()`,
-        [userId, cleanEmail, name || null, region || null, planKey, status || 'active']
+        [userId, cleanEmail, name || null, country, planKey, status || 'active']
       );
 
       // 3. entitlements — the user's plan (admin override, since this is
