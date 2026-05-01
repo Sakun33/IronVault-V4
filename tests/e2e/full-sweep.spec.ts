@@ -108,9 +108,26 @@ async function createVaultFull(page: Page) {
  * Idempotent: returns immediately if already on dashboard.
  * Handles the new three-tier auth: account session (localStorage) + vault session (sessionStorage).
  */
+// Networkidle on prod can hang behind keep-alive connections; fall back to
+// domcontentloaded so a flaky network doesn't fail the whole serial cascade.
+async function gotoSafe(page: Page, url: string) {
+  try {
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
+  } catch {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  }
+}
+async function reloadSafe(page: Page) {
+  try {
+    await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
+  } catch {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  }
+}
+
 async function unlockVault(page: Page) {
   // Navigate to root — if vault session is live, Dashboard is shown immediately
-  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  await gotoSafe(page, BASE_URL);
 
   // Use evaluate to check DOM presence (not visibility) — avoids false-negative from
   // overflow-hidden clipping or dialog h1 taking priority in Playwright's first-match
@@ -127,7 +144,7 @@ async function unlockVault(page: Page) {
   if (!hasAccountSession) {
     await injectAccountSession(page);
     // Reload so React picks up the new localStorage state
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadSafe(page);
     await page.waitForTimeout(500);
   }
 
@@ -230,7 +247,7 @@ async function navigate(page: Page, route: string) {
     const hasAccountSession = await page.evaluate(() => !!localStorage.getItem('iv_account_session')).catch(() => false);
     if (!hasAccountSession) {
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(500);
     }
     // After reload, vault picker should appear (use .first() for multi-vault)
@@ -304,7 +321,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
       // Vault picker is shown when ONE of these is visible:
       //  - button-unlock-vault         → native/local vault present
@@ -1401,7 +1418,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await unlockVault(page);
       // Lock vault (clear vault session) but keep account session
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
       // Vault picker should show some unlock affordance (local OR cloud vault button)
       await page.waitForFunction(
@@ -1415,7 +1432,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await unlockVault(page);
       // Lock vault session
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
       // Enter master password in vault picker
       await page.getByTestId('input-unlock-password').first().waitFor({ timeout: 8000 });
@@ -1433,7 +1450,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await unlockVault(page);
       // Lock vault session so vault picker is shown
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
       // Click account logout
       const logoutBtn = page.getByTestId('button-account-logout');
@@ -1526,7 +1543,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Account session in localStorage → fresh page load should show vault picker, not landing
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       await injectAccountSession(page);
-      await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+      await gotoSafe(page, BASE_URL);
       await page.waitForTimeout(500);
       const landingHeroShown = await page.locator('text=Get started free').isVisible({ timeout: 2000 }).catch(() => false);
       const vaultPickerShown = await page.getByTestId('button-unlock-vault').first().isVisible({ timeout: 5000 }).catch(() => false)
@@ -1546,7 +1563,7 @@ test.describe.serial('IronVault Full Sweep', () => {
         localStorage.removeItem('iv_account');
         localStorage.removeItem('iv_onboarding_shown');
       });
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(1200);
       // Verify account session is gone (localStorage cleared)
       const sessionGone = await page.evaluate(() => !localStorage.getItem('iv_account_session'));
@@ -1567,7 +1584,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.evaluate(() => {
         localStorage.setItem('iv_onboarding_shown', 'true');
       });
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(500);
       // Tier 2: vault picker shown (not landing page)
       const vaultPickerShown = await page.getByTestId('button-unlock-vault').first().isVisible({ timeout: 8000 }).catch(() => false)
@@ -1582,7 +1599,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Ensure account session is active first
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(300);
       // Confirm we are in Tier 2 (vault picker or dashboard)
       const inTier2 = await page.getByTestId('button-unlock-vault').first().isVisible({ timeout: 5000 }).catch(() => false)
@@ -1592,7 +1609,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       expect(inTier2).toBe(true);
       // Simulate cache clear: remove account session key
       await page.evaluate(() => localStorage.removeItem('iv_account_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(1200);
       // Verify session is gone
       const sessionGone2 = await page.evaluate(() => !localStorage.getItem('iv_account_session'));
@@ -1657,13 +1674,13 @@ test.describe.serial('IronVault Full Sweep', () => {
 
     test('14.13 biometric unlock button absent on web (isNativeApp() = false)', async ({ page }) => {
       // Navigate to BASE_URL first so sessionStorage is accessible (avoids SecurityError on blank page)
-      await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+      await gotoSafe(page, BASE_URL);
       // Ensure account session exists for Tier 2 routing
       const hasAccountSession = await page.evaluate(() => !!localStorage.getItem('iv_account_session'));
       if (!hasAccountSession) await injectAccountSession(page);
       // Lock vault session to show vault picker
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
       // On web, isNativeApp() returns false → biometric button must NOT appear
       const biometricVisible = await page.getByTestId('button-biometric-unlock').isVisible({ timeout: 3000 }).catch(() => false);
@@ -1927,7 +1944,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await injectSession(page, EMAIL_B, ACCOUNT_PW_B);
       // Ensure Email B has no vault registry
       await page.evaluate((key) => localStorage.removeItem(key), registryKey(EMAIL_B));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(800);
       // Vault picker should show empty state (no vaults yet message or Add vault button)
       const emptyOrAdd = await page.evaluate(() => {
@@ -1957,7 +1974,7 @@ test.describe.serial('IronVault Full Sweep', () => {
         key: registryKey(EMAIL_B),
         val: syntheticVault,
       });
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(800);
       // Exactly 1 local vault card — the vault's name should appear
       const hasVaultName = await page.evaluate(() =>
@@ -1995,7 +2012,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Now switch to Account B (no vaults)
       await injectSession(page, EMAIL_B, ACCOUNT_PW_B);
       await page.evaluate((key) => localStorage.removeItem(key), registryKey(EMAIL_B));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(800);
 
       // Account A's vault name must NOT appear in Account B's vault picker
@@ -2017,7 +2034,7 @@ test.describe.serial('IronVault Full Sweep', () => {
         else localStorage.removeItem(key);
       }, { key: keyA, val: originalRegistryA });
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
     });
 
     test('17.4 vault selector dropdown lists only current account vaults', async ({ page }) => {
@@ -2051,7 +2068,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
       // Start with main test account that has a vault
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(600);
 
       // Verify vault picker shows at least 1 vault for main account
@@ -2070,7 +2087,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       // Inject Email B's session (no vaults)
       await injectSession(page, EMAIL_B, ACCOUNT_PW_B);
       await page.evaluate((key) => localStorage.removeItem(key), registryKey(EMAIL_B));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(800);
 
       // Email B sees 0 vaults — not Email A's vaults
@@ -2079,7 +2096,7 @@ test.describe.serial('IronVault Full Sweep', () => {
 
       // Restore main account for test cleanup
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
     });
   });
 
@@ -2206,7 +2223,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await ensureCloudToken(page);
       // Lock vault session to show picker
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(1000);
 
       // Cloud section should now show at least 1 cloud vault
@@ -2225,7 +2242,7 @@ test.describe.serial('IronVault Full Sweep', () => {
       await ensureCloudToken(page);
       // Lock vault
       await page.evaluate(() => sessionStorage.removeItem('iv_session'));
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(1000);
 
       // Check if any cloud vault unlock button is present
@@ -2262,7 +2279,7 @@ test.describe.serial('IronVault Full Sweep', () => {
         // Remove any registry for this email
         localStorage.removeItem('ironvault_registry_free.test@example.com');
       });
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
       await page.waitForTimeout(800);
 
       // The license context for an unknown user should be free → show upgrade prompt
@@ -2275,7 +2292,7 @@ test.describe.serial('IronVault Full Sweep', () => {
 
       // Restore main account
       await injectAccountSession(page);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadSafe(page);
     });
 
     test('18.6 cleanup: delete synced cloud vault via API', async ({ page }) => {
@@ -2335,14 +2352,14 @@ async function injectProSession(page: Page) {
 }
 
 async function unlockProVault(page: Page) {
-  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  await gotoSafe(page, BASE_URL);
   const alreadyIn = await page.evaluate(
     () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim()))
   ).catch(() => false);
   if (alreadyIn) return;
 
   await injectProSession(page);
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadSafe(page);
   await page.waitForTimeout(500);
 
   const proSuffix = PRO_EMAIL.toLowerCase().replace(/[^a-z0-9._@-]/g, '_');
