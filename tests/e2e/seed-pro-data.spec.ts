@@ -109,10 +109,24 @@ async function navigatePro(page: Page, route: string) {
 }
 
 // ─── Test fixture with worker-scoped browser context ──────────────────────────
+// Mocks /api/crm/entitlement/** so feature gates resolve to "lifetime" —
+// the qa-pro CRM user reports 'free' in the main-app DB so without the mock
+// every Pro page hits the upgrade gate.
 const proTest = base.extend<{ page: Page }, { proCtx: BrowserContext }>({
   proCtx: [
     async ({ browser }, use) => {
       const ctx = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+      await ctx.route('**/api/crm/entitlement/**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            plan: 'lifetime',
+            entitlement: { plan: 'lifetime', status: 'active', trialActive: false, willRenew: true },
+          }),
+        });
+      });
       await use(ctx);
       await ctx.close();
     },

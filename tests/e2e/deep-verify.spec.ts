@@ -131,11 +131,27 @@ async function navigatePro(page: Page, route: string) {
   await page.waitForTimeout(300);
 }
 
-// Worker-scoped pro context (isolated from free-account tests)
+// Worker-scoped pro context (isolated from free-account tests).
+//
+// Mocks /api/crm/entitlement/** to return 'lifetime' so client-side feature
+// gates resolve to "pro". The qa-pro CRM user exists on prod but the main-app
+// customers table reports 'free' for them (entitlement sync hasn't run), so
+// without the mock every Pro section test ends up on the upgrade gate.
 const proTest = base.extend<{ page: Page }, { proCtx: BrowserContext }>({
   proCtx: [
     async ({ browser }, use) => {
       const ctx = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+      await ctx.route('**/api/crm/entitlement/**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            plan: 'lifetime',
+            entitlement: { plan: 'lifetime', status: 'active', trialActive: false, willRenew: true },
+          }),
+        });
+      });
       await use(ctx);
       await ctx.close();
     },
