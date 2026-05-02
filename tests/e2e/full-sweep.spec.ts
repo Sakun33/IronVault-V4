@@ -87,12 +87,17 @@ async function injectAccountSession(page: Page) {
 }
 
 /**
- * Create vault from scratch via the vault picker's inline create-vault dialog.
+ * Create vault from scratch via the vault picker's inline create-vault dialog,
+ * then unlock it to reach the dashboard.
  * Requires account session to already be in localStorage.
  *
  * The legacy /auth/create-vault page's form is hidden for `onWeb && !isPaid` users
  * (no paywall-bypass override), so QA accounts that aren't seeded as paid can't use it.
  * The picker dialog respects iv_paywall_bypassed and works for any tier.
+ *
+ * Note: the picker's create dialog does NOT auto-unlock the new vault — it
+ * closes the dialog and leaves the user on the picker. We must then click
+ * Unlock with the master password to reach the dashboard.
  */
 async function createVaultFull(page: Page) {
   await page.evaluate(() => localStorage.setItem('iv_paywall_bypassed', '1'));
@@ -108,6 +113,14 @@ async function createVaultFull(page: Page) {
   await page.getByTestId('input-new-vault-password').fill(MASTER_PW);
   await page.getByTestId('input-new-vault-confirm').fill(MASTER_PW);
   await page.getByTestId('button-confirm-create-vault').click();
+  // Dialog closes; picker now shows the new vault card with an Unlock button.
+  await page.waitForTimeout(2500);
+  const unlockBtn = page.locator(
+    '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+  ).first();
+  await unlockBtn.waitFor({ timeout: 12000 });
+  await page.getByTestId('input-unlock-password').first().fill(MASTER_PW);
+  await unlockBtn.click();
   // Wait for Dashboard. Use waitForFunction to check actual DOM text rather than
   // Playwright's visibility model — on mobile the h1 can be inside an overflow-hidden
   // scroll container that clips it, making toBeVisible() fail even though it rendered.
@@ -2390,6 +2403,8 @@ async function unlockProVault(page: Page) {
 
   if (!hasVault) {
     // Use vault picker dialog (legacy /auth/create-vault hides form for !isPaid web).
+    // The picker's create dialog does NOT auto-unlock — it closes and leaves
+    // the user on the picker. Fall through to the unlock flow below.
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(800);
     const newVaultBtn = page.locator(
@@ -2402,28 +2417,23 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-new-vault-password').fill(PRO_MASTER_PW);
     await page.getByTestId('input-new-vault-confirm').fill(PRO_MASTER_PW);
     await page.getByTestId('button-confirm-create-vault').click();
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-      { timeout: 40000 }
-    );
-    // Give license sync (async server fetch) time to write pro license to IndexedDB
-    await page.waitForTimeout(4000);
-  } else {
-    // On web, paid users with cloud vaults see button-unlock-cloud-vault; on
-    // native (or paywall-bypassed) users see button-unlock-vault for local vaults.
-    const unlockBtn = page.locator(
-      '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
-    ).first();
-    await unlockBtn.waitFor({ timeout: 12000 });
-    await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
-    await unlockBtn.click();
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-      { timeout: 30000 }
-    );
-    // LicenseProvider reloads on vault unlock — give syncFromServer() time to complete
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
   }
+
+  // Unlock — for paywall-bypassed pro users this is button-unlock-vault on the
+  // local vault card. Cloud unlock button is a fallback (paid-only).
+  const unlockBtn = page.locator(
+    '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+  ).first();
+  await unlockBtn.waitFor({ timeout: 12000 });
+  await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
+  await unlockBtn.click();
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
+    { timeout: 30000 }
+  );
+  // LicenseProvider reloads on vault unlock — give syncFromServer() time to complete
+  await page.waitForTimeout(3000);
 }
 
 async function navigatePro(page: Page, route: string) {

@@ -63,7 +63,8 @@ async function unlockProVault(page: Page) {
 
   if (!hasVault) {
     // Use the vault picker dialog (works for paywall-bypassed free web users —
-    // /auth/create-vault page hides its form when !isPaid && onWeb).
+    // /auth/create-vault page hides its form when !isPaid && onWeb). The
+    // picker's create dialog does NOT auto-unlock; fall through to unlock.
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(800);
     const newVaultBtn = page.locator(
@@ -76,22 +77,20 @@ async function unlockProVault(page: Page) {
     await page.getByTestId('input-new-vault-password').fill(PRO_MASTER_PW);
     await page.getByTestId('input-new-vault-confirm').fill(PRO_MASTER_PW);
     await page.getByTestId('button-confirm-create-vault').click();
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-      { timeout: 40000 }
-    );
-    await page.waitForTimeout(4000);
-  } else {
-    const unlockBtn = page.getByTestId('button-unlock-vault').first();
-    await unlockBtn.waitFor({ timeout: 12000 });
-    await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
-    await unlockBtn.click();
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
-      { timeout: 30000 }
-    );
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
   }
+
+  const unlockBtn = page.locator(
+    '[data-testid="button-unlock-vault"], [data-testid="button-unlock-cloud-vault"]'
+  ).first();
+  await unlockBtn.waitFor({ timeout: 12000 });
+  await page.getByTestId('input-unlock-password').first().fill(PRO_MASTER_PW);
+  await unlockBtn.click();
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
+    { timeout: 30000 }
+  );
+  await page.waitForTimeout(3000);
 }
 
 async function navigatePro(page: Page, route: string) {
