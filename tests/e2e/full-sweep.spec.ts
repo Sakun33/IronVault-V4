@@ -84,19 +84,30 @@ async function injectAccountSession(page: Page) {
 }
 
 /**
- * Create vault from scratch via the /auth/create-vault page.
- * Requires account session to already be in localStorage (Tier 2 routing shows CreateVaultPage).
+ * Create vault from scratch via the vault picker's inline create-vault dialog.
+ * Requires account session to already be in localStorage.
+ *
+ * The legacy /auth/create-vault page's form is hidden for `onWeb && !isPaid` users
+ * (no paywall-bypass override), so QA accounts that aren't seeded as paid can't use it.
+ * The picker dialog respects iv_paywall_bypassed and works for any tier.
  */
 async function createVaultFull(page: Page) {
-  await page.goto(`${BASE_URL}/auth/create-vault`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(500);
-  await page.getByTestId('input-create-password').waitFor({ timeout: 10000 });
-  await page.getByTestId('input-create-password').fill(MASTER_PW);
-  await page.getByTestId('input-confirm-password').fill(MASTER_PW);
-  await page.getByTestId('button-create-vault').click();
-  // Wait for Dashboard to load. Use waitForFunction to check actual DOM text rather than
-  // Playwright's visibility model — on mobile the h1 can be inside an overflow-hidden scroll
-  // container that clips it, making toBeVisible() fail even though the page is rendered.
+  await page.evaluate(() => localStorage.setItem('iv_paywall_bypassed', '1'));
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const newVaultBtn = page.locator(
+    '[data-testid="button-create-new-vault"], [data-testid="button-add-new-vault"]'
+  ).first();
+  await newVaultBtn.waitFor({ timeout: 15000 });
+  await newVaultBtn.click();
+  await page.getByTestId('input-new-vault-name').waitFor({ timeout: 10000 });
+  await page.getByTestId('input-new-vault-name').fill('E2E Sweep Vault');
+  await page.getByTestId('input-new-vault-password').fill(MASTER_PW);
+  await page.getByTestId('input-new-vault-confirm').fill(MASTER_PW);
+  await page.getByTestId('button-confirm-create-vault').click();
+  // Wait for Dashboard. Use waitForFunction to check actual DOM text rather than
+  // Playwright's visibility model — on mobile the h1 can be inside an overflow-hidden
+  // scroll container that clips it, making toBeVisible() fail even though it rendered.
   await page.waitForFunction(
     () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
     { timeout: 40000 }
@@ -2348,6 +2359,9 @@ async function injectProSession(page: Page) {
     localStorage.setItem('iv_account', JSON.stringify({ email: creds.email, passwordHash: hash }));
     localStorage.setItem('iv_account_session', JSON.stringify({ email: creds.email, loginTime: Date.now() }));
     localStorage.setItem('crmUserId', creds.crmId);
+    // Paywall bypass so the picker dialog renders for QA accounts that aren't
+    // seeded as paid in the main app DB.
+    localStorage.setItem('iv_paywall_bypassed', '1');
   }, { email: PRO_EMAIL, pw: PRO_ACCOUNT_PW, crmId: PRO_CRM_ID });
 }
 
@@ -2372,12 +2386,19 @@ async function unlockProVault(page: Page) {
   }, proSuffix);
 
   if (!hasVault) {
-    await page.goto(`${BASE_URL}/auth/create-vault`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(500);
-    await page.getByTestId('input-create-password').waitFor({ timeout: 10000 });
-    await page.getByTestId('input-create-password').fill(PRO_MASTER_PW);
-    await page.getByTestId('input-confirm-password').fill(PRO_MASTER_PW);
-    await page.getByTestId('button-create-vault').click();
+    // Use vault picker dialog (legacy /auth/create-vault hides form for !isPaid web).
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(800);
+    const newVaultBtn = page.locator(
+      '[data-testid="button-create-new-vault"], [data-testid="button-add-new-vault"]'
+    ).first();
+    await newVaultBtn.waitFor({ timeout: 15000 });
+    await newVaultBtn.click();
+    await page.getByTestId('input-new-vault-name').waitFor({ timeout: 10000 });
+    await page.getByTestId('input-new-vault-name').fill('Pro QA Vault');
+    await page.getByTestId('input-new-vault-password').fill(PRO_MASTER_PW);
+    await page.getByTestId('input-new-vault-confirm').fill(PRO_MASTER_PW);
+    await page.getByTestId('button-confirm-create-vault').click();
     await page.waitForFunction(
       () => Array.from(document.querySelectorAll('h1')).some(h => /^Good (morning|afternoon|evening|night)/i.test((h.textContent || '').trim())),
       { timeout: 40000 }

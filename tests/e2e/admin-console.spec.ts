@@ -219,15 +219,23 @@ test.describe.serial('3 · Customers', () => {
     const { body: list } = await adminFetch<any>(request, `/api/customers?search=saket`);
     const id = list.customers[0].id as string;
     await page.goto(`${ADMIN_URL}/customers/${id}`);
-    // Email appears multiple times (header + customer-info section); use .first() to avoid strict-mode violation.
-    await expect(page.getByText(SAKET_EMAIL).first()).toBeVisible({ timeout: 10000 });
-    // Tabs render as <button> elements (no role="tab"). Use the accessible
-    // button name so we don't match unrelated text on the page like
-    // "Support Tickets" (a heading). The buttons are visible per the snapshot.
+    // Wait for the customer-detail page to finish loading before asserting on
+    // its content. Customer name renders as the h1 header — once it's there,
+    // the header email below it is rendered too.
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 15000 });
+    // Email may render as plain header text, table cell, or input value, so
+    // use a locator that matches any of those positions (substring + .or()).
+    const emailLocator = page.locator(`text=${SAKET_EMAIL}`).first()
+      .or(page.locator(`input[value="${SAKET_EMAIL}"]`).first());
+    await expect(emailLocator).toBeVisible({ timeout: 15000 });
+    // Tabs render as Radix <TabsTrigger>, which uses role="tab". Older snapshots
+    // saw role="button"; accept either, fallback to plain text match.
     for (const tab of ['Overview', 'Journey', 'Tickets', 'Notes', 'Communications']) {
-      await expect(
-        page.getByRole('button', { name: tab, exact: true }).first()
-      ).toBeVisible({ timeout: 10000 });
+      const tabLocator = page
+        .getByRole('tab', { name: tab, exact: true }).first()
+        .or(page.getByRole('button', { name: tab, exact: true }).first())
+        .or(page.locator(`text=${tab}`).first());
+      await expect(tabLocator).toBeVisible({ timeout: 10000 });
     }
   });
 

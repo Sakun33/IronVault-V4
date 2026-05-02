@@ -18,6 +18,11 @@ export default defineConfig({
   workers: 1,
   timeout: 90000,         // long timeout for production network latency
 
+  // Explicit outputDir prevents the harness from racing on trace zip writes
+  // when many serial tests share the default './test-results' tree.
+  outputDir: './test-results/playwright-prod',
+  preserveOutput: 'failures-only',
+
   reporter: [
     ['list'],
     ['html', { outputFolder: 'reports/playwright-prod', open: 'never' }],
@@ -26,7 +31,9 @@ export default defineConfig({
 
   use: {
     baseURL: 'https://www.ironvault.app',
-    trace: 'retain-on-failure',
+    // 'on-first-retry' avoids the trace-zip ENOENT race we saw with
+    // 'retain-on-failure' on long serial runs — failures still record on retry.
+    trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     actionTimeout: 20000,
