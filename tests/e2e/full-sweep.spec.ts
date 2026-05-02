@@ -224,12 +224,23 @@ async function unlockVault(page: Page) {
  * Uses sessionStorage('iv_session') as the authoritative vault-unlocked signal.
  */
 async function navigate(page: Page, route: string) {
-  // Prefer client-side navigation (pushState) when vault is unlocked.
-  // A full page.goto() reloads the page, reinitialising vaultStorage to the default
-  // 'IronVault' database and losing the active vault reference set by switchToVault().
+  // Prefer client-side navigation when vault is unlocked. A full page.goto()
+  // reloads the page, reinitialising vaultStorage to the default 'IronVault'
+  // database and losing the active vault reference set by switchToVault().
+  //
+  // pushState + dispatch popstate doesn't reliably trigger wouter re-render
+  // for some routes (e.g. /notes, /reminders, sometimes /passwords) — the URL
+  // changes but the dashboard stays mounted. Sidebar Link clicks go through
+  // wouter's own setLocation and always re-render correctly.
   const hasSession = await page.evaluate(() => !!sessionStorage.getItem('iv_session')).catch(() => false);
 
   if (hasSession) {
+    const sidebarLink = page.locator(`a[href="${route}"]`).first();
+    if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await sidebarLink.click();
+      await page.waitForTimeout(800);
+      return;
+    }
     await page.evaluate((r) => {
       window.history.pushState({}, '', r);
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -2437,13 +2448,18 @@ async function unlockProVault(page: Page) {
 }
 
 async function navigatePro(page: Page, route: string) {
-  // Use pushState to stay in-session — keeps vault unlocked and license loaded.
-  // Full page.goto clears sessionStorage (vault locks) causing LicenseProvider to
-  // re-mount with a locked vault and fall back to the free-tier default.
-  await page.evaluate((r: string) => {
-    window.history.pushState({}, '', r);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, route);
+  // Stay in-session — sidebar Link click goes through wouter's setLocation
+  // which reliably re-renders. pushState + popstate sometimes leaves the
+  // dashboard mounted even though the URL changed.
+  const sidebarLink = page.locator(`a[href="${route}"]`).first();
+  if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await sidebarLink.click();
+  } else {
+    await page.evaluate((r: string) => {
+      window.history.pushState({}, '', r);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, route);
+  }
 
   // "Upgrade to unlock" is the unique body copy rendered by UpgradeGate — wait until
   // it is absent so we know we're looking at the real pro page, not the gate.
@@ -2762,7 +2778,8 @@ proTest.describe.serial('20 · Subscriptions CRUD (pro account)', () => {
     const priceInput = page.locator('[data-testid="input-cost"]').first();
     if (await priceInput.isVisible({ timeout: 2000 }).catch(() => false)) await priceInput.fill('649');
 
-    // nextBillingDate is required — open calendar and click first available day
+    // nextBillingDate is required — accept either the testid trigger (legacy)
+    // or a native <input type="date"> (current).
     const dateTrigger = page.locator('[data-testid="billing-date-trigger"]').first();
     if (await dateTrigger.isVisible({ timeout: 2000 }).catch(() => false)) {
       await dateTrigger.click();
@@ -2771,6 +2788,11 @@ proTest.describe.serial('20 · Subscriptions CRUD (pro account)', () => {
       if (await dayBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await dayBtn.click();
         await page.waitForTimeout(200);
+      }
+    } else {
+      const dateInput = page.locator('input[type="date"]').first();
+      if (await dateInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await dateInput.fill('2026-12-31');
       }
     }
 

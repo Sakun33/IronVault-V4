@@ -116,10 +116,17 @@ async function unlockProVault(page: Page) {
 }
 
 async function navigatePro(page: Page, route: string) {
-  await page.evaluate((r: string) => {
-    window.history.pushState({}, '', r);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, route);
+  // Sidebar Link click is the most reliable navigation — pushState + popstate
+  // doesn't always trigger a wouter re-render.
+  const sidebarLink = page.locator(`a[href="${route}"]`).first();
+  if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await sidebarLink.click();
+  } else {
+    await page.evaluate((r: string) => {
+      window.history.pushState({}, '', r);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, route);
+  }
 
   await page.waitForFunction(
     () => {
@@ -277,6 +284,16 @@ async function navigate(page: Page, route: string) {
   const hasSession = await page.evaluate(() => !!sessionStorage.getItem('iv_session')).catch(() => false);
 
   if (hasSession) {
+    // Prefer sidebar Link click — wouter's <Link> setLocation reliably triggers
+    // a re-render. pushState + dispatch popstate doesn't always work for some
+    // routes (saw /notes and /reminders stuck on dashboard).
+    const sidebarLink = page.locator(`a[href="${route}"]`).first();
+    if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await sidebarLink.click();
+      await page.waitForTimeout(800);
+      return;
+    }
+    // Fall back to pushState if sidebar link isn't visible (e.g. mobile collapsed nav).
     await page.evaluate((r: string) => {
       window.history.pushState({}, '', r);
       window.dispatchEvent(new PopStateEvent('popstate'));
