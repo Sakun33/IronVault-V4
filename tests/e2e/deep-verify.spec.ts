@@ -116,17 +116,10 @@ async function unlockProVault(page: Page) {
 }
 
 async function navigatePro(page: Page, route: string) {
-  // Sidebar Link click is the most reliable navigation — pushState + popstate
-  // doesn't always trigger a wouter re-render.
-  const sidebarLink = page.locator(`a[href="${route}"]`).first();
-  if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await sidebarLink.click();
-  } else {
-    await page.evaluate((r: string) => {
-      window.history.pushState({}, '', r);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }, route);
-  }
+  // page.goto is reliable; sessionStorage iv_session triggers auto-unlock
+  // and the proCtx route handler keeps the entitlement mock active.
+  await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle').catch(() => {});
 
   await page.waitForFunction(
     () => {
@@ -135,7 +128,7 @@ async function navigatePro(page: Page, route: string) {
     },
     { timeout: 15000 }
   ).catch(() => {});
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
 }
 
 // Worker-scoped pro context (isolated from free-account tests).
@@ -281,25 +274,22 @@ async function unlockVault(page: Page) {
 }
 
 async function navigate(page: Page, route: string) {
+  // Always use page.goto to ensure wouter mounts the right route component.
+  // sessionStorage (iv_session) persists across in-tab page reloads, so
+  // auth-context's auto-unlock-from-iv_session restores the vault state
+  // without needing to re-click Unlock. This is more reliable than
+  // pushState + popstate (wouter sometimes ignores dispatched popstate)
+  // and more reliable than clicking the sidebar Link (intermittent on
+  // some routes — observed /notes /reminders /passwords stuck on dashboard).
   const hasSession = await page.evaluate(() => !!sessionStorage.getItem('iv_session')).catch(() => false);
-
   if (hasSession) {
-    // Prefer sidebar Link click — wouter's <Link> setLocation reliably triggers
-    // a re-render. pushState + dispatch popstate doesn't always work for some
-    // routes (saw /notes and /reminders stuck on dashboard).
-    const sidebarLink = page.locator(`a[href="${route}"]`).first();
-    if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sidebarLink.click();
-      await page.waitForTimeout(800);
-      return;
-    }
-    // Fall back to pushState if sidebar link isn't visible (e.g. mobile collapsed nav).
-    await page.evaluate((r: string) => {
-      window.history.pushState({}, '', r);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }, route);
-    await page.waitForTimeout(600);
-    return;
+    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(800);
+    // After reload, auto-unlock should fire from sessionStorage. If it doesn't
+    // (e.g. session expired), fall through to the unlock-button branch below.
+    const stillLocked = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 1500 }).catch(() => false);
+    if (!stillLocked) return;
   }
 
   await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });

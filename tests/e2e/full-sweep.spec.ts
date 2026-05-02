@@ -224,29 +224,23 @@ async function unlockVault(page: Page) {
  * Uses sessionStorage('iv_session') as the authoritative vault-unlocked signal.
  */
 async function navigate(page: Page, route: string) {
-  // Prefer client-side navigation when vault is unlocked. A full page.goto()
-  // reloads the page, reinitialising vaultStorage to the default 'IronVault'
-  // database and losing the active vault reference set by switchToVault().
+  // Always page.goto for reliable wouter mounting. sessionStorage (iv_session)
+  // persists across in-tab reloads, so auth-context's auto-unlock-from-session
+  // restores the vault state without re-clicking Unlock.
   //
-  // pushState + dispatch popstate doesn't reliably trigger wouter re-render
-  // for some routes (e.g. /notes, /reminders, sometimes /passwords) — the URL
-  // changes but the dashboard stays mounted. Sidebar Link clicks go through
-  // wouter's own setLocation and always re-render correctly.
+  // Earlier versions used pushState + dispatched popstate to keep
+  // vaultStorage's switchToVault() reference alive, but wouter sometimes
+  // ignores dispatched popstate — the URL changes but the dashboard stays
+  // mounted. Single-vault test accounts don't need switchToVault to persist.
   const hasSession = await page.evaluate(() => !!sessionStorage.getItem('iv_session')).catch(() => false);
 
   if (hasSession) {
-    const sidebarLink = page.locator(`a[href="${route}"]`).first();
-    if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sidebarLink.click();
-      await page.waitForTimeout(800);
-      return;
-    }
-    await page.evaluate((r) => {
-      window.history.pushState({}, '', r);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }, route);
-    await page.waitForTimeout(600);
-    return;
+    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(800);
+    const stillLocked = await page.getByTestId('button-unlock-vault').isVisible({ timeout: 1500 }).catch(() => false);
+    if (!stillLocked) return;
+    // Fall through to the unlock branch below if auto-unlock didn't fire.
   }
 
   // Full page load (new page, session expired, or first navigation)
@@ -2448,18 +2442,10 @@ async function unlockProVault(page: Page) {
 }
 
 async function navigatePro(page: Page, route: string) {
-  // Stay in-session — sidebar Link click goes through wouter's setLocation
-  // which reliably re-renders. pushState + popstate sometimes leaves the
-  // dashboard mounted even though the URL changed.
-  const sidebarLink = page.locator(`a[href="${route}"]`).first();
-  if (await sidebarLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await sidebarLink.click();
-  } else {
-    await page.evaluate((r: string) => {
-      window.history.pushState({}, '', r);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }, route);
-  }
+  // page.goto is reliable; sessionStorage iv_session triggers auto-unlock
+  // and the proCtx route handler keeps the entitlement mock active.
+  await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle').catch(() => {});
 
   // "Upgrade to unlock" is the unique body copy rendered by UpgradeGate — wait until
   // it is absent so we know we're looking at the real pro page, not the gate.
