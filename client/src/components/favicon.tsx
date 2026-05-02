@@ -188,12 +188,10 @@ function getFallbackColor(name: string): string {
 }
 
 export function getFaviconUrl(url?: string, name?: string): string | null {
-  // DuckDuckGo's icon API returns a higher-quality icon than Google's s2 endpoint
-  // and is rarely blocked. Used by callers that need a single static URL (no
-  // fallback chain) — e.g. share-link previews. The interactive Favicon
-  // component below has its own Google → DuckDuckGo → letter-avatar chain.
+  // Same-origin proxy — ad-blockers filter all third-party favicon services
+  // (Google s2, DuckDuckGo, Clearbit, etc.), so we route through /api/favicon.
   const domain = getDomain(url, name);
-  return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
+  return domain ? `/api/favicon?d=${encodeURIComponent(domain)}` : null;
 }
 
 interface FaviconProps {
@@ -203,13 +201,15 @@ interface FaviconProps {
 }
 
 export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
-  // Google's s2/favicons returns a proper error/default for unknown domains,
-  // unlike DuckDuckGo which silently serves a generic gray globe placeholder
-  // (so onError never fires and the letter avatar fallback never shows).
+  // Same-origin proxy at /api/favicon — third-party icon services (Google s2,
+  // DuckDuckGo, Clearbit) are all blocked by mainstream ad-blocker filter
+  // lists, so the proxy is the only reliable path. The proxy 404s on unknown
+  // domains so onError fires; the onLoad naturalWidth check is defense in
+  // depth in case the proxy ever returns a 1x1 placeholder upstream.
   const [failed, setFailed] = useState(false);
 
   const domain = getDomain(url, name);
-  const src = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null;
+  const src = domain ? `/api/favicon?d=${encodeURIComponent(domain)}` : null;
 
   if (!src || failed) {
     const color = getFallbackColor(name);
@@ -235,7 +235,6 @@ export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
         }
       }}
       referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
     />
   );
 }

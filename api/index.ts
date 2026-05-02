@@ -295,6 +295,21 @@ function setSecurityHeaders(res: VercelResponse) {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 }
 
+// DuckDuckGo's icon endpoint returns a fixed-size globe ICO when it has no
+// real favicon for a domain. The exact byte length is stable but we don't
+// hardcode it — probe a guaranteed-unknown domain once and memoize.
+let _ddgPlaceholderSize: number | null = null;
+let _ddgPlaceholderProbed = false;
+async function getDdgPlaceholderSize(): Promise<number | null> {
+  if (_ddgPlaceholderProbed) return _ddgPlaceholderSize;
+  _ddgPlaceholderProbed = true;
+  try {
+    const r = await fetch('https://icons.duckduckgo.com/ip3/no-such-domain-zzz999.example.ico');
+    if (r.ok) _ddgPlaceholderSize = (await r.arrayBuffer()).byteLength;
+  } catch { /* leave as null — placeholder check will be skipped */ }
+  return _ddgPlaceholderSize;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
 
@@ -345,6 +360,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { id: 'lifetime', name: 'Lifetime',    priceMonthly: null, priceYearly: null, priceOneTime: 9999, seats: 1, vaultLimit: 5,  available: true },
       ],
     });
+  }
+
+  // ── /api/favicon — first-party proxy for site favicons ────────────────────
+  // Browser ad-blockers filter third-party icon services (Google s2, DuckDuckGo,
+  // Clearbit, etc.), which made favicons render as empty circles for many users.
+  // Fetching same-origin and proxying server-side bypasses those filter lists.
+  if (path === "/api/favicon" && req.method === "GET") {
+    const domain = (req.query?.d as string | undefined)?.toLowerCase();
+    if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain) || domain.length > 253) {
+      return res.status(400).send('Invalid domain');
+    }
+    try {
+      const upstream = await fetch(`https://icons.duckduckgo.com/ip3/${domain}.ico`);
+      if (!upstream.ok) return res.status(404).send('Not found');
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      // DuckDuckGo serves a fixed-size globe placeholder for unknown domains.
+      // Detect via byte length so the client letter-avatar fallback fires
+      // instead of rendering a generic globe. Size is learned lazily by
+      // probing a guaranteed-unknown domain on the first call.
+      const placeholderSize = await getDdgPlaceholderSize();
+      if (placeholderSize !== null && buffer.length === placeholderSize) {
+        return res.status(404).send('No icon');
+      }
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/x-icon');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      return res.send(buffer);
+    } catch {
+      return res.status(404).send('Not found');
+    }
   }
 
 
