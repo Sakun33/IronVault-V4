@@ -217,16 +217,17 @@ test.describe.serial('3 · Customers', () => {
   test('3.3 customer detail page loads with all 5 tabs', async ({ page, request }) => {
     await uiLogin(page);
     const { body: list } = await adminFetch<any>(request, `/api/customers?search=saket`);
-    const id = list.customers[0].id as string;
+    // Use the email actually returned by the API rather than the SAKET_EMAIL
+    // constant — the search matches multiple customers and ordering is not
+    // guaranteed. Locking to customers[0]'s real email keeps the test stable
+    // regardless of whether saketsuman1312@ or saketsuman33@ comes first.
+    const customer = list.customers[0];
+    const id = customer.id as string;
+    const customerEmail = customer.email as string;
     await page.goto(`${ADMIN_URL}/customers/${id}`);
-    // Wait for the customer-detail page to finish loading before asserting on
-    // its content. Customer name renders as the h1 header — once it's there,
-    // the header email below it is rendered too.
     await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 15000 });
-    // Email may render as plain header text, table cell, or input value, so
-    // use a locator that matches any of those positions (substring + .or()).
-    const emailLocator = page.locator(`text=${SAKET_EMAIL}`).first()
-      .or(page.locator(`input[value="${SAKET_EMAIL}"]`).first());
+    const emailLocator = page.locator(`text=${customerEmail}`).first()
+      .or(page.locator(`input[value="${customerEmail}"]`).first());
     await expect(emailLocator).toBeVisible({ timeout: 15000 });
     // Tabs render as Radix <TabsTrigger>, which uses role="tab". Older snapshots
     // saw role="button"; accept either, fallback to plain text match.
