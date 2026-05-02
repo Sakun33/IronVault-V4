@@ -203,15 +203,13 @@ interface FaviconProps {
 }
 
 export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
-  // DuckDuckGo's icon endpoint covers virtually every domain we care about and
-  // — unlike Google's s2/favicons — isn't blocked by ad-blocker filter lists
-  // (which is why Instagram/Facebook icons were rendering as empty circles
-  // for many users). Use it as the only source; on error, fall through to the
-  // letter avatar.
+  // Google's s2/favicons returns a proper error/default for unknown domains,
+  // unlike DuckDuckGo which silently serves a generic gray globe placeholder
+  // (so onError never fires and the letter avatar fallback never shows).
   const [failed, setFailed] = useState(false);
 
   const domain = getDomain(url, name);
-  const src = domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
+  const src = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null;
 
   if (!src || failed) {
     const color = getFallbackColor(name);
@@ -230,7 +228,14 @@ export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
       loading="lazy"
       className={`${className} rounded-xl object-contain bg-white`}
       onError={() => setFailed(true)}
+      onLoad={(e) => {
+        const img = e.currentTarget;
+        if (img.naturalWidth <= 1 || img.naturalHeight <= 1) {
+          setFailed(true);
+        }
+      }}
       referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
     />
   );
 }
