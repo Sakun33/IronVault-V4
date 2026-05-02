@@ -80,15 +80,11 @@ export class OCRService {
   // Initialize Tesseract.js worker
   public async initialize(): Promise<void> {
     try {
-      // Dynamic import of Tesseract.js
+      // Dynamic import of Tesseract.js. v5 API: createWorker(lang) loads and
+      // initialises the language in one call — loadLanguage/initialize were
+      // removed in v3 and break the Documents page on initial mount.
       const { createWorker } = await import('tesseract.js');
-      
-      this.tesseractWorker = await createWorker();
-
-      // Load English language data
-      await this.tesseractWorker.loadLanguage('eng');
-      await this.tesseractWorker.initialize('eng');
-      
+      this.tesseractWorker = await createWorker('eng');
       this.isInitialized = true;
       console.log('OCR Service initialized successfully');
     } catch (error) {

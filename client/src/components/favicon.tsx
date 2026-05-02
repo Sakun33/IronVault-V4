@@ -188,8 +188,12 @@ function getFallbackColor(name: string): string {
 }
 
 export function getFaviconUrl(url?: string, name?: string): string | null {
+  // DuckDuckGo's icon API returns a higher-quality icon than Google's s2 endpoint
+  // and is rarely blocked. Used by callers that need a single static URL (no
+  // fallback chain) — e.g. share-link previews. The interactive Favicon
+  // component below has its own Google → DuckDuckGo → letter-avatar chain.
   const domain = getDomain(url, name);
-  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
+  return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
 }
 
 interface FaviconProps {
@@ -199,14 +203,21 @@ interface FaviconProps {
 }
 
 export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
-  const [failed, setFailed] = useState(false);
+  // Track which provider has failed so we can step through the fallback chain:
+  // Google → DuckDuckGo → letter avatar. Some networks block Google's s2/favicons,
+  // so a single source isn't reliable.
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
 
   const domain = getDomain(url, name);
-  const src = domain
-    ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
-    : null;
+  const src = !domain
+    ? null
+    : stage === 0
+      ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+      : stage === 1
+        ? `https://icons.duckduckgo.com/ip3/${domain}.ico`
+        : null;
 
-  if (!src || failed) {
+  if (!src) {
     const color = getFallbackColor(name);
     const textColor = color === 'bg-primary/20' ? 'text-primary' : 'text-white';
     return (
@@ -222,7 +233,8 @@ export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
       alt={name}
       loading="lazy"
       className={`${className} rounded-xl object-contain bg-white`}
-      onError={() => setFailed(true)}
+      onError={() => setStage((s) => (s === 0 ? 1 : 2))}
+      referrerPolicy="no-referrer"
     />
   );
 }
