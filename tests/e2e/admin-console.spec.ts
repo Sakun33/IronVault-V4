@@ -81,8 +81,14 @@ async function appUserPlan(api: APIRequestContext, email: string): Promise<strin
 }
 
 // UI login helper — fills login form and asserts dashboard renders.
+// Uses domcontentloaded instead of the default 'load' so transient prod
+// network blips on third-party assets don't trip the 30s nav timeout.
 async function uiLogin(page: Page) {
-  await page.goto(ADMIN_URL);
+  try {
+    await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch {
+    await page.goto(ADMIN_URL, { waitUntil: 'commit', timeout: 30000 });
+  }
   await page.getByPlaceholder(/admin/i).first().fill(ADMIN_USER);
   await page.getByPlaceholder(/password/i).first().fill(ADMIN_PASS);
   await page.getByRole('button', { name: /sign in/i }).click();

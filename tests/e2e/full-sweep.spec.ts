@@ -80,6 +80,9 @@ async function injectAccountSession(page: Page) {
     const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     localStorage.setItem('iv_account', JSON.stringify({ email: creds.email, passwordHash: hash }));
     localStorage.setItem('iv_account_session', JSON.stringify({ email: creds.email, loginTime: Date.now() }));
+    // Paywall bypass so the vault picker's create/add buttons render for QA
+    // accounts that aren't seeded as paid in the main app DB.
+    localStorage.setItem('iv_paywall_bypassed', '1');
   }, { email: EMAIL, pw: ACCOUNT_PW });
 }
 
