@@ -718,6 +718,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/auth/register' && req.method === 'POST') {
     const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent, address, city, state, postalCode } = req.body || {};
     if (!email || !accountPasswordHash) return res.status(400).json({ error: 'email and accountPasswordHash required' });
+    if (!/^[a-f0-9]{64}$/i.test(accountPasswordHash)) {
+      return res.status(400).json({ error: 'Invalid password hash format' });
+    }
     const normalizedEmail = (email as string).toLowerCase().trim();
     const safeFullName = fullName ? stripHtml(String(fullName)) : normalizedEmail.split('@')[0];
     try {

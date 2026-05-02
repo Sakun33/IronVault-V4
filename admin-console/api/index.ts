@@ -280,8 +280,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       planLabel.includes("premium")  ? "premium" :
                                        "free";
     const cleanEmail = email.toLowerCase().trim();
-    // crm_users.country is NOT NULL — default to '' when the form leaves Region blank.
-    const country = (region || '').toString();
+    // crm_users.country is NOT NULL — default to 'Unknown' when the form leaves
+    // Region blank. Empty string previously tripped a downstream CHECK
+    // constraint and 500'd; 'Unknown' is the safe sentinel used elsewhere.
+    const country = (region || 'Unknown').toString();
     try {
       // 1. crm_users — source of truth. Use ON CONFLICT so re-submitting an
       //    existing email is a no-op rather than an error.
