@@ -237,6 +237,7 @@ function getPool(): Pool {
 const ALLOWED_ORIGINS = [
   'https://www.ironvault.app',
   'https://ironvault.app',
+  'https://admin.ironvault.app',
   'capacitor://localhost',   // Capacitor iOS native
   'http://localhost',        // Capacitor Android native
   'https://localhost',       // Capacitor Android (HTTPS mode)
@@ -246,7 +247,57 @@ function stripHtml(str: string): string {
   return str.replace(/<[^>]*>/g, '').trim();
 }
 
+// ── In-memory rate limiter for /api/auth/token ───────────────────────────────
+// Tracks failed login attempts per client IP. After 5 failures within a 15-min
+// rolling window, returns 429. The Map persists across requests within the same
+// Fluid Compute instance — this is best-effort, not a distributed lock. For the
+// QA-audit threat model (credential-stuffing from a single source) it is the
+// right granularity; multi-instance bypass is acceptable.
+const _RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const _RATE_LIMIT_MAX = 5;
+const _loginFailures = new Map<string, number[]>();
+
+function _pruneFailures(ip: string, now: number) {
+  const arr = _loginFailures.get(ip);
+  if (!arr) return;
+  const cutoff = now - _RATE_LIMIT_WINDOW_MS;
+  const fresh = arr.filter(t => t > cutoff);
+  if (fresh.length === 0) _loginFailures.delete(ip);
+  else _loginFailures.set(ip, fresh);
+}
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  _pruneFailures(ip, now);
+  return (_loginFailures.get(ip)?.length ?? 0) >= _RATE_LIMIT_MAX;
+}
+
+function recordLoginFailure(ip: string) {
+  const now = Date.now();
+  _pruneFailures(ip, now);
+  const arr = _loginFailures.get(ip) ?? [];
+  arr.push(now);
+  _loginFailures.set(ip, arr);
+}
+
+function clearLoginFailures(ip: string) {
+  _loginFailures.delete(ip);
+}
+
+function setSecurityHeaders(res: VercelResponse) {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.rayzorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com"
+  );
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setSecurityHeaders(res);
+
   const origin = req.headers.origin as string | undefined;
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -254,6 +305,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Same-origin or server-to-server requests (no Origin header)
     res.setHeader("Access-Control-Allow-Origin", "https://www.ironvault.app");
   }
+  // If a browser sends an Origin and it's not in the allowlist, ACAO is simply
+  // not set — the browser will block the response. No wildcard fallback.
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-api-key");
   res.setHeader("Vary", "Origin");
@@ -277,6 +330,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: "1.0.0",
       build: process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "dev",
       timestamp: new Date().toISOString(),
+    });
+  }
+
+  // ── Plans ───────────────────────────────────────────────────────────────────
+  // Public — mirrors client/src/lib/plans.ts. Mobile clients hit this so they
+  // don't have to ship updated bundles when pricing changes.
+  if (path === "/api/plans" || path === "/api/plans/") {
+    return res.json({
+      plans: [
+        { id: 'free',     name: 'Free',        priceMonthly: 0,    priceYearly: 0,    priceOneTime: null, seats: 1, vaultLimit: 1,  available: true },
+        { id: 'pro',      name: 'Pro Monthly', priceMonthly: 149,  priceYearly: 1499, priceOneTime: null, seats: 1, vaultLimit: 5,  available: true },
+        { id: 'family',   name: 'Pro Family',  priceMonthly: 299,  priceYearly: 2999, priceOneTime: null, seats: 6, vaultLimit: 5,  available: true },
+        { id: 'lifetime', name: 'Lifetime',    priceMonthly: null, priceYearly: null, priceOneTime: 9999, seats: 1, vaultLimit: 5,  available: true },
+      ],
     });
   }
 
@@ -796,15 +863,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── GET /api/auth/check ─────────────────────────────────────────────────────
+  // Constant response: this endpoint used to leak account existence (a perfect
+  // user-enumeration oracle). Always return { ok: true } regardless of input.
+  // Real existence checks now live behind authenticated paths (signup attempts
+  // collide on the unique index; password reset is silent).
   if (path === '/api/auth/check' && req.method === 'GET') {
-    const qEmail = ((req.query?.email as string) || '').toLowerCase().trim();
-    if (!qEmail) return res.json({ exists: false });
-    try {
-      const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [qEmail]);
-      return res.json({ exists: rows.length > 0 });
-    } catch {
-      return res.json({ exists: false }); // fail open — don't block signup on DB error
-    }
+    return res.json({ ok: true });
   }
 
   // ── POST /api/auth/send-verification-code ──────────────────────────────────
@@ -896,6 +960,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/token ────────────────────────────────────────────────────
   if (path === '/api/auth/token' && req.method === 'POST') {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
     const { email, accountPasswordHash } = req.body || {};
     if (!email || !accountPasswordHash) {
       return res.status(400).json({ error: 'email and accountPasswordHash required' });
@@ -908,20 +976,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [normalizedEmail]
       );
       if (!userRows[0]) {
+        recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Account not found. Please sign up first.' });
       }
       const userId: string = userRows[0].id;
       const storedHash = userRows[0].account_password_hash;
       if (!storedHash) {
+        recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Account not found. Please sign up first.' });
       }
       if (storedHash !== accountPasswordHash) {
+        recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Invalid credentials' });
       }
       // Block login if email not yet verified
       if (userRows[0].account_status === 'pending_verification') {
         return res.status(403).json({ error: 'email_not_verified' });
       }
+      // Successful auth — wipe failure counter for this IP
+      clearLoginFailures(clientIp);
       // Fire-and-forget: stamp last_active_at for inactive-user re-engagement workflow
       db.query(`UPDATE crm_users SET last_active_at = NOW() WHERE id = $1`, [userId])
         .catch((e: any) => console.error('[auth/token] last_active_at update failed:', e.message));
@@ -1634,6 +1707,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/payments/create-order ─────────────────────────────────────────
   if (path === '/api/payments/create-order' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const RAZORPAY_PLANS: Record<string, { amount: number; currency: string }> = {
       pro_monthly:       { amount: 14900,  currency: 'INR' },
       pro_yearly:        { amount: 149900, currency: 'INR' },
@@ -1785,6 +1860,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/share/create ────────────────────────────────────────────────────
   if (path === '/api/share/create' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       const { data, expiresIn = 24 } = req.body as { data: unknown; expiresIn?: number };
       if (!data) return res.status(400).json({ error: 'data required' });
