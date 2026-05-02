@@ -482,6 +482,117 @@ export class VaultManager {
     console.log('🗑️ Cleared vaultManager internal state');
   }
 
+  /**
+   * Hard cleanup invoked when the logged-in account changes.
+   *
+   * Wipes EVERY localStorage key and IndexedDB database that belongs to a
+   * previous account, leaving only state owned by `currentEmail` intact.
+   * This is the BUG-04 fix — without it, IndexedDB databases (`IronVault_*`)
+   * for the previous user persist on the device, and a stale active-vault
+   * pointer or unscoped registry can route the new user back into them.
+   *
+   * Safe to call when no previous account exists — it just no-ops.
+   */
+  async wipeOtherAccountVaultData(currentEmail: string | null): Promise<void> {
+    const currentSuffix = currentEmail
+      ? VaultManager.emailSuffix(currentEmail.toLowerCase().trim())
+      : null;
+    const keepRegistryKey = currentSuffix ? `ironvault_registry_${currentSuffix}` : null;
+    const keepActiveKey = currentSuffix ? `ironvault_active_vault_${currentSuffix}` : null;
+    const keepPasswordsKey = currentSuffix ? `ironvault_passwords_${currentSuffix}` : null;
+
+    // Collect known vault IDs for the current account so we don't accidentally
+    // drop their IDB databases or biometric keys.
+    let keepVaultIds = new Set<string>();
+    if (keepRegistryKey) {
+      try {
+        const data = localStorage.getItem(keepRegistryKey);
+        const list: VaultListEntry[] = data ? JSON.parse(data) : [];
+        keepVaultIds = new Set(list.map(v => v.id));
+      } catch {
+        // ignore — keepVaultIds stays empty
+      }
+    }
+
+    // Wipe all unscoped legacy keys — they could belong to any prior user.
+    localStorage.removeItem(VAULT_REGISTRY_KEY);
+    localStorage.removeItem(ACTIVE_VAULT_KEY);
+    localStorage.removeItem(VAULT_PASSWORDS_GLOBAL_KEY);
+    localStorage.removeItem('ironvault_has_vault');
+
+    // Snapshot keys before mutating localStorage during iteration.
+    const allKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) allKeys.push(k);
+    }
+
+    for (const key of allKeys) {
+      // Other accounts' scoped registries / active pointers / passwords.
+      if (key.startsWith('ironvault_registry_') && key !== keepRegistryKey) {
+        localStorage.removeItem(key);
+        continue;
+      }
+      if (key.startsWith('ironvault_active_vault_') && key !== keepActiveKey) {
+        localStorage.removeItem(key);
+        continue;
+      }
+      if (key.startsWith('ironvault_passwords_') && key !== keepPasswordsKey) {
+        localStorage.removeItem(key);
+        continue;
+      }
+
+      // Per-vault sync flags / biometric keys for vaults not in the current registry.
+      if (key.startsWith('iv_dirty_')) {
+        const vaultId = key.slice('iv_dirty_'.length);
+        if (!keepVaultIds.has(vaultId)) localStorage.removeItem(key);
+        continue;
+      }
+      if (key.startsWith('iv_last_pull_')) {
+        const vaultId = key.slice('iv_last_pull_'.length);
+        if (!keepVaultIds.has(vaultId)) localStorage.removeItem(key);
+        continue;
+      }
+      if (key.startsWith(BIOMETRIC_KEY_PREFIX)) {
+        const vaultId = key.slice(BIOMETRIC_KEY_PREFIX.length);
+        if (!keepVaultIds.has(vaultId)) localStorage.removeItem(key);
+        continue;
+      }
+    }
+
+    // The cloud-synced vault list is per-account — drop it; the next
+    // listCloudVaults() call rebuilds it for the current user.
+    localStorage.removeItem('iv_cloud_synced_vaults');
+
+    // Drop IndexedDB databases that don't belong to the current account.
+    if (typeof indexedDB !== 'undefined' && 'databases' in indexedDB && typeof (indexedDB as any).databases === 'function') {
+      try {
+        const dbs = await (indexedDB as any).databases();
+        for (const db of dbs) {
+          if (db?.name && db.name.startsWith('IronVault_')) {
+            const vaultId = db.name.slice('IronVault_'.length);
+            if (!keepVaultIds.has(vaultId)) {
+              try {
+                indexedDB.deleteDatabase(db.name);
+              } catch {
+                // best-effort; missing/locked db is non-fatal
+              }
+            }
+          }
+        }
+        // Bare "IronVault" db (created by vaultStorage.init() when no active vault is set) is
+        // never owned by a specific account — drop it so the new user starts fresh.
+        try { indexedDB.deleteDatabase('IronVault'); } catch { /* noop */ }
+      } catch (err) {
+        console.warn('[VaultManager] Failed to enumerate IndexedDB:', err);
+      }
+    }
+
+    // Reset internal state so the next read pulls from the now-clean storage.
+    this.clearInternalState();
+    console.log(`🧹 Wiped vault data not belonging to ${currentEmail ?? '(no account)'}`);
+  }
+
   async isLockedOut(): Promise<boolean> {
     try {
       await vaultIndex.init();

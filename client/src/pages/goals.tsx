@@ -15,9 +15,25 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+
+const toDateInputValue = (date?: Date): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const fromDateInputValue = (value: string): Date | undefined => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? undefined : date;
+};
 import { 
   Plus, 
   Target,
@@ -1110,28 +1126,19 @@ export default function Goals() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="targetDate">Target Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      {format(goalForm.targetDate, 'PPP')}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[200]" align="start" side="bottom" sideOffset={4} avoidCollisions={true}>
-                    <Calendar
-                      mode="single"
-                      selected={goalForm.targetDate}
-                      onSelect={(date) => {
-                        if (!date) return;
-                        setGoalForm(prev => ({ ...prev, targetDate: date }));
-                        if (date < new Date(new Date().setHours(0, 0, 0, 0))) {
-                          toast({ title: 'Past date selected', description: 'Goal target dates are typically in the future.' });
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  id="targetDate"
+                  type="date"
+                  value={toDateInputValue(goalForm.targetDate)}
+                  onChange={(e) => {
+                    const date = fromDateInputValue(e.target.value);
+                    if (!date) return;
+                    setGoalForm(prev => ({ ...prev, targetDate: date }));
+                    if (date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                      toast({ title: 'Past date selected', description: 'Goal target dates are typically in the future.' });
+                    }
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>

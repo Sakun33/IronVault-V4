@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -223,6 +223,10 @@ export default function VaultPickerPage() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  // Synchronous guard against double-clicks / rapid Enter presses — React's
+  // setIsCreating doesn't commit before a second handler can fire, so a state
+  // flag alone isn't enough to prevent the duplicate vault.
+  const creatingRef = useRef(false);
 
   const resetCreateForm = () => {
     setNewVaultName('');
@@ -639,10 +643,30 @@ export default function VaultPickerPage() {
   };
 
   const handleCreateVault = async () => {
+    // Synchronous guard — `isCreating` state takes a render to commit, so a
+    // second click/Enter can fire before the button disables. The ref blocks
+    // those re-entrant calls and is the actual fix for "Test vault appeared
+    // twice" reports.
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+
     setCreateError('');
-    if (!newVaultName.trim()) { setCreateError('Vault name is required'); return; }
-    if (newVaultPassword.length < 8) { setCreateError('Master password must be at least 8 characters'); return; }
-    if (newVaultPassword !== newVaultConfirm) { setCreateError('Passwords do not match'); return; }
+    if (!newVaultName.trim()) { setCreateError('Vault name is required'); creatingRef.current = false; return; }
+    if (newVaultPassword.length < 8) { setCreateError('Master password must be at least 8 characters'); creatingRef.current = false; return; }
+    if (newVaultPassword !== newVaultConfirm) { setCreateError('Passwords do not match'); creatingRef.current = false; return; }
+
+    // Defense-in-depth: if a vault with the same trimmed name already exists
+    // in this account's registry, refuse rather than letting createVault
+    // silently dedupe to "Test 2".
+    const trimmedName = newVaultName.trim();
+    const existingByName = vaultManager.getExistingVaults().find(
+      v => v.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (existingByName) {
+      setCreateError(`A vault named "${existingByName.name}" already exists.`);
+      creatingRef.current = false;
+      return;
+    }
 
     setIsCreating(true);
     const previousActive = vaultManager.getActiveVaultId();
@@ -653,7 +677,7 @@ export default function VaultPickerPage() {
         cv => !vaults.some(v => v.id === cv.vaultId),
       ).length;
       const newVault = await vaultManager.createVault(
-        newVaultName.trim(),
+        trimmedName,
         vaults.length === 0 && cloudVaults.length === 0,
         vaultLimit,
         cloudOnlyCount,
@@ -715,6 +739,7 @@ export default function VaultPickerPage() {
       setCreateError(message.startsWith('PLAN_LIMIT:') ? message.slice('PLAN_LIMIT:'.length).trim() : message);
     } finally {
       setIsCreating(false);
+      creatingRef.current = false;
     }
   };
 

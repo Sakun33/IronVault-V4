@@ -136,6 +136,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // setting isAccountLoggedIn. Without this, the old token stays in
       // localStorage and vault listing runs with it, leaking another user's vaults.
       clearCloudToken();
+
+      // BUG-04: if a different account previously used this device, wipe its
+      // IndexedDB databases and stale localStorage keys before setting up the
+      // new session. Without this the new user can land in an old user's IDB
+      // (via a stale active-vault pointer) or see their cached cloud-synced
+      // vault list.
+      const previousEmail = (() => {
+        try {
+          const raw = localStorage.getItem('iv_account');
+          return raw ? (JSON.parse(raw)?.email || null) : null;
+        } catch { return null; }
+      })();
+      if (previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail) {
+        // Drop in-memory vault crypto state from the previous session before
+        // wiping its IDB — otherwise vaultStorage may hold a now-dangling key.
+        vaultStorage.setEncryptionKey(null as any);
+        sessionStorage.removeItem(SESSION_KEY);
+        await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
+      }
+
       // Persist credentials locally for offline access
       await saveAccountCredentials(email, password);
       saveAccountSession(normalizedEmail);
@@ -191,6 +211,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAccountSession();
     clearPlanCache();
     clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
+    // BUG-04: drop unscoped legacy registry/active-vault pointers and the
+    // cached cloud-synced list so the next account login starts clean.
+    // Per-account scoped registries are kept (so re-login is fast).
+    try {
+      localStorage.removeItem('ironvault_registry');
+      localStorage.removeItem('ironvault_active_vault');
+      localStorage.removeItem('ironvault_passwords');
+      localStorage.removeItem('ironvault_has_vault');
+      localStorage.removeItem('iv_cloud_synced_vaults');
+    } catch { /* noop */ }
     vaultManager.clearAccountEmail();
     vaultManager.clearInternalState();
     setIsAccountLoggedIn(false);

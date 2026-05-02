@@ -6,15 +6,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Eye, EyeOff } from 'lucide-react';
-import { format } from 'date-fns';
+import { Eye, EyeOff } from 'lucide-react';
 import { SUBSCRIPTION_CATEGORIES, SUBSCRIPTION_TYPES } from '@shared/schema';
 import { useVault } from '@/contexts/vault-context';
 import { useCurrency } from '@/contexts/currency-context';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+
+const toDateInputValue = (date?: Date): string => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const fromDateInputValue = (value: string): Date | undefined => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? undefined : date;
+};
 
 interface AddSubscriptionModalProps {
   open: boolean;
@@ -322,39 +336,21 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
           </div>
 
           <div className="space-y-2">
-            <Label>Next Billing Date *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.nextBillingDate && "text-muted-foreground"
-                  )}
-                  data-testid="billing-date-trigger"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.nextBillingDate ? (
-                    format(formData.nextBillingDate, "PPP")
-                  ) : (
-                    "Pick a date"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 z-[200]" align="start" side="bottom" sideOffset={4} avoidCollisions={true}>
-                <Calendar
-                  mode="single"
-                  selected={formData.nextBillingDate}
-                  onSelect={(date) => {
-                    setFormData(prev => ({ ...prev, nextBillingDate: date }));
-                    if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
-                      toast({ title: 'Past date selected', description: 'Next billing dates are typically in the future.' });
-                    }
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <Label htmlFor="next-billing-date">Next Billing Date *</Label>
+            <Input
+              id="next-billing-date"
+              type="date"
+              value={toDateInputValue(formData.nextBillingDate)}
+              onChange={(e) => {
+                const date = fromDateInputValue(e.target.value);
+                setFormData(prev => ({ ...prev, nextBillingDate: date }));
+                if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                  toast({ title: 'Past date selected', description: 'Next billing dates are typically in the future.' });
+                }
+              }}
+              data-testid="billing-date-trigger"
+              required
+            />
           </div>
 
           <div className="space-y-2">
@@ -516,33 +512,18 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
             {/* Expiry Date */}
             <div className="space-y-2">
               <Label htmlFor="expiry-date">Expiry Date (Optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.expiryDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.expiryDate ? format(formData.expiryDate, "PPP") : "Select expiry date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-[200]" align="start" side="bottom" sideOffset={4} avoidCollisions={true}>
-                  <Calendar
-                    mode="single"
-                    selected={formData.expiryDate}
-                    onSelect={(date) => {
-                      setFormData(prev => ({ ...prev, expiryDate: date }));
-                      if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
-                        toast({ title: 'Past date selected', description: 'Expiry dates are typically in the future.' });
-                      }
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                id="expiry-date"
+                type="date"
+                value={toDateInputValue(formData.expiryDate)}
+                onChange={(e) => {
+                  const date = fromDateInputValue(e.target.value);
+                  setFormData(prev => ({ ...prev, expiryDate: date }));
+                  if (date && date < new Date(new Date().setHours(0, 0, 0, 0))) {
+                    toast({ title: 'Past date selected', description: 'Expiry dates are typically in the future.' });
+                  }
+                }}
+              />
             </div>
 
             {/* Auto Renew */}

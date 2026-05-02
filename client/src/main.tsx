@@ -16,13 +16,41 @@ ${stack ? 'Stack:\n' + stack : ''}
 </pre>`;
 }
 
+// Cross-origin scripts (Razorpay, service worker, browser extensions) surface
+// as generic "Script error." with no filename/line info. They are almost never
+// fatal to the app, so log and ignore instead of taking over the screen.
+function isBenignCrossOriginError(e: ErrorEvent): boolean {
+  if (!e) return false;
+  const noLocation = !e.filename && !e.lineno && !e.colno;
+  const genericMessage = !e.message || /^Script error\.?$/i.test(e.message);
+  return noLocation && genericMessage;
+}
+
 window.addEventListener('error', (e) => {
+  if (isBenignCrossOriginError(e)) {
+    console.warn('[IronVault] Cross-origin script error suppressed:', e.message);
+    return;
+  }
+  // Don't take over the screen if React has already mounted something — the
+  // ErrorBoundary inside the app handles render errors with a recoverable UI.
+  const root = document.getElementById('root');
+  if (root && root.childElementCount > 0) {
+    console.error('[IronVault] Runtime error:', e.message, e.error?.stack);
+    return;
+  }
   showCrash('JS ERROR', `${e.message}\nFile: ${e.filename}:${e.lineno}:${e.colno}`, e.error?.stack);
 });
 
 window.addEventListener('unhandledrejection', (e) => {
   const reason = e.reason;
   const msg = reason?.message || String(reason);
+  // Same treatment for unhandled promise rejections — log them but don't wipe
+  // the UI if the app is already running.
+  const root = document.getElementById('root');
+  if (root && root.childElementCount > 0) {
+    console.error('[IronVault] Unhandled rejection:', msg, reason?.stack);
+    return;
+  }
   showCrash('UNHANDLED PROMISE', msg, reason?.stack);
 });
 
