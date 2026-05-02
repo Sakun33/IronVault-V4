@@ -30,7 +30,7 @@ const SERVICE_DOMAINS: Record<string, string> = {
   // Social / Messaging
   facebook: 'facebook.com',
   instagram: 'instagram.com',
-  twitter: 'twitter.com',
+  twitter: 'x.com',
   x: 'x.com',
   'twitter/x': 'x.com',
   linkedin: 'linkedin.com',
@@ -203,21 +203,17 @@ interface FaviconProps {
 }
 
 export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
-  // Track which provider has failed so we can step through the fallback chain:
-  // Google → DuckDuckGo → letter avatar. Some networks block Google's s2/favicons,
-  // so a single source isn't reliable.
-  const [stage, setStage] = useState<0 | 1 | 2>(0);
+  // DuckDuckGo's icon endpoint covers virtually every domain we care about and
+  // — unlike Google's s2/favicons — isn't blocked by ad-blocker filter lists
+  // (which is why Instagram/Facebook icons were rendering as empty circles
+  // for many users). Use it as the only source; on error, fall through to the
+  // letter avatar.
+  const [failed, setFailed] = useState(false);
 
   const domain = getDomain(url, name);
-  const src = !domain
-    ? null
-    : stage === 0
-      ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
-      : stage === 1
-        ? `https://icons.duckduckgo.com/ip3/${domain}.ico`
-        : null;
+  const src = domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
 
-  if (!src) {
+  if (!src || failed) {
     const color = getFallbackColor(name);
     const textColor = color === 'bg-primary/20' ? 'text-primary' : 'text-white';
     return (
@@ -233,7 +229,7 @@ export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
       alt={name}
       loading="lazy"
       className={`${className} rounded-xl object-contain bg-white`}
-      onError={() => setStage((s) => (s === 0 ? 1 : 2))}
+      onError={() => setFailed(true)}
       referrerPolicy="no-referrer"
     />
   );

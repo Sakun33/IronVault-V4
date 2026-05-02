@@ -294,23 +294,32 @@ export default function Documents() {
   const isPaidUser = true; // Mock - should come from subscription context
   const maxDocuments = isPaidUser ? -1 : 10; // -1 means unlimited
   
-  // Initialize services
+  // Initialize services. documentService is required (vault storage); ocrService
+  // is optional (only used by scan/OCR features) — if its WASM bundle can't load,
+  // log and continue so the document list still renders.
   useEffect(() => {
     const initializeServices = async () => {
       try {
         await documentService.initialize();
-        await ocrService.initialize();
-        await loadDocuments();
       } catch (error) {
-        console.error('Failed to initialize document services:', error);
+        console.error('Failed to initialize document service:', error);
         toast({
           title: "Initialization Error",
-          description: "Failed to initialize document services. Some features may not work.",
+          description: "Failed to initialize document storage. Try reloading the page.",
           variant: "destructive"
         });
+        return;
       }
+      // OCR is best-effort — failures here are silent. Scan/OCR-only features
+      // will surface their own errors when invoked.
+      try {
+        await ocrService.initialize();
+      } catch (error) {
+        console.warn('OCR service unavailable — scan features will be disabled:', error);
+      }
+      await loadDocuments();
     };
-    
+
     initializeServices();
   }, []);
   
