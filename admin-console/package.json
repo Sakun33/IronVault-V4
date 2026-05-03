@@ -4,23 +4,13 @@
   "description": "SecureVault Admin Console - Comprehensive dashboard for managing customers, subscriptions, and analytics",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "setup": "npm run install:all && npm run db:setup",
-    "db:setup": "cd backend && npm run db:setup",
-    "db:migrate": "cd backend && npm run db:migrate",
-    "db:seed": "cd backend && npm run db:seed"
+    "install:all": "npm install && cd frontend && npm install"
   },
   "dependencies": {
     "@vercel/node": "^5.0.0",
     "pg": "^8.16.3"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
   },
   "keywords": [
     "admin",

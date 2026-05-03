@@ -4,13 +4,12 @@
   "description": "IronVault - Secure Password Manager with Intelligent Autofill, Multi-Currency Support, and Complete Dark Mode",
   "type": "module",
   "private": true,
-  "main": "server/index.ts",
+  "main": "api/index.ts",
   "workspaces": [
-    "packages/*",
-    "admin-console/backend"
+    "packages/*"
   ],
   "scripts": {
-    "dev": "tsx server/index.ts",
+    "dev": "vite",
     "build": "vite build",
     "build:prod": "NODE_ENV=production vite build",
     "preview": "vite preview",
@@ -30,7 +29,6 @@
     "cap:build:ios": "npm run build:prod && npx cap copy ios",
     "cap:build:android": "npm run build:prod && npx cap copy android",
     "cap:doctor": "npx cap doctor",
-    "admin:start": "ts-node --esm admin-console/backend/server-simple-working.ts",
     "audit:security": "npm audit --audit-level=high",
     "release:ios": "npm run build:prod && npx cap copy ios",
     "release:android": "npm run build:prod && npx cap copy android"

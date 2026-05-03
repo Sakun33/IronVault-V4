@@ -74,3 +74,5 @@ dependency-check/
 admin-console/.env*
 **/.env.vercel*
 .env*
+PROJECT_CREDENTIALS.md
+.claire/

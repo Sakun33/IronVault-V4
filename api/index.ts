@@ -176,6 +176,39 @@ async function createCrmContact(opts: { email: string; firstName: string; lastNa
   return null;
 }
 
+// Best-effort: search Zoho CRM Contacts by email and delete any match.
+// Returns true if a delete was issued, false otherwise. Used on account
+// deletion so user PII doesn't linger in the CRM after a GDPR/CCPA request.
+async function deleteCrmContactByEmail(email: string): Promise<boolean> {
+  const token = await getCrmAccessToken();
+  if (!token) return false;
+  try {
+    const search = await fetch(`https://www.zohoapis.in/crm/v7/Contacts/search?email=${encodeURIComponent(email)}`, {
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+    });
+    if (!search.ok) {
+      // 204 = no match; anything else is logged but not fatal.
+      if (search.status !== 204) console.warn('[crm] contact search failed:', search.status);
+      return false;
+    }
+    const sd = await search.json() as any;
+    const id = sd.data?.[0]?.id;
+    if (!id) return false;
+    const del = await fetch(`https://www.zohoapis.in/crm/v7/Contacts/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+    });
+    if (!del.ok) {
+      console.warn('[crm] contact delete failed:', del.status);
+      return false;
+    }
+    return true;
+  } catch (e: any) {
+    console.error('[crm] delete contact error:', e.message);
+    return false;
+  }
+}
+
 async function createOrUpdateCrmDeal(opts: { contactId: string | null; email: string; plan: string; amount?: number }): Promise<string | null> {
   const token = await getCrmAccessToken();
   if (!token) return null;
@@ -241,6 +274,18 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
     return true;
   } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
 }
+// HTML-escape user-controlled strings before injection into email template HTML.
+// Prevents phishing-via-vault-name and HTML injection in ticket subjects / agent
+// reply previews / owner emails. Applied at template-build time (not at storage)
+// so existing rows render safely without a backfill.
+function _eHtml(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function _emailLayout(body: string) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 20px 60px"><div style="text-align:center;margin-bottom:28px"><img src="https://www.ironvault.app/icon-192.png" alt="IronVault" width="48" height="48" style="display:inline-block;vertical-align:middle;border-radius:11px;border:0" /><span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:21px;font-weight:700;color:#111827;letter-spacing:-0.3px">IronVault</span></div><div style="background:#ffffff;border-radius:16px;padding:40px 36px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.04)">${body}</div><div style="text-align:center;padding:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.7"><p style="margin:0">© 2026 IronVault — Secure Password Manager</p><p style="margin:4px 0 0"><a href="mailto:noreply@ironvault.app" style="color:#6366f1;text-decoration:none">noreply@ironvault.app</a></p></div></div></body></html>`;
 }
@@ -250,28 +295,40 @@ function _ebtn(u: string, l: string) { return `<div style="text-align:center;mar
 function _ecard(i: string) { return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin:0 0 24px">${i}</div>`; }
 function _edivider() { return `<hr style="border:none;border-top:1px solid #f0f0f0;margin:24px 0">`; }
 function welcomeEmail(name: string) {
-  const body = `${_eh1(`Welcome to IronVault, ${name||'there'}!`)}${_ep('Your secure vault account has been created. Everything you store is AES-256 encrypted.')}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Getting started</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Create your vault and master password</li><li>Add passwords, notes, reminders</li><li>Track subscriptions and expenses</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You're receiving this because you created an IronVault account.</p>`;
+  const safeName = _eHtml(name || 'there');
+  const body = `${_eh1(`Welcome to IronVault, ${safeName}!`)}${_ep('Your secure vault account has been created. Everything you store is AES-256 encrypted.')}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Getting started</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Create your vault and master password</li><li>Add passwords, notes, reminders</li><li>Track subscriptions and expenses</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You're receiving this because you created an IronVault account.</p>`;
   return { subject: 'Welcome to IronVault', html: _emailLayout(body) };
 }
 function passwordResetEmail(link: string) {
-  const body = `${_eh1('Reset your password')}${_ep('Click below to set a new password. This link expires in <strong style="color:#111827">1 hour</strong>.')}${_ebtn(link,'Reset Password')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${link}" style="color:#6366f1;text-decoration:none">${link}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you didn't request this, you can safely ignore this email.</p>`;
+  const safeLink = _eHtml(link);
+  const body = `${_eh1('Reset your password')}${_ep('Click below to set a new password. This link expires in <strong style="color:#111827">1 hour</strong>.')}${_ebtn(safeLink,'Reset Password')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${safeLink}" style="color:#6366f1;text-decoration:none">${safeLink}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you didn't request this, you can safely ignore this email.</p>`;
   return { subject: 'Reset your IronVault password', html: _emailLayout(body) };
 }
 function verificationEmail(name: string, link: string) {
-  const body = `${_eh1('Verify your email address')}${_ep(`Hi ${name||'there'}, please confirm your email to activate your IronVault account.`)}${_ebtn(link,'Verify Email Address')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${link}" style="color:#6366f1;text-decoration:none">${link}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">This link expires in 24 hours. If you didn't sign up, you can safely ignore this email.</p>`;
+  const safeName = _eHtml(name || 'there');
+  const safeLink = _eHtml(link);
+  const body = `${_eh1('Verify your email address')}${_ep(`Hi ${safeName}, please confirm your email to activate your IronVault account.`)}${_ebtn(safeLink,'Verify Email Address')}${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Or copy this link into your browser:</p><p style="margin:6px 0 0;font-size:12px;word-break:break-all"><a href="${safeLink}" style="color:#6366f1;text-decoration:none">${safeLink}</a></p>`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">This link expires in 24 hours. If you didn't sign up, you can safely ignore this email.</p>`;
   return { subject: 'Verify your IronVault email address', html: _emailLayout(body) };
 }
 function ticketConfirmationEmail(sub: string, id: string|number) {
-  const body = `${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Ticket #${id}</p><p style="margin:0;font-size:15px;font-weight:600;color:#111827">${sub}</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply via Email')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You can also reply directly to this email to update your ticket.</p>`;
-  return { subject: `[IronVault Support] Ticket received: ${sub}`, html: _emailLayout(body) };
+  // Subject must be CRLF-stripped to prevent SMTP header injection (defense in
+  // depth — nodemailer also serializes safely). Body uses the html-escaped form.
+  const safeSubText = String(sub).replace(/[\r\n]+/g, ' ').slice(0, 200);
+  const safeSubHtml = _eHtml(safeSubText);
+  const safeId = _eHtml(id);
+  const body = `${_eh1('We received your ticket')}${_ep('Our support team will get back to you within 24 hours.')}${_ecard(`<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Ticket #${safeId}</p><p style="margin:0;font-size:15px;font-weight:600;color:#111827">${safeSubHtml}</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply via Email')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">You can also reply directly to this email to update your ticket.</p>`;
+  return { subject: `[IronVault Support] Ticket received: ${safeSubText}`, html: _emailLayout(body) };
 }
 function ticketReplyEmail(id: string|number, preview: string) {
-  const body = `${_eh1('New reply on your ticket')}${_ep(`Our support team has responded to ticket <strong style="color:#111827">#${id}</strong>.`)}${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;font-style:italic">"${String(preview).slice(0,200)}"</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply')}`;
-  return { subject: `[IronVault Support] Update on ticket #${id}`, html: _emailLayout(body) };
+  const safeId = _eHtml(id);
+  const safePreview = _eHtml(String(preview).slice(0,200));
+  const body = `${_eh1('New reply on your ticket')}${_ep(`Our support team has responded to ticket <strong style="color:#111827">#${safeId}</strong>.`)}${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Reply preview</p><p style="margin:0;font-size:14px;color:#374151;font-style:italic">"${safePreview}"</p>`)}${_ebtn('mailto:noreply@ironvault.app','Reply')}`;
+  return { subject: `[IronVault Support] Update on ticket #${String(id).replace(/[\r\n]+/g, ' ')}`, html: _emailLayout(body) };
 }
 function ticketClosedEmail(id: string|number) {
-  const body = `${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#111827">#${id}</strong> has been marked as resolved.`)}${_ecard(`<p style="margin:0;font-size:14px;color:#374151">We hope your issue was resolved. If you need further help, feel free to reach out — we're always here.</p>`)}${_ebtn('mailto:noreply@ironvault.app','Contact Support Again')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Reply to this email if you need further assistance.</p>`;
-  return { subject: `[IronVault Support] Ticket #${id} resolved`, html: _emailLayout(body) };
+  const safeId = _eHtml(id);
+  const body = `${_eh1('Ticket resolved')}${_ep(`Ticket <strong style="color:#111827">#${safeId}</strong> has been marked as resolved.`)}${_ecard(`<p style="margin:0;font-size:14px;color:#374151">We hope your issue was resolved. If you need further help, feel free to reach out — we're always here.</p>`)}${_ebtn('mailto:noreply@ironvault.app','Contact Support Again')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Reply to this email if you need further assistance.</p>`;
+  return { subject: `[IronVault Support] Ticket #${String(id).replace(/[\r\n]+/g, ' ')} resolved`, html: _emailLayout(body) };
 }
 function planUpgradeEmail(plan: string) {
   const label = plan==='lifetime'?'Lifetime':plan==='family'?'Family':'Pro';
@@ -279,14 +336,18 @@ function planUpgradeEmail(plan: string) {
   return { subject: `You're now on IronVault ${label} ⭐`, html: _emailLayout(body) };
 }
 function vaultReadyEmail(vaultName: string) {
-  const body = `${_eh1('Your vault is ready 🔒')}${_ep(`<strong style="color:#111827">${vaultName || 'Your vault'}</strong> has been created and encrypted with your master password.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you can store</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Passwords &amp; login credentials</li><li>Secure notes &amp; documents</li><li>Financial data &amp; subscriptions</li><li>Reminders &amp; goals</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Keep your master password safe — it cannot be recovered.</p>`;
+  const safeName = _eHtml(vaultName || 'Your vault');
+  const body = `${_eh1('Your vault is ready 🔒')}${_ep(`<strong style="color:#111827">${safeName}</strong> has been created and encrypted with your master password.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you can store</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>Passwords &amp; login credentials</li><li>Secure notes &amp; documents</li><li>Financial data &amp; subscriptions</li><li>Reminders &amp; goals</li></ul>`)}${_ebtn(_APP_URL,'Open IronVault')}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Keep your master password safe — it cannot be recovered.</p>`;
   return { subject: 'Your IronVault vault is ready! 🔒', html: _emailLayout(body) };
 }
 function familyInviteEmail(ownerEmail: string, inviteId: string, inviteeEmail: string) {
   const ownerHandle = ownerEmail.split('@')[0];
+  const safeOwnerEmail = _eHtml(ownerEmail);
+  const safeOwnerHandle = _eHtml(ownerHandle);
   const inviteLink = `${_APP_URL}/auth/signup?invite=${encodeURIComponent(inviteId)}&email=${encodeURIComponent(inviteeEmail)}`;
-  const body = `${_eh1(`Join ${ownerHandle}'s IronVault Family!`)}${_ep(`<strong style="color:#111827">${ownerEmail}</strong> has invited you to their IronVault Family plan — you get full premium access at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>2 vaults total (any mix of local + cloud, your own private)</li><li>Cloud sync across all your devices</li><li>Unlimited passwords, notes &amp; documents</li><li>Expense tracking &amp; bank statement import</li></ul>`)}${_ebtn(inviteLink,`Join ${ownerHandle}'s Family Plan`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in or create a free IronVault account to accept. If you didn't expect this, you can safely ignore this email.</p>`;
-  return { subject: `${ownerEmail} invited you to IronVault Family`, html: _emailLayout(body) };
+  const safeInviteLink = _eHtml(inviteLink);
+  const body = `${_eh1(`Join ${safeOwnerHandle}'s IronVault Family!`)}${_ep(`<strong style="color:#111827">${safeOwnerEmail}</strong> has invited you to their IronVault Family plan — you get full premium access at no cost.`)}${_ecard(`<p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">What you get</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2.2"><li>2 vaults total (any mix of local + cloud, your own private)</li><li>Cloud sync across all your devices</li><li>Unlimited passwords, notes &amp; documents</li><li>Expense tracking &amp; bank statement import</li></ul>`)}${_ebtn(safeInviteLink,`Join ${safeOwnerHandle}'s Family Plan`)}${_edivider()}<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">Sign in or create a free IronVault account to accept. If you didn't expect this, you can safely ignore this email.</p>`;
+  return { subject: `${ownerEmail.replace(/[\r\n]+/g, ' ')} invited you to IronVault Family`, html: _emailLayout(body) };
 }
 // ── End email service ──────────────────────────────────────────────────────────
 
@@ -295,14 +356,27 @@ const N8N_SIGNUP_WEBHOOK         = 'https://saketapptest.app.n8n.cloud/webhook/i
 const N8N_PAYMENT_WEBHOOK        = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-payment';
 const N8N_PAYMENT_FAILED_WEBHOOK = 'https://saketapptest.app.n8n.cloud/webhook/razorpay-failed';
 
-function triggerN8n(url: string, payload: unknown): void {
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-    .then(() => {})
-    .catch((e) => console.error(`[n8n] POST ${url} failed:`, e.message));
+// Fire-and-forget n8n webhook trigger with one retry after 2s. Transient
+// outages (n8n cold start, brief network blips) shouldn't permanently lose
+// signup/payment events. Persistent failures are logged for ops follow-up.
+async function triggerN8n(url: string, payload: unknown): Promise<void> {
+  const body = JSON.stringify(payload);
+  const headers = { 'Content-Type': 'application/json' };
+  const post = () => fetch(url, { method: 'POST', headers, body });
+  try {
+    const r = await post();
+    if (r.ok) return;
+    console.warn(`[n8n] POST ${url} returned ${r.status}, retrying in 2s`);
+  } catch (e: any) {
+    console.warn(`[n8n] POST ${url} failed (${e.message}), retrying in 2s`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  try {
+    const r2 = await post();
+    if (!r2.ok) console.error(`[n8n] POST ${url} retry returned ${r2.status} — event lost`);
+  } catch (e: any) {
+    console.error(`[n8n] POST ${url} retry failed:`, e.message);
+  }
 }
 
 let pool: Pool | null = null;
@@ -494,10 +568,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const db = getPool();
 
   // ── /api/crm/notify — internal endpoint for admin→app email triggers ─────────
+  // Authenticated via CRM_NOTIFY_SECRET (separate from JWT_SECRET — auditing flagged
+  // the old behaviour of reusing the JWT signing key as a service token, since a
+  // leak of either rotates both privilege levels in lock-step).
   if (path === "/api/crm/notify" && req.method === "POST") {
     const secret = req.headers["x-notify-secret"] as string | undefined;
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret || !secret || !safeEq(secret, jwtSecret)) return res.status(401).json({ error: "Unauthorized" });
+    const expected = process.env.CRM_NOTIFY_SECRET;
+    if (!expected) return res.status(500).json({ error: "CRM_NOTIFY_SECRET not configured" });
+    if (!secret || !safeEq(secret, expected)) return res.status(401).json({ error: "Unauthorized" });
     const { type, email: toEmail, data } = req.body || {};
     if (!toEmail || !type) return res.status(400).json({ error: "type and email required" });
     if (type === "plan_upgrade" && data?.plan) {
@@ -509,7 +587,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── /api/crm/register ───────────────────────────────────────────────────────
+  // Legacy lead-capture endpoint. Admin-only (ADMIN_API_KEY) — without this
+  // gate the endpoint is an open spam relay (welcome emails to arbitrary
+  // recipients) and lets anyone pollute the customers table.
   if (path === "/api/crm/register" && req.method === "POST") {
+    const adminKey = req.headers['x-admin-key'] as string;
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) return res.status(401).json({ error: 'Unauthorized' });
     const { email, fullName, country, platform, appVersion, planType } = req.body || {};
     if (!email) return res.status(400).json({ error: "email required" });
     const safeFullName = fullName ? stripHtml(String(fullName)) : null;
@@ -552,7 +637,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check entitlements table (joined with crm_users) — this is the authoritative source
       // after admin plan changes. Falls back to legacy customers table if not found.
       const { rows } = await db.query(
-        `SELECT u.id, u.email, COALESCE(e.plan, 'free') AS plan_type, COALESCE(e.status, 'active') AS status
+        `SELECT u.id, u.email,
+                COALESCE(e.plan, 'free') AS plan_type,
+                COALESCE(e.status, 'active') AS status,
+                e.current_period_ends_at,
+                e.subscription_platform
          FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id
          WHERE ${col} = $1 LIMIT 1`,
         [userId]
@@ -570,10 +659,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json({ ...legacyData, entitlement: legacyData });
       }
       const row = rows[0];
+      // Read-time enforcement of subscription expiry. Lifetime plans never
+      // expire; for everything else, if current_period_ends_at is in the past,
+      // downgrade to free. Without this, paid users keep premium forever even
+      // after their card declines, since Razorpay subscription_cancelled events
+      // aren't reliably delivered to us.
+      let plan = row.plan_type as string;
+      let status = row.status as string;
+      const expiresAt: Date | null = row.current_period_ends_at ? new Date(row.current_period_ends_at) : null;
+      if (plan !== 'free' && plan !== 'lifetime' && expiresAt && expiresAt.getTime() < Date.now()) {
+        plan = 'free';
+        status = 'expired';
+        // Persist the downgrade so admin views agree with read-time computation.
+        // Best-effort — we don't block the response on the write.
+        db.query(
+          `UPDATE entitlements SET plan = 'free', status = 'expired', will_renew = false, updated_at = NOW() WHERE user_id = $1`,
+          [row.id]
+        ).catch((e: any) => console.error('[entitlement] expiry-downgrade failed:', e.message));
+      }
       const entitlementData = {
-        plan: row.plan_type,
-        status: row.status,
-        trial_active: row.plan_type === "trial",
+        plan,
+        status,
+        trial_active: plan === "trial",
         id: row.id,
         email: row.email,
       };
@@ -627,15 +734,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const zdTicket = await createZohoDeskTicket({ email, subject: safeSubject, description: safeDescription, priority });
       const ticketId = zdTicket?.ticketNumber ?? zdTicket?.id ?? 'N/A';
 
-      // Secondary: also persist locally for audit trail (fire-and-forget)
+      // Secondary: also persist locally for audit trail (fire-and-forget).
+      // We store the Zoho Desk ticket id + number alongside, so an inbound
+      // Zoho Desk webhook can map an agent reply back to the local row.
       db.query(
         `SELECT id FROM customers WHERE email = $1 LIMIT 1`, [email]
       ).then(({ rows: cRows }) => {
         const customerId = cRows[0]?.id || null;
         return db.query(
-          `INSERT INTO tickets (customer_id, customer_email, subject, description, priority)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [customerId, email, safeSubject, safeDescription || null, priority || 'normal']
+          `INSERT INTO tickets (customer_id, customer_email, subject, description, priority, zoho_ticket_id, zoho_ticket_number)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [customerId, email, safeSubject, safeDescription || null, priority || 'normal', zdTicket?.id || null, zdTicket?.ticketNumber || null]
         );
       }).catch(() => {});
 
@@ -1374,7 +1483,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
       const user = rows[0];
       if (user.account_status === 'active') return res.json({ success: true, message: 'Email already verified. You can log in.' });
-      if (user.verification_token !== token) return res.status(400).json({ error: 'Invalid verification link.' });
+      // Timing-safe compare so token guessing can't be assisted by latency oracle.
+      if (!user.verification_token || !safeEq(String(user.verification_token), String(token))) {
+        return res.status(400).json({ error: 'Invalid verification link.' });
+      }
       if (!user.verification_token_expires_at || new Date(user.verification_token_expires_at) < new Date()) {
         return res.status(400).json({ error: 'Verification link has expired. Please request a new one.' });
       }
@@ -1411,32 +1523,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/auth/resend-verification ─────────────────────────────────────
+  // Always returns the same response shape regardless of whether the account
+  // exists / is already verified — prevents account-enumeration via this
+  // endpoint. The work for actual unverified accounts still happens server-side.
   if (path === '/api/auth/resend-verification' && req.method === 'POST') {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'email required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
+    const generic = { success: true, message: 'If an account with this email exists and is not yet verified, a verification email has been sent.' };
     try {
       const { rows } = await db.query(
         `SELECT id, full_name, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
-      if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
-      if (rows[0].account_status === 'active') return res.json({ success: true, message: 'Email already verified.' });
-
-      const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-      const verifyToken = cryptoRandomString(64, tokenChars);
-      await db.query(
-        `UPDATE crm_users SET verification_token = $1, verification_token_expires_at = NOW() + INTERVAL '24 hours' WHERE id = $2`,
-        [verifyToken, rows[0].id]
-      );
-      const APP_URL_RES = process.env.APP_URL || 'https://www.ironvault.app';
-      const verifyLink = `${APP_URL_RES}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
-      const tmpl = verificationEmail(rows[0].full_name || normalizedEmail.split('@')[0], verifyLink);
-      const emailSent = await sendEmail({ to: normalizedEmail, ...tmpl });
-      return res.json({ success: true, emailSent });
+      const user = rows[0];
+      if (user && user.account_status !== 'active') {
+        const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        const verifyToken = cryptoRandomString(64, tokenChars);
+        await db.query(
+          `UPDATE crm_users SET verification_token = $1, verification_token_expires_at = NOW() + INTERVAL '24 hours' WHERE id = $2`,
+          [verifyToken, user.id]
+        );
+        const APP_URL_RES = process.env.APP_URL || 'https://www.ironvault.app';
+        const verifyLink = `${APP_URL_RES}/auth/verify?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`;
+        const tmpl = verificationEmail(user.full_name || normalizedEmail.split('@')[0], verifyLink);
+        sendEmail({ to: normalizedEmail, ...tmpl }).catch(() => {});
+      }
+      return res.json(generic);
     } catch (err: any) {
       console.error('resend-verification error:', err.message);
-      return res.status(500).json({ error: 'Failed to resend verification' });
+      // Still return the same generic message — don't leak via error type.
+      return res.json(generic);
     }
   }
 
@@ -1658,6 +1775,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [userId]);
       if (!rowCount) return res.status(404).json({ error: 'Account not found' });
+      // Best-effort: remove the user's Zoho CRM contact so PII doesn't linger
+      // after deletion (GDPR/CCPA). Don't fail the response if this errors.
+      deleteCrmContactByEmail(email).catch((e: any) =>
+        console.error('[auth/account DELETE] zoho-crm cleanup failed:', e?.message)
+      );
       return res.json({ success: true, deleted: true });
     } catch (err: any) {
       console.error('[auth/account DELETE]', err.message);
@@ -1904,8 +2026,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/crm/migrate ────────────────────────────────────────────────────
   // Creates / alters tables needed for BUG-023 schema improvements.
-  // Idempotent — safe to re-run.
+  // Idempotent — safe to re-run. Admin-only (ADMIN_API_KEY).
   if (path === '/api/crm/migrate' && req.method === 'POST') {
+    const adminKey = req.headers['x-admin-key'] as string;
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) return res.status(401).json({ error: 'Unauthorized' });
     try {
       await db.query(`
         -- Add missing columns to customers if they don't exist
@@ -1944,6 +2070,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_plan_audit_email ON plan_audit_log(customer_email);
+
+        -- Tickets: track Zoho Desk linkage so inbound webhooks (agent replies)
+        -- can be correlated back to the local row.
+        ALTER TABLE tickets
+          ADD COLUMN IF NOT EXISTS zoho_ticket_id TEXT,
+          ADD COLUMN IF NOT EXISTS zoho_ticket_number TEXT;
+        CREATE INDEX IF NOT EXISTS idx_tickets_zoho_id ON tickets(zoho_ticket_id);
       `);
       return res.json({ success: true, message: 'Schema migration complete (BUG-023)' });
     } catch (err: any) {
@@ -2155,15 +2288,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const normalizedEmail = (email as string).toLowerCase().trim();
     try {
       // Token-based flow only — tokenless else-branch removed (allowed account
-      // takeover with just an email).
+      // takeover with just an email). Compare token in app-layer with a
+      // timing-safe equality so SQL latency doesn't leak token bytes.
+      const submittedToken = (token as string).toUpperCase();
       const { rows } = await db.query(
-        `SELECT id FROM password_reset_tokens
-         WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
+        `SELECT id, token FROM password_reset_tokens
+         WHERE email = $1 AND used = false AND expires_at > NOW()
+         ORDER BY created_at DESC NULLS LAST
          LIMIT 1`,
-        [normalizedEmail, (token as string).toUpperCase()]
+        [normalizedEmail]
       );
-      if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
-      await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
+      const candidate = rows[0];
+      if (!candidate || !candidate.token || !safeEq(String(candidate.token).toUpperCase(), submittedToken)) {
+        return res.status(400).json({ error: 'Invalid or expired reset code' });
+      }
+      await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [candidate.id]);
 
       // Re-hash with scrypt before storing (no longer accept raw client SHA-256)
       const storedHash = await hashAccountPassword(newPasswordHash as string);
@@ -2271,11 +2410,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/crm/upgrade ──────────────────────────────────────────────────
   // Called by the client after a successful plan upgrade to sync a Deal to Zoho CRM.
+  // Requires the caller to actually hold an active paid entitlement — without
+  // this gate any authenticated user could stamp Closed Won deals into CRM.
   if (path === '/api/crm/upgrade' && req.method === 'POST') {
     const user = await getCloudUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { plan, amount } = req.body || {};
     if (!plan) return res.status(400).json({ error: 'plan required' });
+    const { rows: entRows } = await db.query(
+      `SELECT plan, status, current_period_ends_at FROM entitlements WHERE user_id = $1 LIMIT 1`,
+      [user.userId]
+    );
+    const ent = entRows[0];
+    const isPaid = ent && ent.plan && ent.plan !== 'free';
+    const isActive = ent && ent.status === 'active';
+    const notExpired = !ent?.current_period_ends_at
+      || ent.plan === 'lifetime'
+      || new Date(ent.current_period_ends_at).getTime() > Date.now();
+    if (!isPaid || !isActive || !notExpired) {
+      return res.status(403).json({ error: 'Active paid entitlement required' });
+    }
     const dealId = await createOrUpdateCrmDeal({ contactId: null, email: user.email, plan, amount }).catch(() => null);
     return res.json({ success: true, dealId });
   }
@@ -2314,12 +2468,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : rawPlan.includes('pro') ? 'pro'
         : 'free';
 
-      const handledEvents = ['subscription_created', 'subscription_activated', 'subscription_reactivated', 'payment_success', 'invoice_payment_success'];
-      if (!handledEvents.includes(eventType)) {
+      const upgradeEvents = ['subscription_created', 'subscription_activated', 'subscription_reactivated', 'payment_success', 'invoice_payment_success'];
+      const downgradeEvents = ['subscription_cancelled', 'subscription_expired', 'subscription_paused', 'payment_failed', 'invoice_payment_failed'];
+      const isUpgrade = upgradeEvents.includes(eventType);
+      const isDowngrade = downgradeEvents.includes(eventType);
+      if (!isUpgrade && !isDowngrade) {
         return res.json({ received: true, skipped: true, eventType });
       }
 
-      // Update entitlement in DB
+      // Look up local user
       const { rows } = await db.query(
         `SELECT u.id FROM crm_users u WHERE u.email = $1 LIMIT 1`, [email]
       );
@@ -2328,6 +2485,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json({ received: true, warning: 'user not found' });
       }
       const userId = rows[0].id;
+
+      if (isDowngrade) {
+        // Cancel / expire / payment-failed → revoke entitlement to free.
+        // Lifetime plans are excluded from auto-downgrade (one-time purchase).
+        await db.query(
+          `UPDATE entitlements
+           SET plan = CASE WHEN plan = 'lifetime' THEN plan ELSE 'free' END,
+               status = $1,
+               will_renew = false,
+               updated_at = NOW()
+           WHERE user_id = $2`,
+          [eventType === 'subscription_cancelled' ? 'cancelled' : 'expired', userId]
+        );
+        return res.json({ received: true, email, eventType, action: 'downgraded' });
+      }
+
+      // Upgrade flow — store entitlement
       await db.query(
         `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override, updated_at)
          VALUES ($1, $2, 'active', false, true, false, NOW())
@@ -2341,6 +2515,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ received: true, email, plan, eventType });
     } catch (err: any) {
       console.error('[zoho-billing webhook] error:', err.message);
+      return res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  }
+
+  // ── POST /api/razorpay-webhook ──────────────────────────────────────────────
+  // Handles Razorpay subscription lifecycle: payment.captured (confirm),
+  // subscription.cancelled / subscription.halted (downgrade), refund.created
+  // (revoke). Signature: HMAC-SHA256(raw_body, RAZORPAY_WEBHOOK_SECRET) in
+  // hex, sent in X-Razorpay-Signature.
+  //
+  // Vercel parses JSON bodies before this handler runs, so we re-stringify
+  // for HMAC verification. Razorpay sends compact (no-whitespace) JSON; the
+  // re-stringified output matches what they signed for typical payloads.
+  if (path === '/api/razorpay-webhook' && req.method === 'POST') {
+    const expectedSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+      console.error('[razorpay webhook] RAZORPAY_WEBHOOK_SECRET not set — rejecting');
+      return res.status(500).json({ error: 'Server misconfigured' });
+    }
+    const sig = req.headers['x-razorpay-signature'];
+    if (typeof sig !== 'string') {
+      return res.status(401).json({ error: 'Missing signature' });
+    }
+    let rawBody = '';
+    try { rawBody = JSON.stringify(req.body); } catch { return res.status(400).json({ error: 'Invalid body' }); }
+    const expected = createHmac('sha256', expectedSecret).update(rawBody).digest('hex');
+    let sigOk = false;
+    try {
+      const a = Buffer.from(sig, 'hex');
+      const b = Buffer.from(expected, 'hex');
+      sigOk = a.length === b.length && timingSafeEqual(a, b);
+    } catch { sigOk = false; }
+    if (!sigOk) {
+      console.warn('[razorpay webhook] signature mismatch');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    try {
+      const payload = req.body || {};
+      const event: string = payload.event || '';
+      const entity = payload.payload?.payment?.entity || payload.payload?.subscription?.entity || payload.payload?.refund?.entity || {};
+      const email: string = (entity.email || entity.notes?.email || '').toLowerCase().trim();
+
+      if (event === 'payment.captured') {
+        // Confirm payment — already handled inline by /api/payments/verify, but
+        // a webhook fires for safety. No-op if already consumed.
+        return res.json({ received: true, event });
+      }
+
+      if (event === 'subscription.cancelled' || event === 'subscription.halted' || event === 'refund.created') {
+        if (!email) return res.json({ received: true, event, warning: 'no email' });
+        const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [email]);
+        if (!rows[0]) return res.json({ received: true, event, warning: 'user not found' });
+        await db.query(
+          `UPDATE entitlements
+           SET plan = CASE WHEN plan = 'lifetime' THEN plan ELSE 'free' END,
+               status = $1,
+               will_renew = false,
+               updated_at = NOW()
+           WHERE user_id = $2`,
+          [event === 'subscription.cancelled' ? 'cancelled' : 'expired', rows[0].id]
+        );
+        return res.json({ received: true, event, action: 'downgraded' });
+      }
+
+      return res.json({ received: true, event, skipped: true });
+    } catch (err: any) {
+      console.error('[razorpay webhook] error:', err.message);
       return res.status(500).json({ error: 'Webhook processing failed' });
     }
   }
@@ -2566,7 +2807,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/share/migrate ───────────────────────────────────────────────────
+  // Admin-only (ADMIN_API_KEY). DDL endpoints must not be reachable by anonymous callers.
   if (path === '/api/share/migrate' && req.method === 'POST') {
+    const adminKey = req.headers['x-admin-key'] as string;
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) return res.status(401).json({ error: 'Unauthorized' });
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS shared_links (

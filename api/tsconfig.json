@@ -11,6 +11,6 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["*.ts", "../server/**/*", "../shared/**/*"],
+  "include": ["*.ts", "../shared/**/*"],
   "exclude": ["node_modules", "../client/**/*", "../**/*.test.ts"]
 }

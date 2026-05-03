@@ -6,10 +6,32 @@ import { Pool } from "pg";
 const JWT_SECRET = process.env.JWT_SECRET;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-// Computed only when env var is present; null signals misconfiguration
-const ADMIN_PASSWORD_HASH = ADMIN_PASSWORD
-  ? crypto.createHash("sha256").update(ADMIN_PASSWORD).digest("hex")
-  : null;
+
+// Per-deploy random salt derived from JWT_SECRET so two deploys with the same
+// ADMIN_PASSWORD don't produce the same hash. scrypt is a memory-hard KDF —
+// hours-to-crack on commodity hardware vs seconds with unsalted SHA-256.
+function adminPasswordSalt(): Buffer {
+  return crypto.scryptSync(JWT_SECRET || "ironvault-admin", "ironvault-admin-v1", 16);
+}
+
+let _adminPwdHashCache: Buffer | null = null;
+function adminPasswordHash(): Buffer | null {
+  if (!ADMIN_PASSWORD) return null;
+  if (_adminPwdHashCache) return _adminPwdHashCache;
+  _adminPwdHashCache = crypto.scryptSync(ADMIN_PASSWORD, adminPasswordSalt(), 64);
+  return _adminPwdHashCache;
+}
+
+function safeVerifyAdminPassword(input: string): boolean {
+  const expected = adminPasswordHash();
+  if (!expected) return false;
+  let candidate: Buffer;
+  try {
+    candidate = crypto.scryptSync(input, adminPasswordSalt(), 64);
+  } catch { return false; }
+  if (candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
+}
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
 let pool: Pool | null = null;
@@ -100,12 +122,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── Auth login (public) ─────────────────────────────────────────────────────
   if (path === "/api/auth/login" && method === "POST") {
-    if (!ADMIN_PASSWORD_HASH || !JWT_SECRET) {
+    if (!ADMIN_PASSWORD || !JWT_SECRET) {
       return res.status(503).json({ error: "Admin credentials not configured" });
     }
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
-    const hash = crypto.createHash("sha256").update(password || "").digest("hex");
-    if (username === ADMIN_USERNAME && ADMIN_PASSWORD_HASH && safeStrEq(hash, ADMIN_PASSWORD_HASH)) {
+    if (username === ADMIN_USERNAME && safeVerifyAdminPassword(password || "")) {
       // Best-effort: persist last_login so /api/admins can surface it. Ignore failures.
       if (process.env.DATABASE_URL) {
         getPool().query(
@@ -305,10 +326,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       planLabel.includes("premium")  ? "premium" :
                                        "free";
     const cleanEmail = email.toLowerCase().trim();
-    // crm_users.country is NOT NULL — default to 'Unknown' when the form leaves
-    // Region blank. Empty string previously tripped a downstream CHECK
-    // constraint and 500'd; 'Unknown' is the safe sentinel used elsewhere.
-    const country = (region || 'Unknown').toString();
+    // crm_users.country is VARCHAR(2) NOT NULL. The previous default 'Unknown'
+    // (8 chars) violated the column length and 500'd whenever Region was blank.
+    // Truncate any provided value to 2 chars; empty/missing → 'US'.
+    const rawCountry = (region || '').toString().trim();
+    const country = (rawCountry || 'US').slice(0, 2).toUpperCase();
     try {
       // 1. crm_users — source of truth. Use ON CONFLICT so re-submitting an
       //    existing email is a no-op rather than an error.
