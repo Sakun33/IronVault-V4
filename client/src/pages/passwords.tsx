@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
@@ -418,6 +418,8 @@ export default function Passwords() {
                   <button
                     onClick={() => copyToClipboard(pw.username, `${pw.id}-username`, 'Username')}
                     className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                    aria-label={`Copy username for ${pw.name}`}
+                    type="button"
                   >
                     {copiedId === `${pw.id}-username`
                       ? <CheckCircle size={15} className="text-primary" />
@@ -438,6 +440,9 @@ export default function Passwords() {
                       onClick={() => togglePasswordVisibility(pw.id)}
                       className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                       data-testid={`reveal-password-${pw.id}`}
+                      aria-label={isVisible ? `Hide password for ${pw.name}` : `Show password for ${pw.name}`}
+                      aria-pressed={isVisible}
+                      type="button"
                     >
                       {isVisible ? <EyeOff size={15} className="text-primary" /> : <Eye size={15} className="text-muted-foreground" />}
                     </button>
@@ -445,6 +450,8 @@ export default function Passwords() {
                       onClick={() => copyToClipboard(pw.password, pw.id, 'Password')}
                       className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                       data-testid={`copy-password-${pw.id}`}
+                      aria-label={`Copy password for ${pw.name}`}
+                      type="button"
                     >
                       {copiedId === pw.id
                         ? <CheckCircle size={15} className="text-primary" />
@@ -463,6 +470,8 @@ export default function Passwords() {
                     <button
                       onClick={() => window.open(pw.url, '_blank', 'noopener,noreferrer')}
                       className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      aria-label={`Open ${pw.name} website in new tab`}
+                      type="button"
                     >
                       <Globe size={15} className="text-muted-foreground" />
                     </button>

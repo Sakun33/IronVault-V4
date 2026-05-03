@@ -49,6 +49,7 @@ import {
 } from '@shared/schema';
 import { AddInvestmentModal } from '@/components/add-investment-modal';
 import { EditInvestmentModal } from '@/components/edit-investment-modal';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 export default function Investments() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
@@ -75,7 +76,7 @@ export default function Investments() {
       return <div className="p-6 text-red-500">Toast context error</div>;
     }
 
-    const { investments, investmentGoals, addInvestment, addInvestmentGoal, deleteInvestment, deleteInvestmentGoal, updateInvestment, updateInvestmentGoal, bulkDeleteInvestments } = vaultContext;
+    const { investments, investmentGoals, addInvestment, addInvestmentGoal, deleteInvestment, deleteInvestmentGoal, updateInvestment, updateInvestmentGoal, bulkDeleteInvestments, isLoading } = vaultContext;
     const { formatCurrency } = currencyContext;
     const { addLog } = loggingContext;
     const { toast } = toastContext;
@@ -809,6 +810,11 @@ export default function Investments() {
                 )}
               </CardHeader>
               <CardContent className="p-0">
+                {isLoading && investments.length === 0 ? (
+                  <div className="p-6">
+                    <ListSkeleton rows={5} showHeader={false} />
+                  </div>
+                ) : null}
                 <div>
                   {investments
                     .filter(inv => {

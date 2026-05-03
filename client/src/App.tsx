@@ -90,7 +90,8 @@ import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
-  const { logout, masterPassword, isUnlocked } = useAuth();
+  const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
+  const notificationUserId = accountEmail || 'guest';
   const { searchQuery, setSearchQuery, stats, isCloudSyncing, passwords, subscriptions, notes, expenses, reminders } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
@@ -299,7 +300,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               </TooltipTrigger>
               <TooltipContent>Quick Add</TooltipContent>
             </Tooltip>
-            <NotificationBell userId="current-user" />
+            <NotificationBell userId={notificationUserId} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" title="More" aria-label="More options">
@@ -402,6 +403,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <button
                   onClick={clearSearch}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Clear search"
                 >
                   <XCircle className="w-4 h-4" />
                 </button>
@@ -451,7 +453,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <span title="Notifications"><NotificationBell userId="current-user" /></span>
+                <span title="Notifications"><NotificationBell userId={notificationUserId} /></span>
               </TooltipTrigger>
               <TooltipContent>Notifications</TooltipContent>
             </Tooltip>
@@ -497,6 +499,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   size="sm"
                   onClick={() => setShowMobileMenu(false)}
                   className="p-2"
+                  aria-label="Close menu"
                 >
                   <X className="w-5 h-5" />
                 </Button>

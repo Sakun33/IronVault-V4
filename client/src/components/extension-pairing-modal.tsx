@@ -165,6 +165,7 @@ export function ExtensionPairingModal({ open, onOpenChange }: ExtensionPairingMo
                     size="icon"
                     onClick={copyPairingCode}
                     data-testid="copy-pairing-code"
+                    aria-label="Copy pairing code"
                   >
                     <Copy className="w-4 h-4" />
                   </Button>

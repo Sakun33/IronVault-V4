@@ -100,6 +100,7 @@ export function VaultLoginPicker({ onSelectVault, onBiometricUnlock, selectedVau
                       }}
                       className="h-9 w-9"
                       data-testid={`button-biometric-unlock-${vault.id}`}
+                      aria-label="Unlock with biometrics"
                     >
                       <Fingerprint className="w-5 h-5 text-primary" />
                     </Button>

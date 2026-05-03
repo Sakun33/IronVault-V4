@@ -26,6 +26,7 @@ export function InfoLayout({ children, title }: InfoLayoutProps) {
                 size="icon"
                 onClick={() => window.history.back()}
                 className="h-8 w-8 shrink-0"
+                aria-label="Go back"
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
@@ -41,13 +42,13 @@ export function InfoLayout({ children, title }: InfoLayoutProps) {
             <div className="flex items-center gap-1 shrink-0">
               {isUnlocked ? (
                 <Link href="/">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Go to dashboard">
                     <Home className="w-4 h-4" />
                   </Button>
                 </Link>
               ) : (
                 <Link href="/">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Go to login">
                     <Lock className="w-4 h-4" />
                   </Button>
                 </Link>

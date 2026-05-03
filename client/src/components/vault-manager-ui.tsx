@@ -190,6 +190,7 @@ function VaultCard({
                   size="icon"
                   onClick={(e) => e.stopPropagation()}
                   data-testid={`button-vault-menu-${vault.id}`}
+                  aria-label={`Vault menu for ${vault.name}`}
                 >
                   <MoreVertical className="w-4 h-4" />
                 </Button>

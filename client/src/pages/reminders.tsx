@@ -44,9 +44,10 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 export default function Reminders() {
-  const { reminders, addReminder, updateReminder, deleteReminder, subscriptions, bulkDeleteReminders } = useVault();
+  const { reminders, addReminder, updateReminder, deleteReminder, subscriptions, bulkDeleteReminders, isLoading } = useVault();
   const subscriptionUrlMap = useMemo(() =>
     Object.fromEntries((subscriptions || []).map(s => [s.id, s.platformLink || undefined])),
     [subscriptions]
@@ -1151,7 +1152,9 @@ export default function Reminders() {
       </Card>
 
       {/* Reminders Display */}
-      {sortedReminders.length === 0 ? (
+      {isLoading && reminders.length === 0 ? (
+        <ListSkeleton rows={5} showHeader={false} />
+      ) : sortedReminders.length === 0 ? (
         <Card className="rounded-2xl shadow-sm border-0 bg-card">
           <CardContent className="p-12 text-center">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">

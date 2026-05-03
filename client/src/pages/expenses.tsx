@@ -48,13 +48,14 @@ import { format, isSameMonth } from 'date-fns';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 // Color palette for charts
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#f97316', '#6b7280'];
 
 export default function Expenses() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
-  const { expenses, addExpense, updateExpense, deleteExpense, bulkDeleteExpenses, searchQuery, setSearchQuery } = useVault();
+  const { expenses, addExpense, updateExpense, deleteExpense, bulkDeleteExpenses, searchQuery, setSearchQuery, isLoading: vaultLoading } = useVault();
   const { formatCurrency, currency, currencies } = useCurrency();
   const { toast } = useToast();
   const { lastExpenseCategory, saveExpenseCategory } = useFormDefaults();
@@ -1124,7 +1125,9 @@ export default function Expenses() {
       </Card>
 
       {/* Daily-grouped expense list */}
-      {sortedExpenses.length === 0 ? (
+      {vaultLoading && expenses.length === 0 ? (
+        <ListSkeleton rows={5} showHeader={false} />
+      ) : sortedExpenses.length === 0 ? (
         <Card className="rounded-2xl shadow-sm border-0 bg-card">
           <CardContent className="p-12 text-center">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">

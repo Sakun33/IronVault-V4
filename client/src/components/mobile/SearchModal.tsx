@@ -86,6 +86,7 @@ function SearchModalInner({
             size="icon"
             onClick={() => onOpenChange(false)}
             className="h-10 w-10 rounded-xl shrink-0"
+            aria-label="Close search"
           >
             <X className="w-5 h-5" />
           </Button>

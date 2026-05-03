@@ -28,9 +28,12 @@ import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures, clearPlanCache } from '@/hooks/use-plan-features';
 
 function resetViewportZoom() {
+  // After iOS auto-zooms into focused inputs, restore the viewport so the user
+  // can still pinch-zoom (a11y). We snap initial-scale back to 1 but leave
+  // maximum-scale unset and user-scalable enabled.
   setTimeout(() => {
     const vp = document.querySelector('meta[name="viewport"]');
-    if (vp) vp.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    if (vp) vp.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
   }, 100);
 }
 
@@ -1035,6 +1038,8 @@ export default function VaultPickerPage() {
                           onClick={() => setShowPw(s => ({ ...s, [vault.id]: !s[vault.id] }))}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           tabIndex={-1}
+                          aria-label={showPw[vault.id] ? 'Hide password' : 'Show password'}
+                          aria-pressed={!!showPw[vault.id]}
                         >
                           {showPw[vault.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -1137,6 +1142,8 @@ export default function VaultPickerPage() {
                         onClick={() => setCloudShowPw(s => ({ ...s, [cv.vaultId]: !s[cv.vaultId] }))}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors z-10"
                         tabIndex={-1}
+                        aria-label={cloudShowPw[cv.vaultId] ? 'Hide password' : 'Show password'}
+                        aria-pressed={!!cloudShowPw[cv.vaultId]}
                       >
                         {cloudShowPw[cv.vaultId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -1278,6 +1285,8 @@ export default function VaultPickerPage() {
                 onClick={() => setShowDeletePw((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 tabIndex={-1}
+                aria-label={showDeletePw ? 'Hide password' : 'Show password'}
+                aria-pressed={showDeletePw}
               >
                 {showDeletePw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -1407,6 +1416,8 @@ export default function VaultPickerPage() {
                   onClick={() => setShowNewPw((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showNewPw ? 'Hide password' : 'Show password'}
+                  aria-pressed={showNewPw}
                 >
                   {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

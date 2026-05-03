@@ -301,9 +301,9 @@ export default function Profile() {
 
   const customerProfile = loadCustomerProfile();
 
-  // User profile data - populated from signup or default mock data
+  // User profile data - populated from signup
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    id: 'user-1',
+    id: accountEmail || 'guest',
     name: customerProfile?.name || accountEmail?.split('@')[0] || 'User',
     email: customerProfile?.email || accountEmail || '',
     phone: customerProfile?.phone || '',
@@ -517,8 +517,15 @@ export default function Profile() {
       const data = await vaultBackupService.exportVaultData();
       if (!data) throw new Error('No data to export');
       
-      // RFC-4180 CSV escape: wrap in quotes and double any embedded quote.
-      const csvEsc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      // RFC-4180 CSV escape with formula-injection neutralization. Excel/Sheets
+      // execute cell content beginning with =, +, -, @, \t, or \r as a formula
+      // (which can exfiltrate data via WEBSERVICE etc.). Prefix offending cells
+      // with a single quote so they render as literal text.
+      const csvEsc = (v: unknown) => {
+        let s = String(v ?? '');
+        if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+        return `"${s.replace(/"/g, '""')}"`;
+      };
 
       // Convert to CSV format
       const csvRows: string[] = [];
@@ -538,7 +545,7 @@ export default function Profile() {
         csvRows.push('--- SUBSCRIPTIONS ---');
         csvRows.push('Name,Cost,BillingCycle,Category,Next Billing');
         data.subscriptions.forEach((s: any) => {
-          csvRows.push([csvEsc(s.name), csvEsc(s.cost), csvEsc(s.billingCycle), csvEsc(s.category), csvEsc(s.nextBilling)].join(','));
+          csvRows.push([csvEsc(s.name), csvEsc(s.cost), csvEsc(s.billingCycle), csvEsc(s.category), csvEsc(s.nextBillingDate)].join(','));
         });
       }
       
@@ -820,10 +827,10 @@ export default function Profile() {
 
   const handleUpgradeSubscription = (tier: PricingTier) => {
     toast({
-      title: "Upgrade Initiated",
-      description: `Upgrading to ${tier.name} plan...`,
+      title: "Redirecting",
+      description: `Opening ${tier.name} plan checkout...`,
     });
-    // TODO: Implement actual upgrade logic
+    setLocation('/pricing');
   };
 
   const handleCancelSubscription = () => {
@@ -2286,10 +2293,24 @@ export default function Profile() {
                   <p className="text-sm text-muted-foreground">Current passcode strength indicator</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Progress value={masterPassword ? Math.min(100, masterPassword.length * 10) : 50} className="w-20" />
-                  <span className={`text-sm font-medium ${masterPassword && masterPassword.length >= 10 ? 'text-green-600' : masterPassword && masterPassword.length >= 6 ? 'text-yellow-600' : 'text-red-600'}`}>
-                    {masterPassword && masterPassword.length >= 10 ? 'Strong' : masterPassword && masterPassword.length >= 6 ? 'Medium' : 'Weak'}
-                  </span>
+                  {(() => {
+                    const pw = masterPassword || '';
+                    let score = 0;
+                    if (pw.length >= 8) score += 25;
+                    if (pw.length >= 12) score += 25;
+                    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score += 20;
+                    if (/[0-9]/.test(pw)) score += 15;
+                    if (/[^A-Za-z0-9]/.test(pw)) score += 15;
+                    score = Math.min(100, score);
+                    const label = score >= 80 ? 'Strong' : score >= 50 ? 'Medium' : score > 0 ? 'Weak' : 'Not set';
+                    const color = score >= 80 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600';
+                    return (
+                      <>
+                        <Progress value={score} className="w-20" />
+                        <span className={`text-sm font-medium ${color}`}>{label}</span>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </CardContent>

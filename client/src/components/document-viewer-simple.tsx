@@ -355,7 +355,7 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0">
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0" aria-label="Close document viewer">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -363,17 +363,17 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
         {/* Toolbar for images */}
         {isImage && !loading && !error && (
           <div className="flex items-center justify-center gap-2 p-2 border-b border-border bg-muted/50 shrink-0">
-            <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.max(0.5, s - 0.25))} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.max(0.5, s - 0.25))} className="h-8 w-8" aria-label="Zoom out">
               <ZoomOut className="h-4 w-4" />
             </Button>
             <span className="text-xs min-w-[50px] text-center">{Math.round(scale * 100)}%</span>
-            <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.min(3, s + 0.25))} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.min(3, s + 0.25))} className="h-8 w-8" aria-label="Zoom in">
               <ZoomIn className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setRotation(r => (r + 90) % 360)} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => setRotation(r => (r + 90) % 360)} className="h-8 w-8" aria-label="Rotate 90 degrees">
               <RotateCw className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleDownload} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={handleDownload} className="h-8 w-8" aria-label="Download document">
               <Download className="h-4 w-4" />
             </Button>
           </div>

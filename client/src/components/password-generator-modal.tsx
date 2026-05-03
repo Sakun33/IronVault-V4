@@ -123,6 +123,7 @@ export function PasswordGeneratorModal({
                 variant="outline"
                 onClick={copyPassword}
                 data-testid="copy-password-button"
+                aria-label={copied ? 'Password copied' : 'Copy password'}
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-primary" />
@@ -135,6 +136,7 @@ export function PasswordGeneratorModal({
                 variant="outline"
                 onClick={generatePassword}
                 data-testid="regenerate-password-button"
+                aria-label="Regenerate password"
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>

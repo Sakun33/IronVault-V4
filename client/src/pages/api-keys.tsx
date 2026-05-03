@@ -36,6 +36,7 @@ import {
 import { format } from 'date-fns';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 interface APIKey {
   id: string;
@@ -61,7 +62,7 @@ interface APIKey {
 
 export default function APIKeys() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
-  const { apiKeys, addApiKey, updateApiKey, deleteApiKey, bulkDeleteApiKeys } = useVault();
+  const { apiKeys, addApiKey, updateApiKey, deleteApiKey, bulkDeleteApiKeys, isLoading } = useVault();
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const { toast } = useToast();
@@ -376,10 +377,11 @@ export default function APIKeys() {
             }}
             className="h-9 w-9"
             title="Lock Vault"
+            aria-label="Lock API keys vault"
           >
             <Lock className="w-4 h-4" />
           </Button>
-          <Button size="icon" onClick={() => setShowAddModal(true)} className="h-9 w-9" title="Add API Key">
+          <Button size="icon" onClick={() => setShowAddModal(true)} className="h-9 w-9" title="Add API Key" aria-label="Add API Key">
             <Plus className="w-4 h-4" />
           </Button>
         </div>
@@ -465,7 +467,9 @@ export default function APIKeys() {
       </Dialog>
 
       {/* API Keys Grid */}
-      {filteredKeys.length === 0 ? (
+      {isLoading && apiKeys.length === 0 ? (
+        <ListSkeleton rows={5} showHeader={false} />
+      ) : filteredKeys.length === 0 ? (
         <Card className="rounded-2xl shadow-sm border-0 bg-card">
           <CardContent className="p-12 text-center">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">

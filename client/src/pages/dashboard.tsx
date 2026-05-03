@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
+import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { PasswordGenerator } from "@/lib/password-generator";
 import { motion } from "framer-motion";
@@ -217,7 +218,7 @@ function ExpenseBars({
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData } = useVault();
+  const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
@@ -401,6 +402,17 @@ export default function Dashboard() {
   ];
 
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
+
+  if (isLoading && stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && stats.totalExpenses === 0) {
+    return (
+      <div className="space-y-4 pb-6" data-testid="dashboard-loading">
+        <div className="rounded-3xl bg-card border border-border p-6">
+          <ListSkeleton rows={2} showHeader={true} />
+        </div>
+        <ListSkeleton rows={4} showHeader={false} />
+      </div>
+    );
+  }
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6">

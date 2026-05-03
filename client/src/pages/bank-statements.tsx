@@ -3,6 +3,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
+import { ListSkeleton } from '@/components/list-skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +45,7 @@ import {
 export default function BankStatements() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
-  const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV, bulkDeleteBankStatements } = useVault();
+  const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV, bulkDeleteBankStatements, isLoading } = useVault();
   const { formatCurrency } = useCurrency();
   const { addLog } = useLogging();
   const { toast } = useToast();
@@ -298,7 +299,11 @@ export default function BankStatements() {
             </span>
           </div>
         </div>
-        {statements.length === 0 && transactions.length === 0 && (
+        {isLoading && statements.length === 0 && transactions.length === 0 ? (
+          <div className="mt-3">
+            <ListSkeleton rows={3} showHeader={false} />
+          </div>
+        ) : statements.length === 0 && transactions.length === 0 && (
           <div className="mt-3 text-sm text-muted-foreground">
             💡 No data found. Try importing a CSV file or adding sample data.
           </div>
@@ -314,13 +319,13 @@ export default function BankStatements() {
           </p>
         </div>
         <div className="flex gap-1 shrink-0">
-          <Button size="icon" onClick={handleAddStatement} className="h-9 w-9" title="Add Statement">
+          <Button size="icon" onClick={handleAddStatement} className="h-9 w-9" title="Add Statement" aria-label="Add Statement">
             <Plus className="w-4 h-4" />
           </Button>
-          <Button size="icon" onClick={handleImportStatement} className="h-9 w-9" title="Import">
+          <Button size="icon" onClick={handleImportStatement} className="h-9 w-9" title="Import" aria-label="Import statement">
             <Upload className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={handleExportData} className="h-9 w-9" title="Export">
+          <Button variant="outline" size="icon" onClick={handleExportData} className="h-9 w-9" title="Export" aria-label="Export bank statement data">
             <Download className="w-4 h-4" />
           </Button>
         </div>

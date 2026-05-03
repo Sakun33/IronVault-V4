@@ -119,6 +119,7 @@ import {
   Crown
 } from 'lucide-react';
 import DocumentViewer from '@/components/document-viewer-simple';
+import { ListSkeleton } from '@/components/list-skeleton';
 import { useVault } from '@/contexts/vault-context';
 import { vaultStorage } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
@@ -184,6 +185,7 @@ export default function Documents() {
   // State management
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -250,6 +252,7 @@ export default function Documents() {
       }
       await loadDocuments();
       await loadFolders();
+      setIsInitialLoading(false);
     };
 
     initializeServices();
@@ -770,25 +773,28 @@ export default function Documents() {
             onClick={handleScanDocument}
             className="h-9 w-9"
             title="Scan Document"
+            aria-label="Scan a document with the camera"
           >
             <Camera className="w-4 h-4" />
           </Button>
-          
+
           <Button
             variant="outline"
             size="icon"
             onClick={() => setShowCreateFolderModal(true)}
             className="h-9 w-9"
             title="New Folder"
+            aria-label="Create new folder"
           >
             <Folder className="w-4 h-4" />
           </Button>
-          
+
           <Button
             size="icon"
             onClick={handleUpload}
             className="h-9 w-9"
             title="Upload Documents"
+            aria-label="Upload documents"
           >
             <Upload className="w-4 h-4" />
           </Button>
@@ -1015,7 +1021,9 @@ export default function Documents() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredDocuments.length === 0 ? (
+          {isInitialLoading && documents.length === 0 ? (
+            <ListSkeleton rows={6} showHeader={false} />
+          ) : filteredDocuments.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">No documents found</h3>

@@ -799,15 +799,17 @@ export default function Goals() {
               onClick={() => setShowTemplatesModal(true)}
               className="h-9 w-9"
               title="Templates"
+              aria-label="Goal templates"
             >
               <Target className="w-4 h-4" />
             </Button>
-            <Button 
+            <Button
               size="icon"
               variant="outline"
               onClick={() => setShowCalculatorModal(true)}
               className="h-9 w-9"
               title="Calculator"
+              aria-label="Goal calculator"
             >
               <Calculator className="w-4 h-4" />
             </Button>

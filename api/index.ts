@@ -237,7 +237,7 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
       envelope: { from: _FROM_ADDR, to },
       to, subject, html,
     });
-    console.log('[email] sent:', subject, '→', to, result.messageId);
+    void result;
     return true;
   } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
 }
@@ -301,7 +301,7 @@ function triggerN8n(url: string, payload: unknown): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-    .then((r) => console.log(`[n8n] POST ${url} → ${r.status}`))
+    .then(() => {})
     .catch((e) => console.error(`[n8n] POST ${url} failed:`, e.message));
 }
 
@@ -381,6 +381,7 @@ function setSecurityHeaders(res: VercelResponse) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
 }
 
 // DuckDuckGo's icon endpoint returns a fixed-size globe ICO when it has no
@@ -536,7 +537,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ success: true, message: "Registration received", email, plan: row.plan_type, id: row.id });
     } catch (err: any) {
       console.error("register error:", err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Registration failed' });
     }
   }
 
@@ -578,7 +579,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       return res.json({ ...entitlementData, entitlement: entitlementData });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[entitlement] error:', err.message);
+      return res.status(500).json({ error: 'Failed to fetch entitlement' });
     }
   }
 
@@ -644,7 +646,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ success: true, ticket: { id: ticketId, zoho: !!zdTicket } });
     } catch (err: any) {
       console.error("ticket create error:", err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed to create ticket' });
     }
   }
 
@@ -1280,7 +1282,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sent = await sendEmail({ to: email, ...tmpl });
       return res.json({ success: sent, type, to: email, subject: tmpl.subject });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[email-trigger] error:', err.message);
+      return res.status(500).json({ error: 'Failed to send email' });
     }
   }
 
@@ -1944,7 +1947,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `);
       return res.json({ success: true, message: 'Schema migration complete (BUG-023)' });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[migrate] error:', err.message);
+      return res.status(500).json({ error: 'Migration failed' });
     }
   }
 
@@ -2009,8 +2013,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          RETURNING *`,
         [ownerEmail, String(inviteeEmail).toLowerCase(), vaultShareId || null]
       );
-      const emailSent = await sendEmail({ to: String(inviteeEmail).toLowerCase(), ...familyInviteEmail(ownerEmail, rows[0].id, String(inviteeEmail).toLowerCase()) });
-      console.log('[invite-email]', emailSent ? 'SENT' : 'FAILED', '→', String(inviteeEmail).toLowerCase());
+      await sendEmail({ to: String(inviteeEmail).toLowerCase(), ...familyInviteEmail(ownerEmail, rows[0].id, String(inviteeEmail).toLowerCase()) });
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed' });
@@ -2210,7 +2213,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       createOrUpdateCrmDeal({ contactId: null, email: normalizedEmail, plan }).catch(() => {});
       return res.json({ success: true, email: normalizedEmail, plan, customersUpdated: cRows, entitlementsUpdated: eRows });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[admin/set-plan] error:', err.message);
+      return res.status(500).json({ error: 'Failed to update plan' });
     }
   }
 
@@ -2261,7 +2265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } catch (err: any) {
       console.error('[admin/users] error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed to list users' });
     }
   }
 
@@ -2334,11 +2338,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Fire upgrade email + CRM deal (fire-and-forget)
       sendEmail({ to: email, ...planUpgradeEmail(plan) }).catch(() => {});
       createOrUpdateCrmDeal({ contactId: null, email, plan }).catch(() => {});
-      console.log(`[zoho-billing] ${eventType} → ${email} → ${plan}`);
       return res.json({ received: true, email, plan, eventType });
     } catch (err: any) {
       console.error('[zoho-billing webhook] error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Webhook processing failed' });
     }
   }
 
@@ -2380,13 +2383,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           results.push({ email: u.email, action: id ? 'upserted' : 'no-id' });
           succeeded++;
         } catch (e: any) {
-          results.push({ email: u.email, action: 'error', error: e.message });
+          console.error('[migrate-to-crm] item failed:', u.email, e.message);
+          results.push({ email: u.email, action: 'error' });
           failed++;
         }
       }
       return res.json({ success: true, total: users.length, succeeded, failed, results });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[migrate-to-crm] error:', err.message);
+      return res.status(500).json({ error: 'Migration failed' });
     }
   }
 
@@ -2441,7 +2446,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID });
     } catch (err: any) {
       console.error('[Razorpay] create-order error:', err.message);
-      return res.status(500).json({ error: err.message || 'Failed to create order' });
+      return res.status(500).json({ error: 'Failed to create order' });
     }
   }
 
@@ -2553,11 +2558,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
 
-      console.log(`[Razorpay] Payment verified: ${normalizedEmail} → ${tierCfg.tier} (${plan})`);
       return res.json({ success: true, plan: tierCfg.tier });
     } catch (err: any) {
       console.error('[Razorpay] verify error:', err.message);
-      return res.status(500).json({ error: err.message || 'Verification failed' });
+      return res.status(500).json({ error: 'Verification failed' });
     }
   }
 
@@ -2578,7 +2582,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `);
       return res.json({ success: true, message: 'shared_links table ready' });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[share/migrate] error:', err.message);
+      return res.status(500).json({ error: 'Migration failed' });
     }
   }
 
@@ -2600,7 +2605,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         expiresAt: expiresAt.toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[share/create] error:', err.message);
+      return res.status(500).json({ error: 'Failed to create share link' });
     }
   }
 
