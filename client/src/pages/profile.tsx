@@ -85,6 +85,7 @@ import {
   Timer
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
+import { autoLockService } from '@/native/auto-lock';
 import { useVault } from '@/contexts/vault-context';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useToast } from '@/hooks/use-toast';
@@ -180,6 +181,15 @@ export default function Profile() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<string>('fingerprint');
+  // Session-timeout toggle — wired to autoLockService. Reads the persisted
+  // setting on first paint so the Switch reflects the actual state instead
+  // of just `defaultChecked`.
+  const [sessionTimeoutEnabled, setSessionTimeoutEnabled] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('autolock_enabled');
+      return v === null ? true : v === 'true';
+    } catch { return true; }
+  });
   const { changePlan, license } = useLicense();
   const [, setLocation] = useLocation();
   
@@ -1184,17 +1194,42 @@ export default function Profile() {
 
   const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  // Delete account handler
-  const handleDeleteAccount = () => {
+  // Delete account handler — wipe server-side records first, then local data.
+  const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'DELETE') {
       toast({ title: 'Error', description: 'Type DELETE to confirm', variant: 'destructive' });
       return;
     }
+    const token = getCloudToken();
+    try {
+      const res = await fetch('/api/auth/account', {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      // Treat 401/404 as "nothing on server to delete" — still wipe locally so
+      // the user isn't stranded with stale data on this device.
+      if (!res.ok && res.status !== 401 && res.status !== 404) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: 'Server delete failed',
+          description: err?.error || 'Could not delete account on the server. Local data was not erased — try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } catch (err) {
+      toast({
+        title: 'Network error',
+        description: 'Could not reach the server to delete your account. Local data was not erased — try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
     // Clear all local data
     localStorage.clear();
-    indexedDB.deleteDatabase('IronVaultDB');
-    indexedDB.deleteDatabase('vault-storage');
-    toast({ title: 'Account Deleted', description: 'All local data has been permanently erased.' });
+    try { indexedDB.deleteDatabase('IronVaultDB'); } catch { /* noop */ }
+    try { indexedDB.deleteDatabase('vault-storage'); } catch { /* noop */ }
+    toast({ title: 'Account Deleted', description: 'Your account and all local data have been permanently erased.' });
     setShowDeleteDialog(false);
     setTimeout(() => window.location.reload(), 1500);
   };
@@ -2328,7 +2363,13 @@ export default function Profile() {
                   <h4 className="font-medium">Session Timeout</h4>
                   <p className="text-sm text-muted-foreground">Automatically lock vault after inactivity</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={sessionTimeoutEnabled}
+                  onCheckedChange={(checked) => {
+                    setSessionTimeoutEnabled(checked);
+                    autoLockService.setEnabled(checked);
+                  }}
+                />
               </div>
               
               <div className="flex items-center justify-between">

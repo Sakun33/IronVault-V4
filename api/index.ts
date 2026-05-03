@@ -415,6 +415,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Vary", "Origin");
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  // Fire-and-forget startup migrations. Each helper has its own
+  // already-ran guard, so calling on every request is cheap.
+  void ensureTotpColumns().catch(() => { /* logged inside */ });
+  void ensureUniqueIndexes().catch(() => { /* logged inside */ });
+
   const path = (req.url || "").replace(/\?.*$/, "");
 
   // ── Health ──────────────────────────────────────────────────────────────────
@@ -860,6 +865,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       _totpColumnsEnsured = true;
     } catch (e: any) {
       console.error('[ensureTotpColumns]', e.message);
+    }
+  }
+
+  // Adds UNIQUE constraints that enforce the data-shape invariants the app
+  // relies on (one entitlements row per user, one cloud_vaults row per
+  // (user, vault) pair). Pre-existing duplicates are coalesced first so the
+  // CREATE UNIQUE INDEX call doesn't fail.
+  let _uniqueIndexesEnsured = false;
+  async function ensureUniqueIndexes(): Promise<void> {
+    if (_uniqueIndexesEnsured) return;
+    try {
+      // Collapse any pre-existing duplicate entitlements rows down to the
+      // most-recent one before adding the UNIQUE index.
+      await db.query(`
+        DELETE FROM entitlements e
+        USING entitlements e2
+        WHERE e.user_id = e2.user_id
+          AND e.ctid < e2.ctid
+      `).catch(() => {/* table may not exist yet */});
+      await db.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS entitlements_user_id_unique
+          ON entitlements(user_id)
+      `).catch((e: any) => console.error('[ensureUniqueIndexes entitlements]', e.message));
+
+      // Same treatment for cloud_vaults: drop dup (user_id, vault_id) rows.
+      await db.query(`
+        DELETE FROM cloud_vaults c
+        USING cloud_vaults c2
+        WHERE c.user_id = c2.user_id
+          AND c.vault_id = c2.vault_id
+          AND c.ctid < c2.ctid
+      `).catch(() => {/* table may not exist yet */});
+      await db.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS cloud_vaults_user_vault_unique
+          ON cloud_vaults(user_id, vault_id)
+      `).catch((e: any) => console.error('[ensureUniqueIndexes cloud_vaults]', e.message));
+
+      _uniqueIndexesEnsured = true;
+    } catch (e: any) {
+      console.error('[ensureUniqueIndexes]', e.message);
     }
   }
 
@@ -1428,20 +1473,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `SELECT id, account_password_hash, account_status, totp_enabled FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
+      // SECURITY: Use one generic message for "account does not exist", "no
+      // password set", and "wrong password" — otherwise an attacker can probe
+      // the user database to learn which emails are registered.
       if (!userRows[0]) {
         recordLoginFailure(clientIp);
-        return res.status(401).json({ error: 'Account not found. Please sign up first.' });
+        return res.status(401).json({ error: 'Invalid email or password' });
       }
       const userId: string = userRows[0].id;
       const storedHash = userRows[0].account_password_hash;
       if (!storedHash) {
         recordLoginFailure(clientIp);
-        return res.status(401).json({ error: 'Account not found. Please sign up first.' });
+        return res.status(401).json({ error: 'Invalid email or password' });
       }
       const verify = await verifyAccountPassword(accountPasswordHash, storedHash);
       if (!verify.ok) {
         recordLoginFailure(clientIp);
-        return res.status(401).json({ error: 'Invalid credentials' });
+        return res.status(401).json({ error: 'Invalid email or password' });
       }
       // Migrate legacy SHA-256 hashes to scrypt on successful login
       if (verify.legacy) {
@@ -1494,6 +1542,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('auth/token error:', err.message);
       return res.status(500).json({ error: 'Auth failed' });
+    }
+  }
+
+  // ── DELETE /api/auth/account ────────────────────────────────────────────────
+  // Permanently delete the authenticated user and every record we have for
+  // them. Best-effort across known related tables — failures on individual
+  // tables are swallowed so the core crm_users row still gets removed.
+  if (path === '/api/auth/account' && req.method === 'DELETE') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const userId = cloudUser.userId;
+    const email = cloudUser.email;
+    try {
+      // Wipe rows in dependent tables first to avoid FK trip-ups, but tolerate
+      // any individual failure (table may not exist on older deploys).
+      const safeQuery = async (sql: string, params: any[]) => {
+        try { await db.query(sql, params); } catch (e: any) {
+          console.error(`[auth/account DELETE] swallow ${sql.split(' ')[1]}:`, e.message);
+        }
+      };
+      await safeQuery(`DELETE FROM entitlements WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM extension_sessions WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM share_links WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM shared_links WHERE created_by = $1`, [userId]);
+      await safeQuery(`DELETE FROM cloud_vaults WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM payment_orders WHERE email = $1`, [email]);
+      await safeQuery(`DELETE FROM vault_activity WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM customers WHERE email = $1`, [email]);
+
+      const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [userId]);
+      if (!rowCount) return res.status(404).json({ error: 'Account not found' });
+      return res.json({ success: true, deleted: true });
+    } catch (err: any) {
+      console.error('[auth/account DELETE]', err.message);
+      return res.status(500).json({ error: 'Account deletion failed' });
     }
   }
 

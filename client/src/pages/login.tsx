@@ -63,6 +63,13 @@ export default function Login() {
     } catch (err) {
       if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
         setEmailNotVerified(true);
+      } else if (err instanceof Error && err.message === 'SERVER_UNREACHABLE_2FA') {
+        setError('Cannot reach the server. Two-factor authentication is required for this account, so offline sign-in is disabled. Please try again when you are online.');
+        toast({
+          title: 'Server unreachable',
+          description: 'Two-factor authentication is required — offline sign-in is disabled for this account.',
+          variant: 'destructive',
+        });
       } else {
         setError('An error occurred. Please try again.');
       }

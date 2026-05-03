@@ -66,19 +66,19 @@ const PLANS = [
 ];
 
 // ── Handler ───────────────────────────────────────────────────────────────────
-const ADMIN_ALLOWED_ORIGINS = new Set([
-  "https://admin.ironvault.app",
-  "https://www.ironvault.app",
-  "https://ironvault.app",
-]);
+// Admin console is gated to its own subdomain. Do NOT widen this list — even
+// a sibling marketing domain (www.ironvault.app, ironvault.app) shouldn't be
+// able to talk to the admin API; CSRF-style attacks become trivial otherwise.
+const ADMIN_ALLOWED_ORIGIN = "https://admin.ironvault.app";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = (req.headers.origin as string) || "";
-  if (ADMIN_ALLOWED_ORIGINS.has(origin)) {
+  if (origin === ADMIN_ALLOWED_ORIGIN) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   } else {
-    res.setHeader("Access-Control-Allow-Origin", "https://admin.ironvault.app");
+    res.setHeader("Access-Control-Allow-Origin", ADMIN_ALLOWED_ORIGIN);
   }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();

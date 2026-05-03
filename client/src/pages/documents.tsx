@@ -174,72 +174,6 @@ interface DocumentVaultStats {
   starredDocuments: Document[];
 }
 
-// Mock data for demonstration
-const mockFolders: Folder[] = [
-  { id: 'folder-1', name: 'Personal', parentId: null, createdAt: new Date(), updatedAt: new Date(), color: 'blue' },
-  { id: 'folder-2', name: 'Work', parentId: null, createdAt: new Date(), updatedAt: new Date(), color: 'green' },
-  { id: 'folder-3', name: 'Financial', parentId: 'folder-1', createdAt: new Date(), updatedAt: new Date(), color: 'purple' },
-  { id: 'folder-4', name: 'Contracts', parentId: 'folder-2', createdAt: new Date(), updatedAt: new Date(), color: 'orange' },
-];
-
-const mockDocuments: Document[] = [
-  {
-    id: 'doc-1',
-    name: 'Passport Copy.pdf',
-    type: 'pdf',
-    size: 2048576, // 2MB
-    folderId: 'folder-1',
-    encryptedData: 'encrypted_data_here',
-    thumbnail: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-01-15'),
-    isStarred: true,
-    tags: ['personal', 'id'],
-    metadata: {
-      author: 'John Doe',
-      title: 'Passport Copy',
-      created: new Date('2024-01-15'),
-      modified: new Date('2024-01-15')
-    }
-  },
-  {
-    id: 'doc-2',
-    name: 'Contract Agreement.docx',
-    type: 'docx',
-    size: 1536000, // 1.5MB
-    folderId: 'folder-4',
-    encryptedData: 'encrypted_data_here',
-    createdAt: new Date('2024-01-20'),
-    updatedAt: new Date('2024-01-20'),
-    isStarred: false,
-    tags: ['work', 'contract'],
-    metadata: {
-      author: 'Legal Team',
-      title: 'Contract Agreement',
-      created: new Date('2024-01-20'),
-      modified: new Date('2024-01-20')
-    }
-  },
-  {
-    id: 'doc-3',
-    name: 'Bank Statement.xlsx',
-    type: 'xlsx',
-    size: 512000, // 512KB
-    folderId: 'folder-3',
-    encryptedData: 'encrypted_data_here',
-    createdAt: new Date('2024-01-25'),
-    updatedAt: new Date('2024-01-25'),
-    isStarred: false,
-    tags: ['financial', 'bank'],
-    metadata: {
-      author: 'Bank System',
-      title: 'Monthly Statement',
-      created: new Date('2024-01-25'),
-      modified: new Date('2024-01-25')
-    }
-  }
-];
-
 export default function Documents() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
@@ -640,26 +574,7 @@ export default function Documents() {
   
   const handleDownload = async (document: Document) => {
     try {
-      // For mock documents, create a dummy file
-      if (document.id.startsWith('doc-')) {
-        const blob = new Blob(['Mock document content'], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const link = window.document.createElement('a');
-        link.href = url;
-        link.download = document.name;
-        window.document.body.appendChild(link);
-        link.click();
-        window.document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        toast({
-          title: "Download Started",
-          description: `Downloading ${document.name}...`,
-        });
-        return;
-      }
-      
-      // For real documents, use the document service
+      // Real-document path only — fake "doc-" demo blobs were removed.
       const file = await documentService.retrieveDocument(document.id);
       
       // Create download link

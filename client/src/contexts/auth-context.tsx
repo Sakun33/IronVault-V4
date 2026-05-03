@@ -58,7 +58,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Legacy key — older builds wrote the master password here. We never write it
+// anymore (security: master password must not be persisted), but we still
+// remove the key on every relevant transition to clean up old sessions.
 const SESSION_KEY = 'iv_session';
+
+// Set of emails for which the server has previously reported 2FA is enabled.
+// We use this as a hint to refuse the local-hash fallback when the server is
+// unreachable — otherwise an attacker who can MITM /api/auth/token (return 5xx)
+// could bypass 2FA using only the password.
+const TWO_FA_HINT_KEY = 'iv_2fa_enabled_emails';
+function get2faHintSet(): Set<string> {
+  try {
+    const raw = localStorage.getItem(TWO_FA_HINT_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.map((e) => String(e).toLowerCase()) : []);
+  } catch { return new Set(); }
+}
+function add2faHint(email: string) {
+  const s = get2faHintSet();
+  s.add(email.toLowerCase());
+  try { localStorage.setItem(TWO_FA_HINT_KEY, JSON.stringify(Array.from(s))); } catch { /* noop */ }
+}
+function has2faHint(email: string): boolean {
+  return get2faHintSet().has(email.toLowerCase());
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -121,23 +146,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const exists = await vaultStorage.vaultExists();
       setVaultExists(exists);
 
-      // Restore vault session if vault exists and a saved session is present
-      if (exists) {
-        const saved = sessionStorage.getItem(SESSION_KEY);
-        if (saved) {
-          try {
-            const success = await vaultStorage.unlockVault(saved);
-            if (success) {
-              setIsUnlocked(true);
-              setMasterPassword(saved);
-            } else {
-              sessionStorage.removeItem(SESSION_KEY);
-            }
-          } catch {
-            sessionStorage.removeItem(SESSION_KEY);
-          }
-        }
-      }
+      // SECURITY: Master password is NEVER persisted. Older builds wrote it to
+      // sessionStorage; clear any legacy value here. The user must re-enter the
+      // master password on every page load / new session.
+      sessionStorage.removeItem(SESSION_KEY);
     } catch (error) {
       console.error('Failed to initialize auth:', error);
     } finally {
@@ -195,6 +207,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // and pivots to the code prompt. The caller's `success === false` here
         // is NOT a failure — it just means "more steps needed".
         if (data.requires2FA && data.tempToken) {
+          // Record the 2FA hint so we never fall back to local-hash auth for
+          // this email when the server is unreachable.
+          add2faHint(normalizedEmail);
           setPendingTwoFactor({ email: normalizedEmail, tempToken: data.tempToken, password });
           return false;
         }
@@ -217,11 +232,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Network error — fall back to localStorage so offline still works
       console.error('[auth] /api/auth/token network error:', err);
     }
-    // Offline / server-error fallback: verify against locally-stored hash.
-    // Note: 2FA is enforced server-side only; if the server is unreachable we
-    // accept the local-cached credential. This matches the existing offline
-    // posture (localStorage hash check) and avoids locking users out when the
-    // network is down.
+    // SECURITY: if this email has 2FA enabled (per the cached server hint),
+    // refuse the offline fallback entirely — otherwise an attacker who can
+    // induce a 5xx on /api/auth/token would bypass 2FA with just the password.
+    if (has2faHint(normalizedEmail)) {
+      throw new Error('SERVER_UNREACHABLE_2FA');
+    }
+    // Offline / server-error fallback (only for accounts not known to have
+    // 2FA): verify against locally-stored hash.
     const localValid = await verifyAccountCredentials(email, password);
     if (localValid) {
       await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
@@ -283,7 +301,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
         setMasterPassword(password);
-        sessionStorage.setItem(SESSION_KEY, password);
         addLog('Vault Unlock', 'security', 'Vault unlocked successfully');
       }
       return success;
@@ -298,7 +315,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithoutVerification = (password: string): void => {
     setIsUnlocked(true);
     setMasterPassword(password);
-    sessionStorage.setItem(SESSION_KEY, password);
   };
 
   const loginWithKey = async (base64Key: string): Promise<boolean> => {
@@ -322,7 +338,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setVaultExists(true);
       setIsUnlocked(true);
       setMasterPassword(password);
-      sessionStorage.setItem(SESSION_KEY, password);
 
       // Clear activity logs when creating a new vault
       clearLogs();
@@ -347,10 +362,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): Promise<void> => {
     if (!isUnlocked) throw new Error('Vault must be unlocked');
     await vaultStorage.changeMasterPassword(currentPassword, newPassword, onProgress);
-    // Update in-memory + sessionStorage so the rest of the app keeps working
-    // with the same vault under the new password.
+    // Update in-memory state so the rest of the app keeps working with the
+    // same vault under the new password. (Master password is NEVER persisted.)
     setMasterPassword(newPassword);
-    sessionStorage.setItem(SESSION_KEY, newPassword);
     addLog('Master Password Changed', 'security', 'Vault re-encrypted with new master password');
     // Force the cloud sync hook to push the freshly re-encrypted blob so other
     // devices receive the new copy. The hook reads masterPassword from props,

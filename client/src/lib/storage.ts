@@ -1227,7 +1227,7 @@ export class VaultStorage {
 
       // Create password entry
       const password: PasswordEntry = {
-        id: `imported_${Date.now()}_${i}`,
+        id: crypto.randomUUID(),
         name: row.name || row.title || 'Imported Password',
         username: row.username || row.email || '',
         password: row.password || '',
@@ -1270,7 +1270,7 @@ export class VaultStorage {
       });
 
       const subscription: SubscriptionEntry = {
-        id: `imported_${Date.now()}_${i}`,
+        id: crypto.randomUUID(),
         name: row.name || 'Imported Subscription',
         plan: row.plan || 'Basic',
         cost: parseFloat(row.cost || '0'),
@@ -1325,7 +1325,7 @@ export class VaultStorage {
       });
 
       const expense: ExpenseEntry = {
-        id: `imported_${Date.now()}_${i}`,
+        id: crypto.randomUUID(),
         title: row.description || row.title || 'Imported Expense',
         amount: parseFloat(row.amount || '0'),
         currency: row.currency || 'USD',
@@ -1369,7 +1369,7 @@ export class VaultStorage {
       });
 
       const note: NoteEntry = {
-        id: `imported_${Date.now()}_${i}`,
+        id: crypto.randomUUID(),
         title: row.title || 'Imported Note',
         content: row.content || '',
         notebook: row.category || 'Default',
@@ -1410,7 +1410,7 @@ export class VaultStorage {
       });
 
       const reminder: ReminderEntry = {
-        id: `imported_${Date.now()}_${i}`,
+        id: crypto.randomUUID(),
         title: row.title || 'Imported Reminder',
         description: row.description || '',
         dueDate: row.dueDate ? new Date(row.dueDate) : new Date(),

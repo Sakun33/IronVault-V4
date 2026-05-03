@@ -205,6 +205,19 @@ export default function Subscriptions() {
     }
   };
 
+  // Short label suffix that matches the actual billing cycle. Falls back to
+  // "mo" when the value is missing or unknown so the UI never shows a blank.
+  const cycleSuffix = (cycle?: string): string => {
+    switch (cycle) {
+      case 'yearly':    return 'yr';
+      case 'quarterly': return 'qtr';
+      case 'weekly':    return 'wk';
+      case 'daily':     return 'day';
+      case 'monthly':   return 'mo';
+      default:          return 'mo';
+    }
+  };
+
   const totalMonthlySpend = subscriptions
     .filter(s => s.isActive)
     .reduce((total, s) => total + monthlyCostOf(s), 0);
@@ -388,7 +401,7 @@ export default function Subscriptions() {
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-medium text-foreground truncate">{subscription.name}</div>
                         <div className="text-[13px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span className="font-medium">{formatCurrency(subscription.cost || 0, currency)}/{subscription.billingCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                          <span className="font-medium">{formatCurrency(subscription.cost || 0, currency)}/{cycleSuffix(subscription.billingCycle)}</span>
                           <span className="text-muted-foreground/40">·</span>
                           <Calendar size={11} className="flex-shrink-0" />
                           <span>{format(subscription.nextBillingDate, 'MMM d')}</span>
@@ -524,7 +537,7 @@ export default function Subscriptions() {
                 <div className="rounded-xl bg-muted/50 px-4 py-3">
                   <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Billing</div>
                   <div className="text-[15px] font-semibold text-foreground">
-                    {formatCurrency(sub.cost || 0, currency)}<span className="text-[13px] font-normal text-muted-foreground">/{sub.billingCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                    {formatCurrency(sub.cost || 0, currency)}<span className="text-[13px] font-normal text-muted-foreground">/{cycleSuffix(sub.billingCycle)}</span>
                   </div>
                 </div>
 

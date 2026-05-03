@@ -90,6 +90,7 @@ export default function Investments() {
     const [activeTab, setActiveTab] = useState('overview');
     const [deleteTargetInvestment, setDeleteTargetInvestment] = useState<{ id: string; name: string } | null>(null);
     const [deleteTargetGoal, setDeleteTargetGoal] = useState<{ id: string; name: string } | null>(null);
+    const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
     // Calculate portfolio analytics
     const portfolioAnalytics = useMemo(() => {
@@ -793,8 +794,19 @@ export default function Investments() {
           {/* Investments Tab */}
           <TabsContent value="investments" className="space-y-6">
             <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Investment Portfolio</CardTitle>
+                {investments.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    data-testid="button-bulk-delete-investments"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    Delete All ({investments.length})
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div>
@@ -1221,6 +1233,32 @@ export default function Investments() {
           onClose={handleCloseEditModal}
           onInvestmentUpdated={handleInvestmentUpdated}
         />
+
+        <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete all {investments.length} investment{investments.length === 1 ? '' : 's'}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete every investment in your portfolio. Investment goals are kept. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  const ids = investments.map((inv) => inv.id);
+                  const removed = await bulkDeleteInvestments(ids);
+                  setShowBulkDeleteConfirm(false);
+                  toast({ title: 'Deleted', description: `${removed} investment${removed === 1 ? '' : 's'} removed.` });
+                  addLog('Investments Cleared', 'security', `Bulk-deleted ${removed} investments`);
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete all
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={!!deleteTargetInvestment} onOpenChange={(open) => { if (!open) setDeleteTargetInvestment(null); }}>
           <AlertDialogContent>
