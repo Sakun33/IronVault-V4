@@ -186,16 +186,82 @@ export class VaultManager {
         presentVaultIds.add(db.name.slice('IronVault_'.length));
       }
     }
+    // Some IDBs survive vault deletion (orphan shells from a previous reset
+    // or a half-finished delete). Their name appears in databases() but the
+    // stores are empty — counting them as "present" produces the "5 of 5"
+    // bug where the registry shows phantom vaults the user can't actually
+    // open. Probe each present IDB and drop the entry if it has no data.
+    const ALL_STORES = [
+      'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
+      'metadata', 'encrypted_data', 'bankStatements', 'bankTransactions',
+      'investments', 'investmentGoals', 'persistent_data',
+    ];
+    const hasAnyData = (vaultId: string): Promise<boolean> => new Promise((resolve) => {
+      let req: IDBOpenDBRequest;
+      try { req = indexedDB.open(`IronVault_${vaultId}`); }
+      catch { return resolve(true); /* fail-open: don't drop on probe error */ }
+      // Don't trigger an upgrade — the vault is opened on-demand by storage.ts
+      // with the canonical version. We only need a peek at an existing schema.
+      req.onupgradeneeded = () => {
+        try { req.transaction?.abort(); } catch {}
+        resolve(false);
+      };
+      req.onerror = () => resolve(true);
+      req.onblocked = () => resolve(true);
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          const stores = ALL_STORES.filter(s => db.objectStoreNames.contains(s));
+          if (stores.length === 0) { db.close(); return resolve(false); }
+          const tx = db.transaction(stores, 'readonly');
+          let total = 0;
+          let pending = stores.length;
+          let settled = false;
+          for (const name of stores) {
+            const r = tx.objectStore(name).count();
+            r.onsuccess = () => {
+              total += r.result || 0;
+              if (--pending === 0 && !settled) {
+                settled = true;
+                db.close();
+                resolve(total > 0);
+              }
+            };
+            r.onerror = () => {
+              if (--pending === 0 && !settled) {
+                settled = true;
+                db.close();
+                resolve(total > 0);
+              }
+            };
+          }
+          tx.onerror = () => { if (!settled) { settled = true; db.close(); resolve(true); } };
+        } catch {
+          try { db.close(); } catch {}
+          resolve(true);
+        }
+      };
+    });
     const registry = this.getRegistry();
-    const kept = registry.filter(v => presentVaultIds.has(v.id));
+    const liveIds = new Set<string>();
+    for (const v of registry) {
+      if (!presentVaultIds.has(v.id)) continue;
+      const hasData = await hasAnyData(v.id);
+      if (hasData) {
+        liveIds.add(v.id);
+      } else {
+        // Empty shell — drop the IDB so a future databases() call doesn't
+        // resurrect this entry the next time we prune.
+        try { indexedDB.deleteDatabase(`IronVault_${v.id}`); } catch {}
+      }
+    }
+    const kept = registry.filter(v => liveIds.has(v.id));
     const removed = registry.length - kept.length;
     if (removed > 0) {
       this.saveRegistry(kept);
-      // If the active vault pointer was on a now-removed entry, drop it so
-      // getActiveVaultId() falls back to the default / first remaining one.
       try {
         const active = localStorage.getItem(this.activeVaultKey);
-        if (active && !presentVaultIds.has(active)) {
+        if (active && !liveIds.has(active)) {
           localStorage.removeItem(this.activeVaultKey);
           this.activeVaultId = null;
         }

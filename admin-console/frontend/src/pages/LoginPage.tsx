@@ -17,8 +17,9 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setError('');
-    
+
     if (!email || !password) {
       setError('Please enter both username and password');
       return;
@@ -27,9 +28,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email.trim(), password);
     } catch (err: any) {
-      setError(err.message || 'Invalid username or password');
+      const msg = err?.message || (typeof err === 'string' ? err : 'Invalid username or password');
+      console.error('[admin login] failed:', msg, err);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +156,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>© 2025 IronVault. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} IronVault. All rights reserved.</p>
           <p className="mt-1">
             <a href="https://www.ironvault.app" className="hover:text-primary transition-colors">
               www.ironvault.app

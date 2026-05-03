@@ -27,19 +27,24 @@ async function hashAccountPassword(input: string): Promise<string> {
 }
 
 async function verifyAccountPassword(input: string, stored: string): Promise<{ ok: boolean; legacy: boolean }> {
-  if (stored.startsWith('scrypt$')) {
-    const parts = stored.split('$');
+  // Normalize: legacy SHA-256 hashes can sneak in with stray whitespace or
+  // mixed case from older insert paths; trim before format-detecting.
+  const normStored = (stored || '').trim();
+  const normInput = (input || '').trim();
+  if (normStored.startsWith('scrypt$')) {
+    const parts = normStored.split('$');
     if (parts.length !== 3) return { ok: false, legacy: false };
     const salt = Buffer.from(parts[1], 'hex');
     const expected = Buffer.from(parts[2], 'hex');
-    const got = (await scrypt(input, salt, expected.length)) as Buffer;
+    if (salt.length === 0 || expected.length === 0) return { ok: false, legacy: false };
+    const got = (await scrypt(normInput, salt, expected.length)) as Buffer;
     if (got.length !== expected.length) return { ok: false, legacy: false };
     return { ok: timingSafeEqual(got, expected), legacy: false };
   }
-  // Legacy: 64-char hex SHA-256, no salt. Compare in constant time.
-  if (/^[a-f0-9]{64}$/i.test(stored) && /^[a-f0-9]{64}$/i.test(input)) {
-    const a = Buffer.from(stored, 'hex');
-    const b = Buffer.from(input, 'hex');
+  // Legacy: 64-char hex SHA-256, no salt. Case-insensitive hex compare.
+  if (/^[a-f0-9]{64}$/i.test(normStored) && /^[a-f0-9]{64}$/i.test(normInput)) {
+    const a = Buffer.from(normStored.toLowerCase(), 'hex');
+    const b = Buffer.from(normInput.toLowerCase(), 'hex');
     if (a.length !== b.length) return { ok: false, legacy: true };
     return { ok: timingSafeEqual(a, b), legacy: true };
   }
