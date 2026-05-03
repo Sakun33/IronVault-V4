@@ -2707,12 +2707,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Canonical plan + email come from the server-side order row, NOT the
     // request body. Razorpay's HMAC only covers (order_id|payment_id), so
-    // trusting body-supplied plan/email allowed plan tampering.
-    const { rows: orderRows } = await db.query(
-      `SELECT user_id, email, plan, amount, consumed_payment_id FROM payment_orders WHERE order_id = $1 LIMIT 1`,
-      [razorpay_order_id]
-    );
-    const orderRow = orderRows[0];
+    // trusting body-supplied plan/email allowed plan tampering. Wrap the
+    // lookup in try/catch so a missing payment_orders table or transient DB
+    // error returns a clean 500 instead of FUNCTION_INVOCATION_FAILED.
+    let orderRow: { user_id: string; email: string; plan: string; amount: number | null; consumed_payment_id: string | null } | undefined;
+    try {
+      const { rows: orderRows } = await db.query(
+        `SELECT user_id, email, plan, amount, consumed_payment_id FROM payment_orders WHERE order_id = $1 LIMIT 1`,
+        [razorpay_order_id]
+      );
+      orderRow = orderRows[0];
+    } catch (err: any) {
+      console.error('[Razorpay] order lookup failed:', err.message);
+      return res.status(500).json({ error: 'Verification failed' });
+    }
     if (!orderRow) return res.status(404).json({ error: 'Unknown order' });
     if (orderRow.consumed_payment_id) {
       return res.status(409).json({ error: 'Payment already verified' });
