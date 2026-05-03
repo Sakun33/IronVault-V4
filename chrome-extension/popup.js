@@ -182,12 +182,19 @@ ui.loginForm.addEventListener('submit', async (ev) => {
     const result = await send(payload);
     if (result.needsVaultSelection) {
       ui.vaultSelect.innerHTML = '';
+      let defaultVaultId = '';
       result.vaults.forEach((v) => {
         const opt = document.createElement('option');
         opt.value = v.vaultId;
         opt.textContent = v.vaultName + (v.isDefault ? ' (default)' : '');
         ui.vaultSelect.appendChild(opt);
+        if (v.isDefault) defaultVaultId = v.vaultId;
       });
+      // Pre-select the default vault so the common case is one click —
+      // but the user can switch to any other vault before pressing
+      // Connect again. Without pre-selection here the user would lose
+      // the affordance of "default vault" entirely.
+      if (defaultVaultId) ui.vaultSelect.value = defaultVaultId;
       ui.vaultPicker.hidden = false;
       setLoginError('Choose which vault to unlock and click Connect again.');
       return;

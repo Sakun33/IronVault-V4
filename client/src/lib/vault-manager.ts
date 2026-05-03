@@ -122,6 +122,15 @@ export class VaultManager {
     this._accountEmail = normalized;
     // Reset in-memory active vault so it's re-read from the scoped key
     this.activeVaultId = null;
+
+    // Self-heal stale registry entries on every account-binding event.
+    // Source of the "6 of 5 vaults used" report: a previous reset/clear
+    // left orphan rows in the localStorage registry whose IndexedDB had
+    // already been deleted. Pruning at the earliest moment we know the
+    // scoped registry key (i.e. right after setting the email) removes
+    // those rows before any UI reads the count. Idempotent — re-running
+    // it later (e.g. from VaultPickerPage) is a no-op.
+    this.pruneOrphanRegistryEntries().catch(() => { /* silent — best-effort */ });
   }
 
   /** Called on account logout — vault data stays in scoped keys for next login. */

@@ -221,9 +221,11 @@ async function performLogin({ email, accountPassword, masterPassword, vaultId, s
     if (!chosen) throw new Error('Selected vault no longer exists.');
   } else if (vaults.length === 1) {
     chosen = vaults[0];
-  } else {
-    chosen = vaults.find(v => v.isDefault) || null;
   }
+  // For >1 vaults, ALWAYS show the picker on login, even when a default
+  // is set. Previously the default was silently chosen — leaving non-default
+  // vaults unreachable from the popup. The popup pre-selects whichever
+  // vault is marked default so the common case is still one click.
   if (!chosen) {
     return {
       needsVaultSelection: true,
@@ -925,11 +927,20 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onStartup.addListener(async () => {
   await lock();
+  // Clear the JWT on every browser startup. The encrypted blob stays on
+  // disk so the user can still offline-unlock with their master password,
+  // but the bearer token (which can call /api/vaults/cloud, /vault/items/add,
+  // /vault/activity from any context that can read this profile dir) does
+  // NOT survive a browser close. A re-login is required to obtain a fresh
+  // token. This shrinks the disk-residency window of the JWT to just the
+  // current Chrome session — which is what the "session" naming already
+  // implied.
   const c = await getCache();
-  if (c?.token) {
-    await ensureSessionCheckAlarm();
+  if (c) {
+    if (c.token) {
+      await setCache({ ...c, token: null, sessionId: null });
+    }
     await ensureExpiryAlarm();
-    runSessionCheck().catch(() => {});
     tickExpiry().catch(() => {});
   }
   await updateBadge();
