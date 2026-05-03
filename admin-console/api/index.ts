@@ -237,7 +237,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── Shared CRM query helper ─────────────────────────────────────────────────
   // Reads from crm_users + entitlements — the same tables the main backend writes to.
   // Returns rows shaped like the legacy "customers" schema the admin frontend expects.
-  async function queryCrmCustomers(where = "", values: any[] = []) {
+  // Optional `limitOffset` runs LIMIT/OFFSET in SQL so the handler doesn't have
+  // to materialize every row to slice a page in JS.
+  async function queryCrmCustomers(where = "", values: any[] = [], limitOffset?: { limit: number; offset: number }) {
+    let tail = "";
+    const vals = values.slice();
+    if (limitOffset) {
+      vals.push(limitOffset.limit);
+      vals.push(limitOffset.offset);
+      tail = ` LIMIT $${vals.length - 1} OFFSET $${vals.length}`;
+    }
     const { rows } = await db.query(
       `SELECT u.id, u.email,
               COALESCE(u.full_name, split_part(u.email, '@', 1)) AS name,
@@ -252,10 +261,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        FROM crm_users u
        LEFT JOIN entitlements e ON e.user_id = u.id
        ${where}
-       ORDER BY u.created_at DESC`,
-      values
+       ORDER BY u.created_at DESC${tail}`,
+      vals
     );
     return rows;
+  }
+
+  // Counts customers matching the same WHERE the listing uses, without
+  // materializing the rows. Used together with queryCrmCustomers + LIMIT/OFFSET.
+  async function countCrmCustomers(where = "", values: any[] = []): Promise<number> {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS c
+       FROM crm_users u
+       LEFT JOIN entitlements e ON e.user_id = u.id
+       ${where}`,
+      values
+    );
+    return rows[0]?.c ?? 0;
   }
 
   // ── GET /api/customers/export/csv ──────────────────────────────────────────
@@ -268,9 +290,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
         return '"' + s.replace(/"/g, '""') + '"';
       };
-      const header = "id,email,name,region,plan_name,status,created_at\n";
+      const header = "id,email,name,region,plan_name,status,source,created_at,last_active\n";
       const csv = rows.map(r =>
-        [r.id, r.email, r.name || "", r.region || "", r.plan_name, r.status, r.created_at]
+        [r.id, r.email, r.name || "", r.region || "", r.plan_name, r.status, r.source || "", r.created_at, r.last_active || ""]
           .map(csvEsc).join(",")
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");
@@ -295,11 +317,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         conditions.push(`LOWER(COALESCE(e.plan,'free')) = $${vals.length}`);
       }
       if (conditions.length) where = `WHERE ${conditions.join(" AND ")}`;
-      const rows = await queryCrmCustomers(where, vals);
-      const pageN = parseInt(page, 10);
-      const limitN = parseInt(limit, 10);
-      const paginated = rows.slice((pageN - 1) * limitN, pageN * limitN);
-      return res.json({ customers: paginated, total: rows.length, pagination: { page: pageN, limit: limitN, total: rows.length, pages: Math.ceil(rows.length / limitN) } });
+      const pageN = Math.max(1, parseInt(page, 10) || 1);
+      const limitN = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+      const offset = (pageN - 1) * limitN;
+      const [paginated, total] = await Promise.all([
+        queryCrmCustomers(where, vals, { limit: limitN, offset }),
+        countCrmCustomers(where, vals),
+      ]);
+      return res.json({
+        customers: paginated,
+        total,
+        pagination: { page: pageN, limit: limitN, total, pages: Math.ceil(total / limitN) },
+      });
     } catch (err: any) { return res.status(500).json({ error: err.message }); }
   }
 
@@ -326,11 +355,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       planLabel.includes("premium")  ? "premium" :
                                        "free";
     const cleanEmail = email.toLowerCase().trim();
-    // crm_users.country is VARCHAR(2) NOT NULL. The previous default 'Unknown'
-    // (8 chars) violated the column length and 500'd whenever Region was blank.
-    // Truncate any provided value to 2 chars; empty/missing → 'US'.
+    // crm_users.country is VARCHAR(2) NOT NULL. Truncate any provided value
+    // to 2 chars; empty/missing → 'US'.
     const rawCountry = (region || '').toString().trim();
     const country = (rawCountry || 'US').slice(0, 2).toUpperCase();
+    // crm_users.full_name is NOT NULL. Fall back to the email local-part so
+    // the INSERT doesn't 500 when the admin omits the name.
+    const fullName = (name || '').toString().trim() || cleanEmail.split('@')[0];
     try {
       // 1. crm_users — source of truth. Use ON CONFLICT so re-submitting an
       //    existing email is a no-op rather than an error.
@@ -343,7 +374,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            phone     = EXCLUDED.phone,
            updated_at = NOW()
          RETURNING id, email, full_name, country, phone, created_at`,
-        [cleanEmail, name || null, country, phone || null, status || 'active']
+        [cleanEmail, fullName, country, phone || null, status || 'active']
       );
       const userId = crm[0].id;
 
@@ -358,7 +389,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            plan_type = EXCLUDED.plan_type,
            status    = EXCLUDED.status,
            updated_at = NOW()`,
-        [userId, cleanEmail, name || null, country, planKey, status || 'active']
+        [userId, cleanEmail, fullName, country, planKey, status || 'active']
       );
 
       // 3. entitlements — the user's plan (admin override, since this is
@@ -396,27 +427,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (method === "PUT") {
-      // Update crm_users profile fields and/or entitlement plan
-      const { plan_name, subscription_plan, full_name, country, platform } = req.body || {};
-      const newPlan = plan_name || subscription_plan;
+      // Update crm_users profile fields and/or entitlement plan. Accepts:
+      //   - profile: full_name, email, country, region, platform, phone
+      //   - plan:    plan_name | subscription_plan | plan_type | plan_id
+      const body = req.body || {};
+      const { full_name, email: newEmail, country, region, platform, phone } = body;
+      const newPlan = body.plan_name || body.subscription_plan || body.plan_type || body.plan_id;
+      const countryRaw = country !== undefined ? country : region;
       try {
-        if (full_name || country || platform) {
-          const updates: string[] = [];
-          const vals: any[] = [];
-          let i = 1;
-          if (full_name !== undefined) { updates.push(`full_name = $${i++}`); vals.push(full_name); }
-          if (country   !== undefined) { updates.push(`country = $${i++}`);   vals.push(country); }
-          if (platform  !== undefined) { updates.push(`platform = $${i++}`);  vals.push(platform); }
+        const updates: string[] = [];
+        const vals: any[] = [];
+        let i = 1;
+        if (full_name !== undefined) { updates.push(`full_name = $${i++}`); vals.push(full_name); }
+        if (newEmail  !== undefined) { updates.push(`email = $${i++}`);     vals.push(String(newEmail).toLowerCase().trim()); }
+        if (countryRaw !== undefined) {
+          const c = (countryRaw || '').toString().trim().slice(0, 2).toUpperCase() || 'US';
+          updates.push(`country = $${i++}`); vals.push(c);
+        }
+        if (platform  !== undefined) { updates.push(`platform = $${i++}`);  vals.push(platform); }
+        if (phone     !== undefined) { updates.push(`phone = $${i++}`);     vals.push(phone || null); }
+        if (updates.length) {
           updates.push(`updated_at = NOW()`);
           vals.push(id);
           await db.query(`UPDATE crm_users SET ${updates.join(", ")} WHERE id = $${i}`, vals);
         }
         if (newPlan) {
-          const dbPlan = newPlan.toLowerCase().includes("lifetime") ? "lifetime"
-            : newPlan.toLowerCase().includes("pro") || newPlan.toLowerCase().includes("premium") ? "premium"
-            : "free";
+          const p = String(newPlan).toLowerCase();
+          const dbPlan =
+            p.includes("lifetime") ? "lifetime" :
+            p.includes("family")   ? "family" :
+            p.includes("pro") || p.includes("premium") ? "premium" :
+                                                        "free";
+          // UPSERT — admin-created users may not have an entitlements row yet,
+          // so a plain UPDATE is a silent no-op.
           await db.query(
-            `UPDATE entitlements SET plan = $1, updated_at = NOW() WHERE user_id = $2`,
+            `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+             VALUES ($2, $1, 'active', false, false, true)
+             ON CONFLICT (user_id) DO UPDATE SET plan = $1, status = 'active', admin_override = true, updated_at = NOW()`,
             [dbPlan, id]
           );
         }
@@ -428,6 +475,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (method === "DELETE") {
       try {
+        // Cascade-delete the legacy `customers` mirror first (no FK to crm_users
+        // means it would otherwise leak orphan rows that tickets still point at).
+        await db.query(`DELETE FROM customers WHERE id = $1`, [id]).catch(() => {});
         const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [id]);
         if (!rowCount) return res.status(404).json({ error: "Customer not found" });
         return res.json({ success: true });
@@ -482,16 +532,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (subMatch && method === "PUT") {
     const id = subMatch[1];
-    const { plan_type } = req.body || {};
-    if (!plan_type) return res.status(400).json({ error: "plan_type required" });
+    // Frontend (CustomerDetailPage) sends `plan_id` keyed off the PLANS list
+    // ("free" | "pro" | "family" | "lifetime"); legacy clients send `plan_type`.
+    // Accept either, normalize to entitlements canonical keys ("pro" → "premium").
+    const body = req.body || {};
+    const incoming = body.plan_id ?? body.plan_type ?? body.plan ?? body.plan_name;
+    if (!incoming) return res.status(400).json({ error: "plan_id or plan_type required" });
+    const p = String(incoming).toLowerCase().trim();
+    const dbPlan =
+      p.includes("lifetime") ? "lifetime" :
+      p.includes("family")   ? "family" :
+      p.includes("pro") || p.includes("premium") ? "premium" :
+                                                   "free";
     try {
+      // UPSERT — entitlements row may not exist yet for admin-created users.
       await db.query(
-        `UPDATE entitlements SET plan = $1, updated_at = NOW() WHERE user_id = $2`,
-        [plan_type, id]
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($2, $1, 'active', false, false, true)
+         ON CONFLICT (user_id) DO UPDATE SET plan = $1, status = 'active', admin_override = true, updated_at = NOW()`,
+        [dbPlan, id]
       );
+      // Mirror to legacy `customers.plan_type` so other read paths stay in sync.
+      await db.query(
+        `UPDATE customers SET plan_type = $1, updated_at = NOW() WHERE id = $2`,
+        [dbPlan, id]
+      ).catch(() => {});
+      // Audit (best-effort).
+      await db.query(
+        `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
+         SELECT email, NULL, $2, 'admin', 'subscription change' FROM crm_users WHERE id = $1`,
+        [id, dbPlan]
+      ).catch(() => {});
       const { rows } = await db.query(
-        `SELECT u.id, u.email, COALESCE(e.plan,'free') AS plan_type FROM crm_users u
-         LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1`, [id]
+        `SELECT u.id, u.email, COALESCE(e.plan,'free') AS plan_type, COALESCE(e.status,'active') AS status
+         FROM crm_users u LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1`, [id]
       );
       if (!rows[0]) return res.status(404).json({ error: "Customer not found" });
       return res.json(rows[0]);
@@ -537,8 +611,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (err: any) { return res.status(500).json({ error: err.message }); }
     }
     if (method === "POST") {
-      const { customer_email, subject, description, priority } = req.body || {};
-      if (!customer_email || !subject) return res.status(400).json({ error: "customer_email and subject required" });
+      const body = req.body || {};
+      const subject = body.subject;
+      const description = body.description;
+      const priority = body.priority;
+      // Allow either customer_email directly, or look up by customer_id (UUID
+      // referencing crm_users.id) which is what the SupportTicketsPage form
+      // collects.
+      let customer_email: string | undefined = body.customer_email;
+      if (!customer_email && body.customer_id) {
+        const { rows: cu } = await db.query(
+          `SELECT email FROM crm_users WHERE id = $1 LIMIT 1`,
+          [body.customer_id]
+        ).catch(() => ({ rows: [] as any[] }));
+        if (cu[0]) customer_email = cu[0].email;
+      }
+      if (!customer_email || !subject) return res.status(400).json({ error: "customer_email (or customer_id) and subject required" });
       try {
         // tickets.customer_id FK references the legacy `customers` table, but real users
         // live in `crm_users`. Backfill a `customers` row from `crm_users` so the FK is satisfied.

@@ -314,17 +314,17 @@ export default function CustomersPage() {
               </SelectContent>
             </Select>
             
-            {/* Plan Filter */}
+            {/* Plan Filter — values are entitlements canonical keys, not display labels */}
             <Select value={planFilter} onValueChange={setPlanFilter}>
               <SelectTrigger className="font-medium">
                 <SelectValue placeholder="Filter by plan" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Plans</SelectItem>
-                <SelectItem value="Free">Free</SelectItem>
-                <SelectItem value="Pro Monthly">Pro Monthly</SelectItem>
-                <SelectItem value="Pro Yearly">Pro Yearly</SelectItem>
-                <SelectItem value="Lifetime">Lifetime</SelectItem>
+                <SelectItem value="free">Free</SelectItem>
+                <SelectItem value="premium">Pro</SelectItem>
+                <SelectItem value="family">Pro Family</SelectItem>
+                <SelectItem value="lifetime">Lifetime</SelectItem>
               </SelectContent>
             </Select>
           </div>

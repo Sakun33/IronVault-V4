@@ -14,15 +14,15 @@ import { MessageSquare, Plus, CheckCircle, Clock, AlertCircle, User } from 'luci
 import { useToast } from '@/components/ui/use-toast';
 
 interface Ticket {
-  ticket_id: number;
-  customer_id?: number;
+  id: string;
+  customer_id?: string;
   customer_email?: string;
   customer_name?: string;
   subject: string;
   description: string;
   status: string;
   priority: string;
-  assigned_to?: number;
+  assigned_to?: string;
   assigned_to_name?: string;
   created_at: string;
   updated_at: string;
@@ -39,7 +39,7 @@ export default function SupportTicketsPage() {
     subject: '',
     description: '',
     priority: 'medium',
-    customer_id: ''
+    customer_email: '',
   });
 
   const { data: ticketsData, isLoading } = useQuery({
@@ -91,7 +91,7 @@ export default function SupportTicketsPage() {
   });
 
   const updateTicketMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Ticket> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Ticket> }) => {
       const response = await fetch(`/api/tickets/${id}`, {
         method: 'PUT',
         headers: {
@@ -120,7 +120,7 @@ export default function SupportTicketsPage() {
   });
 
   const closeTicketMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       const response = await fetch(`/api/tickets/${id}/close`, {
         method: 'POST',
         headers: {
@@ -152,15 +152,15 @@ export default function SupportTicketsPage() {
       subject: '',
       description: '',
       priority: 'medium',
-      customer_id: ''
+      customer_email: '',
     });
   };
 
   const handleCreate = () => {
-    if (!formData.subject || !formData.description) {
+    if (!formData.subject || !formData.description || !formData.customer_email) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields.",
+        description: "Customer email, subject, and description are required.",
         variant: "destructive",
       });
       return;
@@ -170,21 +170,21 @@ export default function SupportTicketsPage() {
 
   const handleUpdateStatus = (ticket: Ticket, status: string) => {
     updateTicketMutation.mutate({
-      id: ticket.ticket_id,
+      id: ticket.id,
       data: { status }
     });
   };
 
   const handleUpdatePriority = (ticket: Ticket, priority: string) => {
     updateTicketMutation.mutate({
-      id: ticket.ticket_id,
+      id: ticket.id,
       data: { priority }
     });
   };
 
   const handleClose = (ticket: Ticket) => {
     if (confirm('Are you sure you want to close this ticket?')) {
-      closeTicketMutation.mutate(ticket.ticket_id);
+      closeTicketMutation.mutate(ticket.id);
     }
   };
 
@@ -253,6 +253,17 @@ export default function SupportTicketsPage() {
             </DialogHeader>
 
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer_email">Customer Email *</Label>
+                <Input
+                  id="customer_email"
+                  type="email"
+                  placeholder="customer@example.com"
+                  value={formData.customer_email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, customer_email: e.target.value }))}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject *</Label>
                 <Input
@@ -413,8 +424,8 @@ export default function SupportTicketsPage() {
             </TableHeader>
             <TableBody>
               {tickets.map((ticket: Ticket) => (
-                <TableRow key={ticket.ticket_id}>
-                  <TableCell className="font-mono text-sm">#{ticket.ticket_id}</TableCell>
+                <TableRow key={ticket.id}>
+                  <TableCell className="font-mono text-sm">#{String(ticket.id).slice(0, 8)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{ticket.subject}</div>
                     <div className="text-sm text-muted-foreground truncate max-w-md">

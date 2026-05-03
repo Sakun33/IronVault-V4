@@ -209,13 +209,16 @@ export default function CustomerDetailPage() {
   });
 
   const changeSubscriptionMutation = useMutation({
-    mutationFn: async (planId: number) => {
+    mutationFn: async (planId: string) => {
       const response = await fetch(`/api/customers/${id}/subscription`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` },
         body: JSON.stringify({ plan_id: planId }),
       });
-      if (!response.ok) throw new Error('Failed to change subscription');
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to change subscription');
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -405,7 +408,7 @@ export default function CustomerDetailPage() {
             <CardContent>
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm text-muted-foreground mr-2">Current: <strong className="text-foreground capitalize">{customer.plan || customer.plan_name || 'Free'}</strong></p>
-                <Select onValueChange={(v) => changeSubscriptionMutation.mutate(parseInt(v))}>
+                <Select onValueChange={(v) => changeSubscriptionMutation.mutate(v)}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Change plan..." />
                   </SelectTrigger>
@@ -419,6 +422,11 @@ export default function CustomerDetailPage() {
                 </Select>
                 {changeSubscriptionMutation.isSuccess && (
                   <Badge className="bg-green-100 text-green-800">Updated!</Badge>
+                )}
+                {changeSubscriptionMutation.isError && (
+                  <Badge className="bg-red-100 text-red-800">
+                    {(changeSubscriptionMutation.error as Error)?.message || 'Failed'}
+                  </Badge>
                 )}
                 {changeSubscriptionMutation.isPending && (
                   <span className="text-sm text-muted-foreground">Saving...</span>
