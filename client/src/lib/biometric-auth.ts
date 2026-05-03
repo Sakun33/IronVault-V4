@@ -43,7 +43,6 @@ export class BiometricAuthService {
         this.isSupported = available;
       }
     } catch (error) {
-      console.warn('Biometric authentication not supported:', error);
       this.isSupported = false;
     }
   }

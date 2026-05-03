@@ -22,7 +22,6 @@ export async function setupKeyboardHandling() {
 
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   } catch (error) {
-    console.debug('Keyboard plugin not available:', error);
   }
 }
 
@@ -52,7 +51,6 @@ export async function hideKeyboard() {
   try {
     await Keyboard.hide();
   } catch (error) {
-    console.debug('Could not hide keyboard:', error);
   }
 }
 
@@ -61,6 +59,5 @@ export async function showKeyboard() {
   try {
     await Keyboard.show();
   } catch (error) {
-    console.debug('Could not show keyboard:', error);
   }
 }

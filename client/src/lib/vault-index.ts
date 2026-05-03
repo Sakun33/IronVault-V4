@@ -77,7 +77,6 @@ export class VaultIndex {
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('✅ Vault index initialized');
         resolve();
       };
 
@@ -87,24 +86,20 @@ export class VaultIndex {
         // Create vaults store
         if (!db.objectStoreNames.contains('vaults')) {
           db.createObjectStore('vaults', { keyPath: 'id' });
-          console.log('📦 Created vaults store');
         }
 
         // Create security store
         if (!db.objectStoreNames.contains('security')) {
           db.createObjectStore('security', { keyPath: 'id' });
-          console.log('📦 Created security store');
         }
 
         // Create settings store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'id' });
-          console.log('📦 Created settings store');
         }
       };
 
       request.onblocked = () => {
-        console.warn('⚠️ Vault index upgrade blocked');
         reject(new Error('Database upgrade blocked'));
       };
     });
@@ -401,7 +396,6 @@ export class VaultIndex {
     state.lockoutUntil = null;
     state.lastFailedAt = null;
     await this.saveSecurityState(state);
-    console.log('✅ Failed attempts reset');
   }
 
   /**

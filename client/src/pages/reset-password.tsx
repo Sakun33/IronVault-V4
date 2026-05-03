@@ -149,6 +149,8 @@ export default function ResetPasswordPage() {
                       onClick={() => setShowNew(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
+                  aria-label={showNew ? 'Hide password' : 'Show password'}
+                  aria-pressed={showNew}
                     >
                       {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -173,6 +175,8 @@ export default function ResetPasswordPage() {
                       onClick={() => setShowConfirm(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
+                  aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                  aria-pressed={showConfirm}
                     >
                       {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

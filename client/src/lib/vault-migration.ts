@@ -209,7 +209,6 @@ async function deleteLegacyDatabase(): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.deleteDatabase(LEGACY_DB_NAME);
     request.onsuccess = () => {
-      console.log('✅ Legacy database deleted');
       resolve();
     };
     request.onerror = () => reject(request.error);
@@ -223,7 +222,6 @@ async function deleteLegacyDatabase(): Promise<void> {
  * from the legacy database to a new per-vault database.
  */
 export async function migrateLegacyVault(): Promise<MigrationResult> {
-  console.log('🔄 Starting legacy vault migration...');
   
   try {
     // Initialize vault index
@@ -231,13 +229,11 @@ export async function migrateLegacyVault(): Promise<MigrationResult> {
     
     // Check if migration needed
     if (isMigrationComplete()) {
-      console.log('✅ Migration already complete');
       return { success: true, migrated: false };
     }
     
     const vaultCount = await vaultIndex.getVaultCount();
     if (vaultCount > 0) {
-      console.log('✅ Vaults already exist in new system');
       markMigrationComplete();
       return { success: true, migrated: false };
     }
@@ -245,12 +241,10 @@ export async function migrateLegacyVault(): Promise<MigrationResult> {
     // Get legacy vault metadata
     const legacyMetadata = await getLegacyMetadata();
     if (!legacyMetadata) {
-      console.log('ℹ️ No legacy vault found to migrate');
       markMigrationComplete();
       return { success: true, migrated: false };
     }
     
-    console.log('📦 Found legacy vault, migrating...');
     
     // Get password verification from legacy vault
     const legacyVerification = await getLegacyPasswordVerification();
@@ -306,18 +300,15 @@ export async function migrateLegacyVault(): Promise<MigrationResult> {
     // Copy all encrypted data
     const encryptedData = await getLegacyEncryptedData();
     await copyEncryptedData(newDb, encryptedData);
-    console.log(`📋 Copied ${encryptedData.length} encrypted items`);
     
     // Copy metadata
     await copyMetadata(newDb, legacyMetadata);
-    console.log('📋 Copied metadata');
     
     // Close new database
     newDb.close();
     
     // Add vault to index
     await vaultIndex.addVault(vaultEntry);
-    console.log('📋 Added vault to index');
     
     // Delete legacy database
     await deleteLegacyDatabase();
@@ -325,7 +316,6 @@ export async function migrateLegacyVault(): Promise<MigrationResult> {
     // Mark migration complete
     markMigrationComplete();
     
-    console.log(`✅ Migration complete! Vault ID: ${vaultId}`);
     
     return {
       success: true,

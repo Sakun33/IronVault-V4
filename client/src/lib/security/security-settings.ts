@@ -134,13 +134,11 @@ class SecuritySettingsService {
         await navigator.clipboard.writeText(text);
       }
 
-      console.log(`[SecuritySettings] Copied ${label || 'text'} to clipboard`);
 
       // Set up auto-clear if enabled
       if (this.settings.clipboardAutoClear) {
         this.clipboardClearTimeout = setTimeout(async () => {
           await this.clearClipboard();
-          console.log('[SecuritySettings] Clipboard auto-cleared');
         }, this.settings.clipboardClearDelaySeconds * 1000);
       }
     } catch (error) {
@@ -178,7 +176,6 @@ class SecuritySettingsService {
     try {
       // Note: This requires a native plugin to set FLAG_SECURE on Android
       // and equivalent on iOS. For now, we log the intent.
-      console.log(`[SecuritySettings] Screenshot protection: ${enabled ? 'enabled' : 'disabled'}`);
       
       // The actual implementation would call a native plugin:
       // await ScreenshotProtection.setEnabled(enabled);

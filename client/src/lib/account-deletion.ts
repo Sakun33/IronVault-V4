@@ -143,7 +143,6 @@ class AccountDeletionService {
       localStorage.removeItem('license');
       localStorage.removeItem('billing_anonymous_user_id');
 
-      console.log('[AccountDeletion] Local data deleted');
       return true;
     } catch (error) {
       console.error('[AccountDeletion] Failed to delete local data:', error);
@@ -159,7 +158,6 @@ class AccountDeletionService {
       const request = indexedDB.deleteDatabase(dbName);
       
       request.onsuccess = () => {
-        console.log(`[AccountDeletion] Deleted database: ${dbName}`);
         resolve();
       };
       
@@ -169,7 +167,6 @@ class AccountDeletionService {
       };
       
       request.onblocked = () => {
-        console.warn(`[AccountDeletion] Database deletion blocked: ${dbName}`);
         // Still resolve - the database might be deleted when connections close
         resolve();
       };

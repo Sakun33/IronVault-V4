@@ -98,7 +98,8 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
 
-    if (!email || !email.includes('@')) { setError('Please enter a valid email address.'); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email.trim())) { setError('Please enter a valid email address.'); return; }
     if (!name.trim()) { setError('Please enter your full name.'); return; }
     if (accountPassword.length < 8) { setError('Account password must be at least 8 characters.'); return; }
     if (accountPassword !== confirmAccountPassword) { setError('Account passwords do not match.'); return; }
@@ -491,6 +492,8 @@ export default function SignupPage() {
                   onClick={() => setShowAccountPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showAccountPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showAccountPassword}
                 >
                   {showAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -520,6 +523,8 @@ export default function SignupPage() {
                   onClick={() => setShowConfirmAccountPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showConfirmAccountPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showConfirmAccountPassword}
                 >
                   {showConfirmAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

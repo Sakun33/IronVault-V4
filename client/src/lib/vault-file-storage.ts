@@ -112,7 +112,6 @@ class OPFSVaultFileAdapter extends VaultFileAdapter {
       await writable.close();
     } catch (err) {
       // Safari < 17 does not support createWritable on OPFS — silently degrade
-      console.warn('[vault-file] OPFS write failed (browser may not support createWritable):', err);
     }
   }
 

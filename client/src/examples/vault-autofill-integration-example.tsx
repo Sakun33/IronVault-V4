@@ -311,7 +311,6 @@ export function AutofillSettingsPanel() {
 
 // Placeholder functions for example purposes
 async function saveToMainVault(data: any) {
-  console.log('Saving to main vault:', data);
   // Your existing vault save logic here
 }
 

@@ -46,7 +46,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.savePassword(password);
       stats.passwords++;
     }
-    console.log(`✅ Loaded ${stats.passwords} passwords`);
 
     // Load subscriptions
     for (const sub of seedData.subscriptions) {
@@ -70,7 +69,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveSubscription(subscription);
       stats.subscriptions++;
     }
-    console.log(`✅ Loaded ${stats.subscriptions} subscriptions`);
 
     // Load notes
     for (const note of seedData.notes) {
@@ -87,7 +85,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveNote(noteEntry);
       stats.notes++;
     }
-    console.log(`✅ Loaded ${stats.notes} notes`);
 
     // Load expenses
     for (const exp of seedData.expenses) {
@@ -107,7 +104,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveExpense(expense);
       stats.expenses++;
     }
-    console.log(`✅ Loaded ${stats.expenses} expenses`);
 
     // Load reminders
     for (const rem of seedData.reminders) {
@@ -134,7 +130,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveReminder(reminder);
       stats.reminders++;
     }
-    console.log(`✅ Loaded ${stats.reminders} reminders`);
 
     // Load investments
     for (const inv of seedData.investments) {
@@ -161,7 +156,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveInvestment(investment);
       stats.investments++;
     }
-    console.log(`✅ Loaded ${stats.investments} investments`);
 
     // Load investment goals
     for (const goal of seedData.investmentGoals) {
@@ -183,7 +177,6 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveInvestmentGoal(investmentGoal);
       stats.investmentGoals++;
     }
-    console.log(`✅ Loaded ${stats.investmentGoals} investment goals`);
 
     // Load bank transactions (create a statement first)
     const statementId = 'stmt-001';
@@ -228,9 +221,7 @@ export async function loadSeedData(): Promise<SeedDataStats> {
       await vaultStorage.saveBankTransaction(transaction);
       stats.bankTransactions++;
     }
-    console.log(`✅ Loaded ${stats.bankTransactions} bank transactions`);
 
-    console.log('🎉 All seed data loaded successfully!');
     return stats;
 
   } catch (error) {

@@ -71,7 +71,6 @@ export class MultiVaultStorage {
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log(`✅ Vault ${this.vaultId} database initialized`);
         resolve();
       };
 
@@ -580,7 +579,6 @@ export class MultiVaultStorage {
     return new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase(this.dbName);
       request.onsuccess = () => {
-        console.log(`✅ Vault ${this.vaultId} database deleted`);
         resolve();
       };
       request.onerror = () => reject(request.error);
@@ -749,7 +747,6 @@ export class VaultManager {
     // Set as active
     this.activeStorage = storage;
 
-    console.log(`✅ Created vault "${name}" (${vaultId})`);
     return { vaultId, storage };
   }
 
@@ -873,7 +870,6 @@ export class VaultManager {
     // Remove from index
     await vaultIndex.deleteVault(vaultId);
 
-    console.log(`✅ Deleted vault ${vaultId}`);
   }
 
   /**

@@ -28,7 +28,6 @@ function isBenignCrossOriginError(e: ErrorEvent): boolean {
 
 window.addEventListener('error', (e) => {
   if (isBenignCrossOriginError(e)) {
-    console.warn('[IronVault] Cross-origin script error suppressed:', e.message);
     return;
   }
   // Don't take over the screen if React has already mounted something — the

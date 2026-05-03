@@ -110,7 +110,6 @@ export async function loadCachedEntitlements(): Promise<Entitlements | null> {
     
     // Check version
     if (parsed.version !== CACHE_VERSION) {
-      console.log('[EntitlementsCache] Cache version mismatch, clearing');
       clearCache();
       return null;
     }
@@ -126,7 +125,6 @@ export async function loadCachedEntitlements(): Promise<Entitlements | null> {
     // Verify integrity
     const isValid = await verifyChecksum(cached);
     if (!isValid) {
-      console.warn('[EntitlementsCache] Checksum mismatch, cache may be tampered');
       clearCache();
       return null;
     }
@@ -219,7 +217,6 @@ export async function getEntitlementsWithFallback(
       await cacheEntitlements(fresh);
       return { ...fresh, isOffline: false };
     } catch (error) {
-      console.warn('[EntitlementsCache] Failed to fetch fresh entitlements:', error);
       // Fall through to cache
     }
   }
@@ -230,11 +227,9 @@ export async function getEntitlementsWithFallback(
   if (cached) {
     // Check if within grace period for offline usage
     if (isWithinGracePeriod()) {
-      console.log('[EntitlementsCache] Using cached entitlements (offline mode)');
       return { ...cached, isOffline: true };
     } else {
       // Grace period expired - revert to free
-      console.warn('[EntitlementsCache] Offline grace period expired');
       const freeEntitlements = getDefaultEntitlements('FREE');
       freeEntitlements.isOffline = true;
       return freeEntitlements;
@@ -242,7 +237,6 @@ export async function getEntitlementsWithFallback(
   }
   
   // No cache available - return free entitlements
-  console.log('[EntitlementsCache] No cache available, using free entitlements');
   const freeEntitlements = getDefaultEntitlements('FREE');
   freeEntitlements.isOffline = !isOnline;
   return freeEntitlements;

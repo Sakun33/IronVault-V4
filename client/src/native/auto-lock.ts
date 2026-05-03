@@ -48,7 +48,6 @@ class AutoLockService {
         if (!isActive) {
           // App went to background
           this.lastBackgroundTime = Date.now();
-          console.log('[AutoLock] App went to background');
           
           if (this.isEnabled && this.gracePeriodMs === 0) {
             // Immediate lock
@@ -56,7 +55,6 @@ class AutoLockService {
           }
         } else {
           // App came to foreground
-          console.log('[AutoLock] App came to foreground');
           
           if (this.isEnabled && this.gracePeriodMs > 0) {
             // Check if grace period has passed
@@ -70,7 +68,6 @@ class AutoLockService {
 
       // Also handle when app is paused/resumed
       App.addListener('pause', () => {
-        console.log('[AutoLock] App paused');
         this.lastBackgroundTime = Date.now();
         
         if (this.isEnabled && this.gracePeriodMs === 0) {
@@ -79,7 +76,6 @@ class AutoLockService {
       });
 
       App.addListener('resume', () => {
-        console.log('[AutoLock] App resumed');
         
         if (this.isEnabled && this.gracePeriodMs > 0) {
           const timeInBackground = Date.now() - this.lastBackgroundTime;
@@ -95,10 +91,8 @@ class AutoLockService {
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           this.lastBackgroundTime = Date.now();
-          console.log('[AutoLock] Tab hidden');
           // On web we always wait for the grace period; immediate lock is native-only.
         } else {
-          console.log('[AutoLock] Tab visible');
           // Reset idle timer so returning to the tab doesn't count as idle time.
           this.resetIdleTimer();
 
@@ -116,12 +110,10 @@ class AutoLockService {
     this.startIdleDetection();
 
     this.initialized = true;
-    console.log('[AutoLock] Service initialized, enabled:', this.isEnabled, 'idle timeout:', this.idleTimeoutMs, 'ms');
   }
 
   private triggerLock(): void {
     if (this.lockCallback) {
-      console.log('[AutoLock] Triggering vault lock');
       this.lockCallback();
     }
   }
@@ -154,7 +146,6 @@ class AutoLockService {
     });
 
     this.resetIdleTimer();
-    console.log('[AutoLock] Idle detection started, timeout:', this.idleTimeoutMs, 'ms');
   }
 
   /**
@@ -183,7 +174,6 @@ class AutoLockService {
     if (!this.idleEnabled || this.idleTimeoutMs <= 0) return;
 
     this.idleTimerId = setTimeout(() => {
-      console.log('[AutoLock] Idle timeout reached, locking vault');
       this.triggerLock();
     }, this.idleTimeoutMs);
   }
@@ -194,7 +184,6 @@ class AutoLockService {
   setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
     localStorage.setItem('autolock_enabled', enabled.toString());
-    console.log('[AutoLock] Enabled:', enabled);
   }
 
   /**
@@ -204,7 +193,6 @@ class AutoLockService {
   setGracePeriod(ms: number): void {
     this.gracePeriodMs = ms;
     localStorage.setItem('autolock_grace_period', ms.toString());
-    console.log('[AutoLock] Grace period set to:', ms, 'ms');
   }
 
   /**
@@ -214,7 +202,6 @@ class AutoLockService {
   setIdleTimeout(ms: number): void {
     this.idleTimeoutMs = ms;
     localStorage.setItem('autolock_idle_timeout', ms.toString());
-    console.log('[AutoLock] Idle timeout set to:', ms, 'ms');
 
     // Restart idle timer with new timeout
     if (this.initialized) {
@@ -228,7 +215,6 @@ class AutoLockService {
   setIdleEnabled(enabled: boolean): void {
     this.idleEnabled = enabled;
     localStorage.setItem('autolock_idle_enabled', enabled.toString());
-    console.log('[AutoLock] Idle detection enabled:', enabled);
 
     if (enabled && this.initialized) {
       this.startIdleDetection();

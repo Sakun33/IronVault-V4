@@ -85,7 +85,6 @@ export class VaultStorage {
       request.onsuccess = () => {
         this.db = request.result;
         this.syncCurrentVaultIdFromDbName();
-        console.log('✅ Database initialized successfully with version:', this.version, 'vault:', this.currentVaultId ?? '(default)');
         resolve();
       };
 
@@ -99,7 +98,6 @@ export class VaultStorage {
         const tx = (event.target as IDBOpenDBRequest).transaction!;
         const oldVersion = event.oldVersion;
 
-        console.log(`🔄 Database upgrade from version ${oldVersion} to ${this.version}`);
 
         // Create all object stores
         const objectStores = [
@@ -110,7 +108,6 @@ export class VaultStorage {
 
         objectStores.forEach(storeName => {
           if (!db.objectStoreNames.contains(storeName)) {
-            console.log(`📦 Creating object store: ${storeName}`);
             const store = db.createObjectStore(storeName, { keyPath: 'id' });
             if (storeName === 'encrypted_data') {
               store.createIndex('by_store', 'store', { unique: false });
@@ -123,15 +120,12 @@ export class VaultStorage {
           const encStore = tx.objectStore('encrypted_data');
           if (!encStore.indexNames.contains('by_store')) {
             encStore.createIndex('by_store', 'store', { unique: false });
-            console.log('📦 Added by_store index to encrypted_data');
           }
         }
 
-        console.log('✅ Database schema updated successfully');
       };
 
       request.onblocked = () => {
-        console.warn('⚠️ Database upgrade blocked. Please close other tabs and refresh.');
         reject(new Error('Database upgrade blocked. Please close other tabs and refresh.'));
       };
     });
@@ -151,17 +145,14 @@ export class VaultStorage {
     const missingStores = requiredStores.filter(store => !existingStores.includes(store));
     
     if (missingStores.length > 0) {
-      console.warn('⚠️ Missing object stores:', missingStores);
       return false;
     }
     
-    console.log('✅ Database schema is correct');
     return true;
   }
 
   // Force database recreation
   async recreateDatabase(): Promise<void> {
-    console.log('🔄 Forcing database recreation...');
 
     // Close current connection
     if (this.db) {
@@ -182,7 +173,6 @@ export class VaultStorage {
 
       deleteRequest.onsuccess = () => {
         clearTimeout(blockedTimer);
-        console.log('✅ Database deleted, recreating...');
         this.init().then(resolve).catch(reject);
       };
 
@@ -202,7 +192,6 @@ export class VaultStorage {
 
   // Reset all internal state for full vault reset
   resetState(): void {
-    console.log('🔄 Resetting vaultStorage state...');
     if (this.db) {
       this.db.close();
       this.db = undefined;
@@ -211,12 +200,10 @@ export class VaultStorage {
     this.currentVaultId = null;
     this.failedAttempts = 0;
     this.lastFailedAttempt = 0;
-    console.log('✅ vaultStorage state reset');
   }
 
   // Switch to a different vault database
   async switchToVault(vaultId: string): Promise<void> {
-    console.log(`🔄 Switching to vault: ${vaultId}`);
 
     // Close existing connection
     if (this.db) {
@@ -236,7 +223,6 @@ export class VaultStorage {
 
     // Initialize the new database (which also tags currentVaultId).
     await this.init();
-    console.log(`✅ Switched to vault database: ${this.dbName} (vault: ${this.currentVaultId ?? '(default)'})`);
   }
 
   // Get current database name
@@ -251,7 +237,6 @@ export class VaultStorage {
     this.failedAttempts++;
     this.lastFailedAttempt = Date.now();
     
-    console.warn(`⚠️ Failed attempt ${this.failedAttempts}/${this.maxFailedAttempts}`);
     
     // NO LONGER WIPES - just locks out for 1 hour after 3 attempts
     if (this.failedAttempts >= this.maxFailedAttempts) {
@@ -263,7 +248,6 @@ export class VaultStorage {
   async resetFailedAttempts(): Promise<void> {
     this.failedAttempts = 0;
     this.lastFailedAttempt = 0;
-    console.log('✅ Failed attempts reset');
   }
 
   isLockedOut(): boolean {
@@ -281,7 +265,6 @@ export class VaultStorage {
   // DEPRECATED: Security wipe removed - use lockout instead
   // Keeping this method stub for backward compatibility
   async securityWipe(): Promise<void> {
-    console.warn('⚠️ Security wipe is deprecated. Using lockout instead.');
     // No longer wipes data - just resets state
     this.failedAttempts = 0;
     this.lastFailedAttempt = 0;
@@ -304,7 +287,6 @@ export class VaultStorage {
       localStorage.removeItem('securevault-last-backup');
       localStorage.removeItem('securevault-backup-hash');
       
-      console.log('✅ Cached exports cleared');
     } catch (error) {
       console.error('❌ Failed to clear cached exports:', error);
     }
@@ -324,7 +306,6 @@ export class VaultStorage {
         timestamp: Date.now()
       });
 
-      console.log(`✅ Persistent data saved: ${key}`);
     } catch (error) {
       console.error(`❌ Failed to save persistent data ${key}:`, error);
       throw error;
@@ -349,7 +330,6 @@ export class VaultStorage {
   // Set encryption key with security validation
   setEncryptionKey(key: CryptoKey): void {
     this.encryptionKey = key;
-    console.log('✅ Encryption key set');
   }
 
   // Check if vault exists
@@ -972,7 +952,6 @@ export class VaultStorage {
 
   // Export vault data
   async exportVault(exportPassword: string): Promise<string> {
-    console.log('📦 Starting vault export...');
     
     const passwords = await this.getAllPasswords();
     const subscriptions = await this.getAllSubscriptions();
@@ -1016,7 +995,6 @@ export class VaultStorage {
     // Save backup metadata for automatic replacement
     await this.saveBackupMetadata(exportString, exportPassword);
     
-    console.log('✅ Vault export completed');
     return exportString;
   }
 
@@ -1034,7 +1012,6 @@ export class VaultStorage {
       localStorage.setItem('securevault-last-backup', Date.now().toString());
       localStorage.setItem('securevault-backup-hash', hash);
       
-      console.log('✅ Backup metadata saved');
     } catch (error) {
       console.error('❌ Failed to save backup metadata:', error);
     }
@@ -1083,7 +1060,6 @@ export class VaultStorage {
         // Extract only the JSON part
         const jsonData = cleanData.substring(jsonStart);
         
-        console.log('🔍 Cleaned data preview:', jsonData.substring(0, 100));
         
         const parsedData = JSON.parse(jsonData);
         
@@ -1152,7 +1128,7 @@ export class VaultStorage {
         ...(importData.bankTransactions ?? []).map((t: any) => this.saveBankTransaction(t)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
-      if (failed > 0) console.warn(`[importVault] ${failed} item(s) failed to save`);
+      if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);
 
     } catch (error) {
       if (error instanceof Error && error.message.includes('password')) {
@@ -1522,7 +1498,6 @@ export class VaultStorage {
         importedKeys.add(duplicateKey);
         imported++;
       } catch (error) {
-        console.warn('Failed to import password:', password.name, error);
         skipped++;
       }
     }
@@ -1954,7 +1929,6 @@ export class VaultStorage {
   // Bank Statement CSV Import - Auto-detects multiple formats
   async importBankStatementsFromCSV(csvContent: string): Promise<{ statements: number; transactions: number }> {
     try {
-      console.log('Storage: Starting CSV import with auto-detection...');
       
       const lines = csvContent.trim().split('\n');
       if (lines.length < 2) {
@@ -1982,7 +1956,6 @@ export class VaultStorage {
       };
 
       const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-      console.log('Storage: CSV headers found:', headers);
       
       // Auto-detect column mappings for various bank formats
       const columnMappings = {
@@ -1996,7 +1969,6 @@ export class VaultStorage {
         reference: headers.findIndex(h => /^(reference|ref|cheque.?no|check.?no|transaction.?id|txn.?id)$/i.test(h)),
       };
 
-      console.log('Storage: Auto-detected column mappings:', columnMappings);
 
       // Validate required columns
       if (columnMappings.date === -1) {
@@ -2079,7 +2051,6 @@ export class VaultStorage {
             }
           }
           if (isNaN(parsedDate.getTime())) {
-            console.warn(`Skipping line ${i + 1}: Invalid date "${dateStr}"`);
             continue;
           }
 
@@ -2140,7 +2111,6 @@ export class VaultStorage {
           }
           statementGroups[transaction.statementId].push(transaction);
         } catch (error) {
-          console.warn(`Skipping line ${i + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
           continue;
         }
       }
@@ -2180,9 +2150,6 @@ export class VaultStorage {
       });
 
       // Save all data
-      console.log('Storage: Saving data to database...');
-      console.log('Storage: Statements to save:', statements.length);
-      console.log('Storage: Transactions to save:', transactions.length);
       
       for (const statement of statements) {
         await this.saveBankStatement(statement);
@@ -2192,7 +2159,6 @@ export class VaultStorage {
         await this.saveBankTransaction(transaction);
       }
 
-      console.log('Storage: Data saved successfully');
       return {
         statements: statements.length,
         transactions: transactions.length

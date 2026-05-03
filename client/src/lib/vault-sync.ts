@@ -46,7 +46,6 @@ export async function syncVaultsToBackend(): Promise<boolean> {
   try {
     const email = getCustomerEmail();
     if (!email) {
-      console.log('⏭️ No customer email, skipping vault sync');
       return false;
     }
 
@@ -77,11 +76,9 @@ export async function syncVaultsToBackend(): Promise<boolean> {
     });
 
     if (!response.ok) {
-      console.warn('⚠️ Vault sync failed:', response.status);
       return false;
     }
 
-    console.log('✅ Vaults synced to backend');
     return true;
   } catch (error) {
     console.error('❌ Vault sync error:', error);

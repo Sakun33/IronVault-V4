@@ -103,7 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     autoLockService.init(() => {
       if (isUnlocked) {
-        console.log('[Auth] Auto-locking vault due to background/idle');
         setIsUnlocked(false);
         setMasterPassword(null);
         sessionStorage.removeItem(SESSION_KEY);
@@ -397,7 +396,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (err?.message?.startsWith('Cloud sync failed') || err?.message?.startsWith('Master password change pushed locally')) {
         throw err;
       }
-      console.warn('[AUTH] Cloud push step skipped due to error', err);
     }
 
     // Step 3: state update + log only after both local + cloud are consistent.

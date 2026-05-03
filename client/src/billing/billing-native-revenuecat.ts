@@ -101,7 +101,6 @@ export class RevenueCatBillingProvider implements BillingProvider {
 
   async configure(config: BillingConfig): Promise<void> {
     if (configured) {
-      console.log('RevenueCat already configured');
       return;
     }
 
@@ -118,7 +117,6 @@ export class RevenueCatBillingProvider implements BillingProvider {
       this.purchasesInstance = PurchasesSDK;
       configured = true;
       
-      console.log('RevenueCat configured successfully');
     } catch (error) {
       console.error('Failed to configure RevenueCat:', error);
       throw new Error(`RevenueCat configuration failed: ${error}`);
@@ -138,7 +136,6 @@ export class RevenueCatBillingProvider implements BillingProvider {
       const offerings = await this.purchasesInstance.getOfferings();
       
       if (!offerings?.current?.availablePackages) {
-        console.warn('No packages available in current offering');
         return [];
       }
 

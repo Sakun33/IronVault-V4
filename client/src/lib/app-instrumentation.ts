@@ -164,7 +164,6 @@ export class AppInstrumentation {
   private setupReactErrorBoundary(): void {
     // This would be implemented in a React Error Boundary component
     // For now, we'll just log that React is available
-    console.log('React error boundary setup available');
   }
 
   /**

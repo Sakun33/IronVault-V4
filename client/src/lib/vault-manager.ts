@@ -491,7 +491,6 @@ export class VaultManager {
     // Clear all internal state for full reset
     this.vaultStorages.clear();
     this.activeVaultId = null;
-    console.log('🗑️ Cleared vaultManager internal state');
   }
 
   /**
@@ -606,13 +605,11 @@ export class VaultManager {
         // never owned by a specific account — drop it so the new user starts fresh.
         try { indexedDB.deleteDatabase('IronVault'); } catch { /* noop */ }
       } catch (err) {
-        console.warn('[VaultManager] Failed to enumerate IndexedDB:', err);
       }
     }
 
     // Reset internal state so the next read pulls from the now-clean storage.
     this.clearInternalState();
-    console.log(`🧹 Wiped vault data not belonging to ${currentEmail ?? '(no account)'}`);
   }
 
   async isLockedOut(): Promise<boolean> {
@@ -667,7 +664,6 @@ export class VaultManager {
     // Defensively wipe any legacy entry that might still hold a reversible value.
     try { localStorage.removeItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`); }
     catch { /* noop */ }
-    console.warn('[vault-manager] saveBiometricKey is deprecated — use native secure-storage');
   }
 
   getBiometricKey(vaultId: string): string | null {
@@ -749,7 +745,6 @@ export class VaultManager {
     filtered.push({ vaultId, salt: saltBase64, verificationHash });
     this.saveVaultPasswords(filtered);
 
-    console.log(`✅ Password created for vault: ${vaultId}`);
   }
 
   /**
@@ -762,7 +757,6 @@ export class VaultManager {
     const vaultPassword = passwords.find(p => p.vaultId === vaultId);
 
     if (!vaultPassword) {
-      console.log(`No password data for vault: ${vaultId}`);
       return false;
     }
 
@@ -804,12 +798,10 @@ export class VaultManager {
     for (const vault of registry) {
       const success = await this.tryUnlockVault(vault.id, masterPassword);
       if (success) {
-        console.log(`✅ Password matched vault: ${vault.name}`);
         return { success: true, vaultId: vault.id, vaultName: vault.name };
       }
     }
     
-    console.log('❌ Password did not match any vault');
     return { success: false, vaultId: null, vaultName: null };
   }
 
@@ -937,7 +929,6 @@ export class VaultManager {
       }
     }
 
-    console.log(`✅ Vault reset: ${vaultId}`);
   }
 }
 

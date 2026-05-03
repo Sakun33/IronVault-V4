@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { getPlan } from '@/lib/plans';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -392,7 +393,7 @@ export default function Profile() {
 
   // Load family invites (outgoing for owner + incoming for this email)
   const loadFamilyInvites = useCallback(async () => {
-    if (!userProfile.email || userProfile.email === 'john.doe@example.com') return;
+    if (!userProfile.email) return;
     setInvitesLoading(true);
     try {
       const [outRes, inRes] = await Promise.all([
@@ -1036,7 +1037,7 @@ export default function Profile() {
             req.onblocked = () => resolve();
           } catch { resolve(); }
         })));
-      } catch (e) { console.warn('[clear-local] IndexedDB:', e); }
+      } catch (e) { console.error('[clear-local] IndexedDB:', e); }
 
       // 2. CacheStorage
       try {
@@ -1044,7 +1045,7 @@ export default function Profile() {
           const keys = await caches.keys();
           await Promise.all(keys.map(k => caches.delete(k)));
         }
-      } catch (e) { console.warn('[clear-local] caches:', e); }
+      } catch (e) { console.error('[clear-local] caches:', e); }
 
       // 3. Service workers — unregister all so no SW fetches stale data.
       try {
@@ -1052,7 +1053,7 @@ export default function Profile() {
           const regs = await navigator.serviceWorker.getRegistrations();
           await Promise.all(regs.map(r => r.unregister()));
         }
-      } catch (e) { console.warn('[clear-local] service workers:', e); }
+      } catch (e) { console.error('[clear-local] service workers:', e); }
 
       // 4. Web storage — last so the toast doesn't disappear with localStorage.
       try { sessionStorage.clear(); } catch {}
@@ -1736,7 +1737,7 @@ export default function Profile() {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">Invite a family member</p>
                     <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      {outgoingInvites.filter(i => i.status === 'accepted').length + 1}/6 members
+                      {outgoingInvites.filter(i => i.status === 'accepted').length + 1}/{getPlan(userProfile.subscription.tier as any)?.seats ?? 6} members
                     </span>
                   </div>
                   <div className="flex gap-2">

@@ -48,7 +48,6 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
               itemCount: 0,
               iconColor: '#6366f1',
             }];
-            console.log('⚠️ Detected corrupted vault state, showing fallback reset option');
           }
         }
         
@@ -124,27 +123,20 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
       
       if (isResetAll) {
         // Reset all vaults - clear EVERYTHING
-        console.log('🔄 Starting full vault reset...');
         
         // Step 0: Close ALL open database connections FIRST
         // This is critical - open connections block deleteDatabase() calls
         try {
           vaultIndex.close();
-          console.log('🗑️ Closed vaultIndex DB connection');
         } catch (e) {
-          console.warn('Could not close vaultIndex:', e);
         }
         try {
           vaultStorage.resetState();
-          console.log('🗑️ Closed vaultStorage DB connection');
         } catch (e) {
-          console.warn('Could not close vaultStorage:', e);
         }
         try {
           vaultManager.clearInternalState();
-          console.log('🗑️ Cleared vaultManager internal state');
         } catch (e) {
-          console.warn('Could not clear vaultManager:', e);
         }
         
         // Small delay to let connections fully close
@@ -166,7 +158,6 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
         
         keysToRemove.forEach(key => {
           localStorage.removeItem(key);
-          console.log(`🗑️ Removed localStorage: ${key}`);
         });
         
         // Explicitly ensure registry is empty
@@ -175,7 +166,6 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
         localStorage.removeItem('ironvault_active_vault');
         localStorage.removeItem('ironvault_has_vault');
         
-        console.log('🗑️ localStorage cleared');
         
         // Step 2: Delete all IndexedDB databases
         const dbsToDelete = [
@@ -189,22 +179,18 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
             const deleteReq = indexedDB.deleteDatabase(dbName);
             await new Promise<void>((resolve) => {
               const timeout = setTimeout(() => {
-                console.warn(`⏱️ Timeout deleting ${dbName}, continuing...`);
                 resolve();
               }, 3000);
               deleteReq.onsuccess = () => {
                 clearTimeout(timeout);
-                console.log(`🗑️ Deleted database: ${dbName}`);
                 resolve();
               };
               deleteReq.onerror = () => {
                 clearTimeout(timeout);
-                console.warn(`⚠️ Error deleting ${dbName}`);
                 resolve();
               };
               deleteReq.onblocked = () => {
                 clearTimeout(timeout);
-                console.warn(`⚠️ Database ${dbName} deletion blocked, continuing...`);
                 resolve();
               };
             });
@@ -216,13 +202,11 @@ export function ResetVaultDialog({ open, onOpenChange, onResetComplete }: ResetV
         // Step 3: Force clear session storage too
         sessionStorage.clear();
         
-        console.log('✅ All vaults reset successfully - ready for fresh start');
       } else {
         // Reset only selected vaults
         for (const vaultId of selectedArray) {
           await vaultManager.resetVault(vaultId);
         }
-        console.log(`✅ Reset ${selectedArray.length} vault(s)`);
       }
       
       onOpenChange(false);

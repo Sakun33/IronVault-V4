@@ -23,7 +23,6 @@ export function saveProfileLocally(profile: ProfileData): void {
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem('customerProfile', JSON.stringify(profileData));
-    console.log('💾 Profile saved locally:', profileData);
   } catch (error) {
     console.error('❌ Error saving profile locally:', error);
   }
@@ -53,7 +52,6 @@ export async function updateProfile(profile: ProfileData): Promise<void> {
   
   // Sync with backend (non-blocking)
   try {
-    console.log('🔄 Syncing profile with backend:', profile);
     
     const response = await fetch(`${API_URL}/api/public/customers/update`, {
       method: 'POST',
@@ -64,12 +62,9 @@ export async function updateProfile(profile: ProfileData): Promise<void> {
     });
 
     if (response.ok) {
-      console.log('✅ Profile synced with backend');
     } else {
-      console.warn('⚠️ Profile sync failed (non-critical)');
     }
   } catch (error) {
-    console.log('ℹ️ Backend sync unavailable (non-critical)');
   }
 }
 

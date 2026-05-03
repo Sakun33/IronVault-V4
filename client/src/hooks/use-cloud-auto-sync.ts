@@ -57,10 +57,6 @@ export function useCloudAutoSync(
         lastPullRaw ? parseInt(lastPullRaw, 10) || 0 : 0,
       );
       if (lastKnown >= MIN_GATED_COUNT && localCount < lastKnown * 0.5) {
-        console.warn(
-          `[SYNC] Refusing push: local items collapsed from ${lastKnown} → ${localCount}. ` +
-          `This looks like a wipe, not a legitimate edit.`,
-        );
         return false;
       }
 
@@ -73,11 +69,9 @@ export function useCloudAutoSync(
         localStorage.setItem(`${LAST_PULL_PREFIX}${vid}`, new Date().toISOString());
         localStorage.setItem(`${LAST_PUSH_COUNT_PREFIX}${vid}`, String(localCount));
         localStorage.removeItem(`${DIRTY_PREFIX}${vid}`);
-        console.log(`[SYNC] Cloud push succeeded (${localCount} items), dirty flag cleared`);
         return true;
       }
       // Don't advance lastPull on failure — let next poll retry
-      console.warn('[SYNC] Cloud push did not succeed', result);
       return false;
     } catch (e) {
       console.error('[SYNC] Cloud push threw:', e);
@@ -137,7 +131,6 @@ export function useCloudAutoSync(
     if (!isDirty) return;
 
     pushPendingRef.current = true;
-    console.log('[SYNC] Dirty flag detected on mount — pushing before first pull');
     executePush(vaultId, masterPassword).finally(() => {
       pushPendingRef.current = false;
     });
@@ -168,15 +161,12 @@ export function useCloudAutoSync(
         const { vaultManager } = await import('@/lib/vault-manager');
         const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
         const vaultName = vaultMeta?.name ?? 'My Vault';
-        console.log('[IMPORT] Pushing vault to cloud after import...');
         const result = await pushCloudVault(vaultId, vaultName, blob, false);
         if (result.success) {
           markVaultAsCloudSynced(vaultId);
           localStorage.setItem(`${LAST_PULL_PREFIX}${vaultId}`, new Date().toISOString());
           localStorage.removeItem(`${DIRTY_PREFIX}${vaultId}`);
-          console.log('[IMPORT] Cloud push complete — all imported records synced.');
         } else if (result.serverNewer) {
-          console.warn('[IMPORT] Server has newer data — skipping push to avoid overwrite.');
         } else {
           console.error('[IMPORT] Cloud push failed. Records may not sync to other devices.', result);
         }
@@ -269,10 +259,6 @@ export function useCloudAutoSync(
         localCount >= MIN_GATED_COUNT &&
         cloudCount < localCount
       ) {
-        console.warn(
-          `[SYNC] Refusing pull: cloud has ${cloudCount} items, local has ${localCount}. ` +
-          `Skipping replace to avoid data loss; pushing local state instead.`,
-        );
         // Mark dirty so the next push will reconcile cloud back up to local
         localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
         window.dispatchEvent(new CustomEvent('vault:cloud:replaced')); // clear syncing state

@@ -186,7 +186,6 @@ export function MultiVaultAuthProvider({ children }: Props) {
   useEffect(() => {
     const initialize = async () => {
       try {
-        console.log('🔐 Initializing multi-vault auth...');
         
         // Initialize vault manager
         await vaultManager.init();
@@ -194,12 +193,10 @@ export function MultiVaultAuthProvider({ children }: Props) {
         // Check for and run migration if needed
         const shouldMigrate = await needsMigration();
         if (shouldMigrate) {
-          console.log('🔄 Running legacy vault migration...');
           const result = await migrateLegacyVault();
           if (!result.success) {
             console.error('❌ Migration failed:', result.error);
           } else if (result.migrated) {
-            console.log('✅ Migration complete');
           }
         }
         
@@ -207,7 +204,6 @@ export function MultiVaultAuthProvider({ children }: Props) {
         await refreshVaults();
         await updateLockoutState();
         
-        console.log('✅ Multi-vault auth initialized');
       } catch (error) {
         console.error('❌ Failed to initialize auth:', error);
       } finally {
@@ -442,7 +438,6 @@ export function MultiVaultAuthProvider({ children }: Props) {
     autoLockService.init(() => {
       // Lock vault when app goes to background or idle timeout reached
       if (isUnlocked) {
-        console.log('[Auth] Auto-locking vault due to background/idle');
         vaultManager.lockVault();
         setIsUnlocked(false);
         setActiveVault(null);

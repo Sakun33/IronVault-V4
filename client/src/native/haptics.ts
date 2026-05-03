@@ -6,7 +6,6 @@ export async function hapticLight() {
   try {
     await Haptics.impact({ style: ImpactStyle.Light });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -15,7 +14,6 @@ export async function hapticMedium() {
   try {
     await Haptics.impact({ style: ImpactStyle.Medium });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -24,7 +22,6 @@ export async function hapticHeavy() {
   try {
     await Haptics.impact({ style: ImpactStyle.Heavy });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -33,7 +30,6 @@ export async function hapticSuccess() {
   try {
     await Haptics.notification({ type: NotificationType.Success });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -42,7 +38,6 @@ export async function hapticWarning() {
   try {
     await Haptics.notification({ type: NotificationType.Warning });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -51,7 +46,6 @@ export async function hapticError() {
   try {
     await Haptics.notification({ type: NotificationType.Error });
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }
 
@@ -62,6 +56,5 @@ export async function hapticSelection() {
     await Haptics.selectionChanged();
     await Haptics.selectionEnd();
   } catch (error) {
-    console.debug('Haptics not available:', error);
   }
 }

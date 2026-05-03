@@ -17,7 +17,8 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email || !email.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email.trim())) {
       setError('Please enter a valid email address.');
       return;
     }

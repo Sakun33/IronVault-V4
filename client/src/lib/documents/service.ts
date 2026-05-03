@@ -142,7 +142,6 @@ export async function importDocument(
       const pdfPageCount = await extractPdfPageCount(arrayBuffer);
       meta.pdfPageCount = pdfPageCount;
     } catch (e) {
-      console.warn('Failed to extract PDF page count:', e);
     }
   }
 

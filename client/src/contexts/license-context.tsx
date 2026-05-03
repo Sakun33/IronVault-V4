@@ -70,7 +70,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         
         appStateListener = await App.addListener('appStateChange', (state) => {
           if (state.isActive) {
-            console.log('App resumed, syncing entitlements...');
             syncEntitlements();
           }
         });
@@ -106,7 +105,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         if (parsedLicense.status === 'trial' && parsedLicense.trialEndsAt) {
           if (new Date() > parsedLicense.trialEndsAt) {
             // Trial expired - revert to free license but preserve trialUsed flag
-            console.log('Trial expired, reverting to free license');
             const freeLicense = PricingService.getDefaultLicense();
             freeLicense.trialActive = false;
             freeLicense.trialUsed = true; // Explicitly mark trial as used
@@ -159,7 +157,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
             const planId = cache.planId as 'free' | 'pro' | 'family' | 'lifetime';
             if (planId && planId !== 'free') {
               resolvedPlan = planId;
-              console.log('Plan cache fallback:', planId);
             }
           }
         } catch {
@@ -174,12 +171,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       const currentTier = storedLicense?.tier || 'free';
 
       if (resolvedPlan !== currentTier) {
-        console.log(`Server entitlement sync: ${currentTier} → ${resolvedPlan}`);
         await changePlan(resolvedPlan);
       }
     } catch (e) {
       // Silently fail — offline or no CRM registration is OK
-      console.log('Server entitlement sync skipped:', e);
     }
   };
 
@@ -190,7 +185,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       // Check if user already had a trial
       const storedLicense = await vaultStorage.getPersistentData('license');
       if (storedLicense?.trialUsed) {
-        console.log('Trial already used');
         return false;
       }
       
@@ -318,7 +312,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
 
   const syncEntitlements = async () => {
     if (!isNativePlatform()) {
-      console.log('Entitlement sync skipped: not on native platform');
       return;
     }
 
@@ -394,7 +387,6 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       // persistLicense automatically preserves trialUsed flag
       await persistLicense(newLicense);
       
-      console.log('Entitlements synced successfully:', newLicense.tier);
     } catch (error) {
       console.error('Failed to sync entitlements:', error);
     } finally {

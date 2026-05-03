@@ -17,45 +17,47 @@ import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/c
 import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import SignupPage from "@/pages/signup";
-import ForgotPasswordPage from "@/pages/forgot-password";
-import ResetPasswordPage from "@/pages/reset-password";
-import VerifyEmailPage from "@/pages/verify-email";
-import Dashboard from "@/pages/dashboard";
-import Passwords from "@/pages/passwords";
-import Subscriptions from "@/pages/subscriptions";
-import Notes from "@/pages/notes";
-import Expenses from "@/pages/expenses";
-import Reminders from "@/pages/reminders";
-import Logging from "@/pages/logging";
-import ShareView from "@/pages/share-view";
-import BankStatements from "@/pages/bank-statements";
-import Investments from "@/pages/investments";
-import Goals from "@/pages/goals";
-import Documents from "@/pages/documents";
-import APIKeys from "@/pages/api-keys";
-import Profile from "@/pages/profile";
-import Settings from "@/pages/settings";
-import ImportPasswords from "@/components/import-passwords";
-import AboutPage from "@/pages/info/about";
-import FAQPage from "@/pages/info/faq";
-import FeaturesPage from "@/pages/info/features";
-import SecurityPage from "@/pages/info/security";
-import ContactPage from "@/pages/info/contact";
-import DocsPage from "@/pages/info/docs";
-import PrivacyPage from "@/pages/info/privacy";
-import TermsPage from "@/pages/info/terms";
-import DisclaimerPage from "@/pages/info/disclaimer";
-import PricingPage from "@/pages/info/pricing";
-import BlogPage from "@/pages/info/blog";
-import ChangelogPage from "@/pages/info/changelog";
-import StatusPage from "@/pages/info/status";
 import LandingPage from "@/pages/landing";
-import UpgradePage from "@/pages/pricing";
 import VaultPickerPage from "@/pages/vault-picker";
-import CreateVaultPage from "@/pages/create-vault";
-import QAPage from "@/pages/qa";
-import VaultsPage from "@/pages/vaults";
+// Heavy / less-frequently-visited pages are code-split so they don't bloat the
+// initial bundle. The Suspense fallback inside <Router /> covers their loading.
+const SignupPage = React.lazy(() => import("@/pages/signup"));
+const ForgotPasswordPage = React.lazy(() => import("@/pages/forgot-password"));
+const ResetPasswordPage = React.lazy(() => import("@/pages/reset-password"));
+const VerifyEmailPage = React.lazy(() => import("@/pages/verify-email"));
+const Dashboard = React.lazy(() => import("@/pages/dashboard"));
+const Passwords = React.lazy(() => import("@/pages/passwords"));
+const Subscriptions = React.lazy(() => import("@/pages/subscriptions"));
+const Notes = React.lazy(() => import("@/pages/notes"));
+const Expenses = React.lazy(() => import("@/pages/expenses"));
+const Reminders = React.lazy(() => import("@/pages/reminders"));
+const Logging = React.lazy(() => import("@/pages/logging"));
+const ShareView = React.lazy(() => import("@/pages/share-view"));
+const BankStatements = React.lazy(() => import("@/pages/bank-statements"));
+const Investments = React.lazy(() => import("@/pages/investments"));
+const Goals = React.lazy(() => import("@/pages/goals"));
+const Documents = React.lazy(() => import("@/pages/documents"));
+const APIKeys = React.lazy(() => import("@/pages/api-keys"));
+const Profile = React.lazy(() => import("@/pages/profile"));
+const Settings = React.lazy(() => import("@/pages/settings"));
+const ImportPasswords = React.lazy(() => import("@/components/import-passwords"));
+const AboutPage = React.lazy(() => import("@/pages/info/about"));
+const FAQPage = React.lazy(() => import("@/pages/info/faq"));
+const FeaturesPage = React.lazy(() => import("@/pages/info/features"));
+const SecurityPage = React.lazy(() => import("@/pages/info/security"));
+const ContactPage = React.lazy(() => import("@/pages/info/contact"));
+const DocsPage = React.lazy(() => import("@/pages/info/docs"));
+const PrivacyPage = React.lazy(() => import("@/pages/info/privacy"));
+const TermsPage = React.lazy(() => import("@/pages/info/terms"));
+const DisclaimerPage = React.lazy(() => import("@/pages/info/disclaimer"));
+const PricingPage = React.lazy(() => import("@/pages/info/pricing"));
+const BlogPage = React.lazy(() => import("@/pages/info/blog"));
+const ChangelogPage = React.lazy(() => import("@/pages/info/changelog"));
+const StatusPage = React.lazy(() => import("@/pages/info/status"));
+const UpgradePage = React.lazy(() => import("@/pages/pricing"));
+const CreateVaultPage = React.lazy(() => import("@/pages/create-vault"));
+const QAPage = React.lazy(() => import("@/pages/qa"));
+const VaultsPage = React.lazy(() => import("@/pages/vaults"));
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -111,9 +113,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         // Healing while mis-routed would push another vault's data to
         // this vault's cloud entry.
         if (vaultStorage.getCurrentVaultId() !== activeVault.id) {
-          console.warn(
-            `[HEAL] Skipping push: storage on "${vaultStorage.getCurrentVaultId()}", expected "${activeVault.id}".`,
-          );
           return;
         }
         // Push current local items to cloud (heals empty/stale blobs)
@@ -807,13 +806,28 @@ const PUBLIC_INFO_ROUTES = (
   </>
 );
 
+// Suspense fallback used while a lazy-loaded route chunk is fetching.
+function RouteSuspenseFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <div className="animate-pulse text-muted-foreground text-sm">Loading…</div>
+    </div>
+  );
+}
+
 // Router Component
 function Router() {
   const { isUnlocked, isLoading, isAccountLoggedIn } = useAuth();
   const [location] = useLocation();
 
   // Share links are always public — bypass all auth checks
-  if (location.startsWith('/share/')) return <ShareView />;
+  if (location.startsWith('/share/')) {
+    return (
+      <React.Suspense fallback={<RouteSuspenseFallback />}>
+        <ShareView />
+      </React.Suspense>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -832,18 +846,20 @@ function Router() {
   if (!isAccountLoggedIn) {
     return (
       <PublicPageWrapper>
-        <Switch>
-          <Route path="/" component={LandingPage} />
-          <Route path="/auth/login" component={Login} />
-          <Route path="/auth/signup" component={SignupPage} />
-          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
-          <Route path="/auth/reset-password" component={ResetPasswordPage} />
-          <Route path="/auth/verify" component={VerifyEmailPage} />
-          <Route path="/login" component={Login} />
-          {PUBLIC_INFO_ROUTES}
-          {/* Catch-all → landing */}
-          <Route component={LandingPage} />
-        </Switch>
+        <React.Suspense fallback={<RouteSuspenseFallback />}>
+          <Switch>
+            <Route path="/" component={LandingPage} />
+            <Route path="/auth/login" component={Login} />
+            <Route path="/auth/signup" component={SignupPage} />
+            <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
+            <Route path="/auth/reset-password" component={ResetPasswordPage} />
+            <Route path="/auth/verify" component={VerifyEmailPage} />
+            <Route path="/login" component={Login} />
+            {PUBLIC_INFO_ROUTES}
+            {/* Catch-all → landing */}
+            <Route component={LandingPage} />
+          </Switch>
+        </React.Suspense>
       </PublicPageWrapper>
     );
   }
@@ -852,27 +868,30 @@ function Router() {
   if (!isUnlocked) {
     return (
       <PublicPageWrapper>
-        <Switch>
-          <Route path="/auth/create-vault" component={CreateVaultPage} />
-          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
-          <Route path="/auth/reset-password" component={ResetPasswordPage} />
-          <Route path="/auth/verify" component={VerifyEmailPage} />
-          {/* Redirect signup/login to vault picker (already logged in) */}
-          <Route path="/auth/signup" component={VaultPickerPage} />
-          <Route path="/auth/login" component={VaultPickerPage} />
-          {/* /upgrade must be reachable from the vault picker too — without
-              this it hits the catch-all and silently re-renders the picker,
-              looking like a blank page where plans should be. */}
-          <Route path="/upgrade" component={UpgradePage} />
-          {PUBLIC_INFO_ROUTES}
-          {/* Default → vault picker */}
-          <Route component={VaultPickerPage} />
-        </Switch>
+        <React.Suspense fallback={<RouteSuspenseFallback />}>
+          <Switch>
+            <Route path="/auth/create-vault" component={CreateVaultPage} />
+            <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
+            <Route path="/auth/reset-password" component={ResetPasswordPage} />
+            <Route path="/auth/verify" component={VerifyEmailPage} />
+            {/* Redirect signup/login to vault picker (already logged in) */}
+            <Route path="/auth/signup" component={VaultPickerPage} />
+            <Route path="/auth/login" component={VaultPickerPage} />
+            {/* /upgrade must be reachable from the vault picker too — without
+                this it hits the catch-all and silently re-renders the picker,
+                looking like a blank page where plans should be. */}
+            <Route path="/upgrade" component={UpgradePage} />
+            {PUBLIC_INFO_ROUTES}
+            {/* Default → vault picker */}
+            <Route component={VaultPickerPage} />
+          </Switch>
+        </React.Suspense>
       </PublicPageWrapper>
     );
   }
 
   return (
+    <React.Suspense fallback={<RouteSuspenseFallback />}>
     <Switch>
       <Route path="/" component={() => (
         <MainLayout>
@@ -969,6 +988,7 @@ function Router() {
       )} />
       <Route component={NotFound} />
     </Switch>
+    </React.Suspense>
   );
 }
 

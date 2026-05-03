@@ -33,7 +33,6 @@ class PWAService {
   // Service Worker Registration
   private async registerServiceWorker() {
     if (!('serviceWorker' in navigator)) {
-      console.warn('PWA: Service Worker not supported');
       return;
     }
 
@@ -42,7 +41,6 @@ class PWAService {
         scope: '/',
       });
 
-      console.log('PWA: Service Worker registered successfully');
 
       // Handle updates
       this.registration.addEventListener('updatefound', () => {
@@ -60,7 +58,6 @@ class PWAService {
       // Listen for messages from service worker
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'CACHE_UPDATED') {
-          console.log('PWA: Cache updated');
         }
       });
 
@@ -76,7 +73,6 @@ class PWAService {
       this.isOnline = navigator.onLine;
       
       if (wasOnline !== this.isOnline) {
-        console.log(`PWA: Network status changed to ${this.isOnline ? 'online' : 'offline'}`);
         this.notifyOnlineChange();
       }
     };
@@ -88,11 +84,6 @@ class PWAService {
     if ('connection' in navigator) {
       const connection = (navigator as any).connection;
       connection.addEventListener('change', () => {
-        console.log('PWA: Connection change detected', {
-          effectiveType: connection.effectiveType,
-          downlink: connection.downlink,
-          rtt: connection.rtt,
-        });
       });
     }
   }
@@ -102,12 +93,10 @@ class PWAService {
     window.addEventListener('beforeinstallprompt', (e: Event) => {
       e.preventDefault();
       this.installPromptEvent = e as BeforeInstallPromptEvent;
-      console.log('PWA: Install prompt available');
     });
 
     // Detect if app was successfully installed
     window.addEventListener('appinstalled', () => {
-      console.log('PWA: App was successfully installed');
       this.installPromptEvent = null;
     });
   }
@@ -138,9 +127,7 @@ class PWAService {
         const choiceResult = await this.installPromptEvent.userChoice;
         
         if (choiceResult.outcome === 'accepted') {
-          console.log('PWA: User accepted install prompt');
         } else {
-          console.log('PWA: User dismissed install prompt');
         }
 
         this.installPromptEvent = null;
@@ -229,7 +216,6 @@ class PWAService {
       await Promise.all(
         cacheNames.map(cacheName => caches.delete(cacheName))
       );
-      console.log('PWA: All caches cleared');
     }
   }
 

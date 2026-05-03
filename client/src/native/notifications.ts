@@ -58,7 +58,6 @@ export async function scheduleReminderNotification(
     if (!hasPermission) {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        console.warn('Notification permission not granted');
         return false;
       }
     }
@@ -238,11 +237,9 @@ export function setupNotificationListeners(): void {
   }
 
   LocalNotifications.addListener('localNotificationReceived', (notification) => {
-    console.log('Notification received:', notification);
   });
 
   LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-    console.log('Notification action performed:', action);
     
     const notificationData = action.notification;
     const extra = notificationData.extra;

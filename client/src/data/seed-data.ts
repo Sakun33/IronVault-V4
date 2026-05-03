@@ -564,4 +564,3 @@ export const getDataSummary = () => {
   };
 };
 
-console.log('Seed Data Summary:', getDataSummary());

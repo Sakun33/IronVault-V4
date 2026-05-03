@@ -115,7 +115,7 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     await loadVaults();
     // Critical: clear React state of the previous vault's items so the UI
     // doesn't briefly render the wrong vault's data after the switch.
-    try { await refreshData(); } catch (e) { console.warn('[switchVault] refreshData failed', e); }
+    try { await refreshData(); } catch { /* refreshData has its own error handling */ }
   };
 
   /**
@@ -195,7 +195,6 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
       try {
         await deleteCloudVault(vaultId);
       } catch (err) {
-        console.warn('[deleteVault] cloud delete failed (continuing with local delete)', err);
       }
     }
     await vaultManager.deleteVault(vaultId);
@@ -269,6 +268,8 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowSwitchPassword(p => !p)}
                   tabIndex={-1}
+                  aria-label={showSwitchPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showSwitchPassword}
                 >
                   {showSwitchPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>

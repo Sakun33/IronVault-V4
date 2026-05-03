@@ -97,14 +97,12 @@ export class AppIntegrationHooks {
     // Validate section name
     const section = this.vaultSections.find(s => s.name === sectionName);
     if (!section) {
-      console.warn(`Unknown section: ${sectionName}`);
       return;
     }
 
     try {
       // This would be called when user navigates to a section
       // For now, we'll just log it
-      console.log(`User accessed section: ${section.displayName}`);
     } catch (error) {
       console.error('Failed to track section access:', error);
     }
@@ -118,7 +116,6 @@ export class AppIntegrationHooks {
 
     const section = this.vaultSections.find(s => s.name === sectionName);
     if (!section) {
-      console.warn(`Unknown section: ${sectionName}`);
       return;
     }
 
@@ -137,7 +134,6 @@ export class AppIntegrationHooks {
 
     const section = this.vaultSections.find(s => s.name === sectionName);
     if (!section) {
-      console.warn(`Unknown section: ${sectionName}`);
       return;
     }
 

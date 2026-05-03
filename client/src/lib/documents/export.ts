@@ -112,7 +112,6 @@ async function exportToMobile(
           directory: Directory.Cache,
         });
       } catch (e) {
-        console.warn('Failed to cleanup export file:', e);
       }
     }, 30000);
 

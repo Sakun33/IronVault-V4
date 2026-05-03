@@ -34,7 +34,6 @@ export interface CustomerRegistrationResponse {
  */
 export async function registerCustomer(data: CustomerRegistrationData): Promise<CustomerRegistrationResponse> {
   try {
-    console.log('📝 Registering customer with CRM:', data);
     
     // Use production backend API or fallback to local proxy
     const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
@@ -52,7 +51,6 @@ export async function registerCustomer(data: CustomerRegistrationData): Promise<
     });
 
     if (!response.ok) {
-      console.warn('⚠️ Customer registration failed:', response.status);
       return {
         success: false,
         message: 'Failed to register with CRM (non-critical)',
@@ -60,7 +58,6 @@ export async function registerCustomer(data: CustomerRegistrationData): Promise<
     }
 
     const result = await response.json();
-    console.log('✅ Customer registered with CRM:', result);
     
     // Store userId locally for future API calls (API returns `id` or `userId`)
     const storedId = result.userId || result.id;
@@ -91,7 +88,6 @@ export async function autoRegisterOnVaultCreation(
   selectedPlan?: string
 ): Promise<void> {
   if (!email) {
-    console.log('ℹ️ Skipping customer registration - no email provided');
     return;
   }
 
@@ -112,7 +108,6 @@ export async function autoRegisterOnVaultCreation(
     appVersion: '1.0.0',
     selectedPlan: selectedPlan || 'free',
   }).catch(error => {
-    console.log('ℹ️ Background customer registration failed (non-critical):', error.message);
   });
 }
 

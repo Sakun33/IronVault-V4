@@ -201,7 +201,6 @@ export class EncryptedSupportTickets {
           }),
         });
       } catch (syncError) {
-        console.warn('Failed to sync ticket to backend (non-critical):', syncError);
       }
       
       return ticket.id;

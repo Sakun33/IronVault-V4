@@ -255,7 +255,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem('iv_cloud_token');
     if (!token) {
       const reason = 'No cloud token — local-only vault, push skipped';
-      console.warn('[CLOUD-PUSH]', reason);
       return { ok: false, reason };
     }
     if (!masterPassword) {
@@ -273,7 +272,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       const { isVaultCloudSynced } = await import('@/lib/cloud-vault-sync');
       if (!isVaultCloudSynced(vaultId)) {
         const reason = 'Active vault is local-only — cloud push skipped';
-        console.log('[CLOUD-PUSH]', reason);
         return { ok: false, reason };
       }
       // Vault isolation: the open DB must belong to this vault. If it
@@ -368,18 +366,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
     setIsLoading(true);
     try {
-      console.log('VaultContext: Starting data refresh...');
 
       // Check if database schema is correct
       const schemaValid = await vaultStorage.checkSchema();
       if (!schemaValid) {
-        console.log('⚠️ Database schema invalid, recreating...');
         await vaultStorage.recreateDatabase();
-        console.log('✅ Database recreated successfully');
       }
 
       // Always refresh data to ensure we have the latest from storage
-      console.log('VaultContext: Refreshing all data from storage...');
 
       const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData] = await Promise.all([
         vaultStorage.getAllPasswords(),
@@ -394,17 +388,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllApiKeys(),
       ]);
 
-      console.log('VaultContext: Data loaded:', {
-        passwords: passwordsData.length,
-        subscriptions: subscriptionsData.length,
-        notes: notesData.length,
-        expenses: expensesData.length,
-        reminders: remindersData.length,
-        bankStatements: bankStatementsData.length,
-        bankTransactions: bankTransactionsData.length,
-        investments: investmentsData.length,
-        investmentGoals: investmentGoalsData.length,
-      });
 
       // Hydrate date strings back to Date objects (JSON.parse loses Date types)
       setPasswords(passwordsData.map(hydrateDates));
@@ -910,15 +893,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   const importBankStatementsFromCSV = async (csvContent: string) => {
     try {
-      console.log('VaultContext: Starting bank statements import...');
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent);
-      console.log('VaultContext: Import completed:', result);
 
       // Log the import activity
       addLog('Import Bank Statements', 'system', `Imported ${result.statements} statements and ${result.transactions} transactions from CSV`);
 
       await refreshData();
-      console.log('VaultContext: Data refreshed after import');
       return result;
     } catch (error) {
       console.error('VaultContext: Import failed:', error);
@@ -961,14 +941,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
           const blob = await vaultStorage.exportVault(masterPassword);
           const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
           const vaultName = vaultMeta?.name ?? 'My Vault';
-          console.log('[IMPORT] Blocking cloud push starting...');
           const result = await pushCloudVault(vaultId, vaultName, blob, false);
           if (result.success) {
             markVaultAsCloudSynced(vaultId);
             localStorage.setItem(`iv_last_pull_${vaultId}`, new Date().toISOString());
             localStorage.removeItem(`iv_dirty_${vaultId}`);
           }
-          console.log('[IMPORT] Cloud push result:', result);
         }
       } catch (e) {
         console.error('[IMPORT] Cloud push failed:', e);
@@ -1052,7 +1030,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         fresh.push(password);
         imported++;
       } catch (e) {
-        console.warn('[bulkImport] save failed:', e);
         skipped++;
       }
       if (onProgress) onProgress(i + 1, total);
@@ -1080,7 +1057,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     }
     const result = await pushToCloudNow();
     if (result.ok) {
-      console.log(`[bulkImport] cloud push verified — blob length ${result.blobLength}`);
       return {
         imported, skipped, duplicates,
         cloudSync: 'success',

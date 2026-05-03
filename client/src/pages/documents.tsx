@@ -120,6 +120,7 @@ import {
 } from 'lucide-react';
 import DocumentViewer from '@/components/document-viewer-simple';
 import { useVault } from '@/contexts/vault-context';
+import { vaultStorage } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { documentService } from '@/lib/document-encryption';
@@ -246,14 +247,39 @@ export default function Documents() {
       try {
         await ocrService.initialize();
       } catch (error) {
-        console.warn('OCR service unavailable — scan features will be disabled:', error);
       }
       await loadDocuments();
+      await loadFolders();
     };
 
     initializeServices();
   }, []);
-  
+
+  const loadFolders = async () => {
+    try {
+      const stored = await vaultStorage.getPersistentData('document_folders');
+      if (Array.isArray(stored)) {
+        // Stored dates serialize to strings; revive them on load.
+        const revived: Folder[] = stored.map((f: any) => ({
+          ...f,
+          createdAt: new Date(f.createdAt),
+          updatedAt: new Date(f.updatedAt),
+        }));
+        setFolders(revived);
+      }
+    } catch (error) {
+      console.error('Failed to load folders:', error);
+    }
+  };
+
+  const persistFolders = async (next: Folder[]) => {
+    try {
+      await vaultStorage.savePersistentData('document_folders', next);
+    } catch (error) {
+      console.error('Failed to save folders:', error);
+    }
+  };
+
   // Load documents from storage
   const loadDocuments = async () => {
     try {
@@ -490,7 +516,11 @@ export default function Documents() {
       color: newFolderColor
     };
 
-    setFolders(prev => [...prev, newFolder]);
+    setFolders(prev => {
+      const next = [...prev, newFolder];
+      void persistFolders(next);
+      return next;
+    });
     setNewFolderName('');
     setShowCreateFolderModal(false);
 

@@ -451,7 +451,6 @@ export default function VaultPickerPage() {
           const localItemCount = await vaultStorage.getTotalItemCount();
           if (localItemCount > 0) {
             const localBlob = await vaultStorage.exportVault(pw);
-            console.log('[CLOUD-UNLOCK] Local has content — pushing before any wipe', { localItemCount });
             const rescue = await pushCloudVault(
               cloudVault.vaultId, cloudVault.vaultName, localBlob,
               cloudVault.isDefault || false,
@@ -459,12 +458,10 @@ export default function VaultPickerPage() {
             if (rescue.success) {
               preservedLocal = true;
               localStorage.removeItem(dirtyKey);
-              console.log('[CLOUD-UNLOCK] Preserved local data — push succeeded');
             } else if (rescue.serverNewer) {
               // Cloud is newer — wipe-and-replace below is the right call.
               // Clear dirty since cloud is now authoritative.
               localStorage.removeItem(dirtyKey);
-              console.log('[CLOUD-UNLOCK] Cloud is newer than local — will replace');
             } else if (localStorage.getItem(dirtyKey) === '1') {
               // Push failed AND we have explicitly-marked unsynced changes —
               // refuse to wipe.
@@ -476,13 +473,10 @@ export default function VaultPickerPage() {
               }));
               return;
             } else {
-              console.warn('[CLOUD-UNLOCK] Push failed but dirty flag not set — proceeding with cloud download', rescue);
             }
           } else {
-            console.log('[CLOUD-UNLOCK] Local blob is empty/tiny — falling through to cloud download', { blobLength: localBlob.length });
           }
         } else {
-          console.log('[CLOUD-UNLOCK] Local unlock failed (no usable local data) — falling through to cloud download');
         }
       } catch (rescueErr) {
         console.error('[CLOUD-UNLOCK] Rescue attempt threw — falling through to cloud download', rescueErr);

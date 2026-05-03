@@ -86,7 +86,6 @@ export class OCRService {
       const { createWorker } = await import('tesseract.js');
       this.tesseractWorker = await createWorker('eng');
       this.isInitialized = true;
-      console.log('OCR Service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize OCR service:', error);
       throw new Error('OCR service initialization failed');
@@ -364,7 +363,6 @@ export class OCRService {
         this.supportedLanguages.push(languageCode);
       }
       
-      console.log(`Language ${languageCode} loaded successfully`);
     } catch (error) {
       console.error(`Failed to load language ${languageCode}:`, error);
       throw new Error(`Failed to load language ${languageCode}`);

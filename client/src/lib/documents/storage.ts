@@ -235,7 +235,6 @@ async function deleteFromFilesystem(storageRef: string): Promise<void> {
       directory: Directory.Data,
     });
   } catch (e) {
-    console.warn('Failed to delete file from filesystem:', e);
   }
 }
 
@@ -283,7 +282,6 @@ export async function deleteTempFile(uri: string): Promise<void> {
     try {
       await Filesystem.deleteFile({ path: uri });
     } catch (e) {
-      console.warn('Failed to delete temp file:', e);
     }
   } else {
     // Web - revoke blob URL

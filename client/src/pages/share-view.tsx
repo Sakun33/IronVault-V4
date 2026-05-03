@@ -176,6 +176,8 @@ export default function ShareView() {
                       <button
                         onClick={() => setShowPassword(v => !v)}
                         className="text-slate-400 hover:text-white transition-colors flex-shrink-0"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>

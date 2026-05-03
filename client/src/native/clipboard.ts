@@ -67,7 +67,6 @@ export async function clearClipboard(): Promise<void> {
       await navigator.clipboard.writeText('');
     }
 
-    console.debug('Clipboard cleared');
   } catch (error) {
     console.error('Failed to clear clipboard:', error);
   }

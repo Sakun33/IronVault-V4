@@ -22,7 +22,6 @@ let isScreenProtectionEnabled = false;
 
 export async function enableScreenProtection(): Promise<void> {
   if (!isNativeApp()) {
-    console.debug('Screen protection only available on native platforms');
     return;
   }
 
@@ -33,7 +32,6 @@ export async function enableScreenProtection(): Promise<void> {
     // }
     
     isScreenProtectionEnabled = false; // Keep disabled for demos
-    console.debug('Screen protection disabled for investor demos');
   } catch (error) {
     console.error('Failed to enable screen protection:', error);
   }
@@ -50,7 +48,6 @@ export async function disableScreenProtection(): Promise<void> {
     }
     
     isScreenProtectionEnabled = false;
-    console.debug('Screen protection disabled');
   } catch (error) {
     console.error('Failed to disable screen protection:', error);
   }

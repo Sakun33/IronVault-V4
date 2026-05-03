@@ -71,7 +71,6 @@ export class WebBillingProvider implements BillingProvider {
   private customerInfo: CustomerInfo = { ...MOCK_CUSTOMER_INFO };
 
   async configure(config: BillingConfig): Promise<void> {
-    console.log('Web billing provider configured (mock mode)');
     this.configured = true;
     
     const stored = localStorage.getItem('web_customer_info');
@@ -109,7 +108,6 @@ export class WebBillingProvider implements BillingProvider {
       throw new Error('Web billing not configured. Call configure() first.');
     }
 
-    console.log('Web purchase (mock) - redirecting to Stripe or showing message');
     
     return {
       success: false,

@@ -101,7 +101,6 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
             const defaultCurrency = COUNTRY_TO_CURRENCY[country];
             setCurrency(defaultCurrency);
             localStorage.setItem('securevault-currency', defaultCurrency);
-            console.log(`💰 Currency defaulted to ${defaultCurrency} based on country: ${country}`);
           }
         }
       } catch (error) {
