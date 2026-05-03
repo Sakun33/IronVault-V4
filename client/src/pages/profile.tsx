@@ -82,7 +82,6 @@ import {
   UserX,
   Chrome,
   KeyRound,
-  Fingerprint,
   Timer
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
@@ -110,6 +109,7 @@ import { vaultManager } from '@/lib/vault-manager';
 import { TwoFactorAuth } from '@/components/two-factor-auth';
 import { ChangeMasterPasswordDialog } from '@/components/change-master-password-dialog';
 import { vaultBackupService } from '@/lib/vault-backup';
+import { getCloudToken } from '@/lib/cloud-vault-sync';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -183,10 +183,34 @@ export default function Profile() {
   const { changePlan, license } = useLicense();
   const [, setLocation] = useLocation();
   
-  // 2FA persistent state
+  // 2FA state — server is the source of truth. We seed from localStorage to
+  // avoid a flicker on first paint, then refresh from /api/auth/2fa/status.
+  // Local cache is best-effort; the server flag wins on every refresh.
   const [twoFAEnabled, setTwoFAEnabled] = useState(() => {
     return localStorage.getItem('ironvault_2fa_enabled') === 'true';
   });
+
+  useEffect(() => {
+    const token = getCloudToken();
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/2fa/status', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const enabled = !!data?.enabled;
+        setTwoFAEnabled(enabled);
+        localStorage.setItem('ironvault_2fa_enabled', enabled ? 'true' : 'false');
+      } catch {
+        /* offline — keep cached value */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   
   // Change master passcode state
   const [showChangePasscodeDialog, setShowChangePasscodeDialog] = useState(false);
@@ -2211,46 +2235,58 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {/* Two-Factor Authentication */}
+          {/* Two-Factor Authentication — server-backed TOTP. */}
           <TwoFactorAuth
             isEnabled={twoFAEnabled}
-            onEnable={async (code) => {
-              if (code.length === 6) {
-                setTwoFAEnabled(true);
-                localStorage.setItem('ironvault_2fa_enabled', 'true');
-                localStorage.setItem('ironvault_2fa_secret', 'JBSWY3DPEHPK3PXP');
-                return true;
-              }
-              return false;
+            onSetup={async () => {
+              const token = getCloudToken();
+              if (!token) return null;
+              const res = await fetch('/api/auth/2fa/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              });
+              if (!res.ok) return null;
+              return res.json();
+            }}
+            onVerifyEnable={async (code) => {
+              const token = getCloudToken();
+              if (!token) return null;
+              const res = await fetch('/api/auth/2fa/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ code }),
+              });
+              if (!res.ok) return null;
+              const data = await res.json();
+              if (!data?.enabled) return null;
+              setTwoFAEnabled(true);
+              localStorage.setItem('ironvault_2fa_enabled', 'true');
+              return data.backupCodes || [];
             }}
             onDisable={async (code) => {
-              if (code.length === 6) {
-                setTwoFAEnabled(false);
-                localStorage.setItem('ironvault_2fa_enabled', 'false');
-                localStorage.removeItem('ironvault_2fa_secret');
-                localStorage.removeItem('ironvault_2fa_backup_codes');
-                return true;
-              }
-              return false;
-            }}
-            onGenerateBackupCodes={async () => {
-              const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-              const codes = Array.from({ length: 10 }, () => {
-                const bytes = new Uint8Array(8);
-                crypto.getRandomValues(bytes);
-                const half1 = Array.from(bytes.slice(0, 4)).map(b => alphabet[b % alphabet.length]).join('');
-                const half2 = Array.from(bytes.slice(4, 8)).map(b => alphabet[b % alphabet.length]).join('');
-                return `${half1}-${half2}`;
+              const token = getCloudToken();
+              if (!token) return false;
+              const res = await fetch('/api/auth/2fa/disable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ code }),
               });
-              // Store hashed codes (SHA-256 hex) to prevent plaintext exposure
-              const hashedCodes = await Promise.all(codes.map(async (code) => {
-                const encoded = new TextEncoder().encode(code.replace('-', ''));
-                const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-              }));
-              localStorage.setItem('ironvault_2fa_backup_codes_hash', JSON.stringify(hashedCodes));
-              localStorage.setItem('ironvault_2fa_backup_codes_used', JSON.stringify([]));
-              return codes;
+              if (!res.ok) return false;
+              setTwoFAEnabled(false);
+              localStorage.setItem('ironvault_2fa_enabled', 'false');
+              return true;
+            }}
+            onRegenerateBackupCodes={async (code) => {
+              const token = getCloudToken();
+              if (!token) return null;
+              const res = await fetch('/api/auth/2fa/backup-codes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ code }),
+              });
+              if (!res.ok) return null;
+              const data = await res.json();
+              return data?.backupCodes || null;
             }}
           />
 

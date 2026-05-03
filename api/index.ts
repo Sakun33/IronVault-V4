@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, randomBytes, randomUUID } from "crypto";
 import nodemailer from "nodemailer";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
+
+// 30-second window, ±1 step tolerance for clock skew between server and authenticator app.
+authenticator.options = { window: 1, step: 30 };
 
 // ── Zoho Desk API ─────────────────────────────────────────────────────────────
 let _zdToken: string | null = null;
@@ -726,6 +731,256 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── TOTP / 2FA helpers ──────────────────────────────────────────────────────
+  // First-call provisioning: ALTER TABLE only adds columns that don't exist, so
+  // re-running on every request is cheap and lets us roll out without a separate
+  // migration step. Same pattern as ensureSessionAndActivityTables above.
+  let _totpColumnsEnsured = false;
+  async function ensureTotpColumns(): Promise<void> {
+    if (_totpColumnsEnsured) return;
+    try {
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_secret TEXT`);
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false`);
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT[]`);
+      _totpColumnsEnsured = true;
+    } catch (e: any) {
+      console.error('[ensureTotpColumns]', e.message);
+    }
+  }
+
+  // Short-lived (5 min) JWT carrying only `sub: userId, email, purpose: '2fa_pending'`.
+  // Issued after password verification when 2FA is enabled, exchanged for a real
+  // session token at /api/auth/2fa/validate. Distinct purpose claim prevents reuse
+  // as a session token.
+  function signTwoFactorPending(userId: string, email: string): string {
+    const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = b64url(JSON.stringify({ userId, email, purpose: '2fa_pending', exp: now + 5 * 60, iat: now }));
+    const sig = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
+    return `${header}.${payload}.${sig}`;
+  }
+
+  function verifyTwoFactorPending(token: string): { userId: string; email: string } | null {
+    try {
+      const [header, payload, sig] = token.split('.');
+      if (!header || !payload || !sig) return null;
+      const expected = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
+      if (expected !== sig) return null;
+      const data = JSON.parse(Buffer.from(payload, 'base64').toString());
+      if (data.purpose !== '2fa_pending') return null;
+      if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;
+      return { userId: data.userId, email: data.email };
+    } catch { return null; }
+  }
+
+  function generateBackupCodes(count = 10): string[] {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const codes: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const bytes = randomBytes(8);
+      const half1 = Array.from(bytes.slice(0, 4)).map(b => alphabet[b % alphabet.length]).join('');
+      const half2 = Array.from(bytes.slice(4, 8)).map(b => alphabet[b % alphabet.length]).join('');
+      codes.push(`${half1}-${half2}`);
+    }
+    return codes;
+  }
+
+  function hashBackupCode(code: string): string {
+    // Strip dashes/whitespace and uppercase before hashing so user input format is forgiving.
+    const normalized = code.replace(/[-\s]/g, '').toUpperCase();
+    return createHmac('sha256', JWT_SECRET).update(normalized).digest('hex');
+  }
+
+  async function verifyTotpOrBackup(userId: string, code: string): Promise<{ ok: true; usedBackup?: boolean } | { ok: false }> {
+    const trimmed = code.trim();
+    const { rows } = await db.query(
+      `SELECT totp_secret, totp_enabled, totp_backup_codes FROM crm_users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    const row = rows[0];
+    if (!row || !row.totp_secret) return { ok: false };
+    // Try TOTP first (6-digit numeric).
+    if (/^\d{6}$/.test(trimmed)) {
+      try {
+        if (authenticator.verify({ token: trimmed, secret: row.totp_secret })) return { ok: true };
+      } catch { /* fall through */ }
+    }
+    // Fall back to backup codes.
+    const codeHash = hashBackupCode(trimmed);
+    const backupCodes: string[] = row.totp_backup_codes || [];
+    const idx = backupCodes.indexOf(codeHash);
+    if (idx === -1) return { ok: false };
+    // Consume the code (single use).
+    const remaining = backupCodes.filter((_: string, i: number) => i !== idx);
+    await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [remaining, userId]);
+    return { ok: true, usedBackup: true };
+  }
+
+  // ── POST /api/auth/2fa/setup — generate secret, return QR ───────────────────
+  if (path === '/api/auth/2fa/setup' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureTotpColumns();
+    try {
+      // Block re-setup if already enabled — caller must disable first.
+      const { rows } = await db.query(`SELECT totp_enabled FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
+      if (rows[0]?.totp_enabled) {
+        return res.status(400).json({ error: '2FA is already enabled. Disable it first to re-setup.' });
+      }
+      const secret = authenticator.generateSecret();
+      const otpauthUrl = authenticator.keyuri(cloudUser.email, 'IronVault', secret);
+      const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 240, margin: 1 });
+      // Stash secret server-side, but keep totp_enabled=false until user verifies.
+      await db.query(
+        `UPDATE crm_users SET totp_secret = $1, totp_enabled = false WHERE id = $2`,
+        [secret, cloudUser.userId]
+      );
+      return res.json({ secret, otpauthUrl, qrDataUrl });
+    } catch (err: any) {
+      console.error('[2fa/setup]', err.message);
+      return res.status(500).json({ error: '2FA setup failed' });
+    }
+  }
+
+  // ── POST /api/auth/2fa/verify — enable 2FA after user confirms code ─────────
+  if (path === '/api/auth/2fa/verify' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
+    await ensureTotpColumns();
+    try {
+      const { rows } = await db.query(`SELECT totp_secret FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
+      const secret = rows[0]?.totp_secret;
+      if (!secret) return res.status(400).json({ error: 'Run /api/auth/2fa/setup first' });
+      if (!authenticator.verify({ token: code.trim(), secret })) {
+        return res.status(401).json({ error: 'Invalid code' });
+      }
+      const backupCodes = generateBackupCodes(10);
+      const hashedBackup = backupCodes.map(hashBackupCode);
+      await db.query(
+        `UPDATE crm_users SET totp_enabled = true, totp_backup_codes = $1 WHERE id = $2`,
+        [hashedBackup, cloudUser.userId]
+      );
+      return res.json({ enabled: true, backupCodes });
+    } catch (err: any) {
+      console.error('[2fa/verify]', err.message);
+      return res.status(500).json({ error: '2FA verification failed' });
+    }
+  }
+
+  // ── POST /api/auth/2fa/disable — requires valid code, clears secret ─────────
+  if (path === '/api/auth/2fa/disable' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
+    await ensureTotpColumns();
+    try {
+      const v = await verifyTotpOrBackup(cloudUser.userId, code);
+      if (!v.ok) return res.status(401).json({ error: 'Invalid code' });
+      await db.query(
+        `UPDATE crm_users SET totp_enabled = false, totp_secret = NULL, totp_backup_codes = NULL WHERE id = $1`,
+        [cloudUser.userId]
+      );
+      return res.json({ disabled: true });
+    } catch (err: any) {
+      console.error('[2fa/disable]', err.message);
+      return res.status(500).json({ error: '2FA disable failed' });
+    }
+  }
+
+  // ── POST /api/auth/2fa/validate — finish login after password step ──────────
+  // Body: { tempToken, code }. tempToken is the short-lived 2fa_pending JWT issued
+  // by /api/auth/token when totp_enabled is true. Returns a real session token.
+  if (path === '/api/auth/2fa/validate' && req.method === 'POST') {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const { tempToken, code } = req.body || {};
+    if (!tempToken || !code) return res.status(400).json({ error: 'tempToken and code required' });
+    const pending = verifyTwoFactorPending(tempToken);
+    if (!pending) {
+      recordLoginFailure(clientIp);
+      return res.status(401).json({ error: 'Invalid or expired 2FA challenge' });
+    }
+    await ensureTotpColumns();
+    try {
+      const v = await verifyTotpOrBackup(pending.userId, code);
+      if (!v.ok) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid code' });
+      }
+      clearLoginFailures(clientIp);
+      const token = signCloudToken(pending.userId, pending.email);
+      // Mirror /api/auth/token: register session row so this device shows up
+      // under Active Sessions and the extension session_check works.
+      let sessionId: string | null = null;
+      try {
+        await ensureSessionAndActivityTables();
+        const ua = (req.headers['user-agent'] as string) || '';
+        const clientKind = (req.headers['x-iv-client'] as string) || 'web';
+        const { browser, os, deviceName } = parseUserAgent(ua);
+        const ip = getClientIp(req);
+        const tokenHash = hashJwtToken(token);
+        const { rows: sessRows } = await db.query(
+          `INSERT INTO extension_sessions (user_id, device_name, browser, os, ip_address, user_agent, client_kind, jwt_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [pending.userId, deviceName, browser, os, ip, ua, clientKind, tokenHash]
+        );
+        sessionId = sessRows[0]?.id || null;
+      } catch (e: any) {
+        console.error('[2fa/validate] session register failed:', e.message);
+      }
+      db.query(`UPDATE crm_users SET last_active_at = NOW() WHERE id = $1`, [pending.userId])
+        .catch((e: any) => console.error('[2fa/validate] last_active_at update failed:', e.message));
+      return res.json({ success: true, token, userId: pending.userId, email: pending.email, sessionId, usedBackup: v.usedBackup === true });
+    } catch (err: any) {
+      console.error('[2fa/validate]', err.message);
+      return res.status(500).json({ error: '2FA validation failed' });
+    }
+  }
+
+  // ── GET /api/auth/2fa/status — return enabled flag for current user ─────────
+  if (path === '/api/auth/2fa/status' && req.method === 'GET') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureTotpColumns();
+    try {
+      const { rows } = await db.query(
+        `SELECT totp_enabled, COALESCE(array_length(totp_backup_codes, 1), 0) AS backup_count FROM crm_users WHERE id = $1 LIMIT 1`,
+        [cloudUser.userId]
+      );
+      return res.json({ enabled: !!rows[0]?.totp_enabled, backupCodesRemaining: rows[0]?.backup_count ?? 0 });
+    } catch (err: any) {
+      console.error('[2fa/status]', err.message);
+      return res.status(500).json({ error: '2FA status failed' });
+    }
+  }
+
+  // ── POST /api/auth/2fa/backup-codes — regenerate (replaces existing) ────────
+  if (path === '/api/auth/2fa/backup-codes' && req.method === 'POST') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
+    await ensureTotpColumns();
+    try {
+      const { rows } = await db.query(`SELECT totp_enabled FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
+      if (!rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA is not enabled' });
+      const v = await verifyTotpOrBackup(cloudUser.userId, code);
+      if (!v.ok) return res.status(401).json({ error: 'Invalid code' });
+      const backupCodes = generateBackupCodes(10);
+      const hashedBackup = backupCodes.map(hashBackupCode);
+      await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [hashedBackup, cloudUser.userId]);
+      return res.json({ backupCodes });
+    } catch (err: any) {
+      console.error('[2fa/backup-codes]', err.message);
+      return res.status(500).json({ error: 'backup code regeneration failed' });
+    }
+  }
+
   // ── POST /api/test-email ────────────────────────────────────────────────────
   if (path === '/api/test-email' && req.method === 'POST') {
     const { type, to, name, plan } = req.body || {};
@@ -1017,9 +1272,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const normalizedEmail = (email as string).toLowerCase().trim();
     try {
+      // Make sure totp_* columns exist before SELECTing them — first-deploy
+      // hosts won't have them yet. Cheap on subsequent calls (memoized flag).
+      await ensureTotpColumns();
       // Look up user in crm_users table (Drizzle schema)
       const { rows: userRows } = await db.query(
-        `SELECT id, account_password_hash, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+        `SELECT id, account_password_hash, account_status, totp_enabled FROM crm_users WHERE email = $1 LIMIT 1`,
         [normalizedEmail]
       );
       if (!userRows[0]) {
@@ -1039,6 +1297,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Block login if email not yet verified
       if (userRows[0].account_status === 'pending_verification') {
         return res.status(403).json({ error: 'email_not_verified' });
+      }
+      // 2FA gate: if enabled, do NOT issue a session token. Return a short-lived
+      // pending-token instead — caller must POST it + the TOTP code to
+      // /api/auth/2fa/validate to receive the real token.
+      if (userRows[0].totp_enabled) {
+        clearLoginFailures(clientIp);
+        const tempToken = signTwoFactorPending(userId, normalizedEmail);
+        return res.json({ requires2FA: true, tempToken, email: normalizedEmail });
       }
       // Successful auth — wipe failure counter for this IP
       clearLoginFailures(clientIp);

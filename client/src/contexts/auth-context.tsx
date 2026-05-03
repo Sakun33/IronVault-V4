@@ -17,18 +17,35 @@ import { acquireCloudToken, clearCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 
+// Server returns `{ requires2FA: true, tempToken }` when password auth succeeds
+// but the user has 2FA enabled. We surface this to the login page via
+// `pendingTwoFactor` state — the caller shows a code prompt and finishes the
+// login through `verifyTwoFactor`. Until verifyTwoFactor succeeds, no session
+// state is set (isAccountLoggedIn stays false).
+export interface PendingTwoFactor {
+  email: string;
+  tempToken: string;
+  // The plaintext password is held in memory only for the duration of the
+  // 2FA challenge so we can run the post-login side-effects (vault data wipe
+  // for previous user, saveAccountCredentials) once the code is verified.
+  password: string;
+}
+
 interface AuthContextType {
   isUnlocked: boolean;
   vaultExists: boolean;
   masterPassword: string | null;
   isAccountLoggedIn: boolean;
   accountEmail: string | null;
+  pendingTwoFactor: PendingTwoFactor | null;
   login: (masterPassword: string) => Promise<boolean>;
   loginWithKey: (base64Key: string) => Promise<boolean>;
   loginWithoutVerification: (masterPassword: string) => void;
   createVault: (masterPassword: string) => Promise<void>;
   logout: () => void;
   accountLogin: (email: string, password: string) => Promise<boolean>;
+  verifyTwoFactor: (code: string) => Promise<boolean>;
+  cancelTwoFactor: () => void;
   accountLogout: () => void;
   isLoading: boolean;
   getMasterKey: () => Promise<CryptoKey | null>;
@@ -49,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [masterPassword, setMasterPassword] = useState<string | null>(null);
   const [isAccountLoggedIn, setIsAccountLoggedIn] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [pendingTwoFactor, setPendingTwoFactor] = useState<PendingTwoFactor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { clearLogs, addLog } = useLogging();
 
@@ -127,48 +145,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Shared post-auth side-effects. Runs AFTER both password and (if enabled) 2FA
+  // succeed. Pulled out so accountLogin (no-2FA path), verifyTwoFactor, and the
+  // offline fallback can share the same identity-handover logic.
+  const finalizeAccountLogin = async (email: string, password: string, normalizedEmail: string, passwordHash: string) => {
+    // SECURITY: wipe any cloud token from a previous user's session BEFORE
+    // setting isAccountLoggedIn. Without this, the old token stays in
+    // localStorage and vault listing runs with it, leaking another user's vaults.
+    clearCloudToken();
+
+    const previousEmail = (() => {
+      try {
+        const raw = localStorage.getItem('iv_account');
+        return raw ? (JSON.parse(raw)?.email || null) : null;
+      } catch { return null; }
+    })();
+    if (previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail) {
+      vaultStorage.setEncryptionKey(null as any);
+      sessionStorage.removeItem(SESSION_KEY);
+      await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
+    }
+
+    await saveAccountCredentials(email, password);
+    saveAccountSession(normalizedEmail);
+    vaultManager.setAccountEmail(normalizedEmail);
+    clearPlanCache();
+    addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
+    await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
+    setIsAccountLoggedIn(true);
+    setAccountEmail(normalizedEmail);
+  };
+
   const accountLogin = async (email: string, password: string): Promise<boolean> => {
     const normalizedEmail = email.toLowerCase().trim();
     const passwordHash = await sha256(password);
-
-    const onSuccess = async () => {
-      // SECURITY: wipe any cloud token from a previous user's session BEFORE
-      // setting isAccountLoggedIn. Without this, the old token stays in
-      // localStorage and vault listing runs with it, leaking another user's vaults.
-      clearCloudToken();
-
-      // BUG-04: if a different account previously used this device, wipe its
-      // IndexedDB databases and stale localStorage keys before setting up the
-      // new session. Without this the new user can land in an old user's IDB
-      // (via a stale active-vault pointer) or see their cached cloud-synced
-      // vault list.
-      const previousEmail = (() => {
-        try {
-          const raw = localStorage.getItem('iv_account');
-          return raw ? (JSON.parse(raw)?.email || null) : null;
-        } catch { return null; }
-      })();
-      if (previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail) {
-        // Drop in-memory vault crypto state from the previous session before
-        // wiping its IDB — otherwise vaultStorage may hold a now-dangling key.
-        vaultStorage.setEncryptionKey(null as any);
-        sessionStorage.removeItem(SESSION_KEY);
-        await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
-      }
-
-      // Persist credentials locally for offline access
-      await saveAccountCredentials(email, password);
-      saveAccountSession(normalizedEmail);
-      vaultManager.setAccountEmail(normalizedEmail);
-      // Clear stale plan cache so the plan hook re-fetches on next render
-      clearPlanCache();
-      addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
-      // Acquire new token first so the app renders with the correct identity.
-      // Falls back gracefully on network error (offline mode).
-      await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
-      setIsAccountLoggedIn(true);
-      setAccountEmail(normalizedEmail);
-    };
 
     // Server is the primary source of truth for cross-device auth.
     // Trust-on-first-use: if no hash stored server-side yet, it stores and accepts.
@@ -179,7 +189,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email: normalizedEmail, accountPasswordHash: passwordHash }),
       });
       if (res.ok) {
-        await onSuccess();
+        const data = await res.json().catch(() => ({} as any));
+        // 2FA gate: server says "password OK, now I need a code". Stash the
+        // pending state and return false — the login UI watches pendingTwoFactor
+        // and pivots to the code prompt. The caller's `success === false` here
+        // is NOT a failure — it just means "more steps needed".
+        if (data.requires2FA && data.tempToken) {
+          setPendingTwoFactor({ email: normalizedEmail, tempToken: data.tempToken, password });
+          return false;
+        }
+        await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
         return true;
       }
       // 401 from server means wrong password — don't fall back to local
@@ -198,14 +217,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Network error — fall back to localStorage so offline still works
       console.error('[auth] /api/auth/token network error:', err);
     }
-    // Offline / server-error fallback: verify against locally-stored hash
+    // Offline / server-error fallback: verify against locally-stored hash.
+    // Note: 2FA is enforced server-side only; if the server is unreachable we
+    // accept the local-cached credential. This matches the existing offline
+    // posture (localStorage hash check) and avoids locking users out when the
+    // network is down.
     const localValid = await verifyAccountCredentials(email, password);
     if (localValid) {
-      await onSuccess();
+      await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
       return true;
     }
     return false;
   };
+
+  const verifyTwoFactor = async (code: string): Promise<boolean> => {
+    const pending = pendingTwoFactor;
+    if (!pending) return false;
+    try {
+      const res = await fetch('/api/auth/2fa/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken: pending.tempToken, code: code.trim() }),
+      });
+      if (!res.ok) return false;
+      const passwordHash = await sha256(pending.password);
+      await finalizeAccountLogin(pending.email, pending.password, pending.email, passwordHash);
+      setPendingTwoFactor(null);
+      return true;
+    } catch (err) {
+      console.error('[auth] verifyTwoFactor network error:', err);
+      return false;
+    }
+  };
+
+  const cancelTwoFactor = () => setPendingTwoFactor(null);
 
   const accountLogout = () => {
     clearAccountSession();
@@ -358,12 +403,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     masterPassword,
     isAccountLoggedIn,
     accountEmail,
+    pendingTwoFactor,
     login,
     loginWithKey,
     loginWithoutVerification,
     createVault,
     logout,
     accountLogin,
+    verifyTwoFactor,
+    cancelTwoFactor,
     accountLogout,
     isLoading,
     getMasterKey,

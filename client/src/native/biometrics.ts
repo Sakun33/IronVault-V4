@@ -46,10 +46,13 @@ export async function checkBiometricCapabilities(): Promise<BiometricCapabilitie
         strongBiometryIsAvailable: available,
       };
     } catch (error) {
-      console.error('BiometricCheck: error checking capabilities:', error);
-      if (isIOS()) {
-        return { isAvailable: true, biometryType: 'faceId', isEnrolled: true, strongBiometryIsAvailable: true };
-      }
+      // Previously this returned a synthetic { isAvailable: true, biometryType: 'faceId' }
+      // on iOS to mask plugin init quirks. That hid real failures (no enrolment,
+      // hardware locked, missing usage description) and made the unlock UI claim
+      // Face ID was ready when the prompt would error. Always report unavailable
+      // on error and surface the underlying message so the caller can show a
+      // useful message instead of a silent failure.
+      console.error('BiometricCheck: error checking capabilities:', error, isIOS() ? '(iOS)' : '');
       return { isAvailable: false, biometryType: 'none', isEnrolled: false, strongBiometryIsAvailable: false };
     }
   }

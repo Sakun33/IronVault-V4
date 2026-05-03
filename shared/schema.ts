@@ -19,6 +19,13 @@ export const crmUsers = pgTable("crm_users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   accountPasswordHash: varchar("account_password_hash", { length: 255 }),
+  // TOTP-based 2FA. Secret is stored server-side (base32, encrypted-at-rest by
+  // Postgres tablespace). totpEnabled flips to true only after the user verifies
+  // a code, so a half-set-up account never blocks login. backupCodes are SHA-256
+  // hashes of one-time recovery codes (10 generated at enable time).
+  totpSecret: text("totp_secret"),
+  totpEnabled: boolean("totp_enabled").notNull().default(false),
+  totpBackupCodes: text("totp_backup_codes").array(),
 });
 
 // Entitlements table - unified subscription status across all platforms

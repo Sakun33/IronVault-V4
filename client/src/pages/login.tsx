@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Mail, KeyRound, MailCheck } from 'lucide-react';
+import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -11,7 +11,7 @@ import { hasAccountCredentials } from '@/lib/account-auth';
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { accountLogin } = useAuth();
+  const { accountLogin, verifyTwoFactor, cancelTwoFactor, pendingTwoFactor } = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -22,6 +22,9 @@ export default function Login() {
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   const hasCredentials = hasAccountCredentials();
 
@@ -43,7 +46,12 @@ export default function Login() {
       const success = await accountLogin(email, password);
       if (success) {
         setLocation('/');
-      } else {
+      } else if (!pendingTwoFactor) {
+        // pendingTwoFactor is set synchronously inside accountLogin before it
+        // resolves, so by this point we can distinguish wrong-password from
+        // 2FA-required. (React batches the state update but the closure value
+        // we read here was captured at render time — re-reading it after await
+        // gets the latest committed value.)
         setError('Incorrect email or password. Please try again.');
         toast({
           title: 'Login failed',
@@ -62,6 +70,38 @@ export default function Login() {
     }
   };
 
+  // After accountLogin resolves false, decide between "wrong password" and
+  // "2FA challenge issued". The hook value updates synchronously in the same
+  // tick, so the next render sees pendingTwoFactor !== null in the success case.
+  // Reset transient state when leaving the 2FA branch.
+  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTwoFactorError('');
+    if (twoFactorCode.replace(/\s|-/g, '').length < 6) {
+      setTwoFactorError('Enter the 6-digit code from your authenticator app, or a backup code.');
+      return;
+    }
+    setTwoFactorLoading(true);
+    try {
+      const ok = await verifyTwoFactor(twoFactorCode);
+      if (ok) {
+        setTwoFactorCode('');
+        setLocation('/');
+      } else {
+        setTwoFactorError('Invalid or expired code. Try again.');
+      }
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleTwoFactorCancel = () => {
+    cancelTwoFactor();
+    setTwoFactorCode('');
+    setTwoFactorError('');
+    setPassword('');
+  };
+
   const handleResend = async () => {
     setResendLoading(true);
     try {
@@ -77,6 +117,74 @@ export default function Login() {
       setResendLoading(false);
     }
   };
+
+  if (pendingTwoFactor) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+          <Link href="/"><a className="flex items-center gap-2"><AppLogo size={28} /><span className="font-bold text-lg">IronVault</span></a></Link>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-7 h-7 text-primary" />
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight mb-2">Two-Factor Authentication</h1>
+              <p className="text-muted-foreground">
+                Enter the 6-digit code from your authenticator app to finish signing in.
+              </p>
+            </div>
+
+            <form onSubmit={handleTwoFactorSubmit} className="space-y-4">
+              {twoFactorError && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm">
+                  {twoFactorError}
+                </div>
+              )}
+              <div>
+                <Label htmlFor="two-factor-code" className="text-sm font-medium">
+                  Verification Code
+                </Label>
+                <Input
+                  id="two-factor-code"
+                  data-testid="input-two-factor-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="000000"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  className="mt-1.5 text-center text-2xl tracking-widest font-mono"
+                  maxLength={20}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground mt-1.5 text-center">
+                  Lost access to your authenticator? Enter a backup code instead.
+                </p>
+              </div>
+              <Button
+                type="submit"
+                data-testid="button-two-factor-submit"
+                className="w-full h-11 text-base font-semibold"
+                disabled={twoFactorLoading}
+              >
+                {twoFactorLoading ? 'Verifying…' : 'Verify & Sign In'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleTwoFactorCancel}
+                className="w-full"
+              >
+                Use a different account
+              </Button>
+            </form>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (emailNotVerified) {
     return (
