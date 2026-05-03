@@ -2,11 +2,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
 import { createHmac, randomBytes, randomUUID } from "crypto";
 import nodemailer from "nodemailer";
-import { authenticator } from "otplib";
+import { generateSecret as totpGenerateSecret, generateURI as totpGenerateURI, verifySync as totpVerifySync } from "otplib";
 import QRCode from "qrcode";
 
-// 30-second window, ±1 step tolerance for clock skew between server and authenticator app.
-authenticator.options = { window: 1, step: 30 };
+// otplib v13 functional API. epochTolerance: 30 == ±1 step (30s) for clock skew
+// between server and authenticator app — same posture as the v12 `window: 1`.
+const TOTP_TOLERANCE_SECONDS = 30;
 
 // ── Zoho Desk API ─────────────────────────────────────────────────────────────
 let _zdToken: string | null = null;
@@ -802,7 +803,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Try TOTP first (6-digit numeric).
     if (/^\d{6}$/.test(trimmed)) {
       try {
-        if (authenticator.verify({ token: trimmed, secret: row.totp_secret })) return { ok: true };
+        const r = totpVerifySync({ secret: row.totp_secret, token: trimmed, epochTolerance: TOTP_TOLERANCE_SECONDS });
+        if (r.valid) return { ok: true };
       } catch { /* fall through */ }
     }
     // Fall back to backup codes.
@@ -827,8 +829,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rows[0]?.totp_enabled) {
         return res.status(400).json({ error: '2FA is already enabled. Disable it first to re-setup.' });
       }
-      const secret = authenticator.generateSecret();
-      const otpauthUrl = authenticator.keyuri(cloudUser.email, 'IronVault', secret);
+      const secret = totpGenerateSecret();
+      const otpauthUrl = totpGenerateURI({ issuer: 'IronVault', label: cloudUser.email, secret });
       const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 240, margin: 1 });
       // Stash secret server-side, but keep totp_enabled=false until user verifies.
       await db.query(
@@ -853,7 +855,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { rows } = await db.query(`SELECT totp_secret FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
       const secret = rows[0]?.totp_secret;
       if (!secret) return res.status(400).json({ error: 'Run /api/auth/2fa/setup first' });
-      if (!authenticator.verify({ token: code.trim(), secret })) {
+      const v = totpVerifySync({ secret, token: code.trim(), epochTolerance: TOTP_TOLERANCE_SECONDS });
+      if (!v.valid) {
         return res.status(401).json({ error: 'Invalid code' });
       }
       const backupCodes = generateBackupCodes(10);
