@@ -1432,25 +1432,37 @@ export class VaultStorage {
     }
   }
 
-  // Helper method to parse CSV line (handles quoted values)
+  // RFC-4180 CSV line parser. Inside a quoted field, `""` is an escaped quote
+  // and the field stays open; outside quotes, `,` is the separator.
   private parseCSVLine(line: string): string[] {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
-    
+
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-      
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
+
+      if (inQuotes) {
+        if (char === '"') {
+          if (line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += char;
+        }
+      } else if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
         result.push(current.trim());
         current = '';
       } else {
         current += char;
       }
     }
-    
+
     result.push(current.trim());
     return result;
   }
@@ -1927,7 +1939,7 @@ export class VaultStorage {
   }
 
   // Bank Statement CSV Import - Auto-detects multiple formats
-  async importBankStatementsFromCSV(csvContent: string): Promise<{ statements: number; transactions: number }> {
+  async importBankStatementsFromCSV(csvContent: string, currency: string = 'USD'): Promise<{ statements: number; transactions: number }> {
     try {
       
       const lines = csvContent.trim().split('\n');
@@ -2091,7 +2103,7 @@ export class VaultStorage {
             date: parsedDate,
             description: description,
             amount: amount,
-            currency: 'USD',
+            currency,
             category: values[columnMappings.category] || category,
             subcategory: '',
             merchant: merchant,
