@@ -675,7 +675,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           )}
           <div className="p-6 flex-1 min-w-0 animate-fade-in">
             <AnalyticsIntegration>
-              {children}
+              <ErrorBoundary level="page" resetKey={location}>
+                {children}
+              </ErrorBoundary>
             </AnalyticsIntegration>
           </div>
           <Footer />
@@ -695,7 +697,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         )}
         <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden animate-fade-in">
           <AnalyticsIntegration>
-            {children}
+            <ErrorBoundary level="page" resetKey={location}>
+              {children}
+            </ErrorBoundary>
           </AnalyticsIntegration>
         </div>
       </main>

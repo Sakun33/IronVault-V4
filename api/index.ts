@@ -402,11 +402,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
 
   const origin = req.headers.origin as string | undefined;
+  // Strict allowlist: only echo Origin back if it is explicitly approved.
+  // No-Origin requests (same-origin, server-to-server, curl) don't need ACAO —
+  // browsers only enforce CORS on cross-origin requests with an Origin header.
+  // Removing the no-Origin fallback prevents accidental wide-open responses.
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
-  } else if (!origin) {
-    // Same-origin or server-to-server requests (no Origin header)
-    res.setHeader("Access-Control-Allow-Origin", "https://www.ironvault.app");
   }
   // If a browser sends an Origin and it's not in the allowlist, ACAO is simply
   // not set — the browser will block the response. No wildcard fallback.
@@ -902,6 +903,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ON cloud_vaults(user_id, vault_id)
       `).catch((e: any) => console.error('[ensureUniqueIndexes cloud_vaults]', e.message));
 
+      // Non-unique indexes on hot lookup columns. These accelerate the most
+      // frequent queries: login (email), session lookup (token hash), share
+      // resolution (token), payment lookup (email), cloud vault listing
+      // (user_id). All are IF NOT EXISTS so they're safe to run on every
+      // cold start.
+      await Promise.all([
+        db.query(`CREATE INDEX IF NOT EXISTS idx_crm_users_email ON crm_users(email)`),
+        db.query(`CREATE INDEX IF NOT EXISTS idx_extension_sessions_token ON extension_sessions(jwt_token_hash) WHERE jwt_token_hash IS NOT NULL`),
+        db.query(`CREATE INDEX IF NOT EXISTS idx_shared_links_token ON shared_links(token)`),
+        db.query(`CREATE INDEX IF NOT EXISTS idx_payment_orders_email ON payment_orders(email)`),
+        db.query(`CREATE INDEX IF NOT EXISTS idx_cloud_vaults_user ON cloud_vaults(user_id)`),
+      ].map(p => p.catch((e: any) => console.error('[ensureUniqueIndexes hot-path index]', e.message))));
+
       _uniqueIndexesEnsured = true;
     } catch (e: any) {
       console.error('[ensureUniqueIndexes]', e.message);
@@ -945,9 +959,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return codes;
   }
 
+  // Backup codes are stored hashed with scrypt + per-code random salt.
+  // Format: `scrypt$<salt_hex>$<hash_hex>`. A single-pass HMAC was previously
+  // used; scrypt's memory-hard parameters make offline cracking after a DB
+  // dump dramatically more expensive without adding a new native dependency.
+  function normalizeBackupCode(code: string): string {
+    return code.replace(/[-\s]/g, '').toUpperCase();
+  }
+
+  async function hashBackupCodeAsync(code: string): Promise<string> {
+    const normalized = normalizeBackupCode(code);
+    const salt = randomBytes(16);
+    const key = (await scrypt(normalized, salt, 32)) as Buffer;
+    return `scrypt$${salt.toString('hex')}$${key.toString('hex')}`;
+  }
+
+  async function verifyBackupCodeStored(input: string, stored: string): Promise<boolean> {
+    if (!stored) return false;
+    const normalized = normalizeBackupCode(input);
+    if (stored.startsWith('scrypt$')) {
+      const parts = stored.split('$');
+      if (parts.length !== 3) return false;
+      try {
+        const salt = Buffer.from(parts[1], 'hex');
+        const expected = Buffer.from(parts[2], 'hex');
+        const got = (await scrypt(normalized, salt, expected.length)) as Buffer;
+        if (got.length !== expected.length) return false;
+        return timingSafeEqual(got, expected);
+      } catch { return false; }
+    }
+    // Legacy HMAC-SHA256(JWT_SECRET, normalized) — verify in constant time.
+    const legacy = createHmac('sha256', JWT_SECRET).update(normalized).digest('hex');
+    if (legacy.length !== stored.length) return false;
+    return timingSafeEqual(Buffer.from(legacy, 'utf8'), Buffer.from(stored, 'utf8'));
+  }
+
+  // Synchronous form retained ONLY for legacy comparisons during disable / rotate
+  // flows that read existing rows (which may still be HMAC-SHA256).
   function hashBackupCode(code: string): string {
-    // Strip dashes/whitespace and uppercase before hashing so user input format is forgiving.
-    const normalized = code.replace(/[-\s]/g, '').toUpperCase();
+    const normalized = normalizeBackupCode(code);
     return createHmac('sha256', JWT_SECRET).update(normalized).digest('hex');
   }
 
@@ -969,13 +1019,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (r.valid) return { ok: true };
       } catch { /* fall through */ }
     }
-    // Fall back to backup codes.
-    const codeHash = hashBackupCode(trimmed);
+    // Fall back to backup codes — iterate and verify against each stored hash.
+    // With scrypt-hashed codes we cannot do a constant-time index lookup, so we
+    // walk the list. List size is bounded (10 codes) so the linear cost is fine.
     const backupCodes: string[] = row.totp_backup_codes || [];
-    const idx = backupCodes.indexOf(codeHash);
-    if (idx === -1) return { ok: false };
+    let matchedIdx = -1;
+    for (let i = 0; i < backupCodes.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await verifyBackupCodeStored(trimmed, backupCodes[i])) { matchedIdx = i; break; }
+    }
+    if (matchedIdx === -1) return { ok: false };
     // Consume the code (single use).
-    const remaining = backupCodes.filter((_: string, i: number) => i !== idx);
+    const remaining = backupCodes.filter((_: string, i: number) => i !== matchedIdx);
     await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [remaining, userId]);
     return { ok: true, usedBackup: true };
   }
@@ -1033,7 +1088,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ error: 'Invalid code' });
       }
       const backupCodes = generateBackupCodes(10);
-      const hashedBackup = backupCodes.map(hashBackupCode);
+      const hashedBackup = await Promise.all(backupCodes.map(hashBackupCodeAsync));
       await db.query(
         `UPDATE crm_users SET totp_enabled = true, totp_backup_codes = $1 WHERE id = $2`,
         [hashedBackup, cloudUser.userId]
@@ -1045,7 +1100,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // ── POST /api/auth/2fa/disable — requires valid code, clears secret ─────────
+  // ── POST /api/auth/2fa/disable — requires account password OR valid TOTP/backup code
+  // Either form of strong re-auth is accepted; this prevents a stolen session
+  // alone from disabling 2FA. Body: { password?: string (sha256 hex), code?: string }
   if (path === '/api/auth/2fa/disable' && req.method === 'POST') {
     const clientIp = getClientIp(req);
     if (isRateLimited(clientIp)) {
@@ -1053,14 +1110,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
-    const { code } = req.body || {};
-    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
+    const { code, password } = (req.body || {}) as { code?: unknown; password?: unknown };
+    const codeStr = typeof code === 'string' && code.length > 0 ? code : null;
+    const pwdStr = typeof password === 'string' && password.length > 0 ? password : null;
+    if (!codeStr && !pwdStr) {
+      return res.status(400).json({ error: 'password or code required' });
+    }
     await ensureTotpColumns();
     try {
-      const v = await verifyTotpOrBackup(cloudUser.userId, code);
-      if (!v.ok) {
+      let authed = false;
+      if (pwdStr) {
+        const { rows } = await db.query(
+          `SELECT account_password_hash FROM crm_users WHERE id = $1 LIMIT 1`,
+          [cloudUser.userId]
+        );
+        if (rows.length === 0) return res.status(401).json({ error: 'Auth required' });
+        const v = await verifyAccountPassword(pwdStr, rows[0].account_password_hash);
+        authed = v.ok;
+      }
+      if (!authed && codeStr) {
+        const v = await verifyTotpOrBackup(cloudUser.userId, codeStr);
+        authed = v.ok;
+      }
+      if (!authed) {
         recordLoginFailure(clientIp);
-        return res.status(401).json({ error: 'Invalid code' });
+        return res.status(401).json({ error: 'Invalid password or code' });
       }
       await db.query(
         `UPDATE crm_users SET totp_enabled = false, totp_secret = NULL, totp_backup_codes = NULL WHERE id = $1`,
@@ -1162,7 +1236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ error: 'Invalid code' });
       }
       const backupCodes = generateBackupCodes(10);
-      const hashedBackup = backupCodes.map(hashBackupCode);
+      const hashedBackup = await Promise.all(backupCodes.map(hashBackupCodeAsync));
       await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [hashedBackup, cloudUser.userId]);
       return res.json({ backupCodes });
     } catch (err: any) {
@@ -1172,7 +1246,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/test-email ────────────────────────────────────────────────────
+  // Admin-only utility used to preview transactional email templates. Without
+  // auth, an attacker could spam arbitrary recipients with our verified-sender
+  // brand. Require ADMIN_API_KEY (same gate as the admin RPCs).
   if (path === '/api/test-email' && req.method === 'POST') {
+    const adminKey = process.env.ADMIN_API_KEY;
+    const provided = (req.headers['x-admin-key'] as string) || '';
+    if (!adminKey || !safeEq(provided, adminKey)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { type, to, name, plan } = req.body || {};
     const email = (to as string) || 'saketsuman1312@gmail.com';
     const displayName = (name as string) || 'Saket';
@@ -2143,6 +2225,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
+      // Pagination — defaults to 100, hard cap at 500 to bound response size.
+      const url = new URL(req.url || '', 'http://localhost');
+      const limitRaw = parseInt(url.searchParams.get('limit') || '100', 10);
+      const offsetRaw = parseInt(url.searchParams.get('offset') || '0', 10);
+      const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 500);
+      const offset = Math.max(Number.isFinite(offsetRaw) ? offsetRaw : 0, 0);
       const { rows } = await db.query(
         `SELECT u.id, u.email, u.full_name AS name,
                 u.created_at, u.last_active_at,
@@ -2153,7 +2241,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            LEFT JOIN entitlements e ON e.user_id = u.id
            LEFT JOIN cloud_vaults cv ON cv.user_id = u.id
           WHERE u.account_status = 'active'
-          GROUP BY u.id, u.email, u.full_name, u.created_at, u.last_active_at`
+          GROUP BY u.id, u.email, u.full_name, u.created_at, u.last_active_at
+          ORDER BY u.created_at DESC
+          LIMIT $1 OFFSET $2`,
+        [limit, offset]
       );
       return res.json({
         users: rows.map((r: any) => ({
@@ -2166,6 +2257,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           lastLoginAt: r.last_active_at,
           createdAt: r.created_at,
         })),
+        pagination: { limit, offset, count: rows.length },
       });
     } catch (err: any) {
       console.error('[admin/users] error:', err.message);

@@ -162,25 +162,40 @@ export class VaultStorage {
   // Force database recreation
   async recreateDatabase(): Promise<void> {
     console.log('🔄 Forcing database recreation...');
-    
+
     // Close current connection
     if (this.db) {
       this.db.close();
       this.db = undefined;
     }
-    
-    // Delete and recreate
+
+    // Delete and recreate. The `blocked` event fires when another open
+    // connection (e.g. another tab) is preventing the delete from completing —
+    // surface that as a clear failure instead of hanging the app indefinitely.
     return new Promise((resolve, reject) => {
       const deleteRequest = indexedDB.deleteDatabase(this.dbName);
-      
+
+      const blockedTimer = setTimeout(() => {
+        console.error('❌ Database delete blocked > 8s — another tab still has it open');
+        reject(new Error('Another tab has the vault open. Please close other IronVault tabs and try again.'));
+      }, 8000);
+
       deleteRequest.onsuccess = () => {
+        clearTimeout(blockedTimer);
         console.log('✅ Database deleted, recreating...');
         this.init().then(resolve).catch(reject);
       };
-      
+
       deleteRequest.onerror = () => {
+        clearTimeout(blockedTimer);
         console.error('❌ Failed to delete database');
         reject(new Error('Failed to delete database'));
+      };
+
+      deleteRequest.onblocked = () => {
+        clearTimeout(blockedTimer);
+        console.error('❌ Database delete blocked — another connection has the DB open');
+        reject(new Error('Another tab has the vault open. Please close other IronVault tabs and try again.'));
       };
     });
   }
@@ -1996,6 +2011,7 @@ export class VaultStorage {
 
       const transactions: BankTransaction[] = [];
       const statementGroups: { [key: string]: BankTransaction[] } = {};
+      const statementIdMap: { [key: string]: string } = {};
 
       // Auto-categorize based on description
       const autoCategory = (desc: string): { category: string; merchant: string } => {
@@ -2092,9 +2108,15 @@ export class VaultStorage {
             ? parseFloat((values[columnMappings.balance] || '0').replace(/[^0-9.\-]/g, '')) || 0 
             : 0;
 
+          // Group every 100 rows into one statement, but use a fresh UUID per group
+          // so re-importing the same CSV does not collide with prior import IDs.
+          const groupKey = String(Math.floor(i / 100) + 1);
+          if (!statementIdMap[groupKey]) {
+            statementIdMap[groupKey] = crypto.randomUUID();
+          }
           const transaction: BankTransaction = {
             id: crypto.randomUUID(),
-            statementId: `stmt-${Math.floor(i / 100) + 1}`,
+            statementId: statementIdMap[groupKey],
             date: parsedDate,
             description: description,
             amount: amount,
@@ -2136,7 +2158,7 @@ export class VaultStorage {
           id: statementId,
           bankName: 'Imported Bank',
           accountName: 'Imported Account',
-          accountNumber: `****${statementId.split('-')[1]}`,
+          accountNumber: `****${statementId.slice(-4)}`,
           statementPeriod: {
             startDate: startDate,
             endDate: endDate
@@ -2147,7 +2169,7 @@ export class VaultStorage {
           totalCredits: sortedTxns.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
           totalDebits: Math.abs(sortedTxns.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0)),
           transactionCount: sortedTxns.length,
-          fileName: `imported-${statementId}.csv`,
+          fileName: `imported-${statementId.slice(0, 8)}.csv`,
           fileType: 'csv',
           importDate: new Date(),
           createdAt: new Date(),

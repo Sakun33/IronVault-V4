@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Copy, Eye, EyeOff, AlertTriangle, Lock, ExternalLink, Check } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
+import { CryptoService } from '@/lib/crypto';
 
 interface ShareData {
   name: string;
@@ -8,6 +9,12 @@ interface ShareData {
   password?: string;
   url?: string;
   sharedBy?: string;
+}
+
+function urlSafeB64ToUint8(s: string): Uint8Array {
+  let b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4 !== 0) b64 += '=';
+  return CryptoService.base64ToUint8Array(b64);
 }
 
 export default function ShareView() {
@@ -21,11 +28,40 @@ export default function ShareView() {
     const token = window.location.pathname.split('/share/')[1];
     if (!token) { setError('Invalid link'); setLoading(false); return; }
 
+    // Fragment is never sent to the server — extract the decryption key from it.
+    const frag = window.location.hash.replace(/^#/, '');
+    const params = new URLSearchParams(frag);
+    const keyB64 = params.get('k');
+
     fetch(`/api/share/${token}`)
       .then(r => r.json())
-      .then(d => {
-        if (d.error) setError(d.error);
-        else setData(d.data);
+      .then(async d => {
+        if (d.error) { setError(d.error); return; }
+        const blob = d.data;
+
+        // Versioned envelope: v=2 → AES-GCM ciphertext + iv. Anything else is treated as legacy plaintext.
+        if (blob && blob.v === 2 && blob.ct && blob.iv) {
+          if (!keyB64) {
+            setError('This share link is missing its decryption key. Use the original full URL.');
+            return;
+          }
+          try {
+            const rawKey = urlSafeB64ToUint8(keyB64);
+            const key = await crypto.subtle.importKey(
+              'raw', rawKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+            );
+            const ct = CryptoService.base64ToUint8Array(blob.ct);
+            const iv = CryptoService.base64ToUint8Array(blob.iv);
+            const plain = await CryptoService.decrypt(ct, key, iv);
+            setData(JSON.parse(new TextDecoder().decode(plain)) as ShareData);
+          } catch {
+            setError('Could not decrypt this share — link may be corrupted or tampered with.');
+          }
+          return;
+        }
+
+        // Legacy unencrypted envelope (older clients prior to client-side encryption).
+        setData(blob as ShareData);
       })
       .catch(() => setError('Failed to load — check your connection'))
       .finally(() => setLoading(false));

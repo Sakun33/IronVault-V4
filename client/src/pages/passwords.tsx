@@ -12,6 +12,8 @@ import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
 import { PasswordGenerator } from '@/lib/password-generator';
+import { CryptoService } from '@/lib/crypto';
+import { ListSkeleton } from '@/components/list-skeleton';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
@@ -21,7 +23,7 @@ import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Passwords() {
-  const { passwords, deletePassword, bulkDeletePasswords } = useVault();
+  const { passwords, deletePassword, bulkDeletePasswords, isLoading } = useVault();
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
 
@@ -78,16 +80,27 @@ export default function Passwords() {
 
   const handleShare = async (pw: any) => {
     try {
+      const payload = JSON.stringify({
+        name: pw.name,
+        username: pw.username || pw.email || '',
+        password: pw.password,
+        url: pw.url || '',
+        sharedBy: 'IronVault User',
+      });
+
+      // Client-side encrypt: key never leaves the browser. Server only sees ciphertext + IV.
+      const key = await CryptoService.generateKey();
+      const { encrypted, iv } = await CryptoService.encrypt(payload, key);
+      const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+
       const res = await fetch('/api/share/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           data: {
-            name: pw.name,
-            username: pw.username || pw.email || '',
-            password: pw.password,
-            url: pw.url || '',
-            sharedBy: 'IronVault User',
+            v: 2,
+            ct: CryptoService.uint8ArrayToBase64(encrypted),
+            iv: CryptoService.uint8ArrayToBase64(iv),
           },
           expiresIn: 24,
         }),
@@ -95,14 +108,18 @@ export default function Passwords() {
       if (!res.ok) throw new Error('Failed to create share link');
       const { link } = await res.json();
 
+      // The fragment is never sent in HTTP requests — server cannot read the key.
+      const linkWithKey = `${link}#k=${CryptoService.uint8ArrayToBase64(rawKey)
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+
       if (navigator.share) {
         await navigator.share({
           title: `Password for ${pw.name}`,
           text: `Here's the login for ${pw.name}. One-time link — save the details.`,
-          url: link,
+          url: linkWithKey,
         });
       } else {
-        await navigator.clipboard.writeText(link);
+        await navigator.clipboard.writeText(linkWithKey);
         toast({ title: 'Share link copied!', description: 'One-time link valid for 24 hours' });
       }
     } catch (err: any) {
@@ -314,7 +331,9 @@ export default function Passwords() {
         </div>
 
         {/* Password List */}
-        {filteredPasswords.length > 0 ? (
+        {isLoading && passwords.length === 0 ? (
+          <ListSkeleton rows={6} showHeader={false} />
+        ) : filteredPasswords.length > 0 ? (
           <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
             {filteredPasswords.map((password, idx) => {
               const checked = selection.isSelected(password.id);

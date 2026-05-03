@@ -21,6 +21,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 const NOTEBOOK_COLORS: Record<string, string> = {
   personal:  '#6366f1',
@@ -48,7 +49,7 @@ function timeAgo(date: Date | string) {
 }
 
 export default function Notes() {
-  const { notes, addNote, updateNote, deleteNote, bulkDeleteNotes } = useVault();
+  const { notes, addNote, updateNote, deleteNote, bulkDeleteNotes, isLoading } = useVault();
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const { getLimit, isPro } = useSubscription();
@@ -468,7 +469,9 @@ export default function Notes() {
       </div>
 
       {/* Notes grid */}
-      {sortedNotes.length === 0 ? (
+      {isLoading && notes.length === 0 ? (
+        <ListSkeleton rows={5} showHeader={false} />
+      ) : sortedNotes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Archive className="w-10 h-10 text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground font-medium mb-1">

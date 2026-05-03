@@ -3,6 +3,8 @@ import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { vaultStorage } from '@/lib/storage';
 import { useLicense } from './license-context';
 import { useAuth } from './auth-context';
+import { useVault } from './vault-context';
+import { deleteCloudVault, isVaultCloudSynced } from '@/lib/cloud-vault-sync';
 import { getPlan } from '@/lib/plans';
 import {
   Dialog,
@@ -42,6 +44,7 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const { license } = useLicense();
   const { accountEmail, login } = useAuth();
+  const { refreshData } = useVault();
 
   // --- Vault-switch auth dialog state ---
   const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
@@ -110,6 +113,9 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
       setActiveVault(vault);
     }
     await loadVaults();
+    // Critical: clear React state of the previous vault's items so the UI
+    // doesn't briefly render the wrong vault's data after the switch.
+    try { await refreshData(); } catch (e) { console.warn('[switchVault] refreshData failed', e); }
   };
 
   /**
@@ -180,6 +186,18 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteVault = async (vaultId: string): Promise<void> => {
+    // Best-effort cloud cleanup BEFORE local delete. If we delete locally
+    // first and the cloud call later fails, the cloud copy is orphaned with
+    // no way to clean it up from this device. We only attempt the cloud call
+    // when the vault was previously synced — for local-only vaults there's
+    // nothing on the server.
+    if (isVaultCloudSynced(vaultId)) {
+      try {
+        await deleteCloudVault(vaultId);
+      } catch (err) {
+        console.warn('[deleteVault] cloud delete failed (continuing with local delete)', err);
+      }
+    }
     await vaultManager.deleteVault(vaultId);
     await loadVaults();
   };

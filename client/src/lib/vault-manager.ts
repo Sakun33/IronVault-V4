@@ -64,6 +64,11 @@ export class VaultManager {
   private vaultStorages: Map<string, VaultStorage> = new Map();
   private activeVaultId: string | null = null;
   private _accountEmail: string | null = null;
+  // Re-entrancy guard for wipeOtherAccountVaultData. The wipe enumerates
+  // localStorage keys + IndexedDB databases and is destructive — running it
+  // concurrently (e.g. two account-change events firing back-to-back) can
+  // race the IDB delete pass with itself and leave behind stale state.
+  private _wipeInProgress: Promise<void> | null = null;
 
   private constructor() {}
 
@@ -499,8 +504,18 @@ export class VaultManager {
    * pointer or unscoped registry can route the new user back into them.
    *
    * Safe to call when no previous account exists — it just no-ops.
+   *
+   * Concurrent calls fold into the same in-flight promise so destructive
+   * passes never overlap.
    */
   async wipeOtherAccountVaultData(currentEmail: string | null): Promise<void> {
+    if (this._wipeInProgress) return this._wipeInProgress;
+    this._wipeInProgress = this._wipeOtherAccountVaultDataImpl(currentEmail)
+      .finally(() => { this._wipeInProgress = null; });
+    return this._wipeInProgress;
+  }
+
+  private async _wipeOtherAccountVaultDataImpl(currentEmail: string | null): Promise<void> {
     const currentSuffix = currentEmail
       ? VaultManager.emailSuffix(currentEmail.toLowerCase().trim())
       : null;
@@ -693,56 +708,87 @@ export class VaultManager {
   /**
    * Create a password verification hash for a vault
    */
+  // Domain-separation tag for the verification-hash derivation. The verification
+  // hash MUST NOT equal the AES key — otherwise a registry leak hands attackers
+  // the decryption key directly. We derive verifier = SHA-256(rawKey || tag).
+  private static readonly VERIFY_TAG = 'iv-pwd-verify-v1';
+
+  private static async deriveVerificationHash(rawKey: ArrayBuffer): Promise<string> {
+    const tag = new TextEncoder().encode(VaultManager.VERIFY_TAG);
+    const combined = new Uint8Array(rawKey.byteLength + tag.byteLength);
+    combined.set(new Uint8Array(rawKey), 0);
+    combined.set(tag, rawKey.byteLength);
+    const digest = await crypto.subtle.digest('SHA-256', combined);
+    return Array.from(new Uint8Array(digest))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  private static rawKeyToHex(rawKey: ArrayBuffer): string {
+    return Array.from(new Uint8Array(rawKey))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
   async createVaultPassword(vaultId: string, masterPassword: string): Promise<void> {
     const salt = CryptoService.generateSalt();
     const saltBase64 = CryptoService.uint8ArrayToBase64(salt);
-    
-    // Create a verification hash using PBKDF2 with extractable key
+
     const key = await CryptoService.deriveKeyWithConfig(masterPassword, salt, {
       algorithm: 'PBKDF2',
       iterations: 100000,
       hash: 'SHA-256'
-    }, true); // extractable = true for password verification
-    
-    // Export key and create verification hash
+    }, true);
+
     const exportedKey = await crypto.subtle.exportKey('raw', key);
-    const hashArray = Array.from(new Uint8Array(exportedKey));
-    const verificationHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
+    // verificationHash is SHA-256(rawKey || domainTag), NOT the raw key itself.
+    const verificationHash = await VaultManager.deriveVerificationHash(exportedKey);
+
     const passwords = this.getVaultPasswords();
-    // Remove existing entry for this vault if any
     const filtered = passwords.filter(p => p.vaultId !== vaultId);
     filtered.push({ vaultId, salt: saltBase64, verificationHash });
     this.saveVaultPasswords(filtered);
-    
+
     console.log(`✅ Password created for vault: ${vaultId}`);
   }
 
   /**
-   * Try to unlock a specific vault with a password
+   * Try to unlock a specific vault with a password.
+   * Accepts both the new SHA-256(rawKey||tag) verifier and legacy entries that
+   * stored the raw AES key as the verifier; on legacy match we upgrade in place.
    */
   async tryUnlockVault(vaultId: string, masterPassword: string): Promise<boolean> {
     const passwords = this.getVaultPasswords();
     const vaultPassword = passwords.find(p => p.vaultId === vaultId);
-    
+
     if (!vaultPassword) {
       console.log(`No password data for vault: ${vaultId}`);
       return false;
     }
-    
+
     try {
       const salt = CryptoService.base64ToUint8Array(vaultPassword.salt);
       const key = await CryptoService.deriveKeyWithConfig(masterPassword, salt, {
         algorithm: 'PBKDF2',
         iterations: 100000,
         hash: 'SHA-256'
-      }, true); // extractable = true for password verification
-      
+      }, true);
+
       const exportedKey = await crypto.subtle.exportKey('raw', key);
-      const hashArray = Array.from(new Uint8Array(exportedKey));
-      const computedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      
-      return computedHash === vaultPassword.verificationHash;
+      const newHash = await VaultManager.deriveVerificationHash(exportedKey);
+      if (newHash === vaultPassword.verificationHash) return true;
+
+      // Legacy: verificationHash used to equal the raw AES key in hex.
+      const legacyHash = VaultManager.rawKeyToHex(exportedKey);
+      if (legacyHash === vaultPassword.verificationHash) {
+        // Upgrade in place so the key is no longer recoverable from storage.
+        const upgraded = passwords.map(p =>
+          p.vaultId === vaultId ? { ...p, verificationHash: newHash } : p
+        );
+        this.saveVaultPasswords(upgraded);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error(`Error verifying password for vault ${vaultId}:`, error);
       return false;

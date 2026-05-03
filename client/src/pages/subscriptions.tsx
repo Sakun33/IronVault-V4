@@ -21,11 +21,12 @@ import { SubscriptionAnalytics } from '@/components/subscription-analytics';
 import { SubscriptionReminderComponent } from '@/components/subscription-reminder-component';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { format, addDays, differenceInCalendarDays } from 'date-fns';
+import { ListSkeleton } from '@/components/list-skeleton';
 
 export default function Subscriptions() {
   const { isPro, getLimit, isLoading: licenseLoading } = useSubscription();
 
-  const { subscriptions, deleteSubscription, bulkDeleteSubscriptions, searchQuery, setSearchQuery, stats } = useVault();
+  const { subscriptions, deleteSubscription, bulkDeleteSubscriptions, searchQuery, setSearchQuery, stats, isLoading } = useVault();
   const { formatCurrency, currency } = useCurrency();
   const { toast } = useToast();
   
@@ -377,7 +378,9 @@ export default function Subscriptions() {
             </Card>
 
             {/* Subscription List */}
-            {filteredSubscriptions.length > 0 ? (
+            {isLoading && subscriptions.length === 0 ? (
+              <ListSkeleton rows={5} showHeader={false} />
+            ) : filteredSubscriptions.length > 0 ? (
               <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 {filteredSubscriptions.map((subscription, idx) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());

@@ -445,11 +445,13 @@ export default function VaultPickerPage() {
       try {
         const localUnlocked = await vaultStorage.unlockVault(pw);
         if (localUnlocked) {
-          const localBlob = await vaultStorage.exportVault(pw);
-          // Don't push trivially-empty blobs (no metadata + empty arrays
-          // serialize to ~600 bytes). >1000 bytes means real content.
-          if (localBlob.length > 1000) {
-            console.log('[CLOUD-UNLOCK] Local has content — pushing before any wipe', { blobLength: localBlob.length });
+          // Count actual entries — a byte-length threshold on the encrypted blob
+          // misclassifies vaults with rich metadata-only state (icons, categories,
+          // settings) as non-empty, and vaults with very small entries as empty.
+          const localItemCount = await vaultStorage.getTotalItemCount();
+          if (localItemCount > 0) {
+            const localBlob = await vaultStorage.exportVault(pw);
+            console.log('[CLOUD-UNLOCK] Local has content — pushing before any wipe', { localItemCount });
             const rescue = await pushCloudVault(
               cloudVault.vaultId, cloudVault.vaultName, localBlob,
               cloudVault.isDefault || false,

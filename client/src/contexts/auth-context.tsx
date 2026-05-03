@@ -361,17 +361,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onProgress?: (p: number) => void,
   ): Promise<void> => {
     if (!isUnlocked) throw new Error('Vault must be unlocked');
+
+    // Step 1: re-encrypt local data with the new master password.
     await vaultStorage.changeMasterPassword(currentPassword, newPassword, onProgress);
-    // Update in-memory state so the rest of the app keeps working with the
-    // same vault under the new password. (Master password is NEVER persisted.)
+
+    // Step 2: if this vault is cloud-synced, push the new blob synchronously
+    // BEFORE confirming success. If the push fails, roll back the local change
+    // so local + cloud stay consistent.
+    try {
+      const { isVaultCloudSynced, pushCloudVault } = await import('@/lib/cloud-vault-sync');
+      const { vaultManager } = await import('@/lib/vault-manager');
+      const vaultId = vaultManager.getActiveVaultId();
+      if (vaultId && isVaultCloudSynced(vaultId)) {
+        const meta = vaultManager.getVaultInfo(vaultId);
+        const vaultName = meta?.name || 'Vault';
+        const isDefault = !!meta?.isDefault;
+        const blob = await vaultStorage.exportVault(newPassword);
+        const result = await pushCloudVault(vaultId, vaultName, blob, isDefault);
+        if (!result.success) {
+          // Roll back local re-encryption so the user can retry without an
+          // inconsistent state. This itself can fail; if it does, surface that
+          // via a distinct message so the user knows local diverged.
+          try {
+            await vaultStorage.changeMasterPassword(newPassword, currentPassword);
+          } catch (rollbackErr) {
+            console.error('[AUTH] Rollback after failed cloud push failed', rollbackErr);
+            throw new Error('Master password change pushed locally but cloud sync failed and rollback failed. Please retry sync from another device.');
+          }
+          throw new Error('Cloud sync failed — master password change has been rolled back. Check your network and try again.');
+        }
+      }
+    } catch (err: any) {
+      // If we threw above, propagate. Anything else (e.g. dynamic import failure)
+      // — fall through and at least keep local state consistent with new pwd.
+      if (err?.message?.startsWith('Cloud sync failed') || err?.message?.startsWith('Master password change pushed locally')) {
+        throw err;
+      }
+      console.warn('[AUTH] Cloud push step skipped due to error', err);
+    }
+
+    // Step 3: state update + log only after both local + cloud are consistent.
     setMasterPassword(newPassword);
     addLog('Master Password Changed', 'security', 'Vault re-encrypted with new master password');
-    // Force the cloud sync hook to push the freshly re-encrypted blob so other
-    // devices receive the new copy. The hook reads masterPassword from props,
-    // so by the time this event fires the new value is already in state.
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
-    }, 100);
   };
 
   /**

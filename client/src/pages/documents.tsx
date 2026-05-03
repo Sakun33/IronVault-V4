@@ -28,7 +28,6 @@ import {
   FolderOpen,
   Upload,
   Download,
-  Share2,
   Eye,
   Edit,
   Trash2,
@@ -195,7 +194,6 @@ export default function Documents() {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -207,12 +205,10 @@ export default function Documents() {
   // Form states
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderColor, setNewFolderColor] = useState('blue');
-  const [sharePassword, setSharePassword] = useState('');
   const [filePassword, setFilePassword] = useState('');
   const [masterPasswordInput, setMasterPasswordInput] = useState('');
   
   // Authentication states
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   // File input ref
@@ -513,7 +509,6 @@ export default function Documents() {
     try {
       // Simple master password validation
       if (masterPasswordInput === masterPassword) {
-        setIsAuthenticated(true);
         setShowAuthModal(false);
         setMasterPasswordInput(''); // Clear password input
         
@@ -565,11 +560,6 @@ export default function Documents() {
         variant: "destructive"
       });
     }
-  };
-  
-  const handleShare = (document: Document) => {
-    setSelectedDocument(document);
-    setShowShareModal(true);
   };
   
   const handleDownload = async (document: Document) => {
@@ -1077,17 +1067,6 @@ export default function Documents() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleShare(document);
-                        }}
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
                           handleDownload(document);
                         }}
                       >
@@ -1220,42 +1199,6 @@ export default function Documents() {
               </Button>
               <Button onClick={handleCreateFolder}>
                 Create Folder
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Share Modal */}
-      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share Document</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="sharePassword">Optional Password Protection</Label>
-              <Input
-                id="sharePassword"
-                type="password"
-                value={sharePassword}
-                onChange={(e) => setSharePassword(e.target.value)}
-                placeholder="Enter password for shared file (optional)"
-              />
-              <p className="text-sm text-muted-foreground mt-1">
-                Recipients will need this password to open the file
-              </p>
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowShareModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={() => { toast({ title: "Shared", description: "Share link copied to clipboard." }); setShowShareModal(false); }}>
-                Share Document
               </Button>
             </div>
           </div>
