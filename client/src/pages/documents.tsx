@@ -249,7 +249,7 @@ export default function Documents() {
   
   // State management
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [folders, setFolders] = useState<Folder[]>(mockFolders);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -290,8 +290,9 @@ export default function Documents() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   
-  // Subscription limits (mock - in real app, get from subscription service)
-  const isPaidUser = true; // Mock - should come from subscription context
+  // Real subscription gate — `isFeatureAvailable('documents')` is the
+  // single source of truth (Free plan only gets metadata-only docs).
+  const isPaidUser = isFeatureAvailable('documents');
   const maxDocuments = isPaidUser ? -1 : 10; // -1 means unlimited
   
   // Initialize services. documentService is required (vault storage); ocrService

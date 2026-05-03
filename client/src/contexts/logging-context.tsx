@@ -6,7 +6,7 @@ export interface LogEntry {
   id: string;
   timestamp: Date;
   action: string;
-  category: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'system' | 'security';
+  category: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'system' | 'security' | 'apikey' | 'investment' | 'bank_statement';
   description: string;
   details?: any;
   ipAddress?: string;

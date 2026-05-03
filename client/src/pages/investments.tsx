@@ -75,7 +75,7 @@ export default function Investments() {
       return <div className="p-6 text-red-500">Toast context error</div>;
     }
 
-    const { investments, investmentGoals, addInvestment, addInvestmentGoal, deleteInvestment, deleteInvestmentGoal, updateInvestment, updateInvestmentGoal } = vaultContext;
+    const { investments, investmentGoals, addInvestment, addInvestmentGoal, deleteInvestment, deleteInvestmentGoal, updateInvestment, updateInvestmentGoal, bulkDeleteInvestments } = vaultContext;
     const { formatCurrency } = currencyContext;
     const { addLog } = loggingContext;
     const { toast } = toastContext;

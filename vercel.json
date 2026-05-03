@@ -11,7 +11,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.rayzorpay.com https://www.googletagmanager.com https://cdn-in.pagesense.io https://salesiq.zohopublic.in https://*.zoho.in https://*.zohopublic.in; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com https://www.google-analytics.com https://*.zoho.in https://*.zohopublic.in https://salesiq.zohopublic.in; frame-src https://api.razorpay.com https://checkout.razorpay.com https://salesiq.zohopublic.in"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://www.googletagmanager.com https://cdn-in.pagesense.io https://salesiq.zohopublic.in https://*.zoho.in https://*.zohopublic.in; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com https://www.google-analytics.com https://*.zoho.in https://*.zohopublic.in https://salesiq.zohopublic.in; frame-src https://api.razorpay.com https://checkout.razorpay.com https://salesiq.zohopublic.in"
         },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },

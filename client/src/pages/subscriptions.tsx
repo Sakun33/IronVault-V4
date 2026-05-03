@@ -124,7 +124,7 @@ export default function Subscriptions() {
 
   const openPlatform = (url: string, subscriptionName: string) => {
     if (url) {
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
       toast({
         title: "Opening Platform",
         description: `Opening ${subscriptionName} in a new tab`,
@@ -190,17 +190,26 @@ export default function Subscriptions() {
     }
   };
 
-  // Calculate totals
+  // Normalize each subscription's cost to a per-month amount before summing,
+  // so a yearly $120 sub doesn't get reported as $120/month and a quarterly
+  // $30 sub doesn't get reported as $30/month.
+  const monthlyCostOf = (s: { cost?: number; billingCycle?: string }): number => {
+    const cost = s.cost || 0;
+    switch (s.billingCycle) {
+      case 'yearly':    return cost / 12;
+      case 'quarterly': return cost / 3;
+      case 'weekly':    return cost * 4.345; // ~weeks per month
+      case 'daily':     return cost * 30.437;
+      case 'monthly':
+      default:          return cost;
+    }
+  };
+
   const totalMonthlySpend = subscriptions
     .filter(s => s.isActive)
-    .reduce((total, s) => total + (s.cost || 0), 0);
+    .reduce((total, s) => total + monthlyCostOf(s), 0);
 
-  const totalYearlySpend = subscriptions
-    .filter(s => s.isActive)
-    .reduce((total, s) => {
-      const monthlyCost = s.cost || 0;
-      return total + (s.billingCycle === 'yearly' ? monthlyCost : monthlyCost * 12);
-    }, 0);
+  const totalYearlySpend = totalMonthlySpend * 12;
 
   const activeSubscriptions = subscriptions.filter(s => s.isActive).length;
 

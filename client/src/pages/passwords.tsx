@@ -440,7 +440,7 @@ export default function Passwords() {
                       <div className="text-[14px] text-foreground truncate">{pw.url}</div>
                     </div>
                     <button
-                      onClick={() => window.open(pw.url, '_blank')}
+                      onClick={() => window.open(pw.url, '_blank', 'noopener,noreferrer')}
                       className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
                     >
                       <Globe size={15} className="text-muted-foreground" />

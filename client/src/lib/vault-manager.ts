@@ -241,11 +241,18 @@ export class VaultManager {
   /**
    * Add an externally-created vault entry to the local registry without generating a new ID.
    * Used when registering cloud vaults that already have a server-assigned ID.
+   *
+   * Enforces plan limit when caller passes one. Cloud-only vaults must also
+   * count toward the user's vault budget — silently exceeding the cap was
+   * the source of the "6 of 5 vaults used" UI bug.
    */
-  addToRegistry(entry: VaultListEntry): void {
+  addToRegistry(entry: VaultListEntry, planVaultLimit?: number): void {
     const registry = this.getRegistry();
     // Skip if already present
     if (registry.find(v => v.id === entry.id)) return;
+    if (typeof planVaultLimit === 'number' && planVaultLimit !== -1 && registry.length >= planVaultLimit) {
+      throw new Error(`PLAN_LIMIT: Your current plan allows ${planVaultLimit} vault(s) total. Upgrade to register more.`);
+    }
     if (entry.isDefault) {
       registry.forEach(v => { v.isDefault = false; });
     }
@@ -636,25 +643,25 @@ export class VaultManager {
   // Biometric Key Storage
   // ============================================
 
-  saveBiometricKey(vaultId: string, masterPassword: string): void {
-    try {
-      // Store encrypted biometric key (in production, use Keychain/Keystore)
-      const key = btoa(masterPassword);
-      localStorage.setItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`, key);
-    } catch (error) {
-      console.error('Error saving biometric key:', error);
-    }
+  // The previous implementation `localStorage.setItem(..., btoa(masterPassword))`
+  // stored the master password as recoverable plaintext. Removed entirely —
+  // biometric unlock must route through native/secure-storage.ts (Keychain/
+  // Keystore) instead. These methods are intentionally no-ops; legacy data
+  // is purged on read.
+  saveBiometricKey(vaultId: string, _masterPassword: string): void {
+    // Defensively wipe any legacy entry that might still hold a reversible value.
+    try { localStorage.removeItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`); }
+    catch { /* noop */ }
+    console.warn('[vault-manager] saveBiometricKey is deprecated — use native secure-storage');
   }
 
   getBiometricKey(vaultId: string): string | null {
+    // Always purge legacy plaintext-encoded entries; never return them.
     try {
-      const key = localStorage.getItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`);
-      if (key) {
-        return atob(key);
+      if (localStorage.getItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`)) {
+        localStorage.removeItem(`${BIOMETRIC_KEY_PREFIX}${vaultId}`);
       }
-    } catch (error) {
-      console.error('Error getting biometric key:', error);
-    }
+    } catch { /* noop */ }
     return null;
   }
 

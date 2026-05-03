@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useVault } from '@/contexts/vault-context';
@@ -254,7 +255,7 @@ export default function Notes() {
               <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                 {viewingNote.content.includes('<')
                   ? <div className="prose dark:prose-invert max-w-none text-sm"
-                      dangerouslySetInnerHTML={{ __html: viewingNote.content }} />
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(viewingNote.content) }} />
                   : viewingNote.content
                 }
               </div>

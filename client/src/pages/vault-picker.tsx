@@ -420,7 +420,7 @@ export default function VaultPickerPage() {
           isDefault: cloudVault.isDefault || false,
           biometricEnabled: false,
           iconColor: '#6366f1',
-        });
+        }, vaultLimit);
       }
 
       // ── Always-rescue local data ─────────────────────────────────────────

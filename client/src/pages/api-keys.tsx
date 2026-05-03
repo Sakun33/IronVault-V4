@@ -11,7 +11,7 @@ const envBrandColor = (env: string) => {
   if (env === 'staging') return '#f59e0b';
   return '#3b82f6';
 };
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { POPULAR_API_SERVICES } from '@/lib/popular-services';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,7 +61,8 @@ interface APIKey {
 
 export default function APIKeys() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
-  const { apiKeys, addApiKey, updateApiKey, deleteApiKey } = useVault();
+  const { apiKeys, addApiKey, updateApiKey, deleteApiKey, bulkDeleteApiKeys } = useVault();
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const { toast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -419,11 +420,49 @@ export default function APIKeys() {
             </select>
           </div>
 
-          <div className="text-sm text-muted-foreground">
-            {filteredKeys.length} API key{filteredKeys.length !== 1 ? 's' : ''}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {filteredKeys.length} API key{filteredKeys.length !== 1 ? 's' : ''}
+            </div>
+            {filteredKeys.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                data-testid="button-bulk-delete-apikeys"
+              >
+                <Trash2 className="w-4 h-4 mr-1.5" />
+                Delete All ({filteredKeys.length})
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {filteredKeys.length} API key{filteredKeys.length !== 1 ? 's' : ''}?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the {filteredKeys.length} API key{filteredKeys.length !== 1 ? 's' : ''} currently shown. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                const ids = filteredKeys.map(k => k.id);
+                const removed = await bulkDeleteApiKeys(ids);
+                setShowBulkDeleteConfirm(false);
+                toast({ title: 'Deleted', description: `${removed} API key${removed === 1 ? '' : 's'} removed.` });
+              }}
+            >
+              Delete {filteredKeys.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* API Keys Grid */}
       {filteredKeys.length === 0 ? (

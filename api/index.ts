@@ -1,9 +1,87 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Pool } from "pg";
-import { createHmac, randomBytes, randomUUID } from "crypto";
+import { createHmac, randomBytes, randomInt, randomUUID, scrypt as scryptCb, scryptSync, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
+import { promisify } from "util";
 import nodemailer from "nodemailer";
 import { generateSecret as totpGenerateSecret, generateURI as totpGenerateURI, verifySync as totpVerifySync } from "otplib";
 import QRCode from "qrcode";
+
+const scrypt = promisify(scryptCb) as (password: string | Buffer, salt: string | Buffer, keylen: number) => Promise<Buffer>;
+
+// Cryptographically random alphanumeric token of arbitrary length.
+function cryptoRandomString(len: number, alphabet: string): string {
+  const out: string[] = [];
+  for (let i = 0; i < len; i++) {
+    out.push(alphabet[randomInt(0, alphabet.length)]);
+  }
+  return out.join('');
+}
+
+// Account-password hashing — scrypt with per-user random salt, format
+// `scrypt$<salt_hex>$<key_hex>`. Legacy 64-char hex SHA-256 hashes are
+// recognized on login and silently re-hashed.
+async function hashAccountPassword(input: string): Promise<string> {
+  const salt = randomBytes(16);
+  const key = await scrypt(input, salt, 64);
+  return `scrypt$${salt.toString('hex')}$${(key as Buffer).toString('hex')}`;
+}
+
+async function verifyAccountPassword(input: string, stored: string): Promise<{ ok: boolean; legacy: boolean }> {
+  if (stored.startsWith('scrypt$')) {
+    const parts = stored.split('$');
+    if (parts.length !== 3) return { ok: false, legacy: false };
+    const salt = Buffer.from(parts[1], 'hex');
+    const expected = Buffer.from(parts[2], 'hex');
+    const got = (await scrypt(input, salt, expected.length)) as Buffer;
+    if (got.length !== expected.length) return { ok: false, legacy: false };
+    return { ok: timingSafeEqual(got, expected), legacy: false };
+  }
+  // Legacy: 64-char hex SHA-256, no salt. Compare in constant time.
+  if (/^[a-f0-9]{64}$/i.test(stored) && /^[a-f0-9]{64}$/i.test(input)) {
+    const a = Buffer.from(stored, 'hex');
+    const b = Buffer.from(input, 'hex');
+    if (a.length !== b.length) return { ok: false, legacy: true };
+    return { ok: timingSafeEqual(a, b), legacy: true };
+  }
+  return { ok: false, legacy: false };
+}
+
+// AES-256-GCM envelope for TOTP secrets at rest. Key = scrypt(JWT_SECRET, "totp")
+let _totpEncKey: Buffer | null = null;
+function getTotpEncKey(): Buffer {
+  if (_totpEncKey) return _totpEncKey;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET is required');
+  _totpEncKey = scryptSync(secret, 'ironvault-totp-v1', 32);
+  return _totpEncKey;
+}
+function encryptTotpSecret(plain: string): string {
+  const key = getTotpEncKey();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc:v1:${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+}
+function decryptTotpSecret(stored: string): string {
+  if (!stored.startsWith('enc:v1:')) return stored; // legacy plaintext fallback
+  const parts = stored.split(':');
+  if (parts.length !== 5) return stored;
+  const iv = Buffer.from(parts[2], 'hex');
+  const tag = Buffer.from(parts[3], 'hex');
+  const enc = Buffer.from(parts[4], 'hex');
+  const decipher = createDecipheriv('aes-256-gcm', getTotpEncKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
+
+// Constant-time string-or-buffer compare; falls back to false on length mismatch.
+function safeEq(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 // otplib v13 functional API. epochTolerance: 30 == ±1 step (30s) for clock skew
 // between server and authenticator app — same posture as the v12 `window: 1`.
@@ -291,9 +369,13 @@ function clearLoginFailures(ip: string) {
 }
 
 function setSecurityHeaders(res: VercelResponse) {
+  // 'unsafe-inline' is currently required because the Razorpay checkout SDK
+  // injects inline event handlers into its iframe shell. We accept the trade-off
+  // for now; XSS sinks in user content are mitigated separately (DOMPurify on
+  // notes, etc.). Migrate to nonce-based CSP when Razorpay supports it.
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.rayzorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com"
   );
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -496,36 +578,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── /api/crm/heartbeat ──────────────────────────────────────────────────────
   if (path === "/api/crm/heartbeat" && req.method === "POST") {
-    const { email, userId } = req.body || {};
-    if (!email && !userId) return res.status(400).json({ error: "email or userId required" });
-
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     try {
-      const col = email ? "email" : "id";
-      const val = email || userId;
+      // Always operate on the authenticated user — never trust body-supplied identity.
       await db.query(
-        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE ${col} = $1`,
-        [val]
+        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE email = $1`,
+        [cloudUser.email]
       );
       return res.json({ success: true });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── /api/crm/vaults/sync ────────────────────────────────────────────────────
   if (path === "/api/crm/vaults/sync" && req.method === "POST") {
-    const { userId, email, vaultCount } = req.body || {};
-    if (!userId && !email) return res.status(400).json({ error: "userId or email required" });
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    const { vaultCount } = req.body || {};
     try {
-      const col = userId ? "id" : "email";
-      const val = userId || email;
       await db.query(
-        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE ${col} = $1`,
-        [val]
+        `UPDATE customers SET last_active = NOW(), updated_at = NOW() WHERE email = $1`,
+        [cloudUser.email]
       );
       return res.json({ success: true, vaultCount: vaultCount || 0, synced: true });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
@@ -564,7 +643,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── PATCH /api/crm/tickets/:id ──────────────────────────────────────────────
+  // Admin-only: requires ADMIN_API_KEY (or JWT_SECRET fallback)
   if (path.match(/^\/api\/crm\/tickets\/[^/]+$/) && req.method === "PATCH") {
+    const adminKey = req.headers['x-admin-key'] as string;
+    const expectedAdminKey = process.env.ADMIN_API_KEY || process.env.JWT_SECRET;
+    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const ticketId = path.replace("/api/crm/tickets/", "");
     const { status, reply } = req.body || {};
     try {
@@ -577,7 +662,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       if (!rows[0]) return res.status(404).json({ error: 'Ticket not found' });
       const ticket = rows[0];
-      // Send email notification (fire-and-forget)
       if (ticket.customer_email) {
         if (status === 'closed' || status === 'resolved') {
           const tmpl = ticketClosedEmail(ticketId);
@@ -590,26 +674,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ success: true, ticket });
     } catch (err: any) {
       console.error('ticket update error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── GET /api/crm/tickets/:email ──────────────────────────────────────────────
   if (path.startsWith("/api/crm/tickets/") && req.method === "GET") {
-    const email = decodeURIComponent(path.replace("/api/crm/tickets/", ""));
-    if (!email) return res.status(400).json({ error: "email required" });
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    // Authenticated user can only fetch their own tickets — ignore the path param.
     try {
       const { rows } = await db.query(
-        `SELECT * FROM tickets WHERE customer_email = $1 ORDER BY created_at DESC`, [email]
+        `SELECT * FROM tickets WHERE customer_email = $1 ORDER BY created_at DESC`, [cloudUser.email]
       );
       return res.json({ tickets: rows, total: rows.length });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── Cloud vault helpers (manual HS256 JWT — avoids jsonwebtoken ESM issues) ──
-  const JWT_SECRET = process.env.JWT_SECRET || 'ironvault-dev-secret';
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) {
+    console.error('[fatal] JWT_SECRET env var is not set');
+    return res.status(500).json({ error: 'Server misconfigured' });
+  }
 
   function b64url(buf: Buffer | string): string {
     const b = typeof buf === 'string' ? Buffer.from(buf) : buf;
@@ -623,15 +712,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return `${header}.${payload}.${sig}`;
   }
 
-  function verifyCloudToken(token: string): { userId: string; email: string } | null {
+  function verifyCloudToken(token: string): { userId: string; email: string; iat: number } | null {
     try {
       const [header, payload, sig] = token.split('.');
       if (!header || !payload || !sig) return null;
       const expected = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
-      if (expected !== sig) return null;
+      if (!safeEq(expected, sig)) return null;
       const data = JSON.parse(Buffer.from(payload, 'base64').toString());
       if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;
-      return { userId: data.userId, email: data.email };
+      return { userId: data.userId, email: data.email, iat: data.iat || 0 };
     } catch { return null; }
   }
 
@@ -743,6 +832,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_secret TEXT`);
       await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false`);
       await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT[]`);
+      // password_changed_at supports JWT invalidation on password change.
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ`);
       _totpColumnsEnsured = true;
     } catch (e: any) {
       console.error('[ensureTotpColumns]', e.message);
@@ -766,7 +857,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const [header, payload, sig] = token.split('.');
       if (!header || !payload || !sig) return null;
       const expected = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
-      if (expected !== sig) return null;
+      if (!safeEq(expected, sig)) return null;
       const data = JSON.parse(Buffer.from(payload, 'base64').toString());
       if (data.purpose !== '2fa_pending') return null;
       if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;
@@ -800,10 +891,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
     const row = rows[0];
     if (!row || !row.totp_secret) return { ok: false };
+    let plainSecret: string;
+    try { plainSecret = decryptTotpSecret(row.totp_secret); }
+    catch { return { ok: false }; }
     // Try TOTP first (6-digit numeric).
     if (/^\d{6}$/.test(trimmed)) {
       try {
-        const r = totpVerifySync({ secret: row.totp_secret, token: trimmed, epochTolerance: TOTP_TOLERANCE_SECONDS });
+        const r = totpVerifySync({ secret: plainSecret, token: trimmed, epochTolerance: TOTP_TOLERANCE_SECONDS });
         if (r.valid) return { ok: true };
       } catch { /* fall through */ }
     }
@@ -832,12 +926,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const secret = totpGenerateSecret();
       const otpauthUrl = totpGenerateURI({ issuer: 'IronVault', label: cloudUser.email, secret });
       const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 240, margin: 1 });
-      // Stash secret server-side, but keep totp_enabled=false until user verifies.
+      // Encrypt secret at rest (AES-256-GCM with key derived from JWT_SECRET).
+      const encryptedSecret = encryptTotpSecret(secret);
       await db.query(
         `UPDATE crm_users SET totp_secret = $1, totp_enabled = false WHERE id = $2`,
-        [secret, cloudUser.userId]
+        [encryptedSecret, cloudUser.userId]
       );
-      return res.json({ secret, otpauthUrl, qrDataUrl });
+      // Note: secret is intentionally NOT echoed back — the QR + otpauthUrl
+      // already carry it. Reduces accidental log/cache exposure.
+      return res.json({ otpauthUrl, qrDataUrl });
     } catch (err: any) {
       console.error('[2fa/setup]', err.message);
       return res.status(500).json({ error: '2FA setup failed' });
@@ -853,8 +950,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureTotpColumns();
     try {
       const { rows } = await db.query(`SELECT totp_secret FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
-      const secret = rows[0]?.totp_secret;
-      if (!secret) return res.status(400).json({ error: 'Run /api/auth/2fa/setup first' });
+      const storedSecret = rows[0]?.totp_secret;
+      if (!storedSecret) return res.status(400).json({ error: 'Run /api/auth/2fa/setup first' });
+      let secret: string;
+      try { secret = decryptTotpSecret(storedSecret); }
+      catch { return res.status(500).json({ error: '2FA verification failed' }); }
       const v = totpVerifySync({ secret, token: code.trim(), epochTolerance: TOTP_TOLERANCE_SECONDS });
       if (!v.valid) {
         return res.status(401).json({ error: 'Invalid code' });
@@ -1032,13 +1132,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (existing[0]) return res.status(409).json({ error: 'An account with this email already exists.' });
 
       const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-      const verifyToken = Array.from({ length: 64 }, () => tokenChars[Math.floor(Math.random() * tokenChars.length)]).join('');
+      const verifyToken = cryptoRandomString(64, tokenChars);
+      const storedHash = await hashAccountPassword(accountPasswordHash);
 
       const { rows: newUser } = await db.query(
         `INSERT INTO crm_users (email, full_name, country, marketing_consent, support_consent, account_password_hash, account_status, verification_token, verification_token_expires_at)
          VALUES ($1, $2, $3, $4, true, $5, 'pending_verification', $6, NOW() + INTERVAL '24 hours')
          RETURNING id`,
-        [normalizedEmail, safeFullName, country || 'US', marketingConsent || false, accountPasswordHash, verifyToken]
+        [normalizedEmail, safeFullName, country || 'US', marketingConsent || false, storedHash, verifyToken]
       );
       const userId = newUser[0].id;
 
@@ -1151,7 +1252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rows[0].account_status === 'active') return res.json({ success: true, message: 'Email already verified.' });
 
       const tokenChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-      const verifyToken = Array.from({ length: 64 }, () => tokenChars[Math.floor(Math.random() * tokenChars.length)]).join('');
+      const verifyToken = cryptoRandomString(64, tokenChars);
       await db.query(
         `UPDATE crm_users SET verification_token = $1, verification_token_expires_at = NOW() + INTERVAL '24 hours' WHERE id = $2`,
         [verifyToken, rows[0].id]
@@ -1202,8 +1303,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           PRIMARY KEY (email, purpose)
         )
       `);
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const secret = process.env.JWT_SECRET || 'ironvault-dev-secret';
+      const code = String(randomInt(100000, 1000000));
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return res.status(500).json({ error: 'Server misconfigured' });
       const codeHash = createHmac('sha256', secret).update(`${normalizedEmail}:${normalizedPurpose}:${code}`).digest('hex');
       await db.query(
         `INSERT INTO auth_verification_codes (email, purpose, code_hash, expires_at, attempts)
@@ -1248,7 +1350,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await db.query(`DELETE FROM auth_verification_codes WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
         return res.status(400).json({ error: 'Code expired. Please request a new one.' });
       }
-      const secret = process.env.JWT_SECRET || 'ironvault-dev-secret';
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return res.status(500).json({ error: 'Server misconfigured' });
       const candidateHash = createHmac('sha256', secret).update(`${normalizedEmail}:${normalizedPurpose}:${normalizedCode}`).digest('hex');
       if (candidateHash !== rows[0].code_hash) {
         await db.query(`UPDATE auth_verification_codes SET attempts = attempts + 1 WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
@@ -1293,9 +1396,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Account not found. Please sign up first.' });
       }
-      if (storedHash !== accountPasswordHash) {
+      const verify = await verifyAccountPassword(accountPasswordHash, storedHash);
+      if (!verify.ok) {
         recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      // Migrate legacy SHA-256 hashes to scrypt on successful login
+      if (verify.legacy) {
+        try {
+          const upgraded = await hashAccountPassword(accountPasswordHash);
+          await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [upgraded, userId]);
+        } catch (e: any) { console.error('[auth/token] hash upgrade failed:', e.message); }
       }
       // Block login if email not yet verified
       if (userRows[0].account_status === 'pending_verification') {
@@ -1632,7 +1743,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/crm/family-invites/invitee/:email ───────────────────────────────
   if (path.startsWith('/api/crm/family-invites/invitee/') && req.method === 'GET') {
-    const inviteeEmail = decodeURIComponent(path.replace('/api/crm/family-invites/invitee/', ''));
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    // Authenticated users may only list invites addressed to them.
     try {
       const { rows } = await db.query(
         `SELECT fi.*, c.full_name as owner_name
@@ -1641,39 +1754,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          WHERE fi.invitee_email = $1
            AND fi.status = 'pending'
          ORDER BY fi.invited_at DESC`,
-        [inviteeEmail.toLowerCase()]
+        [cloudUser.email]
       );
       return res.json({ invites: rows, total: rows.length });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── GET /api/crm/family-invites/:ownerEmail ──────────────────────────────────
   if (path.startsWith('/api/crm/family-invites/') && req.method === 'GET') {
-    const ownerEmail = decodeURIComponent(path.replace('/api/crm/family-invites/', ''));
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    // Only the owner can list their own invites.
     try {
       const { rows } = await db.query(
         `SELECT * FROM family_invites WHERE owner_email = $1 ORDER BY invited_at DESC`,
-        [ownerEmail.toLowerCase()]
+        [cloudUser.email]
       );
       return res.json({ invites: rows, total: rows.length });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── POST /api/crm/family-invites ─────────────────────────────────────────────
   if (path === '/api/crm/family-invites' && req.method === 'POST') {
-    const { ownerEmail, inviteeEmail, vaultShareId } = req.body || {};
-    if (!ownerEmail || !inviteeEmail) {
-      return res.status(400).json({ error: 'ownerEmail and inviteeEmail required' });
-    }
-    // Validate owner has a paid plan (family or lifetime)
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    const { inviteeEmail, vaultShareId } = req.body || {};
+    if (!inviteeEmail) return res.status(400).json({ error: 'inviteeEmail required' });
+    const ownerEmail = cloudUser.email; // bound to authenticated identity
     try {
       const { rows: cRows } = await db.query(
         `SELECT plan_type FROM customers WHERE email = $1 LIMIT 1`,
-        [ownerEmail.toLowerCase()]
+        [ownerEmail]
       );
       const plan = cRows[0]?.plan_type || 'free';
       if (!['family', 'lifetime', 'pro'].includes(plan)) {
@@ -1685,19 +1800,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          ON CONFLICT (owner_email, invitee_email) DO UPDATE
            SET status = 'pending', invited_at = NOW(), updated_at = NOW()
          RETURNING *`,
-        [ownerEmail.toLowerCase(), inviteeEmail.toLowerCase(), vaultShareId || null]
+        [ownerEmail, String(inviteeEmail).toLowerCase(), vaultShareId || null]
       );
-      const emailSent = await sendEmail({ to: inviteeEmail.toLowerCase(), ...familyInviteEmail(ownerEmail, rows[0].id, inviteeEmail.toLowerCase()) });
-      console.log('[invite-email]', emailSent ? 'SENT' : 'FAILED', '→', inviteeEmail.toLowerCase());
+      const emailSent = await sendEmail({ to: String(inviteeEmail).toLowerCase(), ...familyInviteEmail(ownerEmail, rows[0].id, String(inviteeEmail).toLowerCase()) });
+      console.log('[invite-email]', emailSent ? 'SENT' : 'FAILED', '→', String(inviteeEmail).toLowerCase());
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── PATCH /api/crm/family-invites/:id ────────────────────────────────────────
   // Accepts status: accepted | declined | revoked
   if (path.match(/^\/api\/crm\/family-invites\/[^/]+$/) && req.method === 'PATCH') {
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     const id = path.split('/').pop();
     const { status } = req.body || {};
     if (!['accepted', 'declined', 'revoked'].includes(status)) {
@@ -1705,13 +1822,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const tsCol = status === 'accepted' ? 'accepted_at' : status === 'declined' ? 'declined_at' : 'revoked_at';
     try {
+      // Look up the invite first to authorize: invitee can accept/decline,
+      // owner can revoke.
+      const { rows: existing } = await db.query(
+        `SELECT * FROM family_invites WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      if (!existing[0]) return res.status(404).json({ error: 'Invite not found' });
+      const invite = existing[0];
+      if (status === 'revoked' && invite.owner_email !== cloudUser.email) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if ((status === 'accepted' || status === 'declined') && invite.invitee_email !== cloudUser.email) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       const { rows } = await db.query(
         `UPDATE family_invites SET status = $1, ${tsCol} = NOW(), updated_at = NOW()
          WHERE id = $2 RETURNING *`,
         [status, id]
       );
-      if (!rows[0]) return res.status(404).json({ error: 'Invite not found' });
-      // When accepted: promote invitee to pro_family_member plan (2 vaults total — local + cloud combined)
       if (status === 'accepted' && rows[0].invitee_email) {
         await db.query(
           `UPDATE customers SET plan_type = 'pro_family_member', updated_at = NOW()
@@ -1721,17 +1850,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.json({ success: true, invite: rows[0] });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
   // ── POST /api/crm/vaults/report ──────────────────────────────────────────────
-  // Client reports current local vault count — server updates and flags over-limit accounts
+  // Authenticated: client reports their own vault count, server flags over-limit.
   if (path === '/api/crm/vaults/report' && req.method === 'POST') {
-    const { email, vaultCount, planId } = req.body || {};
-    if (!email) return res.status(400).json({ error: 'email required' });
+    const cloudUser = getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    const { vaultCount, planId } = req.body || {};
     const count = Number(vaultCount) || 0;
-    // Determine plan limit
     const planLimits: Record<string, number> = { free: 1, pro: 5, family: 5, lifetime: 5, pro_family_member: 1 };
     const resolvedPlanId = (planId as string) || 'free';
     const limit = planLimits[resolvedPlanId] ?? 1;
@@ -1741,11 +1870,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `UPDATE customers
          SET vault_count = $1, flagged_over_limit = $2, last_active = NOW(), updated_at = NOW()
          WHERE email = $3`,
-        [count, flagged, email.toLowerCase()]
+        [count, flagged, cloudUser.email]
       );
       return res.json({ success: true, vaultCount: count, limit, flagged });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
@@ -1760,12 +1889,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           email VARCHAR(255) NOT NULL,
-          token VARCHAR(10) NOT NULL,
+          token VARCHAR(64) NOT NULL,
           expires_at TIMESTAMPTZ NOT NULL,
           used BOOLEAN DEFAULT false,
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
+      // Widen legacy schemas (was VARCHAR(10))
+      await db.query(`ALTER TABLE password_reset_tokens ALTER COLUMN token TYPE VARCHAR(64)`).catch(() => {});
       const { rows } = await db.query(
         `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]
       );
@@ -1776,7 +1907,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json({ success: true, emailSent: emailConfigured });
       }
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const token = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      // 16-char token (~80 bits) — strong vs the legacy 6-char (~30 bits).
+      // Server-generated; user types only the link from email so length OK.
+      const token = cryptoRandomString(16, chars);
       await db.query(`UPDATE password_reset_tokens SET used = true WHERE email = $1`, [normalizedEmail]);
       await db.query(
         `INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
@@ -1806,30 +1939,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/auth/reset-password ──────────────────────────────────────────
   if (path === '/api/auth/reset-password' && req.method === 'POST') {
     const { email, token, newPasswordHash } = req.body || {};
-    if (!email || !newPasswordHash) {
-      return res.status(400).json({ error: 'email and newPasswordHash required' });
+    if (!email || !token || !newPasswordHash) {
+      return res.status(400).json({ error: 'email, token and newPasswordHash required' });
     }
     const normalizedEmail = (email as string).toLowerCase().trim();
     try {
-      if (token) {
-        // Token-based flow: verify reset code
-        const { rows } = await db.query(
-          `SELECT id FROM password_reset_tokens
-           WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
-           LIMIT 1`,
-          [normalizedEmail, (token as string).toUpperCase()]
-        );
-        if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
-        await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
-      } else {
-        // Tokenless flow: verify email exists
-        const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1`, [normalizedEmail]);
-        if (!rows[0]) return res.status(404).json({ error: 'No account found for that email' });
-      }
-      await db.query(
-        `UPDATE crm_users SET account_password_hash = $1 WHERE email = $2`,
-        [newPasswordHash, normalizedEmail]
+      // Token-based flow only — tokenless else-branch removed (allowed account
+      // takeover with just an email).
+      const { rows } = await db.query(
+        `SELECT id FROM password_reset_tokens
+         WHERE email = $1 AND token = $2 AND used = false AND expires_at > NOW()
+         LIMIT 1`,
+        [normalizedEmail, (token as string).toUpperCase()]
       );
+      if (!rows[0]) return res.status(400).json({ error: 'Invalid or expired reset code' });
+      await db.query(`UPDATE password_reset_tokens SET used = true WHERE id = $1`, [rows[0].id]);
+
+      // Re-hash with scrypt before storing (no longer accept raw client SHA-256)
+      const storedHash = await hashAccountPassword(newPasswordHash as string);
+      await db.query(
+        `UPDATE crm_users SET account_password_hash = $1, password_changed_at = NOW() WHERE email = $2`,
+        [storedHash, normalizedEmail]
+      );
+      // Invalidate all existing sessions on password change
+      await db.query(
+        `UPDATE extension_sessions SET is_active = false, revoked_at = NOW()
+         WHERE user_id = (SELECT id FROM crm_users WHERE email = $1 LIMIT 1)
+         AND is_active = true`,
+        [normalizedEmail]
+      ).catch(() => {});
       return res.json({ success: true, message: 'Password reset successfully. Please log in.' });
     } catch (err: any) {
       console.error('reset-password error:', err.message);
@@ -1838,10 +1976,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/admin/set-plan ────────────────────────────────────────────────
-  // Protected by JWT_SECRET header. Updates plan in both customers + entitlements.
+  // Protected by ADMIN_API_KEY (separate from JWT_SECRET — see audit H-2).
   if (path === '/api/admin/set-plan' && req.method === 'POST') {
     const adminKey = req.headers['x-admin-key'] as string;
-    if (!adminKey || adminKey !== JWT_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    const expectedAdminKey = process.env.ADMIN_API_KEY || JWT_SECRET;
+    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { email, plan } = req.body || {};
     if (!email || !plan) return res.status(400).json({ error: 'email and plan required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
@@ -1921,7 +2062,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/webhooks/zoho-billing' && req.method === 'POST') {
     const secret = req.headers['x-zoho-billing-secret'];
     const expectedSecret = process.env.ZOHO_BILLING_WEBHOOK_SECRET;
-    if (expectedSecret && secret !== expectedSecret) {
+    if (!expectedSecret) {
+      console.error('[zoho-billing webhook] ZOHO_BILLING_WEBHOOK_SECRET not set — rejecting');
+      return res.status(500).json({ error: 'Server misconfigured' });
+    }
+    if (typeof secret !== 'string' || !safeEq(secret, expectedSecret)) {
       return res.status(401).json({ error: 'Invalid webhook secret' });
     }
 
@@ -1981,7 +2126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // One-shot migration: push all crm_users to Zoho CRM. Protected by x-admin-key.
   if (path === '/api/admin/migrate-to-crm' && req.method === 'POST') {
     const adminKey = (req.headers['x-admin-key'] as string) || req.body?.adminKey;
-    if (!adminKey || adminKey !== JWT_SECRET) {
+    const expectedAdminKey = process.env.ADMIN_API_KEY || JWT_SECRET;
+    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
@@ -2032,9 +2178,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pro_family_yearly: { amount: 299900, currency: 'INR' },
       lifetime:          { amount: 999900, currency: 'INR' },
     };
-    const { plan, email } = req.body || {};
+    const { plan } = req.body || {};
     const planCfg = RAZORPAY_PLANS[plan as string];
     if (!planCfg) return res.status(400).json({ error: 'Invalid plan' });
+    // Always use the authenticated user's email — never trust client-supplied email.
+    const orderEmail = cloudUser.email;
     try {
       const { default: RazorpayClient } = await import('razorpay');
       const rzp = new RazorpayClient({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
@@ -2042,8 +2190,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         amount: planCfg.amount,
         currency: planCfg.currency,
         receipt: `iv_${plan}_${Date.now()}`,
-        notes: { email: email || '', plan },
+        notes: { email: orderEmail, plan, userId: cloudUser.userId },
       });
+      // Persist authoritative plan+email mapping for verify endpoint
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS payment_orders (
+            order_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            plan TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            currency TEXT NOT NULL,
+            consumed_payment_id TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await db.query(
+          `INSERT INTO payment_orders (order_id, user_id, email, plan, amount, currency)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (order_id) DO NOTHING`,
+          [order.id, cloudUser.userId, orderEmail, plan, planCfg.amount, planCfg.currency]
+        );
+      } catch (e: any) {
+        console.error('[Razorpay] order persist failed:', e.message);
+      }
       return res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID });
     } catch (err: any) {
       console.error('[Razorpay] create-order error:', err.message);
@@ -2053,8 +2224,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/payments/verify ────────────────────────────────────────────────
   if (path === '/api/payments/verify' && req.method === 'POST') {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, email } = req.body || {};
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !plan || !email) {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     const RAZORPAY_TIERS: Record<string, { tier: string; isLifetime: boolean; periodMonths: number }> = {
@@ -2064,20 +2235,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pro_family_yearly: { tier: 'family',   isLifetime: false, periodMonths: 12 },
       lifetime:          { tier: 'lifetime', isLifetime: true,  periodMonths: 0  },
     };
-    const RAZORPAY_AMOUNTS: Record<string, number> = {
-      pro_monthly: 14900,
-      pro_yearly: 149900,
-      pro_family: 29900,
-      pro_family_yearly: 299900,
-      lifetime: 999900,
-    };
-    const tierCfg = RAZORPAY_TIERS[plan as string];
+
+    // Canonical plan + email come from the server-side order row, NOT the
+    // request body. Razorpay's HMAC only covers (order_id|payment_id), so
+    // trusting body-supplied plan/email allowed plan tampering.
+    const { rows: orderRows } = await db.query(
+      `SELECT user_id, email, plan, amount, consumed_payment_id FROM payment_orders WHERE order_id = $1 LIMIT 1`,
+      [razorpay_order_id]
+    );
+    const orderRow = orderRows[0];
+    if (!orderRow) return res.status(404).json({ error: 'Unknown order' });
+    if (orderRow.consumed_payment_id) {
+      return res.status(409).json({ error: 'Payment already verified' });
+    }
+    const plan = orderRow.plan as string;
+    const normalizedEmail = (orderRow.email as string).toLowerCase().trim();
+    const userId = orderRow.user_id as string;
+    const tierCfg = RAZORPAY_TIERS[plan];
     if (!tierCfg) return res.status(400).json({ error: 'Invalid plan' });
 
-    const expectedSig = createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+    const expectedSigBuf = createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest('hex');
-    if (expectedSig !== razorpay_signature) {
+      .digest();
+    let sigOk = false;
+    try {
+      const provided = Buffer.from(String(razorpay_signature), 'hex');
+      sigOk = provided.length === expectedSigBuf.length && timingSafeEqual(provided, expectedSigBuf);
+    } catch { sigOk = false; }
+    if (!sigOk) {
       console.warn('[Razorpay] Signature mismatch:', razorpay_payment_id);
       triggerN8n(N8N_PAYMENT_FAILED_WEBHOOK, {
         event: 'payment.failed',
@@ -2085,11 +2270,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           payment: {
             entity: {
               id: razorpay_payment_id,
-              amount: RAZORPAY_AMOUNTS[plan as string] ?? 0,
+              amount: orderRow.amount ?? 0,
               currency: 'INR',
-              email: (email as string).toLowerCase().trim(),
+              email: normalizedEmail,
               error_description: 'Invalid payment signature',
-              notes: { plan, userId: null },
+              notes: { plan, userId },
             },
           },
         },
@@ -2098,14 +2283,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const db = getPool();
-      const normalizedEmail = (email as string).toLowerCase().trim();
-      const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [normalizedEmail]);
-      if (!rows[0]) {
-        console.warn('[Razorpay] No user found for email:', normalizedEmail);
-        return res.status(404).json({ error: 'User not found' });
+      // Atomically mark this order consumed so the same payment can't upgrade twice
+      const { rowCount } = await db.query(
+        `UPDATE payment_orders SET consumed_payment_id = $1 WHERE order_id = $2 AND consumed_payment_id IS NULL`,
+        [razorpay_payment_id, razorpay_order_id]
+      );
+      if (!rowCount) {
+        return res.status(409).json({ error: 'Payment already verified' });
       }
-      const userId = rows[0].id;
 
       const now = new Date();
       let periodEndsAt: Date | null = null;
@@ -2134,7 +2319,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           payment: {
             entity: {
               id: razorpay_payment_id,
-              amount: RAZORPAY_AMOUNTS[plan as string] ?? 0,
+              amount: orderRow.amount ?? 0,
               currency: 'INR',
               status: 'captured',
               order_id: razorpay_order_id,

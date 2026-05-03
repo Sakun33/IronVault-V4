@@ -194,7 +194,7 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
     if (Capacitor.isNativePlatform()) {
       openWithNativeViewer();
     } else if (blobUrl) {
-      window.open(blobUrl, '_blank');
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

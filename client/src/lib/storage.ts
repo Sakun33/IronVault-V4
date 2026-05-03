@@ -50,6 +50,20 @@ export class VaultStorage {
     }
   }
 
+  /**
+   * Throw if no vault is currently selected. Called at the top of every
+   * save/delete write to prevent silent writes to a stale or null vault.
+   * Less strict than `assertActiveVault` (no expected ID), but catches the
+   * UI-forgot-to-switch-vault class of bug.
+   */
+  private assertVaultSelected(): void {
+    if (!this.currentVaultId) {
+      const msg = '[VAULT-ISOLATION] No active vault — refusing write.';
+      console.error(msg);
+      throw new Error(msg);
+    }
+  }
+
   // Derive vault ID from the current dbName ("IronVault" → "default",
   // "IronVault_<id>" → "<id>"). Mirrors switchToVault's mapping so that
   // assertActiveVault('default') matches the legacy bare-IronVault DB.
@@ -605,6 +619,7 @@ export class VaultStorage {
 
   // Encrypt and store data
   private async encryptAndStore(storeName: string, data: any): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db || !this.encryptionKey) throw new Error('Database or encryption key not available');
 
     const jsonData = JSON.stringify(data);
@@ -721,6 +736,7 @@ export class VaultStorage {
   }
 
   async deletePassword(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -752,6 +768,7 @@ export class VaultStorage {
   }
 
   async deleteSubscription(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -783,6 +800,7 @@ export class VaultStorage {
   }
 
   async deleteNote(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -814,6 +832,7 @@ export class VaultStorage {
   }
 
   async deleteExpense(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -845,6 +864,7 @@ export class VaultStorage {
   }
 
   async deleteReminder(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -921,6 +941,7 @@ export class VaultStorage {
   }
 
   async deleteApiKey(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
@@ -1829,6 +1850,7 @@ export class VaultStorage {
   }
 
   async deleteBankStatement(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
@@ -1853,6 +1875,7 @@ export class VaultStorage {
   }
 
   async deleteBankTransaction(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
@@ -1877,6 +1900,7 @@ export class VaultStorage {
   }
 
   async deleteInvestment(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
@@ -1901,6 +1925,7 @@ export class VaultStorage {
   }
 
   async deleteInvestmentGoal(id: string): Promise<void> {
+    this.assertVaultSelected();
     if (!this.db) throw new Error('Database not initialized');
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');

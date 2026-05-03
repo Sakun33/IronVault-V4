@@ -3,6 +3,7 @@ import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { vaultStorage } from '@/lib/storage';
 import { useLicense } from './license-context';
 import { useAuth } from './auth-context';
+import { getPlan } from '@/lib/plans';
 import {
   Dialog,
   DialogContent,
@@ -50,9 +51,14 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const [showSwitchPassword, setShowSwitchPassword] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  const isPaidUser = license.tier === 'pro' || license.tier === 'lifetime' || license.status === 'trial';
-  const maxVaults = vaultManager.getMaxVaults(isPaidUser);
-  const canCreateVault = vaultManager.canCreateVault(isPaidUser);
+  // Resolve plan-aware vault limit. plans.ts is the single source of truth;
+  // older flags only knew about Free/Pro and incorrectly treated family /
+  // family_member / lifetime as Free (1 vault). When the tier isn't in
+  // plans.ts (e.g. trial), fall back to the Pro limit.
+  const planEntry = getPlan(license.tier as any) || getPlan('pro');
+  const planVaultLimit = planEntry?.vaultLimit ?? 1;
+  const maxVaults = planVaultLimit;
+  const canCreateVault = planVaultLimit === -1 || vaultManager.getLocalVaultCount() < planVaultLimit;
 
   const loadVaults = useCallback(async () => {
     try {
@@ -84,11 +90,8 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   }, [loadVaults, accountEmail]);
 
   const createVault = async (name: string): Promise<VaultInfo> => {
-    if (!vaultManager.canCreateVault(isPaidUser)) {
-      throw new Error(`Maximum of ${vaultManager.getMaxVaults(isPaidUser)} vault(s) allowed for your plan`);
-    }
-
-    const newVault = await vaultManager.createVault(name);
+    // Pass the plan-aware limit so vaultManager doesn't fall back to MAX_VAULTS_FREE=1
+    const newVault = await vaultManager.createVault(name, false, planVaultLimit, 0);
     await loadVaults();
     return newVault;
   };

@@ -170,7 +170,7 @@ export default function Profile() {
   const { formatCurrency, currency, currencies } = useCurrency();
   const { stats } = useVault();
   const { toast } = useToast();
-  const { accountEmail, masterPassword } = useAuth();
+  const { accountEmail, masterPassword, changeMasterPassword } = useAuth();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showPricingModal, setShowPricingModal] = useState(false);
@@ -340,10 +340,28 @@ export default function Profile() {
       totalSubscriptions: stats?.activeSubscriptions ?? 0,
       totalExpenses: 0,
       totalInvestments: 0,
-      vaultSize: 2.5, // MB
+      vaultSize: 0, // MB — populated asynchronously, see useEffect below
       lastBackup: new Date(),
     },
   });
+
+  // Compute approximate vault size from IndexedDB navigator.storage.estimate()
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const nav: any = navigator;
+        if (nav.storage?.estimate) {
+          const est = await nav.storage.estimate();
+          const mb = (est.usage ?? 0) / (1024 * 1024);
+          if (!cancelled) {
+            setUserProfile(prev => ({ ...prev, stats: { ...prev.stats, vaultSize: Math.round(mb * 100) / 100 } }));
+          }
+        }
+      } catch { /* leave vaultSize at 0 */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -488,25 +506,28 @@ export default function Profile() {
       const data = await vaultBackupService.exportVaultData();
       if (!data) throw new Error('No data to export');
       
+      // RFC-4180 CSV escape: wrap in quotes and double any embedded quote.
+      const csvEsc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
       // Convert to CSV format
       const csvRows: string[] = [];
-      
-      // Export passwords
+
+      // Export passwords (schema field is `name`, not `title`)
       if (data.passwords?.length > 0) {
         csvRows.push('--- PASSWORDS ---');
-        csvRows.push('Title,Username,URL,Notes');
+        csvRows.push('Name,Username,URL,Notes');
         data.passwords.forEach((p: any) => {
-          csvRows.push(`"${p.title || ''}","${p.username || ''}","${p.url || ''}","${p.notes || ''}"`);
+          csvRows.push([csvEsc(p.name), csvEsc(p.username), csvEsc(p.url), csvEsc(p.notes)].join(','));
         });
       }
-      
-      // Export subscriptions
+
+      // Export subscriptions (schema fields are `cost` and `billingCycle`)
       if (data.subscriptions?.length > 0) {
         csvRows.push('');
         csvRows.push('--- SUBSCRIPTIONS ---');
-        csvRows.push('Name,Amount,Frequency,Category,Next Billing');
+        csvRows.push('Name,Cost,BillingCycle,Category,Next Billing');
         data.subscriptions.forEach((s: any) => {
-          csvRows.push(`"${s.name || ''}","${s.amount || ''}","${s.frequency || ''}","${s.category || ''}","${s.nextBilling || ''}"`);
+          csvRows.push([csvEsc(s.name), csvEsc(s.cost), csvEsc(s.billingCycle), csvEsc(s.category), csvEsc(s.nextBilling)].join(','));
         });
       }
       
@@ -889,23 +910,16 @@ export default function Profile() {
       toast({ title: 'Error', description: 'Current passcode is incorrect', variant: 'destructive' });
       return;
     }
-    // Re-encrypt vault with new passcode
+    // Re-encrypt vault with new passcode via the auth-context hook
     try {
-      const { updateMasterPassword } = useVault as any;
-      if (typeof updateMasterPassword === 'function') {
-        await updateMasterPassword(currentPasscode, newPasscode);
-      }
+      await changeMasterPassword(currentPasscode, newPasscode);
       toast({ title: 'Passcode Changed', description: 'Your master passcode has been updated. Please re-login.' });
       setShowChangePasscodeDialog(false);
       setCurrentPasscode('');
       setNewPasscode('');
       setConfirmNewPasscode('');
-    } catch (error) {
-      toast({ title: 'Success', description: 'Master passcode change request processed. Please re-login for it to take full effect.' });
-      setShowChangePasscodeDialog(false);
-      setCurrentPasscode('');
-      setNewPasscode('');
-      setConfirmNewPasscode('');
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to change passcode', variant: 'destructive' });
     }
   };
 
@@ -1948,7 +1962,7 @@ export default function Profile() {
                       </Button>
                     </a>
                     <Button variant="outline" className="w-full justify-start" onClick={() => {
-                      window.open('https://wa.me/918287450463?text=Hi%20IronVault%20Support', '_blank');
+                      window.open('https://wa.me/918287450463?text=Hi%20IronVault%20Support', '_blank', 'noopener,noreferrer');
                     }}>
                       <MessageSquare className="w-4 h-4 mr-2" />
                       <div className="flex flex-col items-start">

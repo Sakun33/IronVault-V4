@@ -82,10 +82,12 @@ interface VaultContextType {
   addReminder: (reminder: Omit<ReminderEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateReminder: (id: string, updates: Partial<ReminderEntry>) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
+  bulkDeleteReminders: (ids: string[]) => Promise<number>;
   // Bank Statements CRUD
   addBankStatement: (statement: Omit<BankStatement, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateBankStatement: (id: string, updates: Partial<BankStatement>) => Promise<void>;
   deleteBankStatement: (id: string) => Promise<void>;
+  bulkDeleteBankStatements: (ids: string[]) => Promise<number>;
   addBankTransaction: (transaction: Omit<BankTransaction, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateBankTransaction: (id: string, updates: Partial<BankTransaction>) => Promise<void>;
   deleteBankTransaction: (id: string) => Promise<void>;
@@ -93,6 +95,7 @@ interface VaultContextType {
   addInvestment: (investment: Omit<Investment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateInvestment: (id: string, updates: Partial<Investment>) => Promise<void>;
   deleteInvestment: (id: string) => Promise<void>;
+  bulkDeleteInvestments: (ids: string[]) => Promise<number>;
   addInvestmentGoal: (goal: Omit<InvestmentGoal, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateInvestmentGoal: (id: string, updates: Partial<InvestmentGoal>) => Promise<void>;
   deleteInvestmentGoal: (id: string) => Promise<void>;
@@ -101,6 +104,7 @@ interface VaultContextType {
   addApiKey: (key: any) => Promise<void>;
   updateApiKey: (id: string, updates: any) => Promise<void>;
   deleteApiKey: (id: string) => Promise<void>;
+  bulkDeleteApiKeys: (ids: string[]) => Promise<number>;
   importBankStatementsFromCSV: (csvContent: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -649,6 +653,51 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteExpense(id)));
     const ok = results.filter(r => r.status === 'fulfilled').length;
     setExpenses(prev => prev.filter(e => !idSet.has(e.id)));
+    if (ok > 0) addLog('Bulk Delete Expenses', 'expense', `Deleted ${ok} expense${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteReminders = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteReminder(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setReminders(prev => prev.filter(r => !idSet.has(r.id)));
+    if (ok > 0) addLog('Bulk Delete Reminders', 'reminder', `Deleted ${ok} reminder${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteApiKeys = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteApiKey(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setApiKeys(prev => prev.filter(k => !idSet.has(k.id)));
+    if (ok > 0) addLog('Bulk Delete API Keys', 'apikey', `Deleted ${ok} API key${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteInvestments = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteInvestment(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setInvestments(prev => prev.filter(i => !idSet.has(i.id)));
+    if (ok > 0) addLog('Bulk Delete Investments', 'investment', `Deleted ${ok} investment${ok === 1 ? '' : 's'}`);
+    pushToCloud();
+    return ok;
+  };
+
+  const bulkDeleteBankStatements = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const results = await Promise.allSettled(ids.map(id => vaultStorage.deleteBankStatement(id)));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    setBankStatements(prev => prev.filter(s => !idSet.has(s.id)));
+    if (ok > 0) addLog('Bulk Delete Bank Statements', 'bank_statement', `Deleted ${ok} statement${ok === 1 ? '' : 's'}`);
     pushToCloud();
     return ok;
   };
@@ -1132,15 +1181,18 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addReminder,
     updateReminder,
     deleteReminder,
+    bulkDeleteReminders,
     addBankStatement,
     updateBankStatement,
     deleteBankStatement,
+    bulkDeleteBankStatements,
     addBankTransaction,
     updateBankTransaction,
     deleteBankTransaction,
     addInvestment,
     updateInvestment,
     deleteInvestment,
+    bulkDeleteInvestments,
     addInvestmentGoal,
     updateInvestmentGoal,
     deleteInvestmentGoal,
@@ -1148,6 +1200,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addApiKey,
     updateApiKey,
     deleteApiKey: deleteApiKeyFromVault,
+    bulkDeleteApiKeys,
     importBankStatementsFromCSV,
     exportVault,
     importVault,
