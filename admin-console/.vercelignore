@@ -4,3 +4,10 @@ frontend/node_modules
 frontend/.nm-bak
 backend/node_modules
 backend/.nm-bak
+.claude
+.git
+.env
+.env.*
+*.log
+backend/data
+frontend/dist
