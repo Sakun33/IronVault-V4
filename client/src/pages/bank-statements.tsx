@@ -46,7 +46,7 @@ export default function BankStatements() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
   const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV, bulkDeleteBankStatements, isLoading } = useVault();
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, currency } = useCurrency();
   const { addLog } = useLogging();
   const { toast } = useToast();
   
@@ -210,7 +210,7 @@ export default function BankStatements() {
         try {
           addLog('Import statement initiated', 'system', 'User selected CSV file for import');
           const csvContent = await file.text();
-          const result = await importBankStatementsFromCSV(csvContent);
+          const result = await importBankStatementsFromCSV(csvContent, currency);
           addLog('Import statement completed', 'system', `Imported ${result.statements} statements and ${result.transactions} transactions`);
           toast({
             title: "Import Successful",

@@ -105,7 +105,7 @@ interface VaultContextType {
   updateApiKey: (id: string, updates: any) => Promise<void>;
   deleteApiKey: (id: string) => Promise<void>;
   bulkDeleteApiKeys: (ids: string[]) => Promise<number>;
-  importBankStatementsFromCSV: (csvContent: string) => Promise<{ statements: number; transactions: number }>;
+  importBankStatementsFromCSV: (csvContent: string, currency?: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
   importPasswordsFromCSV: (csvContent: string, parserId: string) => Promise<{ imported: number; skipped: number }>;
@@ -891,9 +891,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
-  const importBankStatementsFromCSV = async (csvContent: string) => {
+  const importBankStatementsFromCSV = async (csvContent: string, currency?: string) => {
     try {
-      const result = await vaultStorage.importBankStatementsFromCSV(csvContent);
+      const result = await vaultStorage.importBankStatementsFromCSV(csvContent, currency);
 
       // Log the import activity
       addLog('Import Bank Statements', 'system', `Imported ${result.statements} statements and ${result.transactions} transactions from CSV`);
