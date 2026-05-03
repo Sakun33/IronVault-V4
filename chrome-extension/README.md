@@ -49,19 +49,22 @@ The extension requires Chrome 116+ (Manifest V3, modular service worker).
 - **Browser-isolated session storage.** State lives in `chrome.storage.session`
   — held in browser memory, never written to disk, automatically wiped when
   the browser closes.
-- **Auto-lock.** Configurable in Settings — default 5 min, choices are 1 / 5 /
-  15 / 30 minutes. A background alarm checks `lastActivity` every minute and
-  wipes session state on timeout.
-- **Biometric unlock (Touch ID / Windows Hello / Face ID).** Optional. Enabled
-  per device in the popup's Settings panel. Uses WebAuthn with the PRF
-  extension to derive a wrapping key for the master password — the key never
-  leaves the platform authenticator and is unrecoverable if the credential is
-  removed. Falls back gracefully when PRF isn't supported.
+- **Session duration.** When you sign in you pick a session length: 1h, 4h,
+  8h, 24h, 1 week, or "until logout". A background alarm wipes the local
+  cache and JWT when the session expires (full sign-out — re-login from
+  scratch).
+- **Origin-locked autofill.** When the popup sends a credential to fill,
+  both the popup and content-script verify that the active tab's hostname
+  exactly matches (or is a subdomain of) the credential's stored domain.
+  Credentials for `evil.example.com` cannot fill on `example.com`.
+- **Incognito split.** The extension runs in `split` incognito mode — your
+  vault unlock state in normal windows does **not** carry into incognito
+  windows, and vice-versa.
 - **No `eval`, no inline scripts.** CSP is `script-src 'self'; object-src 'self'`.
-- **Minimum permissions.** `storage`, `activeTab`, `alarms`, plus host
-  permissions only for `ironvault.app` (so we can call the auth and vault APIs).
-  No `<all_urls>` host permission — content-script matches give access without
-  granting cross-origin fetch.
+- **Permissions.** `storage`, `activeTab`, `alarms`, `downloads`, `tabs`,
+  `notifications`, plus host permissions only for `ironvault.app` and
+  `www.ironvault.app` (so we can call the auth and vault APIs). No
+  `<all_urls>` host permission.
 - **Content scripts get only one credential.** Domain-matched lookups are done
   in the background using `sender.tab.url` (so a hostile page can't lie about
   its origin); only the picked credential is sent to the page.
@@ -71,39 +74,47 @@ The extension requires Chrome 116+ (Manifest V3, modular service worker).
 ```
 chrome-extension/
 ├─ manifest.json          MV3 manifest, minimum permissions
-├─ background.js          Service worker — auth + decrypt + state + auto-lock
-├─ popup.html             Login → vault list → settings (modules)
+├─ background.js          Service worker — auth + decrypt + session state
+├─ popup.html             Login → vault picker → vault list
 ├─ popup.css
 ├─ popup.js               Renders state, forwards user actions to background
 ├─ content.js             Detects login forms, shows IronVault badge
 ├─ content.css            Badge + picker styles (prefixed iv-autofill-*)
 ├─ lib/
 │  ├─ crypto.js           PBKDF2 + AES-GCM + b64 (byte-compatible w/ web)
-│  └─ api.js              authToken, listCloudVaults, downloadCloudVault
+│  ├─ api.js              authToken, listCloudVaults, downloadCloudVault
+│  └─ csv.js              Browser-CSV parser for SYNC_FROM_BROWSER
 └─ icons/                 16/32/48/128
 ```
 
 ### Message types (popup ↔ background ↔ content)
 
-| Type                   | From    | Notes                                           |
-|------------------------|---------|-------------------------------------------------|
-| `STATUS`               | popup   | Returns unlock state, signedIn, biometric, autolock. |
-| `LOGIN`                | popup   | First-time sign-in — fetches & caches encrypted blob. |
-| `UNLOCK`               | popup   | Master-password unlock from cached blob (no network). |
-| `BIOMETRIC_ENABLE`/`_DISABLE`/`_UNLOCK` | popup | WebAuthn PRF flow.            |
-| `SIGN_OUT`             | popup   | Wipes cached blob, biometric, session.          |
-| `LOCK`                 | popup   | Wipe session storage only.                      |
-| `SEARCH`               | popup   | Filtered metadata-only list.                    |
-| `RESYNC`               | popup   | Re-fetches encrypted blob using cached JWT.     |
-| `GET_DOMAIN_MATCHES`   | content | Origin from `sender.tab.url`, never trusted.    |
-| `GET_PASSWORD_FOR_FILL`| both    | Decrypts ONE entry. Caller drops it after use.  |
-| `GET_SETTINGS` / `SET_AUTOLOCK` | popup | Auto-lock: one of 1, 5, 15, 30.        |
+| Type                       | From    | Notes                                            |
+|----------------------------|---------|--------------------------------------------------|
+| `STATUS`                   | popup   | Returns unlock state, signedIn flag, vault list. |
+| `LOGIN`                    | popup   | First-time sign-in — fetches & caches encrypted blob. |
+| `UNLOCK`                   | popup   | Master-password unlock from cached blob (no network). |
+| `VERIFY_MASTER`            | popup   | Re-checks master before reveal/copy.             |
+| `LOCK`                     | popup   | Wipe session storage only (keep encrypted blob). |
+| `LOGOUT_AND_CLEAN`         | popup   | Best-effort resync, then full wipe of all local state. |
+| `SEARCH`                   | popup   | Filtered metadata-only list.                     |
+| `RESYNC`                   | popup   | Re-fetches encrypted blob using cached JWT.      |
+| `GET_DOMAIN_MATCHES`       | content | Origin taken from `sender.tab.url`, never trusted. |
+| `GET_PASSWORD_FOR_FILL`    | both    | Decrypts ONE entry. Caller drops it after use.   |
+| `IV_FILL_FROM_POPUP`       | popup→content | Inject decrypted credential into the active tab; content script re-checks origin. |
+| `SYNC_FROM_BROWSER`        | popup   | Import a Chrome-exported password CSV into the vault. |
+| `BROWSER_CSV_DETECTED`     | bg→popup | A passwords-CSV download has been auto-detected. |
+| `BROWSER_AUTO_SYNC_RESULT` | bg→popup | Result of auto-import after detection.           |
 
 ## What's NOT in this version
 
-- **Saving new passwords from the page.** The extension is read-only for now.
-  Use the IronVault app to add or edit entries; they sync to the extension on
-  re-unlock or via the **Re-sync vault** button under Settings.
+- **In-page "save new password" prompt.** Save new entries via the IronVault
+  app — they sync to the extension on the next unlock or `RESYNC`.
+- **Biometric unlock.** Not implemented — re-entry of the master password
+  is required after the session expires or after a manual lock.
+- **Configurable inactivity-based auto-lock or a Settings panel.** The
+  session model is duration-based: pick a session length at sign-in, and
+  the extension does a full sign-out at expiry.
 
 ## Verifying byte-compatibility with the web app
 
@@ -114,8 +125,9 @@ The extension's `lib/crypto.js` is intentionally a slim re-implementation of
 - Hash: **SHA-256**
 - Salt: **16 bytes** (matches `generateSalt`)
 - IV: **12 bytes** (matches `generateIV`)
-- Wire format: `JSON.stringify({ version: 2, salt: b64, iv: b64, data: b64 })`
-  — exactly what `VaultStorage.exportVault()` produces.
+- Wire format: `JSON.stringify({ version: 3, salt: b64, iv: b64, data: b64 })`
+  — exactly what `VaultStorage.exportVault()` produces. The decryptor
+  accepts older `version: 2` blobs for backwards compatibility.
 
 Any vault exported by the IronVault web/mobile app and synced to the cloud is
 decryptable by this extension with the same master password, and vice versa.

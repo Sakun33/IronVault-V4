@@ -429,9 +429,25 @@ async function fillEntry(entry) {
   // Auto-fill does NOT require master password — vault is already
   // decrypted in memory for the session duration. Background sends the
   // single credential to the active tab's content script.
+  //
+  // Pre-flight origin check: if the active tab no longer points at the
+  // entry's saved domain (exact or subdomain), refuse to send. The content
+  // script enforces the same rule again (defence-in-depth, in case the tab
+  // navigates between this query and message delivery).
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
+    if (!tab?.id || !tab.url) return;
+    let tabHost = '';
+    try {
+      tabHost = new URL(tab.url).hostname.replace(/^www\./, '').toLowerCase();
+    } catch { return; }
+    const entryDomain = (entry.domain || '').toLowerCase();
+    if (!entryDomain || (tabHost !== entryDomain && !tabHost.endsWith('.' + entryDomain))) {
+      // Don't silently fill into the wrong page. window.close() so the user
+      // sees their click was acknowledged but no fill happened.
+      window.close();
+      return;
+    }
     const { credential } = await send({ type: 'GET_PASSWORD_FOR_FILL', id: entry.id });
     await chrome.tabs.sendMessage(tab.id, {
       type: 'IV_FILL_FROM_POPUP',
@@ -515,7 +531,10 @@ ui.logoutBtn.addEventListener('click', async () => {
     } catch (err) {
       console.warn('[popup] LOGOUT_AND_CLEAN failed, falling back:', err);
       try {
-        await chrome.storage.local.remove(['ironvault.cache.v1', 'ironvault.biometric', 'rememberedEmail']);
+        // Must match background.js K_CACHE = 'ironvault.cache' — the previous
+        // 'ironvault.cache.v1' key never existed, so this fallback path silently
+        // left the JWT + encrypted blob on disk after a "Sign out".
+        await chrome.storage.local.remove(['ironvault.cache', 'rememberedEmail']);
       } catch {}
       try { await chrome.storage.session.clear(); } catch {}
     }

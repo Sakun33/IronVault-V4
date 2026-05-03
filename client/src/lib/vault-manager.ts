@@ -150,6 +150,51 @@ export class VaultManager {
     localStorage.setItem(this.registryKey, JSON.stringify(vaults));
   }
 
+  /**
+   * Walk the registry and drop entries whose IndexedDB no longer exists.
+   * The registry is just localStorage — if a user clears site data partially
+   * (browser tools, mobile cleaners) or a previous reset failed mid-way, the
+   * registry can still list vaults whose IDBs are gone, producing surprising
+   * "6 of 5 vaults used" displays. Idempotent and best-effort: callers can
+   * await it on startup and ignore failures.
+   *
+   * Returns the number of orphans removed.
+   */
+  async pruneOrphanRegistryEntries(): Promise<number> {
+    if (typeof indexedDB === 'undefined') return 0;
+    if (!('databases' in indexedDB) || typeof (indexedDB as any).databases !== 'function') {
+      return 0;
+    }
+    let dbs: { name?: string }[] = [];
+    try {
+      dbs = await (indexedDB as any).databases();
+    } catch {
+      return 0;
+    }
+    const presentVaultIds = new Set<string>();
+    for (const db of dbs) {
+      if (db?.name && db.name.startsWith('IronVault_')) {
+        presentVaultIds.add(db.name.slice('IronVault_'.length));
+      }
+    }
+    const registry = this.getRegistry();
+    const kept = registry.filter(v => presentVaultIds.has(v.id));
+    const removed = registry.length - kept.length;
+    if (removed > 0) {
+      this.saveRegistry(kept);
+      // If the active vault pointer was on a now-removed entry, drop it so
+      // getActiveVaultId() falls back to the default / first remaining one.
+      try {
+        const active = localStorage.getItem(this.activeVaultKey);
+        if (active && !presentVaultIds.has(active)) {
+          localStorage.removeItem(this.activeVaultKey);
+          this.activeVaultId = null;
+        }
+      } catch { /* noop */ }
+    }
+    return removed;
+  }
+
   getActiveVaultId(): string | null {
     if (this.activeVaultId) return this.activeVaultId;
 

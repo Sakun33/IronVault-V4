@@ -291,11 +291,31 @@
   // Receive a "Fill" action from the popup. The popup has already decrypted
   // the credential — we just inject it into the most relevant visible
   // password input on this tab.
+  //
+  // Hard origin check: the credential carries the domain it was stored
+  // under, and we refuse to fill if the page's host doesn't match
+  // (exact equal or page is a subdomain of the entry's domain). This
+  // closes the "user picks a credential, then the tab navigates / is
+  // swapped to attacker.com before the message lands" race, and also
+  // prevents cross-origin fills via misrouted messages.
   RUNTIME.onMessage?.addListener?.((msg, _sender, sendResponse) => {
     if (msg?.type !== 'IV_FILL_FROM_POPUP' || !msg.credential) {
       return false;
     }
     try {
+      let entryDomain = (msg.credential.domain || '').toLowerCase();
+      if (!entryDomain && msg.credential.url) {
+        try {
+          const u = new URL(msg.credential.url.includes('://') ? msg.credential.url : `https://${msg.credential.url}`);
+          entryDomain = u.hostname.replace(/^www\./, '').toLowerCase();
+        } catch { entryDomain = ''; }
+      }
+      const pageHost = (location.hostname || '').replace(/^www\./, '').toLowerCase();
+      const matches = !!entryDomain && (pageHost === entryDomain || pageHost.endsWith('.' + entryDomain));
+      if (!matches) {
+        sendResponse?.({ ok: false, error: 'Refusing to fill — tab origin no longer matches the saved credential.' });
+        return false;
+      }
       const candidates = Array.from(document.querySelectorAll('input[type="password"]'))
         .filter(isVisible);
       const passwordInput = candidates[0];

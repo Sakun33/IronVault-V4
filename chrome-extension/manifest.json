@@ -2,9 +2,10 @@
   "manifest_version": 3,
   "name": "IronVault — Secure Autofill",
   "short_name": "IronVault",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zero-knowledge autofill from your IronVault. Master password required — vault stays end-to-end encrypted.",
   "minimum_chrome_version": "116",
+  "incognito": "split",
   "permissions": [
     "storage",
     "activeTab",
@@ -43,16 +44,10 @@
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": true
     }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": ["icons/icon-48.png", "icons/icon-128.png"],
-      "matches": ["http://*/*", "https://*/*"]
-    }
-  ]
+  }
 }

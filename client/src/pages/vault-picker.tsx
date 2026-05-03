@@ -241,9 +241,20 @@ export default function VaultPickerPage() {
   };
 
   useEffect(() => {
-    // Always re-read local vaults from the (now email-scoped) registry
-    const list = vaultManager.getExistingVaults();
-    setVaults(list);
+    // Always re-read local vaults from the (now email-scoped) registry.
+    // First, prune any registry entries whose IndexedDB no longer exists —
+    // otherwise the displayed count can exceed the user's plan limit ("6 of
+    // 5") because of stale rows from an interrupted reset / partial clear.
+    let cancelled = false;
+    (async () => {
+      try { await vaultManager.pruneOrphanRegistryEntries(); } catch { /* noop */ }
+      if (cancelled) return;
+      setVaults(vaultManager.getExistingVaults());
+    })();
+    return () => { cancelled = true; };
+  }, [accountEmail]);
+
+  useEffect(() => {
 
     // Check biometric availability for the default vault
     const checkBiometric = async () => {
@@ -747,6 +758,12 @@ export default function VaultPickerPage() {
     ...vaults.map(v => v.id),
     ...cloudVaults.map(c => c.vaultId),
   ]).size;
+  // For display only: never show "X of Y" with X > Y. If a leftover registry
+  // entry slipped past pruning, the user shouldn't see "6 of 5". The actual
+  // count is still authoritative for atVaultLimit / paywall logic.
+  const displayVaultCount = vaultLimit === -1
+    ? combinedVaultCount
+    : Math.min(combinedVaultCount, vaultLimit);
   const atVaultLimit = !planLoading && combinedVaultCount >= vaultLimit;
 
   return (
@@ -1065,7 +1082,7 @@ export default function VaultPickerPage() {
                     <span className="text-sm text-amber-800 dark:text-amber-300 truncate">
                       {vaultLimit === 1
                         ? 'Free plan: 1 vault max'
-                        : `Plan limit reached: ${combinedVaultCount} of ${vaultLimit} vaults used`}
+                        : `Plan limit reached: ${displayVaultCount} of ${vaultLimit} vaults used`}
                     </span>
                   </div>
                   <Button
@@ -1210,7 +1227,7 @@ export default function VaultPickerPage() {
                   className="text-xs text-center text-muted-foreground mb-4"
                   data-testid="text-vault-usage"
                 >
-                  {combinedVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
+                  {displayVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
                   {atVaultLimit && vaultLimit !== -1 && (
                     <>
                       {' · '}
@@ -1335,7 +1352,7 @@ export default function VaultPickerPage() {
           >
             <Zap className={`w-4 h-4 ${atVaultLimit ? 'text-amber-500' : 'text-primary'}`} />
             <span className="flex-1">
-              {combinedVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
+              {displayVaultCount} of {vaultLimit === -1 ? '∞' : vaultLimit} vaults used
               {atVaultLimit && vaultLimit !== -1 && ' — upgrade to add more'}
             </span>
           </div>

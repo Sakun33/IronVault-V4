@@ -66,10 +66,17 @@ function extractDomain(url) {
   }
 }
 
+// Match a stored entry domain against the page domain. Allowed:
+//   - Exact match (entry.domain === page.domain)
+//   - Entry is a parent of the page (page is a subdomain of entry)
+// Explicitly NOT allowed: entry is a subdomain of the page. Without this
+// guard a credential for evil.google.com would offer to fill on google.com,
+// or attacker.github.io would suggest creds on victim.github.io. (No public-
+// suffix list here — we just prevent the child→parent direction.)
 function domainMatches(pageDomain, entryDomain) {
   if (!pageDomain || !entryDomain) return false;
   if (pageDomain === entryDomain) return true;
-  return pageDomain.endsWith('.' + entryDomain) || entryDomain.endsWith('.' + pageDomain);
+  return pageDomain.endsWith('.' + entryDomain);
 }
 
 async function getCache() {
@@ -113,12 +120,11 @@ async function lock() {
 }
 
 // Full wipe: clear EVERYTHING this device holds about IronVault — encrypted
-// blob, JWT, biometric wrap, session storage, plus any export-CSV download
-// history entries. Triggered by manual logout, session expiry, or remote
-// revocation.
+// blob, JWT, session storage, plus any export-CSV download history entries.
+// Triggered by manual logout, session expiry, or remote revocation.
 async function fullWipe() {
   try {
-    await chrome.storage.local.remove([K_CACHE, 'ironvault.biometric', 'rememberedEmail']);
+    await chrome.storage.local.remove([K_CACHE, 'rememberedEmail']);
   } catch {}
   await chrome.storage.session.clear();
   chrome.alarms.clear(EXPIRY_ALARM);
@@ -868,7 +874,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (fromContent) {
             const sess = await chrome.storage.session.get(['token']);
             if (sess.token) {
-              logActivity(sess.token, 'filled', 'password', cred.name).catch(() => {});
+              // Don't send the credential's plaintext name to the server —
+              // doing so leaks the user's vault entry titles in cleartext
+              // and breaks the zero-knowledge promise. A generic label is
+              // enough for the user-facing activity feed.
+              logActivity(sess.token, 'filled', 'password', 'Credential used').catch(() => {});
             }
           }
           break;
