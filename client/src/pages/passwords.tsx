@@ -119,11 +119,13 @@ export default function Passwords() {
 
   const filteredPasswords = useMemo(() => {
     return passwords.filter(password => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === '' ||
-        password.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        password.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        password.url?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        password.category?.toLowerCase().includes(searchQuery.toLowerCase());
+        (password.name ?? '').toLowerCase().includes(q) ||
+        (password.username ?? '').toLowerCase().includes(q) ||
+        (password.url ?? '').toLowerCase().includes(q) ||
+        (password.category ?? '').toLowerCase().includes(q) ||
+        (password.notes ?? '').toLowerCase().includes(q);
       const matchesCategory = categoryFilter === 'all' || password.category === categoryFilter;
       const { level } = PasswordGenerator.calculateStrength(password.password);
       const matchesStrength = strengthFilter === 'all' ||

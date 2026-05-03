@@ -33,12 +33,20 @@ function createJWT(payload: object): string {
   return `${h}.${b}.${s}`;
 }
 
+function safeStrEq(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 function verifyJWT(token: string): object | null {
   if (!JWT_SECRET) return null;
   try {
     const [h, b, s] = token.split(".");
+    if (!h || !b || !s) return null;
     const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${h}.${b}`).digest("base64url");
-    if (s !== expected) return null;
+    if (!safeStrEq(s, expected)) return null;
     const payload = JSON.parse(Buffer.from(b, "base64url").toString()) as { exp: number };
     return payload.exp >= Date.now() / 1000 ? payload : null;
   } catch { return null; }
@@ -58,8 +66,19 @@ const PLANS = [
 ];
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+const ADMIN_ALLOWED_ORIGINS = new Set([
+  "https://admin.ironvault.app",
+  "https://www.ironvault.app",
+  "https://ironvault.app",
+]);
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = (req.headers.origin as string) || "";
+  if (ADMIN_ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "https://admin.ironvault.app");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -86,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
     const hash = crypto.createHash("sha256").update(password || "").digest("hex");
-    if (username === ADMIN_USERNAME && hash === ADMIN_PASSWORD_HASH) {
+    if (username === ADMIN_USERNAME && ADMIN_PASSWORD_HASH && safeStrEq(hash, ADMIN_PASSWORD_HASH)) {
       // Best-effort: persist last_login so /api/admins can surface it. Ignore failures.
       if (process.env.DATABASE_URL) {
         getPool().query(
@@ -174,7 +193,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
-        DROP TABLE IF EXISTS ticket_replies;
         CREATE TABLE IF NOT EXISTS ticket_replies (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
@@ -223,14 +241,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/customers/export/csv" && method === "GET") {
     try {
       const rows = await queryCrmCustomers();
+      // RFC-4180 quote + Excel/Sheets formula-injection neutralization.
+      const csvEsc = (v: any): string => {
+        let s = v == null ? "" : String(v);
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+        return '"' + s.replace(/"/g, '""') + '"';
+      };
       const header = "id,email,name,region,plan_name,status,created_at\n";
       const csv = rows.map(r =>
-        [r.id, r.email, r.name || "", r.region || "", r.plan_name, r.status, r.created_at].join(",")
+        [r.id, r.email, r.name || "", r.region || "", r.plan_name, r.status, r.created_at]
+          .map(csvEsc).join(",")
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=customers.csv");
       return res.status(200).send(header + csv);
-    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    } catch (err: any) { return res.status(500).json({ error: "Failed" }); }
   }
 
   // ── GET /api/customers ──────────────────────────────────────────────────────

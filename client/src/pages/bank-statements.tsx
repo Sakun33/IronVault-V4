@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,7 +44,7 @@ import {
 export default function BankStatements() {
   const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
 
-  const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV } = useVault();
+  const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV, bulkDeleteBankStatements } = useVault();
   const { formatCurrency } = useCurrency();
   const { addLog } = useLogging();
   const { toast } = useToast();
@@ -55,6 +56,7 @@ export default function BankStatements() {
   const [dateRangeFilter, setDateRangeFilter] = useState('all');
   const [selectedStatement, setSelectedStatement] = useState<string>('all');
   const [deleteStatementId, setDeleteStatementId] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   // Calculate analytics
   const analytics = useMemo(() => {
@@ -504,8 +506,17 @@ export default function BankStatements() {
           {/* Uploaded Statements Management */}
           {statements.length > 0 && (
             <Card className="rounded-2xl shadow-sm border-border/50">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Uploaded Statements</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  data-testid="button-bulk-delete-statements"
+                >
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                  Delete All ({statements.length})
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -522,6 +533,7 @@ export default function BankStatements() {
                         size="icon"
                         className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0"
                         onClick={() => setDeleteStatementId(stmt.id)}
+                        aria-label={`Delete statement ${stmt.bankName}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -531,6 +543,31 @@ export default function BankStatements() {
               </CardContent>
             </Card>
           )}
+
+          <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete {statements.length} bank statement{statements.length === 1 ? '' : 's'}?</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete all {statements.length} bank statement{statements.length === 1 ? '' : 's'} and their transactions. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    const ids = statements.map(s => s.id);
+                    const removed = await bulkDeleteBankStatements(ids);
+                    setShowBulkDeleteConfirm(false);
+                    toast({ title: 'Deleted', description: `${removed} statement${removed === 1 ? '' : 's'} removed.` });
+                  }}
+                >
+                  Delete {statements.length}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Categories Tab */}

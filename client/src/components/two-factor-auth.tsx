@@ -156,12 +156,20 @@ export function TwoFactorAuth({
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: 'Copied',
-      description: 'Copied to clipboard',
-    });
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: 'Copied',
+        description: 'Copied to clipboard',
+      });
+    } catch {
+      toast({
+        title: 'Copy failed',
+        description: 'Clipboard is not available in this context',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleGenerateNewBackupCodes = async () => {

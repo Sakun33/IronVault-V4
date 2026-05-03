@@ -46,7 +46,7 @@ import {
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 
 export default function Reminders() {
-  const { reminders, addReminder, updateReminder, deleteReminder, subscriptions } = useVault();
+  const { reminders, addReminder, updateReminder, deleteReminder, subscriptions, bulkDeleteReminders } = useVault();
   const subscriptionUrlMap = useMemo(() =>
     Object.fromEntries((subscriptions || []).map(s => [s.id, s.platformLink || undefined])),
     [subscriptions]
@@ -56,6 +56,7 @@ export default function Reminders() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState<ReminderEntry | null>(null);
   const [deleteReminderTarget, setDeleteReminderTarget] = useState<ReminderEntry | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -547,6 +548,19 @@ export default function Reminders() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {sortedReminders.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              data-testid="button-bulk-delete-reminders"
+              className="rounded-xl"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete All ({sortedReminders.length})
+            </Button>
+          )}
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
             <Button size="sm" onClick={resetForm} data-testid="button-add-reminder" className="rounded-xl flex-shrink-0">
@@ -890,6 +904,7 @@ export default function Reminders() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -1193,6 +1208,33 @@ export default function Reminders() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteReminderTarget(null)}>Cancel</Button>
             <Button variant="destructive" data-testid="button-confirm-delete-reminder" onClick={handleDeleteReminderConfirmed}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <DialogContent className="max-w-sm" data-testid="dialog-bulk-delete-reminders">
+          <DialogHeader>
+            <DialogTitle>Delete {sortedReminders.length} reminder{sortedReminders.length === 1 ? '' : 's'}?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the {sortedReminders.length} reminder{sortedReminders.length === 1 ? '' : 's'} currently shown. This cannot be undone.
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                const ids = sortedReminders.map(r => r.id);
+                const removed = await bulkDeleteReminders(ids);
+                setShowBulkDeleteConfirm(false);
+                toast({ title: 'Deleted', description: `${removed} reminder${removed === 1 ? '' : 's'} removed.` });
+              }}
+            >
+              Delete {sortedReminders.length}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

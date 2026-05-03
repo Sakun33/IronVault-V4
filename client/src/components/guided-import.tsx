@@ -340,7 +340,7 @@ function InstructionsStage({
             // so we copy the URL to the clipboard as a fallback and surface the
             // user-friendly label.
             try {
-              window.open(source.shortcut!.url, '_blank', 'noopener');
+              window.open(source.shortcut!.url, '_blank', 'noopener,noreferrer');
             } catch {
               navigator.clipboard?.writeText(source.shortcut!.url).catch(() => {});
             }

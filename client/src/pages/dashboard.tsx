@@ -44,7 +44,7 @@ function maskUsername(u: string): string {
 
 function getGreeting(): string {
   const h = new Date().getHours();
-  if (h < 5) return 'Good night';
+  if (h < 5) return 'Good morning';
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
@@ -71,7 +71,10 @@ function getUserName(): string {
       if (email) {
         // Capitalize and strip numbers from email prefix
         const prefix = (email as string).split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
-        if (prefix) return prefix.charAt(0).toUpperCase() + prefix.slice(1).split(' ')[0];
+        if (prefix) {
+          const first = prefix.split(' ')[0];
+          return first.charAt(0).toUpperCase() + first.slice(1);
+        }
       }
     }
   } catch { /* ignore */ }
@@ -224,7 +227,10 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => refreshData(), 15000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      refreshData();
+    }, 60000);
     return () => clearInterval(interval);
   }, [refreshData]);
 
@@ -317,7 +323,7 @@ export default function Dashboard() {
 
   const recentPasswords = useMemo(() =>
     [...passwords]
-      .filter(p => !normalizedSearch || p.name.toLowerCase().includes(normalizedSearch) || p.username.toLowerCase().includes(normalizedSearch))
+      .filter(p => !normalizedSearch || (p.name ?? '').toLowerCase().includes(normalizedSearch) || (p.username ?? '').toLowerCase().includes(normalizedSearch))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 5),
     [passwords, normalizedSearch]);
@@ -325,7 +331,7 @@ export default function Dashboard() {
   const upcomingRenewals = useMemo(() =>
     subscriptions
       .filter(s => s.isActive)
-      .filter(s => !normalizedSearch || s.name.toLowerCase().includes(normalizedSearch))
+      .filter(s => !normalizedSearch || (s.name ?? '').toLowerCase().includes(normalizedSearch))
       .filter(s => {
         if (!s.nextBillingDate) return false;
         const d = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
@@ -347,15 +353,19 @@ export default function Dashboard() {
     [reminders]);
 
   const recentActivity = useMemo(() => {
+    const safeDate = (v: unknown): Date => {
+      const d = new Date(v as any);
+      return isNaN(d.getTime()) ? new Date(0) : d;
+    };
     const items = [
-      ...passwords.map(p => ({ id: p.id, text: p.name, action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: new Date(p.updatedAt || p.createdAt) })),
-      ...notes.map(n => ({ id: n.id, text: n.title, action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: new Date(n.updatedAt || n.createdAt) })),
-      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: new Date((e as any).updatedAt || e.date || e.createdAt) })),
-      ...reminders.map(r => ({ id: r.id, text: r.title, action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: new Date(r.updatedAt || r.createdAt) })),
-      ...subscriptions.map(s => ({ id: s.id, text: s.name, action: 'Subscription', icon: Bookmark, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: new Date(s.updatedAt || s.createdAt) })),
+      ...passwords.map(p => ({ id: p.id, text: p.name ?? 'Password', action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: safeDate(p.updatedAt || p.createdAt) })),
+      ...notes.map(n => ({ id: n.id, text: n.title ?? 'Note', action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: safeDate(n.updatedAt || n.createdAt) })),
+      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: safeDate((e as any).updatedAt || e.date || e.createdAt) })),
+      ...reminders.map(r => ({ id: r.id, text: r.title ?? 'Reminder', action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: safeDate(r.updatedAt || r.createdAt) })),
+      ...subscriptions.map(s => ({ id: s.id, text: s.name ?? 'Subscription', action: 'Subscription', icon: Bookmark, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: safeDate(s.updatedAt || s.createdAt) })),
     ];
     return items
-      .filter(item => !normalizedSearch || item.text.toLowerCase().includes(normalizedSearch))
+      .filter(item => !normalizedSearch || (item.text ?? '').toLowerCase().includes(normalizedSearch))
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 6);
   }, [passwords, notes, expenses, reminders, subscriptions, normalizedSearch]);

@@ -490,7 +490,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/crm/notify" && req.method === "POST") {
     const secret = req.headers["x-notify-secret"] as string | undefined;
     const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret || secret !== jwtSecret) return res.status(401).json({ error: "Unauthorized" });
+    if (!jwtSecret || !secret || !safeEq(secret, jwtSecret)) return res.status(401).json({ error: "Unauthorized" });
     const { type, email: toEmail, data } = req.body || {};
     if (!toEmail || !type) return res.status(400).json({ error: "type and email required" });
     if (type === "plan_upgrade" && data?.plan) {
@@ -578,7 +578,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── /api/crm/heartbeat ──────────────────────────────────────────────────────
   if (path === "/api/crm/heartbeat" && req.method === "POST") {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     try {
       // Always operate on the authenticated user — never trust body-supplied identity.
@@ -594,7 +594,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── /api/crm/vaults/sync ────────────────────────────────────────────────────
   if (path === "/api/crm/vaults/sync" && req.method === "POST") {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     const { vaultCount } = req.body || {};
     try {
@@ -643,11 +643,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── PATCH /api/crm/tickets/:id ──────────────────────────────────────────────
-  // Admin-only: requires ADMIN_API_KEY (or JWT_SECRET fallback)
+  // Admin-only: requires ADMIN_API_KEY
   if (path.match(/^\/api\/crm\/tickets\/[^/]+$/) && req.method === "PATCH") {
     const adminKey = req.headers['x-admin-key'] as string;
-    const expectedAdminKey = process.env.ADMIN_API_KEY || process.env.JWT_SECRET;
-    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) {
+      return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    }
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const ticketId = path.replace("/api/crm/tickets/", "");
@@ -680,7 +683,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/crm/tickets/:email ──────────────────────────────────────────────
   if (path.startsWith("/api/crm/tickets/") && req.method === "GET") {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     // Authenticated user can only fetch their own tickets — ignore the path param.
     try {
@@ -724,10 +727,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch { return null; }
   }
 
-  function getCloudUser(req: VercelRequest): { userId: string; email: string } | null {
+  // Verify JWT iat against the user's password_changed_at to invalidate
+  // tokens issued before a password change. Returns null if the token is
+  // older than the most recent password change.
+  async function verifyTokenNotStale(userId: string, iat: number): Promise<boolean> {
+    if (!iat) return true;
+    try {
+      const { rows } = await db.query(
+        `SELECT EXTRACT(EPOCH FROM password_changed_at)::bigint AS pc FROM crm_users WHERE id = $1`,
+        [userId]
+      );
+      const pc = rows[0]?.pc as number | undefined;
+      if (!pc) return true;
+      return iat >= pc;
+    } catch { return true; }
+  }
+
+  async function getCloudUser(req: VercelRequest): Promise<{ userId: string; email: string } | null> {
     const auth = req.headers.authorization as string | undefined;
     if (!auth?.startsWith('Bearer ')) return null;
-    return verifyCloudToken(auth.substring(7));
+    const decoded = verifyCloudToken(auth.substring(7));
+    if (!decoded) return null;
+    const fresh = await verifyTokenNotStale(decoded.userId, decoded.iat);
+    if (!fresh) return null;
+    return { userId: decoded.userId, email: decoded.email };
   }
 
   function getCloudUserToken(req: VercelRequest): string | null {
@@ -914,7 +937,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/2fa/setup — generate secret, return QR ───────────────────
   if (path === '/api/auth/2fa/setup' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     await ensureTotpColumns();
     try {
@@ -943,7 +966,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/2fa/verify — enable 2FA after user confirms code ─────────
   if (path === '/api/auth/2fa/verify' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { code } = req.body || {};
     if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
@@ -957,6 +984,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       catch { return res.status(500).json({ error: '2FA verification failed' }); }
       const v = totpVerifySync({ secret, token: code.trim(), epochTolerance: TOTP_TOLERANCE_SECONDS });
       if (!v.valid) {
+        recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Invalid code' });
       }
       const backupCodes = generateBackupCodes(10);
@@ -974,14 +1002,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/2fa/disable — requires valid code, clears secret ─────────
   if (path === '/api/auth/2fa/disable' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { code } = req.body || {};
     if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
     await ensureTotpColumns();
     try {
       const v = await verifyTotpOrBackup(cloudUser.userId, code);
-      if (!v.ok) return res.status(401).json({ error: 'Invalid code' });
+      if (!v.ok) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid code' });
+      }
       await db.query(
         `UPDATE crm_users SET totp_enabled = false, totp_secret = NULL, totp_backup_codes = NULL WHERE id = $1`,
         [cloudUser.userId]
@@ -1047,7 +1082,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/auth/2fa/status — return enabled flag for current user ─────────
   if (path === '/api/auth/2fa/status' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     await ensureTotpColumns();
     try {
@@ -1064,7 +1099,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/2fa/backup-codes — regenerate (replaces existing) ────────
   if (path === '/api/auth/2fa/backup-codes' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { code } = req.body || {};
     if (!code || typeof code !== 'string') return res.status(400).json({ error: 'code required' });
@@ -1073,7 +1112,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { rows } = await db.query(`SELECT totp_enabled FROM crm_users WHERE id = $1 LIMIT 1`, [cloudUser.userId]);
       if (!rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA is not enabled' });
       const v = await verifyTotpOrBackup(cloudUser.userId, code);
-      if (!v.ok) return res.status(401).json({ error: 'Invalid code' });
+      if (!v.ok) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid code' });
+      }
       const backupCodes = generateBackupCodes(10);
       const hashedBackup = backupCodes.map(hashBackupCode);
       await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [hashedBackup, cloudUser.userId]);
@@ -1457,7 +1499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/vaults/cloud ───────────────────────────────────────────────────
   if (path === '/api/vaults/cloud' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       const { rows } = await db.query(
@@ -1479,7 +1521,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/vaults/cloud/:vaultId ─────────────────────────────────────────
   if (path.startsWith('/api/vaults/cloud/') && !path.endsWith('/default') && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const vaultId = path.replace('/api/vaults/cloud/', '');
     try {
@@ -1502,7 +1544,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/vaults/cloud ──────────────────────────────────────────────────
   if (path === '/api/vaults/cloud' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { vaultId, vaultName, encryptedBlob, isDefault = false, clientModifiedAt, sourceDeviceId } = req.body || {};
     if (!vaultId || !vaultName || !encryptedBlob) {
@@ -1561,7 +1603,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── PUT /api/vaults/cloud/:vaultId ─────────────────────────────────────────
   if (path.startsWith('/api/vaults/cloud/') && !path.endsWith('/default') && req.method === 'PUT') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const vaultId = path.replace('/api/vaults/cloud/', '');
     const { encryptedBlob, vaultName, isDefault, clientModifiedAt } = req.body || {};
@@ -1621,7 +1663,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── DELETE /api/vaults/cloud/:vaultId ──────────────────────────────────────
   if (path.startsWith('/api/vaults/cloud/') && !path.endsWith('/default') && req.method === 'DELETE') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const vaultId = path.replace('/api/vaults/cloud/', '');
     try {
@@ -1638,7 +1680,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── PATCH /api/vaults/cloud/:vaultId/default ────────────────────────────────
   if (path.endsWith('/default') && req.method === 'PATCH') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const vaultId = path.replace('/api/vaults/cloud/', '').replace('/default', '');
     try {
@@ -1661,7 +1703,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // the user's master password (zero-knowledge). The server never sees the
   // plaintext credentials.
   if (path === '/api/vault/autofill' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       const { rows } = await db.query(
@@ -1743,7 +1785,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/crm/family-invites/invitee/:email ───────────────────────────────
   if (path.startsWith('/api/crm/family-invites/invitee/') && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     // Authenticated users may only list invites addressed to them.
     try {
@@ -1764,7 +1806,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── GET /api/crm/family-invites/:ownerEmail ──────────────────────────────────
   if (path.startsWith('/api/crm/family-invites/') && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     // Only the owner can list their own invites.
     try {
@@ -1780,7 +1822,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/crm/family-invites ─────────────────────────────────────────────
   if (path === '/api/crm/family-invites' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     const { inviteeEmail, vaultShareId } = req.body || {};
     if (!inviteeEmail) return res.status(400).json({ error: 'inviteeEmail required' });
@@ -1813,7 +1855,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── PATCH /api/crm/family-invites/:id ────────────────────────────────────────
   // Accepts status: accepted | declined | revoked
   if (path.match(/^\/api\/crm\/family-invites\/[^/]+$/) && req.method === 'PATCH') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     const id = path.split('/').pop();
     const { status } = req.body || {};
@@ -1857,7 +1899,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/crm/vaults/report ──────────────────────────────────────────────
   // Authenticated: client reports their own vault count, server flags over-limit.
   if (path === '/api/crm/vaults/report' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
     const { vaultCount, planId } = req.body || {};
     const count = Number(vaultCount) || 0;
@@ -1979,8 +2021,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Protected by ADMIN_API_KEY (separate from JWT_SECRET — see audit H-2).
   if (path === '/api/admin/set-plan' && req.method === 'POST') {
     const adminKey = req.headers['x-admin-key'] as string;
-    const expectedAdminKey = process.env.ADMIN_API_KEY || JWT_SECRET;
-    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) {
+      return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    }
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const { email, plan } = req.body || {};
@@ -2011,7 +2056,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/admin/users' && req.method === 'GET') {
     const apiKey = req.headers['x-api-key'] as string | undefined;
     const expected = process.env.N8N_API_KEY;
-    if (!expected || !apiKey || apiKey !== expected) {
+    if (!expected || !apiKey || !safeEq(apiKey, expected)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
@@ -2048,7 +2093,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/crm/upgrade ──────────────────────────────────────────────────
   // Called by the client after a successful plan upgrade to sync a Deal to Zoho CRM.
   if (path === '/api/crm/upgrade' && req.method === 'POST') {
-    const user = getCloudUser(req);
+    const user = await getCloudUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { plan, amount } = req.body || {};
     if (!plan) return res.status(400).json({ error: 'plan required' });
@@ -2126,8 +2171,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // One-shot migration: push all crm_users to Zoho CRM. Protected by x-admin-key.
   if (path === '/api/admin/migrate-to-crm' && req.method === 'POST') {
     const adminKey = (req.headers['x-admin-key'] as string) || req.body?.adminKey;
-    const expectedAdminKey = process.env.ADMIN_API_KEY || JWT_SECRET;
-    if (!adminKey || !expectedAdminKey || !safeEq(adminKey, expectedAdminKey)) {
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    if (!expectedAdminKey) {
+      return res.status(500).json({ error: 'ADMIN_API_KEY not configured' });
+    }
+    if (!adminKey || !safeEq(adminKey, expectedAdminKey)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
@@ -2169,7 +2217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/payments/create-order ─────────────────────────────────────────
   if (path === '/api/payments/create-order' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const RAZORPAY_PLANS: Record<string, { amount: number; currency: string }> = {
       pro_monthly:       { amount: 14900,  currency: 'INR' },
@@ -2361,7 +2409,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/share/create ────────────────────────────────────────────────────
   if (path === '/api/share/create' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       const { data, expiresIn = 24 } = req.body as { data: unknown; expiresIn?: number };
@@ -2386,19 +2434,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = path.slice('/api/share/'.length);
     if (!token || token.includes('/')) return res.status(400).json({ error: 'Invalid token' });
     try {
-      const { rows } = await db.query('SELECT * FROM shared_links WHERE token = $1', [token]);
-      if (rows.length === 0) return res.status(404).json({ error: 'Link not found' });
-      const share = rows[0];
-      if (new Date(share.expires_at) < new Date()) {
+      // Atomic claim of the share to prevent TOCTOU between concurrent reads.
+      // Only one caller wins the UPDATE; everyone else gets 0 rows back.
+      const { rows: claimed } = await db.query(
+        `UPDATE shared_links
+            SET viewed = true, viewed_at = NOW()
+          WHERE token = $1
+            AND viewed = false
+            AND expires_at > NOW()
+        RETURNING encrypted_data`,
+        [token]
+      );
+      if (claimed.length > 0) {
+        return res.json({ data: JSON.parse(claimed[0].encrypted_data) });
+      }
+      // Lookup why the claim failed for a more useful error.
+      const { rows: existing } = await db.query(
+        'SELECT viewed, expires_at FROM shared_links WHERE token = $1',
+        [token]
+      );
+      if (existing.length === 0) return res.status(404).json({ error: 'Link not found' });
+      const e = existing[0];
+      if (new Date(e.expires_at) < new Date()) {
         return res.status(410).json({ error: 'Link expired' });
       }
-      if (share.viewed) {
-        return res.status(410).json({ error: 'Link already used — one-time links expire after first view' });
-      }
-      await db.query('UPDATE shared_links SET viewed = true, viewed_at = NOW() WHERE token = $1', [token]);
-      return res.json({ data: JSON.parse(share.encrypted_data) });
+      return res.status(410).json({ error: 'Link already used — one-time links expire after first view' });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      console.error('[share GET]', err.message);
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
@@ -2407,7 +2470,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Used by the Active Sessions UI in Profile → Security and by the extension
   // settings list.
   if (path === '/api/auth/sessions' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     const callerToken = getCloudUserToken(req);
     if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
     try {
@@ -2443,7 +2506,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/sessions/:id/revoke ─────────────────────────────────────
   if (/^\/api\/auth\/sessions\/[^\/]+\/revoke$/.test(path) && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const id = path.split('/')[4];
     try {
@@ -2468,7 +2531,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // out of the device they're using to revoke. The "Sign out everywhere"
   // button calls this.
   if (path === '/api/auth/sessions/revoke-all' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     const callerToken = getCloudUserToken(req);
     if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
     try {
@@ -2491,7 +2554,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The extension polls this every 5 minutes. If the caller's token has been
   // revoked server-side, returns 401 so the extension wipes local data.
   if (path === '/api/auth/session/check' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     const callerToken = getCloudUserToken(req);
     if (!cloudUser || !callerToken) return res.status(401).json({ error: 'Auth required' });
     try {
@@ -2516,7 +2579,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // for the chosen vault. Functionally a thin wrapper around PUT but lives at
   // a clearer path the extension reaches for "Save to Vault".
   if (path === '/api/vault/items/add' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { vaultId, encryptedBlob, clientModifiedAt, addedItem } = req.body || {};
     if (!encryptedBlob) return res.status(400).json({ error: 'encryptedBlob required' });
@@ -2570,7 +2633,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // web app on view/import/export/delete, and anywhere else that wants to leave
   // an audit trail in the user's activity timeline.
   if (path === '/api/vault/activity' && req.method === 'POST') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { action, itemType, itemTitle } = req.body || {};
     if (!action) return res.status(400).json({ error: 'action required' });
@@ -2606,7 +2669,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Paginated timeline used by Profile → Activity. Filterable by item_type
   // and action. Returns up to 100 rows per page.
   if (path === '/api/vault/activity' && req.method === 'GET') {
-    const cloudUser = getCloudUser(req);
+    const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     try {
       await ensureSessionAndActivityTables();

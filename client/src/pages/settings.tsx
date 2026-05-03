@@ -594,7 +594,7 @@ export default function SettingsPage() {
             <Button
               variant="outline"
               className="gap-2"
-              onClick={() => window.open('https://github.com/Sakun33/IronVault-V4/tree/main/chrome-extension', '_blank', 'noreferrer')}
+              onClick={() => window.open('https://github.com/Sakun33/IronVault-V4/tree/main/chrome-extension', '_blank', 'noopener,noreferrer')}
               data-testid="button-extension-source"
             >
               <Key className="w-4 h-4" />

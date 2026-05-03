@@ -32,7 +32,8 @@ export default function Login() {
     e.preventDefault();
     setError('');
 
-    if (!email || !email.includes('@')) {
+    const trimmedEmail = (email || '').trim();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setError('Please enter a valid email address.');
       return;
     }
@@ -43,7 +44,7 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      const success = await accountLogin(email, password);
+      const success = await accountLogin(trimmedEmail, password);
       if (success) {
         setLocation('/');
       } else if (!pendingTwoFactor) {

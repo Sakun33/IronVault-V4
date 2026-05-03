@@ -906,7 +906,17 @@ export default function Profile() {
       toast({ title: 'Error', description: 'New passcodes do not match', variant: 'destructive' });
       return;
     }
-    if (currentPasscode !== masterPassword) {
+    // Constant-time string compare to avoid timing-attack signal on the
+    // current passcode. The two strings are user-supplied and short, but the
+    // saved masterPassword is treated as a credential, so use timing-safe equality.
+    const cur = currentPasscode || '';
+    const mp = masterPassword || '';
+    let mismatch = cur.length !== mp.length ? 1 : 0;
+    const max = Math.max(cur.length, mp.length);
+    for (let i = 0; i < max; i++) {
+      mismatch |= (cur.charCodeAt(i) || 0) ^ (mp.charCodeAt(i) || 0);
+    }
+    if (mismatch !== 0) {
       toast({ title: 'Error', description: 'Current passcode is incorrect', variant: 'destructive' });
       return;
     }

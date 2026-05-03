@@ -735,8 +735,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               .filter(n => n.title?.toLowerCase()?.includes(q) || n.content?.toLowerCase()?.includes(q))
               .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: '/notes' })),
             expenses: (expenses ?? [])
-              .filter(e => e.title?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q))
-              .map(e => ({ id: e.id, type: 'expense' as const, title: e.title, subtitle: e.category, href: '/expenses' })),
+              .filter(e => (e as any).description?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q))
+              .map(e => ({ id: e.id, type: 'expense' as const, title: (e as any).description || e.category || 'Expense', subtitle: e.category, href: '/expenses' })),
             reminders: (reminders ?? [])
               .filter(r => r.title?.toLowerCase()?.includes(q))
               .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: '/reminders' })),
