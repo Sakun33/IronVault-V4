@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
+import { SwipeableRow } from '@/components/swipeable-row';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -393,8 +394,14 @@ export default function Subscriptions() {
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
                   const checked = selection.isSelected(subscription.id);
                   return (
+                  <SwipeableRow
+                    key={subscription.id}
+                    onDelete={() => handleDeleteSubscription(subscription.id, subscription.name)}
+                    deleteLabel="Delete"
+                    disabled={selection.isSelectionMode}
+                    className={idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''}
+                  >
                     <motion.button
-                      key={subscription.id}
                       variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
                       transition={{ type: 'spring', stiffness: 320, damping: 26 }}
                       whileHover={{ scale: 1.005 }}
@@ -405,7 +412,7 @@ export default function Subscriptions() {
                         else setDetailSub(subscription);
                       }}
                       onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(subscription.id); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${checked ? 'bg-primary/5' : ''}`}
                     >
                       {selection.isSelectionMode && (
                         <SelectionCheckbox checked={checked} onChange={() => selection.toggle(subscription.id)} label={`Select ${subscription.name}`} />
@@ -428,6 +435,7 @@ export default function Subscriptions() {
                         <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                       )}
                     </motion.button>
+                  </SwipeableRow>
                   );
                 })}
                 </motion.div>

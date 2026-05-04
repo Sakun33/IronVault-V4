@@ -1,5 +1,6 @@
 import { Switch, Route, Link, useLocation } from "wouter";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { makeSlideUp } from "@/lib/design-system";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -92,6 +93,8 @@ import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
+  const reducedMotion = useReducedMotion();
+  const slideUp = makeSlideUp(reducedMotion);
   const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
   const notificationUserId = accountEmail || 'guest';
   const { searchQuery, setSearchQuery, stats, isCloudSyncing, passwords, subscriptions, notes, expenses, reminders } = useVault();
@@ -236,11 +239,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const navItems = [...coreNavItems, ...financeNavItems, ...bottomNavItems];
 
   // Core sections for bottom navigation (only 4 most used)
+  // Five primary tabs per Phase-5 spec. The MoreSheet is still reachable
+  // from the in-app menu, but the bottom rail keeps the surfaces a typical
+  // user actually thumbs between.
   const bottomTabItems: TabItem[] = [
-    { id: 'passwords', label: 'Passwords', icon: Key, href: '/passwords', count: stats.totalPasswords },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', count: stats.activeSubscriptions },
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, href: '/' },
-    { id: 'more', label: 'More', icon: Plus, href: '#', onClick: () => setShowQuickAccess(true) },
+    { id: 'passwords', label: 'Passwords', icon: Key, href: '/passwords', count: stats.totalPasswords },
+    { id: 'notes', label: 'Notes', icon: FileText, href: '/notes', count: stats.totalNotes },
+    { id: 'finance', label: 'Finance', icon: DollarSign, href: '/expenses' },
+    { id: 'profile', label: 'Profile', icon: User, href: '/profile' },
   ];
 
   // All sections for MoreSheet
@@ -764,10 +771,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    {...slideUp}
                     className="will-change-transform"
                   >
                     {children}

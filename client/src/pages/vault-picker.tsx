@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { hapticMedium, hapticError } from '@/lib/haptics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -40,6 +41,7 @@ function resetViewportZoom() {
 
 export default function VaultPickerPage() {
   const [, setLocation] = useLocation();
+  const reducedMotion = useReducedMotion();
   const { login, loginWithKey, loginWithoutVerification, accountEmail, accountLogout } = useAuth();
   const { toast } = useToast();
   const { license } = useLicense();
@@ -206,6 +208,13 @@ export default function VaultPickerPage() {
   // after the animation finishes so the caller can `await` it.
   const playUnlockAnimation = (vaultName: string) =>
     new Promise<void>((resolve) => {
+      // Tactile bump on every successful unlock — fires on native; no-ops on
+      // web. Independent of the visual overlay so reduced-motion users still
+      // feel the confirmation.
+      void hapticMedium();
+      // Skip the celebratory overlay entirely when the user prefers reduced
+      // motion — vestibular sensitivity rules out the scale + ring burst.
+      if (reducedMotion) { resolve(); return; }
       setUnlockSuccess(vaultName);
       setTimeout(() => {
         setUnlockSuccess(null);
@@ -368,9 +377,11 @@ export default function VaultPickerPage() {
         await playUnlockAnimation(vaultName);
         setLocation('/');
       } else {
+        void hapticError();
         setErrors(e => ({ ...e, [vaultId]: 'Incorrect master password. Please try again.' }));
       }
     } catch (err: any) {
+      void hapticError();
       const raw = (err?.message || '').toString();
       const looksLikeWrongPassword =
         /decrypt/i.test(raw) || /Invalid master key/i.test(raw) || /JSON/i.test(raw);

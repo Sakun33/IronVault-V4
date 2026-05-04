@@ -790,6 +790,34 @@ input::-webkit-strong-password-auto-fill-button {
   box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
 }
 
+/* ---------- Smooth theme switch ---------- */
+/* When the user toggles dark/light, transition the surface + text colors so
+   the swap doesn't feel like a hard cut. Constrained to color/bg/border so
+   we don't end up animating layout. */
+html, body {
+  transition:
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms ease;
+}
+.glass-card, .glass-surface, [data-radix-dialog-content], button, input, select, textarea {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  html, body, .glass-card, .glass-surface, [data-radix-dialog-content] {
+    transition: none !important;
+  }
+}
+
+/* ---------- Mobile horizontal-overflow safety net ---------- */
+/* Phase-3 audited every page at 375px but a future regression elsewhere can
+   easily reintroduce horizontal scroll. Belt-and-suspenders rule below
+   guards against accidental clipping outside scrollable surfaces. */
+@media (max-width: 480px) {
+  html, body { overflow-x: hidden; }
+}
+
 /* ---------- Primary CTA tap pulse (used on Sign In / Unlock Vault) ---------- */
 @keyframes iv-cta-tap-pulse {
   0% {

@@ -73,3 +73,51 @@ export const staggerItem: Variants = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0, transition: { duration: 0.28, ease: easing.smooth } as Transition },
 };
+
+// ── Reduced-motion helper ──────────────────────────────────────────────────
+// Pass the result of `useReducedMotion()` from motion/react. When the OS
+// prefers reduced motion we collapse spring/transition configs to instant
+// opacity changes — keeps the meaning of "this thing changed" without the
+// movement that triggers vestibular issues.
+export type SpringIsh = Transition | { type: 'spring'; stiffness?: number; damping?: number; mass?: number };
+export function getTransition(reduced: boolean | null, full: SpringIsh): Transition {
+  if (reduced) return { duration: 0 } as Transition;
+  return full as Transition;
+}
+
+// Variant pairs that swap to opacity-only when reduced motion is requested.
+// Use these instead of inline `initial={{ y: 12 }}` so a single switch
+// disables travel everywhere.
+export function makeSlideUp(reduced: boolean | null) {
+  return reduced
+    ? {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: { duration: 0 } as Transition,
+      }
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -8 },
+        transition: { type: 'spring' as const, stiffness: 300, damping: 30 },
+      };
+}
+
+export function makeStaggerItem(reduced: boolean | null): Variants {
+  return reduced
+    ? {
+        hidden: { opacity: 0 },
+        show: { opacity: 1, transition: { duration: 0 } as Transition },
+      }
+    : {
+        hidden: { opacity: 0, y: 14 },
+        show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 320, damping: 26 } as Transition },
+      };
+}
+
+export function makeStaggerContainer(reduced: boolean | null, gap = 0.04): Variants {
+  return reduced
+    ? { hidden: {}, show: { transition: { staggerChildren: 0 } } }
+    : { hidden: {}, show: { transition: { staggerChildren: gap } } };
+}

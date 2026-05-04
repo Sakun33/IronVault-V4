@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'motion/react';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { SwipeableRow } from '@/components/swipeable-row';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -180,6 +182,7 @@ export default function Passwords() {
   const copyToClipboard = async (text: string, key: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      void hapticSuccess();
       setCopiedId(key);
       toast({ title: "Copied", description: `${label} copied to clipboard` });
       setTimeout(() => setCopiedId(null), 2000);
@@ -451,8 +454,14 @@ export default function Passwords() {
               {filteredPasswords.map((password, idx) => {
                 const checked = selection.isSelected(password.id);
                 return (
+                <SwipeableRow
+                  key={password.id}
+                  onDelete={() => handleDelete(password.id)}
+                  deleteLabel="Delete"
+                  disabled={selection.isSelectionMode}
+                  className={idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''}
+                >
                   <motion.button
-                    key={password.id}
                     variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
                     transition={{ type: 'spring', stiffness: 320, damping: 26 }}
                     whileHover={{ scale: 1.005 }}
@@ -463,7 +472,7 @@ export default function Passwords() {
                       else openDetail(password);
                     }}
                     onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${checked ? 'bg-primary/5' : ''}`}
                   >
                     {selection.isSelectionMode && (
                       <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
@@ -480,6 +489,7 @@ export default function Passwords() {
                       <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                     )}
                   </motion.button>
+                </SwipeableRow>
                 );
               })}
             </motion.div>
@@ -744,6 +754,7 @@ export default function Passwords() {
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.92 }}
           onClick={() => {
+            void hapticLight();
             if (!isPro && passwords.length >= getLimit('passwords')) {
               toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
               return;

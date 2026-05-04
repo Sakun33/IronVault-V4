@@ -16,6 +16,7 @@ import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { PasswordGenerator } from "@/lib/password-generator";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 // Small motion-driven counter for stat tiles. Eases from 0 → value with a
 // short delay so the number lands after the card slides in.
@@ -427,6 +428,7 @@ export default function Dashboard() {
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh} className="lg:contents">
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6">
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -838,5 +840,6 @@ export default function Dashboard() {
       <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
       <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
     </motion.div>
+    </PullToRefresh>
   );
 }
