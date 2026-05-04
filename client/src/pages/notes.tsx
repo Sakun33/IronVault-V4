@@ -459,12 +459,19 @@ export default function Notes() {
 
   const upgradeBlocked = !isPro && notes.length >= getLimit('notes');
 
-  // Auto-keep-the-current-editor-in-sync when notes refresh from cloud
+  // Reconcile the open editor's note ID against `notes`, but ONLY if the
+  // note has been deleted (closed-from-elsewhere flow). We deliberately do
+  // NOT replace `editingNote` with a fresh storage copy on every refresh —
+  // that was racing with the editor's own typing/autosave and made the
+  // editor feel like it was being "auto-closed" or wiping in-progress
+  // input whenever a cloud sync landed mid-edit. The editor is the source
+  // of truth while it's open; the parent only watches for deletes.
   useEffect(() => {
     if (!editingNote) return;
-    const fresh = notes.find(n => n.id === editingNote.id);
-    if (fresh && fresh.updatedAt !== editingNote.updatedAt) setEditingNote(fresh);
-  }, [notes, editingNote]);
+    const stillExists = notes.some(n => n.id === editingNote.id);
+    if (!stillExists && editorOpen) closeEditor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, editingNote?.id]);
 
   // ── Layout components ────────────────────────────────────────────────────
   const isThreePane = tier === 'desktop';
@@ -751,65 +758,64 @@ export default function Notes() {
     />
   );
 
-  // ── Desktop layout ───────────────────────────────────────────────────────
-  // Single-pane: full-width flat list by default, full-screen editor when
-  // a note is opened. The previous 3-pane (notebooks sidebar + list + editor)
-  // was too cramped; notebook/tag filtering is now a dropdown in the header.
+  // ── Desktop master-detail layout ─────────────────────────────────────────
+  // True 2-panel: ~320px notes list on the left + flex-1 editor on the right.
+  // Both panes stay mounted; clicking a row swaps the right pane to the new
+  // note. The editor is never unmounted on selection change so its local
+  // typing state survives across notes — and crucially across any cloud
+  // sync refresh that happens in the background.
   if (isThreePane) {
-    const editorActive = editorOpen || !!editingNote;
     return (
       <div className="flex flex-col h-full -mx-6 -my-6">
-        {!editorActive && (
-          <div className="px-6 pt-6 pb-3 space-y-3 border-b border-border/40 bg-background">
-            {headerBlock}
-            {searchBlock}
-            {/* Notebook + tag filter rail (replaces old left sidebar) */}
-            {(notebooks.length > 0 || tagFrequencies.length > 0) && (
-              <div className="-mx-1 px-1 flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-                <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
-                {notebooks.map(nb => (
-                  <FilterChip
-                    key={nb.name}
-                    label={nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
-                    count={notebookCounts[nb.name.toLowerCase()] ?? 0}
-                    active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()}
-                    onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }}
-                  />
-                ))}
-                {tagFrequencies.length > 0 && <span className="w-px h-5 bg-border/50 mx-1 flex-shrink-0" aria-hidden />}
-                {tagFrequencies.slice(0, 8).map(([tag, count]) => (
-                  <FilterChip
-                    key={`tag-${tag}`}
-                    label={`#${tag}`}
-                    count={count}
-                    active={selectedTag === tag}
-                    onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
-                  />
-                ))}
-              </div>
-            )}
-            {activeFilterChips}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                {selectedTag ? `#${selectedTag}` : selectedNotebook === 'all' ? 'All Notes' : selectedNotebook}
-                <span className="ml-1.5 text-muted-foreground/40">· {sortedNotes.length}</span>
-              </span>
-              <Button size="sm" onClick={() => openNewNote()} disabled={upgradeBlocked} className="cta-tap-pulse h-7 px-3 text-xs">
-                <Plus className="w-3 h-3 mr-1" /> New note
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Main content area — list or full-screen editor */}
-        <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar bg-background">
-          {editorActive ? (
-            <div className="h-full">
-              <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-background sticky top-0 z-10 flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={closeEditor} className="rounded-xl">
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to notes
+        <div className="flex-1 min-h-0 flex">
+          {/* LEFT pane — list + filters */}
+          <section className="w-[340px] flex-shrink-0 border-r border-border/40 bg-background flex flex-col">
+            <div className="px-4 pt-5 pb-2 space-y-2.5 border-b border-border/40 bg-background">
+              {headerBlock}
+              {searchBlock}
+              {(notebooks.length > 0 || tagFrequencies.length > 0) && (
+                <div className="-mx-1 px-1 flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+                  <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
+                  {notebooks.map(nb => (
+                    <FilterChip
+                      key={nb.name}
+                      label={nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
+                      count={notebookCounts[nb.name.toLowerCase()] ?? 0}
+                      active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()}
+                      onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }}
+                    />
+                  ))}
+                  {tagFrequencies.length > 0 && <span className="w-px h-5 bg-border/50 mx-1 flex-shrink-0" aria-hidden />}
+                  {tagFrequencies.slice(0, 8).map(([tag, count]) => (
+                    <FilterChip
+                      key={`tag-${tag}`}
+                      label={`#${tag}`}
+                      count={count}
+                      active={selectedTag === tag}
+                      onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
+                    />
+                  ))}
+                </div>
+              )}
+              {activeFilterChips}
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 truncate">
+                  {selectedTag ? `#${selectedTag}` : selectedNotebook === 'all' ? 'All Notes' : selectedNotebook}
+                  <span className="ml-1.5 text-muted-foreground/40">· {sortedNotes.length}</span>
+                </span>
+                <Button size="sm" onClick={() => openNewNote()} disabled={upgradeBlocked} className="cta-tap-pulse h-7 px-3 text-xs flex-shrink-0">
+                  <Plus className="w-3 h-3 mr-1" /> New
                 </Button>
               </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar px-2">
+              {notesListContent}
+            </div>
+          </section>
+
+          {/* RIGHT pane — editor or empty state. Always mounted. */}
+          <section className="flex-1 min-w-0 bg-background overflow-hidden">
+            {editorOpen || !!editingNote ? (
               <NoteEditor
                 open={editorOpen}
                 note={editingNote}
@@ -825,10 +831,10 @@ export default function Notes() {
                 bottomGutterPx={0}
                 embedded
               />
-            </div>
-          ) : (
-            <div className="max-w-3xl mx-auto px-6 py-2">{notesListContent}</div>
-          )}
+            ) : (
+              <DesktopEditorEmpty onCreate={() => openNewNote()} disabled={upgradeBlocked} />
+            )}
+          </section>
         </div>
 
         {dialogs}
@@ -839,9 +845,9 @@ export default function Notes() {
             allSelected={selection.allSelected}
             itemLabel="note"
             onSelectAll={selection.selectAll}
-            onClear={selection.clearSelection}
-            onCancel={selection.exitSelectionMode}
-            onDelete={handleBulkDelete}
+            onClear={selection.clear}
+            onExit={selection.exitSelectionMode}
+            onBulkDelete={handleBulkDelete}
           />
         )}
       </div>
@@ -906,9 +912,9 @@ export default function Notes() {
             allSelected={selection.allSelected}
             itemLabel="note"
             onSelectAll={selection.selectAll}
-            onClear={selection.clearSelection}
-            onCancel={selection.exitSelectionMode}
-            onDelete={handleBulkDelete}
+            onClear={selection.clear}
+            onExit={selection.exitSelectionMode}
+            onBulkDelete={handleBulkDelete}
           />
         )}
       </div>
@@ -990,9 +996,9 @@ export default function Notes() {
           allSelected={selection.allSelected}
           itemLabel="note"
           onSelectAll={selection.selectAll}
-          onClear={selection.clearSelection}
-          onCancel={selection.exitSelectionMode}
-          onDelete={handleBulkDelete}
+          onClear={selection.clear}
+          onExit={selection.exitSelectionMode}
+          onBulkDelete={handleBulkDelete}
         />
       )}
     </div>

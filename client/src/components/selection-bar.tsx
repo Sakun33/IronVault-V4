@@ -54,15 +54,19 @@ export function SelectionBar({
     <>
       <div
         data-testid="selection-bar"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md
+        // On mobile we lift the bar above the bottom-tabs gutter (~96px +
+        // iOS safe-area inset) so the Delete button is never trapped behind
+        // the nav. lg:bottom-6 collapses back to a normal floating bar on
+        // desktop where the nav is on the left side instead.
+        className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md
                    rounded-2xl border border-border/60 bg-background/95 backdrop-blur
-                   shadow-2xl px-3 py-2 flex items-center gap-2"
+                   shadow-2xl px-2.5 py-2 flex items-center gap-1.5"
       >
         <Button
           variant="ghost"
           size="sm"
           onClick={allSelected ? onClear : onSelectAll}
-          className="rounded-xl gap-1.5 text-xs"
+          className="rounded-xl gap-1.5 text-xs px-2 h-9 flex-shrink-0"
           data-testid="button-toggle-select-all"
         >
           {allSelected ? (
@@ -70,11 +74,11 @@ export function SelectionBar({
           ) : (
             <Square className="w-4 h-4" />
           )}
-          {allSelected ? 'Deselect all' : 'Select all'}
+          <span className="hidden sm:inline">{allSelected ? 'Deselect all' : 'Select all'}</span>
         </Button>
 
-        <span className="text-sm font-medium flex-1 text-center">
-          {selectedCount} of {totalCount} selected
+        <span className="text-xs sm:text-sm font-medium flex-1 text-center truncate">
+          {selectedCount} selected
         </span>
 
         <Button
@@ -82,7 +86,7 @@ export function SelectionBar({
           size="sm"
           disabled={selectedCount === 0}
           onClick={() => setShowConfirm(true)}
-          className="rounded-xl gap-1.5 text-xs"
+          className="rounded-xl gap-1.5 text-xs h-9 px-3 flex-shrink-0 font-semibold"
           data-testid="button-bulk-delete"
         >
           <Trash2 className="w-4 h-4" />
@@ -93,7 +97,7 @@ export function SelectionBar({
           variant="ghost"
           size="sm"
           onClick={onExit}
-          className="rounded-xl"
+          className="rounded-xl h-9 w-9 p-0 flex-shrink-0"
           aria-label="Exit selection"
           data-testid="button-exit-selection"
         >

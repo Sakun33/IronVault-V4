@@ -2,7 +2,40 @@ import { useCallback, useEffect, useState } from 'react';
 import { vaultStorage } from '@/lib/storage';
 import {
   SharedExpense, ExpenseGroup, ExpenseContact, Settlement, ExpenseActivity,
+  ExpenseEntry,
 } from '@shared/schema';
+
+/**
+ * Adapt a legacy ExpenseEntry (the old personal-only schema) into the
+ * Splitwise-style SharedExpense shape so it can render in the new All
+ * tab and Reports without a separate code path. Marked with a synthetic
+ * `_legacy` flag so list/edit handlers can route mutations back through
+ * the vault-context's expense API instead of the new shared-expense API.
+ */
+function legacyToShared(e: ExpenseEntry): SharedExpense & { _legacy?: true } {
+  return {
+    id: e.id,
+    title: e.title,
+    amount: e.amount,
+    currency: e.currency || 'USD',
+    paidBy: 'self',
+    splitType: 'equal',
+    splits: [{ contactId: 'self', amount: e.amount }],
+    groupId: undefined,
+    category: e.category || 'Other',
+    date: new Date(e.date),
+    notes: e.notes,
+    receiptDataUrl: undefined,
+    recurrence: e.isRecurring
+      ? (e.recurringFrequency === 'weekly' ? 'weekly'
+        : e.recurringFrequency === 'yearly' ? 'yearly'
+          : 'monthly')
+      : 'none',
+    createdAt: new Date(e.createdAt),
+    updatedAt: new Date(e.updatedAt),
+    _legacy: true,
+  } as SharedExpense & { _legacy?: true };
+}
 
 /**
  * Owns the Splitwise-style state outside vault-context to keep that file
@@ -10,6 +43,11 @@ import {
  * encrypted IDB on mount + on `vault:item:saved` events, then exposes
  * thin add / update / delete helpers that wrap the storage layer and log
  * an entry to the activity feed where appropriate.
+ *
+ * The `expenses` array merges both the new SharedExpense entries AND the
+ * legacy ExpenseEntry rows from the original /expenses page, so users
+ * with hundreds of pre-existing expenses see them in the new UI without
+ * any migration step.
  */
 export function useSharedExpenses() {
   const [expenses, setExpenses] = useState<SharedExpense[]>([]);
@@ -21,12 +59,13 @@ export function useSharedExpenses() {
 
   const refresh = useCallback(async () => {
     try {
-      const [e, g, c, s, a] = await Promise.all([
+      const [e, g, c, s, a, legacy] = await Promise.all([
         vaultStorage.getAllSharedExpenses(),
         vaultStorage.getAllExpenseGroups(),
         vaultStorage.getAllExpenseContacts(),
         vaultStorage.getAllSettlements(),
         vaultStorage.getAllExpenseActivity(),
+        vaultStorage.getAllExpenses().catch(() => [] as ExpenseEntry[]),
       ]);
       // Normalize Date fields — storage round-trips through JSON.
       const reviveDate = <T extends { createdAt?: any; updatedAt?: any; date?: any }>(x: T): T => ({
@@ -35,7 +74,11 @@ export function useSharedExpenses() {
         updatedAt: x.updatedAt ? new Date(x.updatedAt) : new Date(),
         ...((x as any).date ? { date: new Date((x as any).date) } : {}),
       });
-      setExpenses(e.map(reviveDate));
+      const merged: SharedExpense[] = [
+        ...e.map(reviveDate),
+        ...legacy.map(le => legacyToShared(reviveDate(le))),
+      ];
+      setExpenses(merged);
       setGroups(g.map(reviveDate));
       setContacts(c.map(reviveDate));
       setSettlements(s.map(reviveDate));
@@ -134,10 +177,32 @@ export function useSharedExpenses() {
     return e;
   };
   const updateSharedExpense = async (id: string, updates: Partial<SharedExpense>): Promise<void> => {
-    const existing = expenses.find(x => x.id === id);
+    const existing = expenses.find(x => x.id === id) as (SharedExpense & { _legacy?: true }) | undefined;
     if (!existing) return;
     const next: SharedExpense = { ...existing, ...updates, updatedAt: new Date() };
-    await vaultStorage.saveSharedExpense(next);
+    if (existing._legacy) {
+      // Legacy ExpenseEntry — write to the original `expenses` store so
+      // any other surface that reads ExpenseEntry (dashboard tile,
+      // recurring detection, exports) sees the update.
+      const legacyPatch: Partial<ExpenseEntry> = {
+        title: next.title,
+        amount: next.amount,
+        currency: next.currency,
+        category: next.category,
+        date: next.date instanceof Date ? next.date : new Date(next.date),
+        notes: next.notes,
+        isRecurring: next.recurrence !== 'none',
+        recurringFrequency: next.recurrence !== 'none' ? next.recurrence : undefined,
+        updatedAt: new Date(),
+      };
+      const allLegacy = await vaultStorage.getAllExpenses();
+      const legacyExisting = allLegacy.find(x => x.id === id);
+      if (legacyExisting) {
+        await vaultStorage.saveExpense({ ...legacyExisting, ...legacyPatch });
+      }
+    } else {
+      await vaultStorage.saveSharedExpense(next);
+    }
     setExpenses(prev => prev.map(x => x.id === id ? next : x));
     await logActivity({
       kind: 'expense_edited',
@@ -149,8 +214,12 @@ export function useSharedExpenses() {
     });
   };
   const deleteSharedExpense = async (id: string): Promise<void> => {
-    const existing = expenses.find(x => x.id === id);
-    await vaultStorage.deleteSharedExpense(id);
+    const existing = expenses.find(x => x.id === id) as (SharedExpense & { _legacy?: true }) | undefined;
+    if (existing?._legacy) {
+      await vaultStorage.deleteExpense(id);
+    } else {
+      await vaultStorage.deleteSharedExpense(id);
+    }
     setExpenses(prev => prev.filter(x => x.id !== id));
     if (existing) {
       await logActivity({

@@ -229,6 +229,7 @@ export default function ExpensesPage() {
         contacts={sx.contacts}
         defaultCurrency={currency}
         defaultGroupId={openGroupId || undefined}
+        onAddContact={sx.addContact}
         onClose={() => { setShowAdd(false); setEditing(null); }}
         onSave={async (data) => {
           if (editing) {
@@ -804,7 +805,7 @@ function ChartTip({ active, payload, currency }: any) {
 // Add / Edit expense modal
 // ─────────────────────────────────────────────────────────────────────────────
 function AddExpenseModal({
-  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave,
+  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave, onAddContact,
 }: {
   open: boolean;
   existing: SharedExpense | null;
@@ -814,6 +815,7 @@ function AddExpenseModal({
   defaultGroupId?: string;
   onClose: () => void;
   onSave: (data: Omit<SharedExpense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onAddContact: (data: Omit<ExpenseContact, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ExpenseContact>;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState('');
@@ -831,7 +833,28 @@ function AddExpenseModal({
   const [shareSplits, setShareSplits] = useState<Record<string, number>>({});
   const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>(undefined);
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly' | 'yearly'>('none');
+  const [newPersonInput, setNewPersonInput] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleAddInlinePerson = async () => {
+    const name = newPersonInput.trim();
+    if (!name) return;
+    // Reuse existing contact if one with the same name already exists,
+    // otherwise create a new one and immediately tick it as a participant.
+    const dup = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (dup) {
+      setParticipants(prev => new Set(prev).add(dup.id));
+      setNewPersonInput('');
+      return;
+    }
+    try {
+      const c = await onAddContact({ name, email: '', phone: '', notes: '' });
+      setParticipants(prev => new Set(prev).add(c.id));
+      setNewPersonInput('');
+    } catch {
+      toast({ title: "Couldn't add person", variant: 'destructive' });
+    }
+  };
 
   // Reset form on open
   useEffect(() => {
@@ -1051,6 +1074,29 @@ function AddExpenseModal({
                 />
               ))}
             </div>
+            {/* Inline "add a person" — creates a contact and ticks them in
+                without leaving the dialog. */}
+            <div className="flex items-center gap-2 pt-1">
+              <Input
+                value={newPersonInput}
+                onChange={(e) => setNewPersonInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleAddInlinePerson(); } }}
+                placeholder="Add a person by name…"
+                className="h-8 text-sm flex-1"
+                data-testid="input-inline-person"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-xl"
+                onClick={() => void handleAddInlinePerson()}
+                disabled={!newPersonInput.trim()}
+                data-testid="button-inline-add-person"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add
+              </Button>
+            </div>
           </div>
 
           {/* Split type */}
@@ -1071,14 +1117,26 @@ function AddExpenseModal({
             </div>
           </div>
 
-          {/* Per-participant split editor */}
-          {splitType !== 'equal' && partList.length > 0 && (
+          {/* Per-participant split editor — visible for ALL split types so
+              the user can always see each person's name and resolved amount. */}
+          {partList.length > 0 && (
             <div className="rounded-xl border border-border/50 bg-muted/20 p-2 space-y-1.5">
               {partList.map(id => {
-                const label = id === 'self' ? 'You' : (contacts.find(c => c.id === id)?.name || id);
+                const label = id === 'self' ? 'You' : (contacts.find(c => c.id === id)?.name || `(${id.slice(0, 6)})`);
+                const resolved = resolvedSplits.find(s => s.contactId === id)?.amount ?? 0;
+                if (splitType === 'equal') {
+                  return (
+                    <div key={id} className="flex items-center gap-2">
+                      <Avatar name={label} size={20} />
+                      <span className="flex-1 text-sm truncate">{label}</span>
+                      <span className="text-sm font-semibold tabular-nums w-24 text-right">{formatAmount(resolved, cur)}</span>
+                    </div>
+                  );
+                }
                 if (splitType === 'exact') {
                   return (
                     <div key={id} className="flex items-center gap-2">
+                      <Avatar name={label} size={20} />
                       <span className="flex-1 text-sm truncate">{label}</span>
                       <Input
                         type="number"
@@ -1094,14 +1152,16 @@ function AddExpenseModal({
                 if (splitType === 'percent') {
                   return (
                     <div key={id} className="flex items-center gap-2">
+                      <Avatar name={label} size={20} />
                       <span className="flex-1 text-sm truncate">{label}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums w-16 text-right">{formatAmount(resolved, cur)}</span>
                       <Input
                         type="number"
                         step="1"
                         value={percentSplits[id] ?? ''}
                         onChange={(e) => setPercentSplits(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
                         placeholder="0"
-                        className="w-20 h-8"
+                        className="w-16 h-8"
                       />
                       <span className="text-xs text-muted-foreground">%</span>
                     </div>
@@ -1109,7 +1169,9 @@ function AddExpenseModal({
                 }
                 return (
                   <div key={id} className="flex items-center gap-2">
+                    <Avatar name={label} size={20} />
                     <span className="flex-1 text-sm truncate">{label}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums w-16 text-right">{formatAmount(resolved, cur)}</span>
                     <Input
                       type="number"
                       step="1"
@@ -1117,7 +1179,7 @@ function AddExpenseModal({
                       value={shareSplits[id] ?? ''}
                       onChange={(e) => setShareSplits(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
                       placeholder="1"
-                      className="w-20 h-8"
+                      className="w-14 h-8"
                     />
                     <span className="text-xs text-muted-foreground">shares</span>
                   </div>

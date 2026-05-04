@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { SwipeableRow } from '@/components/swipeable-row';
 import { useSubscription } from '@/hooks/use-subscription';
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare } from 'lucide-react';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -44,6 +44,13 @@ export default function Subscriptions() {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteSubTarget, setDeleteSubTarget] = useState<{id: string; name: string} | null>(null);
   const [detailSub, setDetailSub] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'list';
+    return localStorage.getItem('iv_subscriptions_view') === 'grid' ? 'grid' : 'list';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('iv_subscriptions_view', viewMode); } catch {}
+  }, [viewMode]);
 
   // Subscription Templates
   const SUBSCRIPTION_TEMPLATES = [
@@ -376,12 +383,98 @@ export default function Subscriptions() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* List / Grid view toggle — desktop only; mobile sticks to list */}
+                <div className="hidden sm:flex items-center justify-end mt-3">
+                  <div className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
+                    <button
+                      type="button"
+                      aria-label="List view"
+                      aria-pressed={viewMode === 'list'}
+                      onClick={() => setViewMode('list')}
+                      className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="subs-view-list"
+                    >
+                      <ListIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Grid view"
+                      aria-pressed={viewMode === 'grid'}
+                      onClick={() => setViewMode('grid')}
+                      className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="subs-view-grid"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Subscription List */}
+            {/* Subscription List or Grid */}
             {isLoading && subscriptions.length === 0 ? (
               <ListSkeleton rows={5} showHeader={false} />
+            ) : filteredSubscriptions.length > 0 && viewMode === 'grid' ? (
+              <motion.div
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
+                initial="hidden"
+                animate="show"
+                className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${selection.isSelectionMode ? 'pb-20' : ''}`}
+              >
+                {filteredSubscriptions.map((subscription) => {
+                  const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
+                  const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
+                  const checked = selection.isSelected(subscription.id);
+                  return (
+                    <motion.div
+                      key={subscription.id}
+                      data-testid={`subscription-card-${subscription.id}`}
+                      variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                      transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                      whileHover={{ y: -3, scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={() => {
+                        if (selection.isSelectionMode) selection.toggle(subscription.id);
+                        else setDetailSub(subscription);
+                      }}
+                      onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(subscription.id); }}
+                      className={`group glass-card cursor-pointer p-4 ${checked ? 'ring-2 ring-emerald-400/40' : ''}`}
+                    >
+                      <div className="flex items-start gap-3 mb-3">
+                        <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-10 h-10 flex-shrink-0 rounded-xl" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-[15px] truncate">{subscription.name}</h3>
+                            {selection.isSelectionMode && (
+                              <SelectionCheckbox checked={checked} onChange={() => selection.toggle(subscription.id)} label={`Select ${subscription.name}`} />
+                            )}
+                          </div>
+                          {subscription.category && (
+                            <p className="text-xs text-muted-foreground truncate">{subscription.category}</p>
+                          )}
+                        </div>
+                        <Badge variant={subscription.isActive ? 'default' : 'secondary'} className="text-[10px] h-5 px-1.5 flex-shrink-0">
+                          {subscription.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-bold tabular-nums">{formatCurrency(subscription.cost || 0, currency)}</span>
+                        <span className="text-xs text-muted-foreground">/{cycleSuffix(subscription.billingCycle)}</span>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Calendar size={12} />
+                          <span>{format(subscription.nextBillingDate, 'MMM d, yyyy')}</span>
+                        </div>
+                        {isUpcoming && (
+                          <span className="text-orange-500 font-medium">due in {daysUntilRenewal}d</span>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
             ) : filteredSubscriptions.length > 0 ? (
               <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 <motion.div

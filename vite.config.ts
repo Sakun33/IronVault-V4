@@ -45,8 +45,24 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
+    // The main app shell was hitting ~1.1 MB raw / ~315 KB gzipped, which made
+    // the initial paint feel sluggish on slower networks. Splitting the heavy
+    // long-lived vendor libs into their own chunks lets the browser cache them
+    // across deploys and keeps the page-level lazy chunks tiny.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       external: ['@revenuecat/purchases-capacitor'],
+      output: {
+        manualChunks: {
+          'vendor-react':     ['react', 'react-dom'],
+          'vendor-router':    ['wouter'],
+          'vendor-motion':    ['framer-motion'],
+          'vendor-icons':     ['lucide-react'],
+          'vendor-zod':       ['zod'],
+          'vendor-dompurify': ['dompurify'],
+          'vendor-datefns':   ['date-fns'],
+        },
+      },
     },
   },
   server: {
