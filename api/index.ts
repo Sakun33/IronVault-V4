@@ -523,6 +523,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   void ensureTotpColumns().catch(() => { /* logged inside */ });
   void ensureUniqueIndexes().catch(() => { /* logged inside */ });
 
+  // P0 (2026-05-05) — JWT_SECRET MUST be initialized before any matcher
+  // that calls verifyCloudToken / signCloudToken / getCloudUser. It used
+  // to live ~400 lines down inside this handler, which meant any matcher
+  // earlier in the file (e.g. /api/crm/entitlement/* at line ~657) hit
+  // the temporal-dead-zone when its inner verifyCloudToken referenced
+  // JWT_SECRET — the throw was caught by verifyCloudToken's try/catch,
+  // it returned null, and the user got a silent 401 even with a valid
+  // Bearer token. /api/auth/me + /api/vaults/cloud worked only because
+  // they execute much later in the handler, after the const had been
+  // initialized. Hoisting to the top makes ALL matchers behave the same.
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) {
+    console.error('[fatal] JWT_SECRET env var is not set');
+    return res.status(500).json({ error: 'Server misconfigured' });
+  }
+
   const path = (req.url || "").replace(/\?.*$/, "");
 
   // ── Health ──────────────────────────────────────────────────────────────────
@@ -667,28 +683,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminAuthed = !!expectedAdminKey && !!adminKey && safeEq(adminKey, expectedAdminKey);
     if (!adminAuthed) {
       const cloudUser = await getCloudUser(req);
-      // DEBUG: investigating why this endpoint returns 401 with a Bearer
-      // token that succeeds on /api/auth/me + /api/vaults/cloud. Same
-      // getCloudUser, same token, same request. Logging the full chain
-      // of token parsing: header length, JWT segment lengths, signature
-      // recompute match, and final decode result.
-      const _authHeader = req.headers.authorization as string | undefined;
-      const _tok = _authHeader && _authHeader.startsWith('Bearer ') ? _authHeader.substring(7) : '';
-      const _segs = _tok.split('.');
-      const _decoded = _tok ? verifyCloudToken(_tok) : null;
-      let _sigCheck: string = 'n/a';
-      if (_segs.length === 3) {
-        const expected = b64url(createHmac('sha256', JWT_SECRET).update(`${_segs[0]}.${_segs[1]}`).digest());
-        _sigCheck = expected === _segs[2] ? 'match' : `mismatch:exp=${expected.slice(0, 8)} got=${_segs[2].slice(0, 8)}`;
-      }
-      console.error('[entitlement debug] path=%s userId=%s hdrLen=%d tokLen=%d segs=%d sig=%s decoded=%j cloudUser=%j',
-        path, userId,
-        _authHeader?.length || 0,
-        _tok.length,
-        _segs.length,
-        _sigCheck,
-        _decoded,
-        cloudUser);
       if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
       // Allow lookup by either id or email, but only the user's own row.
       const matchesOwn =
@@ -887,11 +881,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── Cloud vault helpers (manual HS256 JWT — avoids jsonwebtoken ESM issues) ──
-  const JWT_SECRET = process.env.JWT_SECRET;
-  if (!JWT_SECRET) {
-    console.error('[fatal] JWT_SECRET env var is not set');
-    return res.status(500).json({ error: 'Server misconfigured' });
-  }
+  // JWT_SECRET is now hoisted to the top of the handler (see comment up
+  // there explaining why); the helpers below close over the lexical
+  // binding initialised at handler entry.
 
   function b64url(buf: Buffer | string): string {
     const b = typeof buf === 'string' ? Buffer.from(buf) : buf;
