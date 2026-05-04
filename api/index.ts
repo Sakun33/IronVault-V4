@@ -877,8 +877,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   function signCloudToken(userId: string, email: string): string {
+    // P0 FIX: forward-bias iat by 1 second. Any UPDATE to crm_users that
+    // happens during the SAME login request (legacy scrypt migration, an
+    // implicit ON UPDATE password_changed_at trigger, etc.) can land on a
+    // timestamp that — once truncated to whole seconds — is equal to or
+    // greater than the JWT's iat, causing verifyTokenNotStale to reject
+    // the freshly-issued token. Using Math.ceil + 1 guarantees iat is
+    // strictly in the future of any concurrent server-side write at
+    // second granularity. The +1s shift on a 30-day exp is irrelevant.
+    const iat = Math.ceil(Date.now() / 1000) + 1;
     const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = b64url(JSON.stringify({ userId, email, exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600, iat: Math.floor(Date.now() / 1000) }));
+    const payload = b64url(JSON.stringify({ userId, email, exp: iat + 30 * 24 * 3600, iat }));
     const sig = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
     return `${header}.${payload}.${sig}`;
   }
@@ -896,8 +905,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Verify JWT iat against the user's password_changed_at to invalidate
-  // tokens issued before a password change. Returns null if the token is
-  // older than the most recent password change.
+  // tokens issued before a password change. Returns true if the token is
+  // newer than (or within 2s of) the most recent password change.
+  //
+  // P0 FIX: pair with the +1s forward bias in signCloudToken. The
+  // STALENESS_GRACE_S window absorbs the remaining sources of small
+  // skew that can cause a freshly-issued token to look "too old":
+  //   • postgres EXTRACT(EPOCH)::bigint truncates fractional seconds
+  //     up by floor, while the API server uses Math.ceil — these
+  //     can disagree by up to 1s on the same instant
+  //   • clock drift between the API container and the postgres host
+  //     (Vercel Fluid Compute and the cloud DB are in different regions)
+  // 2s is generous enough to cover both without meaningfully weakening
+  // the staleness invariant — a real password change moves
+  // password_changed_at by minutes, not seconds.
+  const STALENESS_GRACE_S = 2;
   async function verifyTokenNotStale(userId: string, iat: number): Promise<boolean> {
     if (!iat) return true;
     try {
@@ -907,7 +929,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       const pc = rows[0]?.pc as number | undefined;
       if (!pc) return true;
-      return iat >= pc;
+      const ok = iat >= pc - STALENESS_GRACE_S;
+      if (!ok) {
+        console.warn('[auth] token stale: iat=%d pc=%d delta=%ds userId=%s', iat, pc, pc - iat, userId);
+      }
+      return ok;
     } catch { return true; }
   }
 
