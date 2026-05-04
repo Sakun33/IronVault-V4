@@ -16,6 +16,7 @@ import {
 import { acquireCloudToken, clearCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
+import { markLoginComplete } from '@/lib/auth-fetch-interceptor';
 
 // Server returns `{ requires2FA: true, tempToken }` when password auth succeeds
 // but the user has 2FA enabled. We surface this to the login page via
@@ -204,6 +205,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     vaultManager.setAccountEmail(normalizedEmail);
     clearPlanCache();
     addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
+    // Stamp the grace-period timestamp BEFORE acquiring the new token, so any
+    // background calls that race the token swap with a stale Bearer header
+    // can't trigger the 401 → /auth/login bounce loop. See
+    // auth-fetch-interceptor.ts for the cooldown logic.
+    markLoginComplete();
     await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
     setIsAccountLoggedIn(true);
     setAccountEmail(normalizedEmail);

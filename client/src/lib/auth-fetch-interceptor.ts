@@ -31,6 +31,20 @@ const SKIP_PATHS = [
 
 let installed = false;
 
+// Tracks the timestamp of the most recent successful login. After a fresh
+// login, several background calls fire concurrently — heartbeat, vault
+// listing, plan check, session check — and any of them might race with a
+// stale token still in localStorage from a previous session. Without a
+// grace period, those 401s would synchronously redirect the user back to
+// /auth/login, producing a login → logout loop. We let the new session's
+// token settle for 5s before honoring 401s as session-expired signals.
+let lastLoginTime = 0;
+const LOGIN_GRACE_PERIOD_MS = 5000;
+
+export function markLoginComplete(): void {
+  lastLoginTime = Date.now();
+}
+
 export function installAuthFetchInterceptor(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
@@ -55,6 +69,15 @@ export function installAuthFetchInterceptor(): void {
     try { path = new URL(urlStr, window.location.origin).pathname; } catch { /* noop */ }
     if (!path.startsWith('/api/')) return response;
     if (SKIP_PATHS.some(p => path.startsWith(p))) return response;
+
+    // Grace period after a successful login. Background API calls that
+    // were already in flight (or that fire immediately on auth-state
+    // changes) may carry a stale token from the previous session and
+    // 401 — we MUST NOT redirect on those, or the user gets bounced
+    // straight back to the login page they just submitted.
+    if (lastLoginTime && Date.now() - lastLoginTime < LOGIN_GRACE_PERIOD_MS) {
+      return response;
+    }
 
     // Did the request actually carry a Bearer token? If not, the 401 is
     // expected (anonymous call), don't trigger logout.
