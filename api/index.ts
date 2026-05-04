@@ -942,8 +942,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!auth?.startsWith('Bearer ')) return null;
     const decoded = verifyCloudToken(auth.substring(7));
     if (!decoded) return null;
-    const fresh = await verifyTokenNotStale(decoded.userId, decoded.iat);
-    if (!fresh) return null;
+    // P0 (2026-05-05) — verifyTokenNotStale was actively rejecting freshly
+    // issued tokens for at least one production user (Lifetime plan, fresh
+    // mobile login). Both the +1s iat forward bias in signCloudToken and
+    // the 2s tolerance in verifyTokenNotStale failed to close the window —
+    // the symptom remained "Bearer token JUST issued returns 401 on every
+    // protected endpoint". The downstream effect was the user appearing as
+    // free-plan with no cloud vaults.
+    //
+    // Removing the staleness gate. JWT signature + 30-day exp + the 401
+    // interceptor's auto-logout on real session loss cover the threat
+    // model adequately. If/when we need post-password-change invalidation
+    // again, do it via a per-user version int bumped on password change
+    // and embedded in the JWT — no clock-comparison required.
     return { userId: decoded.userId, email: decoded.email };
   }
 
