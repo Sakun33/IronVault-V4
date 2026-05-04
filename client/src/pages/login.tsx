@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
+import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
+import { motionPresets } from '@/lib/design-system';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -254,12 +256,25 @@ export default function Login() {
         </p>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm">
+      <main className="flex-1 flex items-center justify-center px-4 py-10 relative">
+        {/* ambient gradient backdrop — pure decorative, sits behind everything */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[420px] w-[620px] rounded-full bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-transparent blur-3xl" />
+          <div className="absolute -bottom-32 right-0 h-[320px] w-[480px] rounded-full bg-gradient-to-tr from-emerald-400/15 to-transparent blur-3xl" />
+        </div>
+        <motion.div
+          {...motionPresets.scaleIn}
+          className="w-full max-w-sm glass-card p-8 relative"
+        >
           <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <KeyRound className="w-7 h-7 text-primary" />
-            </div>
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.08, type: 'spring', stiffness: 320, damping: 22 }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-4 shadow-[0_8px_24px_-6px_rgba(16,185,129,0.55)]"
+            >
+              <KeyRound className="w-7 h-7 text-white" />
+            </motion.div>
             <h1 className="text-3xl font-bold tracking-tight mb-2">Welcome back</h1>
             <p className="text-muted-foreground">
               {hasCredentials
@@ -354,7 +369,7 @@ export default function Login() {
               <a className="text-primary font-medium hover:underline">Create a free account</a>
             </Link>
           </p>
-        </div>
+        </motion.div>
       </main>
     </div>
   );

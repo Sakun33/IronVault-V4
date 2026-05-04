@@ -576,7 +576,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
-        <nav className="w-60 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r border-border/50 p-3 flex flex-col h-full">
+        <nav className="w-60 flex-shrink-0 glass-surface border-r p-3 flex flex-col h-full">
           {/* Scrollable primary nav items with section groups */}
           <div className="flex-1 overflow-y-auto min-h-0">
             {/* Core Vault group */}
@@ -591,7 +591,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' nav-active-indicator bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>
@@ -621,7 +621,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' nav-active-indicator bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>

@@ -138,6 +138,7 @@
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.300.0",
+    "motion": "^12.38.0",
     "nodemailer": "^8.0.5",
     "otplib": "^13.4.0",
     "pdfjs-dist": "^5.4.449",

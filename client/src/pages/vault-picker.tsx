@@ -1017,9 +1017,9 @@ export default function VaultPickerPage() {
               ) : (
                 <div className="space-y-4 mb-6">
                   {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).map(vault => (
-                    <div key={vault.id} className="rounded-xl border border-border bg-card p-4">
+                    <div key={vault.id} className="glass-card gradient-border p-4 transition-all duration-200 hover:bg-white/[0.07]">
                       <div className="flex items-center gap-2 mb-3">
-                        <ShieldCheck className="w-5 h-5 text-primary" />
+                        <ShieldCheck className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
                         <span className="font-semibold">{vault.name}</span>
                         {vault.isDefault && (
                           <span className="ml-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">Default</span>
@@ -1116,7 +1116,7 @@ export default function VaultPickerPage() {
               <div className="space-y-4 mb-6">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cloud Vaults</p>
                 {cloudVaults.map(cv => (
-                  <div key={cv.vaultId} className="rounded-xl border border-border bg-card p-4">
+                  <div key={cv.vaultId} className="glass-card gradient-border p-4 transition-all duration-200 hover:bg-white/[0.07]">
                     <div className="flex items-center gap-2 mb-3">
                       <Cloud className="w-5 h-5 text-blue-500" />
                       <span className="font-semibold">{cv.vaultName}</span>
