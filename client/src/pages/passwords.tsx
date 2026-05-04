@@ -347,7 +347,7 @@ export default function Passwords() {
                 aria-label="List view"
                 aria-pressed={viewMode === 'list'}
                 onClick={() => setViewMode('list')}
-                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`h-11 w-11 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <ListIcon className="w-4 h-4" />
               </button>
@@ -356,7 +356,7 @@ export default function Passwords() {
                 aria-label="Grid view"
                 aria-pressed={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
-                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`h-11 w-11 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>

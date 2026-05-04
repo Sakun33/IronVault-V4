@@ -1693,7 +1693,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const secret = process.env.JWT_SECRET;
       if (!secret) return res.status(500).json({ error: 'Server misconfigured' });
       const candidateHash = createHmac('sha256', secret).update(`${normalizedEmail}:${normalizedPurpose}:${normalizedCode}`).digest('hex');
-      if (candidateHash !== rows[0].code_hash) {
+      if (!safeEq(candidateHash, String(rows[0].code_hash || ''))) {
         await db.query(`UPDATE auth_verification_codes SET attempts = attempts + 1 WHERE email = $1 AND purpose = $2`, [normalizedEmail, normalizedPurpose]);
         return res.status(400).json({ error: 'Incorrect code.' });
       }
