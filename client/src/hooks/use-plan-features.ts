@@ -134,7 +134,14 @@ export function usePlanFeatures(): PlanFeatures {
     }
 
     try {
-      const resp = await fetch(`/api/crm/entitlement/${encodeURIComponent(email)}`);
+      // QA-R2 C2: server now requires Bearer auth on /api/crm/entitlement/:id
+      // (own row only, or ADMIN_API_KEY). Without a token we return early so
+      // the user falls back to the local cached plan / 'free' default.
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      if (!cloudToken) { setIsLoading(false); return; }
+      const resp = await fetch(`/api/crm/entitlement/${encodeURIComponent(email)}`, {
+        headers: { 'Authorization': `Bearer ${cloudToken}` },
+      });
       if (resp.ok) {
         const data = await resp.json();
         const serverPlan = (data.plan as PlanId) ?? 'free';

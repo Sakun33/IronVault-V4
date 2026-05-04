@@ -196,7 +196,20 @@ export function NoteEditor({
     const el = editorRef.current;
     if (!el) return;
     if (typeof document !== 'undefined' && document.activeElement === el) return;
-    const html = initialHtml(note, starter);
+    // QA-R2 H8: re-sanitize on read. Saves go through DOMPurify in
+    // runSave(), but a vault that was imported from another build (or an
+    // older client whose sanitizer rule-set differed) could carry HTML
+    // that doesn't match our current allow-list. Running through
+    // DOMPurify on every load means we never feed unvetted markup back
+    // into the contentEditable surface, even if the storage layer is
+    // somehow compromised. Same allow-list as runSave so round-trips
+    // are stable.
+    const raw = initialHtml(note, starter);
+    const html = DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span'],
+      ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style'],
+      ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
+    });
     if (el.innerHTML !== html) el.innerHTML = html;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, note?.id, note?.updatedAt, note?.content]);

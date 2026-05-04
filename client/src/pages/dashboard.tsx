@@ -287,7 +287,37 @@ export default function Dashboard() {
   };
 
   const fmtAmt = (n: number) => formatCurrency(n, currency);
-  const userName = getUserName(accountEmail);
+  // QA-R2 H9: prefer the server-side full_name (typed at signup) over the
+  // best-effort email-prefix parse. Fetched once on mount and cached in
+  // localStorage so subsequent loads don't await the network. Falls back
+  // through customerProfile → email-prefix → empty so the greeting always
+  // renders something sensible even offline.
+  const [serverName, setServerName] = useState<string>(() => {
+    try { return localStorage.getItem('iv_display_name') || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    if (!accountEmail) return;
+    const cloudToken = localStorage.getItem('iv_cloud_token');
+    if (!cloudToken) return;
+    let cancelled = false;
+    fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${cloudToken}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return;
+        const name = (data?.fullName || '').trim();
+        if (name) {
+          // Use the first word only — same convention the namifyEmail
+          // fallback uses, and matches user expectation ("Saket Suman"
+          // → "Saket").
+          const first = name.split(/\s+/)[0];
+          setServerName(first);
+          try { localStorage.setItem('iv_display_name', first); } catch { /* noop */ }
+        }
+      })
+      .catch(() => { /* network blip — fall back to local resolution */ });
+    return () => { cancelled = true; };
+  }, [accountEmail]);
+  const userName = serverName || getUserName(accountEmail);
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   // ── Derived stats ─────────────────────────────────────────────────────────

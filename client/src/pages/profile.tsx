@@ -741,9 +741,11 @@ export default function Profile() {
   useEffect(() => {
     const crmUserId = localStorage.getItem('crmUserId');
     if (!crmUserId) return;
+    const cloudToken = localStorage.getItem('iv_cloud_token');
+    if (!cloudToken) return; // QA-R2 C2: endpoint now requires Bearer auth
     const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
     const entEndpoint = apiUrl ? `${apiUrl}/api/crm/entitlement/${crmUserId}` : `/api/crm/entitlement/${crmUserId}`;
-    fetch(entEndpoint)
+    fetch(entEndpoint, { headers: { 'Authorization': `Bearer ${cloudToken}` } })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.entitlement?.plan) {
@@ -849,11 +851,17 @@ export default function Profile() {
 
   const handleCreateSupportTicket = async (ticketData: Partial<SupportTicket>) => {
     try {
+      // QA-R2 C1: backend now requires Bearer auth on POST /api/crm/tickets
+      // and uses the token's email server-side, so we don't send body.email.
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      if (!cloudToken) throw new Error('Not signed in');
       const response = await fetch('/api/crm/tickets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cloudToken}`,
+        },
         body: JSON.stringify({
-          email: userProfile.email,
           subject: ticketData.title || 'Support Request',
           description: ticketData.description || '',
           priority: ticketData.priority || 'medium',

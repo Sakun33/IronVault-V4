@@ -111,6 +111,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [isUnlocked]);
 
+  // QA-R2 H2: global 401 handler. The fetch interceptor in
+  // lib/auth-fetch-interceptor.ts dispatches `vault:auth:expired` whenever
+  // an authenticated /api/* request comes back 401, which means our cloud
+  // JWT has expired or been revoked. Run accountLogout to clear the stale
+  // session and bounce the user to /auth/login. We listen here at the
+  // provider level so a single subscription serves the whole app.
+  useEffect(() => {
+    const onExpired = () => {
+      if (!isAccountLoggedIn) return; // already logged out — no-op
+      console.warn('[auth] cloud JWT expired (received 401) — signing out');
+      accountLogout();
+      try {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
+          window.location.assign('/auth/login?expired=1');
+        }
+      } catch { /* noop */ }
+    };
+    window.addEventListener('vault:auth:expired', onExpired);
+    return () => window.removeEventListener('vault:auth:expired', onExpired);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAccountLoggedIn]);
+
   const initializeAuth = async () => {
     try {
       // Restore account session from localStorage (persists across page loads)
@@ -282,6 +304,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('ironvault_passwords');
       localStorage.removeItem('ironvault_has_vault');
       localStorage.removeItem('iv_cloud_synced_vaults');
+      // QA-R2 H9: cached display name from /api/auth/me. Drop it so the
+      // next account login fetches fresh — otherwise the previous user's
+      // name briefly appears in the dashboard greeting.
+      localStorage.removeItem('iv_display_name');
     } catch { /* noop */ }
     vaultManager.clearAccountEmail();
     vaultManager.clearInternalState();

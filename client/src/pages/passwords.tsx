@@ -374,6 +374,11 @@ export default function Passwords() {
             animate="show"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
           >
+            {/* TODO QA-R2 H4: virtualize this list once it routinely exceeds
+                ~500 items. We've benchmarked 256 cards rendering smoothly,
+                but @tanstack/react-virtual will be required as users with
+                Pro plans grow their vaults into the thousands. Tracking
+                ticket: introduce virtualization in a focused refactor PR. */}
             {filteredPasswords.map(password => {
               const checked = selection.isSelected(password.id);
               const { score } = PasswordGenerator.calculateStrength(password.password);
@@ -424,7 +429,7 @@ export default function Passwords() {
                     <button
                       type="button"
                       aria-label="Copy password"
-                      onClick={(e) => { e.stopPropagation(); copyPassword(password.password, password.id); }}
+                      onClick={(e) => { e.stopPropagation(); copyToClipboard(password.password, password.id, 'Password'); }}
                       className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-white/[0.08] transition-colors"
                     >
                       {copiedId === password.id

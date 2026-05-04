@@ -416,6 +416,23 @@ function stripHtml(str: string): string {
 // Fluid Compute instance — this is best-effort, not a distributed lock. For the
 // QA-audit threat model (credential-stuffing from a single source) it is the
 // right granularity; multi-instance bypass is acceptable.
+//
+// QA-R2 H7 — KNOWN LIMITATION:
+//   Vercel serverless functions can scale across multiple instances, and each
+//   instance gets its own fresh in-process Map. An attacker distributing
+//   attempts across enough concurrent invocations can therefore exceed the
+//   intended 5-attempts-per-15-min cap. We've judged this acceptable for the
+//   current threat model (low traffic, scrypt-hashed server-side passwords,
+//   per-IP not per-account, account lockout NOT used).
+//
+//   For higher scale OR if we ever expose an account-enumeration vector, swap
+//   this implementation for a Redis-backed counter (Upstash, Vercel KV, etc.)
+//   so all instances share state. Sketch:
+//     await redis.incr(key); await redis.expire(key, 15*60);
+//     if (await redis.get(key) > 5) return 429;
+//   Document this swap as a follow-up at:
+//   https://vercel.com/docs/storage/vercel-kv (Vercel KV is deprecated; use
+//   Upstash Redis from the Vercel Marketplace instead).
 const _RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const _RATE_LIMIT_MAX = 5;
 const _loginFailures = new Map<string, number[]>();
@@ -448,10 +465,15 @@ function clearLoginFailures(ip: string) {
 }
 
 function setSecurityHeaders(res: VercelResponse) {
-  // 'unsafe-inline' is currently required because the Razorpay checkout SDK
-  // injects inline event handlers into its iframe shell. We accept the trade-off
-  // for now; XSS sinks in user content are mitigated separately (DOMPurify on
-  // notes, etc.). Migrate to nonce-based CSP when Razorpay supports it.
+  // QA-R2 H6 — explicit policy:
+  //   * NO 'unsafe-eval' anywhere (audited grep this file: none present).
+  //   * 'unsafe-inline' on script-src and style-src is INTENTIONAL and
+  //     ONLY because the Razorpay checkout SDK injects inline event
+  //     handlers into its iframe shell at runtime. Removing it would
+  //     break payments. XSS sinks in user-generated content are
+  //     mitigated separately (DOMPurify on notes, see also H8).
+  //   * Migrate to a nonce-based CSP (and drop unsafe-inline) once
+  //     Razorpay's checkout SDK supports it.
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com"
@@ -635,6 +657,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path.startsWith("/api/crm/entitlement/")) {
     const userId = decodeURIComponent(path.replace("/api/crm/entitlement/", ""));
     if (!userId) return res.status(400).json({ error: "userId required" });
+    // QA-R2 C2: this endpoint reveals plan / status / subscription_platform —
+    // an unauthenticated attacker could probe it to learn which emails are
+    // registered and which are paying customers. Require either:
+    //   1) a JWT for the SAME user (own entitlement only), OR
+    //   2) the ADMIN_API_KEY header (admin tooling).
+    const adminKey = req.headers['x-admin-key'] as string;
+    const expectedAdminKey = process.env.ADMIN_API_KEY;
+    const adminAuthed = !!expectedAdminKey && !!adminKey && safeEq(adminKey, expectedAdminKey);
+    if (!adminAuthed) {
+      const cloudUser = await getCloudUser(req);
+      if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+      // Allow lookup by either id or email, but only the user's own row.
+      const matchesOwn =
+        userId === cloudUser.userId ||
+        userId.toLowerCase() === cloudUser.email.toLowerCase();
+      if (!matchesOwn) return res.status(403).json({ error: 'Forbidden' });
+    }
 
     try {
       const isUuid = /^[0-9a-f-]{36}$/i.test(userId);
@@ -730,8 +769,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/crm/tickets ────────────────────────────────────────────────────
   if (path === "/api/crm/tickets" && req.method === "POST") {
-    const { email, subject, description, priority } = req.body || {};
-    if (!email || !subject) return res.status(400).json({ error: "email and subject required" });
+    // QA-R2 C1: ticket creation was open to anyone — an attacker could spam
+    // arbitrary emails into our tickets table + Zoho Desk. Require an
+    // authenticated session and ALWAYS use the JWT's email rather than a
+    // body-supplied one to prevent submitter spoofing.
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    const { subject, description, priority } = req.body || {};
+    const email = cloudUser.email; // server-trusted, ignores body.email
+    if (!subject) return res.status(400).json({ error: "subject required" });
     const safeSubject = stripHtml(String(subject));
     const safeDescription = description ? stripHtml(String(description)) : '';
     try {
@@ -1772,11 +1818,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await safeQuery(`DELETE FROM entitlements WHERE user_id = $1`, [userId]);
       await safeQuery(`DELETE FROM extension_sessions WHERE user_id = $1`, [userId]);
       await safeQuery(`DELETE FROM share_links WHERE user_id = $1`, [userId]);
-      await safeQuery(`DELETE FROM shared_links WHERE created_by = $1`, [userId]);
+      // QA-R2 C3: shared_links table has no user FK column (token-only).
+      // Skip it; rows expire on their own via expires_at.
       await safeQuery(`DELETE FROM cloud_vaults WHERE user_id = $1`, [userId]);
       await safeQuery(`DELETE FROM payment_orders WHERE email = $1`, [email]);
       await safeQuery(`DELETE FROM vault_activity WHERE user_id = $1`, [userId]);
       await safeQuery(`DELETE FROM customers WHERE email = $1`, [email]);
+      // QA-R2 C3: tables that were missing from the original cleanup.
+      // tickets has both customer_id (FK to customers) and customer_email,
+      // so we delete by both to catch rows where one column was nulled.
+      await safeQuery(`DELETE FROM tickets WHERE customer_email = $1`, [email]);
+      await safeQuery(`DELETE FROM plan_audit_log WHERE customer_email = $1`, [email]);
+      await safeQuery(`DELETE FROM auth_verification_codes WHERE email = $1`, [email]);
+      await safeQuery(`DELETE FROM password_reset_tokens WHERE email = $1`, [email]);
+      await safeQuery(`DELETE FROM billing_events WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM ticket_replies WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM support_tickets WHERE user_id = $1`, [userId]);
+      await safeQuery(`DELETE FROM deletion_requests WHERE email = $1`, [email]);
 
       const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [userId]);
       if (!rowCount) return res.status(404).json({ error: 'Account not found' });
@@ -1789,6 +1847,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('[auth/account DELETE]', err.message);
       return res.status(500).json({ error: 'Account deletion failed' });
+    }
+  }
+
+  // ── GET /api/auth/me ────────────────────────────────────────────────────────
+  // QA-R2 H9: returns the authenticated user's display name + email so the
+  // dashboard greeting can show the ACTUAL name the user typed at signup
+  // ("Saket" rather than "Saketsuman1312" parsed out of the email prefix).
+  // Tiny endpoint by design — anything more belongs in /api/profile.
+  if (path === '/api/auth/me' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const { rows } = await db.query(
+        `SELECT id, email, full_name FROM crm_users WHERE id = $1 LIMIT 1`,
+        [cloudUser.userId]
+      );
+      const row = rows[0];
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      return res.json({
+        userId: row.id,
+        email: row.email,
+        fullName: row.full_name || null,
+      });
+    } catch (err: any) {
+      console.error('[auth/me] error:', err.message);
+      return res.status(500).json({ error: 'Failed' });
     }
   }
 
@@ -1870,7 +1954,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { rows: priorVaults } = await db.query(
         `SELECT COUNT(*) AS cnt FROM cloud_vaults WHERE user_id = $1`, [cloudUser.userId]
       );
-      const isFirstVault = parseInt(priorVaults[0]?.cnt ?? '0', 10) === 0;
+      const priorCount = parseInt(priorVaults[0]?.cnt ?? '0', 10);
+      const isFirstVault = priorCount === 0;
+      // QA-R2 C4: enforce per-plan vault cap server-side. The client also gates
+      // creation but a malicious client could bypass that. Mirror the limits
+      // published at /api/plans (free=1, pro=5, family=5, lifetime=5,
+      // pro_family_member=2; -1 = unlimited).
+      const VAULT_LIMITS: Record<string, number> = {
+        free: 1,
+        pro: 5,
+        family: 5,
+        lifetime: 5,
+        pro_family_member: 2,
+      };
+      const cap = VAULT_LIMITS[plan as string] ?? 1;
+      if (cap !== -1 && priorCount >= cap) {
+        return res.status(403).json({
+          error: `Vault limit reached (${cap}). Delete an existing vault or upgrade your plan to add more.`,
+          code: 'VAULT_LIMIT_REACHED',
+          cap,
+          current: priorCount,
+        });
+      }
       const ts = clientModifiedAt ? new Date(clientModifiedAt) : new Date();
       const { rows: created } = await db.query(
         `INSERT INTO cloud_vaults (user_id, vault_id, vault_name, encrypted_blob, is_default, client_modified_at, source_device_id)
@@ -2275,7 +2380,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         return res.json({ success: true, emailSent: sent });
       } else {
-        // SMTP not configured — return token for in-app display (dev/demo fallback)
+        // QA-R2 H1: in production, NEVER return the reset token in the
+        // response — that's an account-takeover vector if SMTP is mis-
+        // configured. Generic "we sent it" so the response shape mirrors
+        // the success path (and we don't leak whether SMTP is broken).
+        // The token still exists in password_reset_tokens; the legitimate
+        // user just won't get an email. Logs surface the misconfig.
+        if (process.env.NODE_ENV === 'production') {
+          console.error('[forgot-password] SMTP not configured in production — token NOT delivered for', normalizedEmail);
+          return res.json({ success: true, emailSent: false });
+        }
+        // Non-production (dev / preview): keep the inline reset link for
+        // local testing convenience.
         return res.json({ success: true, emailSent: false, resetCode: token, resetLink });
       }
     } catch (err: any) {

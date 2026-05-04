@@ -523,8 +523,57 @@ export class VaultStorage {
     });
   }
 
-  // Replace vault contents from an encrypted cloud blob (clear then re-import)
+  // Replace vault contents from an encrypted cloud blob.
+  // QA-R2 C5: decrypt + validate the blob FIRST so we never clear local data
+  // and then discover the cloud blob is corrupt / wrong-password / not JSON.
+  // The original code did `clearEncryptedItems → importVault`, so a decrypt
+  // failure mid-import wiped the user's local vault with nothing to restore.
   async replaceVaultFromBlob(encryptedBlob: string, masterPassword: string): Promise<void> {
+    // Step 1: parse the envelope (version/salt/iv/data) up-front. We accept
+    // both the encrypted-vault shape and the legacy plaintext-JSON shape that
+    // importVault() supports.
+    let cleanBlob = encryptedBlob.trim();
+    if (cleanBlob.charCodeAt(0) === 0xFEFF) cleanBlob = cleanBlob.slice(1);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanBlob);
+    } catch (e: any) {
+      throw new Error(`Cloud blob is not valid JSON: ${e.message || 'parse error'}`);
+    }
+
+    // Step 2: if it's an encrypted envelope, decrypt + verify it has at least
+    // one expected collection before we touch local data. If decrypt throws
+    // (wrong password / tampered ciphertext), the catch re-throws and local
+    // state is preserved.
+    if (parsed.version && parsed.salt && parsed.iv && parsed.data) {
+      try {
+        const salt = CryptoService.base64ToUint8Array(parsed.salt);
+        const iv = CryptoService.base64ToUint8Array(parsed.iv);
+        const data = new Uint8Array(CryptoService.base64ToArrayBuffer(parsed.data));
+        const key = await CryptoService.deriveKey(masterPassword, salt);
+        const decrypted = await CryptoService.decrypt(data, key, iv);
+        const payload = JSON.parse(new TextDecoder().decode(decrypted));
+        if (typeof payload !== 'object' || payload === null) {
+          throw new Error('Decrypted payload is not an object');
+        }
+        // Sanity check: at least ONE known collection field must be present.
+        // A blob with none of these is almost certainly malformed and we
+        // don't want to wipe local for it.
+        const hasAnyCollection = [
+          'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
+          'bankStatements', 'bankTransactions', 'investments', 'investmentGoals',
+        ].some(k => Array.isArray((payload as any)[k]));
+        if (!hasAnyCollection) {
+          throw new Error('Cloud blob has no known collections — refusing to replace local data');
+        }
+      } catch (e: any) {
+        throw new Error(`Cloud blob decrypt/validate failed — local data preserved: ${e?.message || e}`);
+      }
+    }
+
+    // Step 3: only NOW that we know the blob is valid + decryptable, wipe
+    // local and re-import. importVault re-runs the same decrypt internally;
+    // we accept that small duplicated work for the safety guarantee.
     await this.clearEncryptedItems();
     await this.importVault(encryptedBlob, masterPassword);
     // Recreate the verification entry so unlockVault() can verify on session restore.

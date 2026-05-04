@@ -325,6 +325,45 @@ export default function Notes() {
   const selection = useMultiSelect(sortedNotes);
 
   // Editor lifecycle ────────────────────────────────────────────────────────
+  // QA-R2 H5: hijack the browser back button so it closes the editor
+  // instead of navigating away from /notes entirely. We push a marker
+  // history entry when the editor opens and listen for popstate; if the
+  // marker is popped we close the editor instead of letting wouter route
+  // away. The closeEditor() helper below pops the marker if it's still on
+  // the stack, so an explicit Done/Back tap stays in sync with the URL.
+  const editorHashPushedRef = useRef(false);
+  const pushEditorHistoryMarker = () => {
+    if (typeof window === 'undefined' || editorHashPushedRef.current) return;
+    try {
+      window.history.pushState({ ivEditor: true }, '');
+      editorHashPushedRef.current = true;
+    } catch { /* noop */ }
+  };
+  const popEditorHistoryMarker = () => {
+    if (typeof window === 'undefined' || !editorHashPushedRef.current) return;
+    editorHashPushedRef.current = false;
+    try {
+      if (window.history.state?.ivEditor) window.history.back();
+    } catch { /* noop */ }
+  };
+  useEffect(() => {
+    const onPop = () => {
+      // The browser already popped the entry by the time popstate fires —
+      // clear the ref and just close the editor in React state.
+      if (editorHashPushedRef.current) {
+        editorHashPushedRef.current = false;
+        setEditorOpen(false);
+        setTimeout(() => {
+          setEditingNote(null);
+          setStarterContent(undefined);
+          setStarterNotebook(undefined);
+        }, 240);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const openNewNote = (template?: typeof NOTE_TEMPLATES[number]) => {
     if (!isPro && notes.length >= getLimit('notes')) {
       toast({ title: 'Limit reached', description: 'Upgrade to Pro for unlimited notes.', variant: 'destructive' });
@@ -336,14 +375,17 @@ export default function Notes() {
     setStarterNotebook(template?.notebook || lastNotebook || 'personal');
     setEditorOpen(true);
     setShowTemplatesModal(false);
+    pushEditorHistoryMarker();
   };
   const openExistingNote = (note: NoteEntry) => {
     setEditingNote(note);
     setStarterContent(undefined);
     setStarterNotebook(undefined);
     setEditorOpen(true);
+    pushEditorHistoryMarker();
   };
   const closeEditor = () => {
+    popEditorHistoryMarker();
     setEditorOpen(false);
     setTimeout(() => {
       setEditingNote(null);

@@ -7,6 +7,7 @@ import { useAuth } from './auth-context';
 import { useLogging } from './logging-context';
 import type { ParserConfig } from '@/lib/csv-parsers';
 import { isNoteEditing } from '@/lib/note-editing-guard';
+import { useSearch } from './search-context';
 
 // Date fields that need hydration from JSON strings back to Date objects after decryption
 const DATE_FIELDS = ['createdAt', 'updatedAt', 'lastUsed', 'date', 'nextBillingDate', 'expiryDate', 'dueDate', 'completedAt', 'nextReminderDate', 'nextDueDate', 'purchaseDate', 'maturityDate', 'importDate', 'achievedDate', 'targetDate'];
@@ -157,7 +158,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [investmentGoals, setInvestmentGoals] = useState<InvestmentGoal[]>([]);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  // QA-R2 H3: searchQuery moved out to its own SearchProvider so its
+  // updates no longer rebuild the entire vault context value (which was
+  // re-rendering every consumer of useVault() on every keystroke).
+  // The fields stay on the public type as a backwards-compat shim — they
+  // forward to the search context. Direct consumers should prefer the
+  // useSearch() hook so they only re-render on actual search changes.
   const [isLoading, setIsLoading] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
@@ -1148,7 +1154,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     }).length,
   };
 
-  const value: VaultContextType = {
+  // Internal value (without searchQuery) — see useVault() below for how the
+  // public API still exposes searchQuery via the SearchContext.
+  const value: Omit<VaultContextType, 'searchQuery' | 'setSearchQuery'> = {
     passwords,
     subscriptions,
     notes,
@@ -1159,8 +1167,6 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     investments,
     investmentGoals,
     stats,
-    searchQuery,
-    setSearchQuery,
     refreshData,
     addPassword,
     updatePassword,
@@ -1222,16 +1228,21 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <VaultContext.Provider value={value}>
+    <VaultContext.Provider value={value as VaultContextType}>
       {children}
     </VaultContext.Provider>
   );
 }
 
-export function useVault() {
+export function useVault(): VaultContextType {
   const context = useContext(VaultContext);
   if (context === undefined) {
     throw new Error('useVault must be used within a VaultProvider');
   }
-  return context;
+  // QA-R2 H3: searchQuery/setSearchQuery are sourced from the separate
+  // SearchContext so vault state changes don't bust their identity (and
+  // search keystrokes don't bust vault consumers). Merge here so the
+  // public API stays unchanged.
+  const search = useSearch();
+  return { ...context, searchQuery: search.searchQuery, setSearchQuery: search.setSearchQuery };
 }

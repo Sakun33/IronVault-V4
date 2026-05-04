@@ -184,22 +184,32 @@ export class EncryptedSupportTickets {
       const encrypted = await this.encryptTicket(ticket);
       await this.storeTicket(encrypted);
 
-      // Also send to backend API so admin console can see the ticket
+      // Also send to backend API so admin console can see the ticket.
+      // Server now requires a Bearer cloud token (QA-R2 C1) and uses the
+      // token's email as the submitter — local crmUserId/email aren't sent.
       try {
-        const crmUserId = localStorage.getItem('crmUserId');
-        const apiUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_API_URL) || '';
-        const endpoint = apiUrl ? `${apiUrl}/api/crm/tickets` : '/api/crm/tickets';
-        await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: crmUserId,
-            subject: ticketData.title,
-            description: ticketData.description,
-            priority: ticketData.priority,
-            category: ticketData.category
-          }),
-        });
+        const cloudToken = localStorage.getItem('iv_cloud_token');
+        if (!cloudToken) {
+          // Local-only or signed-out user — skip the backend write but
+          // still keep the encrypted local ticket above so the user
+          // doesn't lose their submission.
+        } else {
+          const apiUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_API_URL) || '';
+          const endpoint = apiUrl ? `${apiUrl}/api/crm/tickets` : '/api/crm/tickets';
+          await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${cloudToken}`,
+            },
+            body: JSON.stringify({
+              subject: ticketData.title,
+              description: ticketData.description,
+              priority: ticketData.priority,
+              category: ticketData.category
+            }),
+          });
+        }
       } catch (syncError) {
       }
       

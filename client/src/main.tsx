@@ -4,6 +4,10 @@ import "./index.css";
 import "./styles/mobile.css";
 // Initialize PWA service early
 import "./lib/pwa";
+// QA-R2 H2: install the global 401 → vault:auth:expired interceptor BEFORE
+// any module that may issue authenticated fetches at import time.
+import { installAuthFetchInterceptor } from "./lib/auth-fetch-interceptor";
+installAuthFetchInterceptor();
 
 // CRASH REPORTER — shows actual error on white screen instead of blank page
 function showCrash(label: string, msg: string, stack?: string) {

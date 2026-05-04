@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { VaultProvider, useVault } from "@/contexts/vault-context";
+import { SearchProvider } from "@/contexts/search-context";
 import { CurrencyProvider } from "@/contexts/currency-context";
 import { LoggingProvider } from "@/contexts/logging-context";
 import { ThemeProvider, useTheme } from "@/contexts/theme-context";
@@ -1137,16 +1138,18 @@ function App() {
               <AuthProvider>
                 <CurrencyProvider>
                   <VaultProvider>
-                    <LicenseProvider>
-                      <VaultSelectionProvider>
-                        <Toaster />
-                        <ZohoSalesIQIdentity />
-                        <Router />
-                        {/* PWA / extension nudges */}
-                        <PWAOfflineIndicator />
-                        <BrowserExtensionPrompt />
-                      </VaultSelectionProvider>
-                    </LicenseProvider>
+                    <SearchProvider>
+                      <LicenseProvider>
+                        <VaultSelectionProvider>
+                          <Toaster />
+                          <ZohoSalesIQIdentity />
+                          <Router />
+                          {/* PWA / extension nudges */}
+                          <PWAOfflineIndicator />
+                          <BrowserExtensionPrompt />
+                        </VaultSelectionProvider>
+                      </LicenseProvider>
+                    </SearchProvider>
                   </VaultProvider>
                 </CurrencyProvider>
               </AuthProvider>

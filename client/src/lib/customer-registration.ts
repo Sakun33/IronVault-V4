@@ -134,7 +134,12 @@ export async function getEntitlementStatus(): Promise<CustomerRegistrationRespon
     // different table (crm_users) and would return 404 for most users.
     const endpoint = `/api/crm/entitlement/${lookupId}`;
 
-    const response = await fetch(endpoint);
+    // QA-R2 C2: this endpoint now requires Bearer auth (own row or admin).
+    const cloudToken = localStorage.getItem('iv_cloud_token');
+    if (!cloudToken) return null;
+    const response = await fetch(endpoint, {
+      headers: { 'Authorization': `Bearer ${cloudToken}` },
+    });
     if (!response.ok) return null;
     const data = await response.json();
     // Cache the canonical UUID so future calls skip the email lookup
