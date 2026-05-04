@@ -692,87 +692,32 @@ export function NoteEditor({
       {/* Color rail under top bar */}
       {accentHex && <div className="h-px w-full" style={{ background: accentHex }} aria-hidden />}
 
-      {/* Body */}
+      {/* Formatting toolbar — fixed BELOW the header, never scrolls away.
+          One row of buttons that horizontally scrolls if it overflows. */}
+      <div className="flex-shrink-0 border-b border-border/40 bg-background">
+        <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
+          <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Strikethrough" active={activeFormats.has('strike')} onClick={() => applyFormat('strikeThrough')}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Highlight" onClick={applyHighlight}><Highlighter className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
+          <ToolbarBtn label="Heading 1" active={headingCycle === 1} onClick={() => applyHeading(headingCycle === 1 ? 0 : 1)}><Heading1 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Heading 2" active={headingCycle === 2} onClick={() => applyHeading(headingCycle === 2 ? 0 : 2)}><Heading2 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Heading 3" active={headingCycle === 3} onClick={() => applyHeading(headingCycle === 3 ? 0 : 3)}><Heading3 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
+          <ToolbarBtn label="Bullet list (⌘⇧8)" active={activeFormats.has('ul')} onClick={() => applyFormat('insertUnorderedList')}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Numbered list (⌘⇧7)" active={activeFormats.has('ol')} onClick={() => applyFormat('insertOrderedList')}><ListOrdered className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Checklist (⌘⇧9)" onClick={insertChecklistItem}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Quote" onClick={applyQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
+        </div>
+      </div>
+
+      {/* Body — only this section scrolls */}
       <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar">
-        <div className="px-4 sm:px-8 pt-5 pb-3 max-w-3xl mx-auto w-full relative">
-          {/* Notebook + tag row */}
-          <div className="flex items-center justify-between gap-2 mb-4 text-[13px] text-muted-foreground flex-wrap">
-            <span className="inline-flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 opacity-60" />
-              <select
-                value={notebook}
-                onChange={e => onNotebookSelect(e.target.value)}
-                aria-label="Notebook"
-                className="bg-transparent border-0 outline-none cursor-pointer hover:text-foreground transition-colors capitalize"
-              >
-                {notebookOptions.map(nb => (
-                  <option key={nb.name} value={nb.name} className="bg-background">
-                    {nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
-                  </option>
-                ))}
-                <option value="__new__" className="bg-background text-emerald-300">+ New notebook…</option>
-              </select>
-            </span>
-
-            <div className="flex items-center gap-1 flex-wrap justify-end min-w-0 relative">
-              {tags.map(t => (
-                <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-foreground">
-                  <TagIcon className="w-2.5 h-2.5 opacity-60" />
-                  {t}
-                  <button type="button" aria-label={`Remove ${t}`} onClick={() => removeTag(t)} className="opacity-50 hover:opacity-100">
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              ))}
-              {tagInputOpen ? (
-                <div className="relative">
-                  <input
-                    autoFocus
-                    value={tagInput}
-                    onChange={e => { setTagInput(e.target.value); setTagAutocomplete(true); }}
-                    onFocus={() => setTagAutocomplete(true)}
-                    onBlur={() => { setTimeout(() => { setTagAutocomplete(false); if (tagInput.trim()) addTag(); setTagInputOpen(false); }, 120); }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
-                      else if (e.key === 'Escape') { e.preventDefault(); setTagInput(''); setTagInputOpen(false); }
-                      else if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
-                    }}
-                    placeholder="tag"
-                    className="bg-transparent border-0 outline-none text-[13px] w-24 placeholder:text-muted-foreground/50"
-                    aria-label="Add tag"
-                  />
-                  {tagAutocomplete && tagSuggestions.length > 0 && (
-                    <div className="absolute right-0 top-6 z-10 min-w-[140px] rounded-lg border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl py-1">
-                      {tagSuggestions.map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onMouseDown={(e) => { e.preventDefault(); addTag(t); }}
-                          className="w-full text-left px-2.5 py-1 text-xs text-foreground hover:bg-white/[0.06]"
-                        >
-                          #{t}
-                        </button>
-                      ))}
-                      {tagInput.trim() && !knownTags.includes(tagInput.trim().toLowerCase().replace(/^#/, '')) && (
-                        <button
-                          type="button"
-                          onMouseDown={(e) => { e.preventDefault(); addTag(); }}
-                          className="w-full text-left px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
-                        >
-                          + Create "{tagInput.trim().toLowerCase().replace(/^#/, '')}"
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <button type="button" onClick={() => setTagInputOpen(true)} className="text-[13px] text-emerald-400/90 hover:text-emerald-300 transition-colors inline-flex items-center gap-0.5">
-                  <Plus className="w-3 h-3" /> {tags.length === 0 ? 'Add tag' : 'Tag'}
-                </button>
-              )}
-            </div>
-          </div>
-
+        <div className="px-4 sm:px-8 pt-4 pb-3 max-w-3xl mx-auto w-full relative">
           {/* Title */}
           <input
             ref={titleRef}
@@ -801,7 +746,10 @@ export function NoteEditor({
             spellCheck={!viewerMode}
             className={`iv-rich-editor note-content ${viewerMode ? 'cursor-text' : ''}`}
             data-placeholder={viewerMode ? '' : 'Start writing…'}
-            style={{ minHeight: '400px', paddingBottom: `calc(96px + ${bottomGutterPx}px)` }}
+            // Toolbar is now above the body, so we no longer need the
+            // 96px ghost gutter at the bottom of the editable area —
+            // just keep enough breathing room above the footer.
+            style={{ minHeight: '300px', paddingBottom: `calc(24px + ${bottomGutterPx}px)` }}
           />
 
           <SlashMenu
@@ -860,41 +808,109 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Two-row formatting toolbar */}
-      <div
-        className="sticky bottom-0 z-[2] bg-background/95 backdrop-blur-md border-t border-border/40 transition-transform duration-150"
+      {/* Footer — notebook, tags, word count, save status. Fixed at the
+          bottom of the editor; lifts above the iOS soft keyboard via the
+          same visualViewport offset the toolbar used to use. */}
+      <footer
+        className="flex-shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-md transition-transform duration-150"
         style={{
           paddingBottom: keyboardOffset ? 0 : 'env(safe-area-inset-bottom)',
           transform: keyboardOffset ? `translateY(-${keyboardOffset}px)` : undefined,
         }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          {/* Row 1 — inline formatting */}
-          <div className="px-2 pt-1 pb-0.5 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
-            <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Strikethrough" active={activeFormats.has('strike')} onClick={() => applyFormat('strikeThrough')}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Highlight" onClick={applyHighlight}><Highlighter className="w-3.5 h-3.5" /></ToolbarBtn>
-            <span className="ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0">
-              {wordCount} word{wordCount === 1 ? '' : 's'}
+          {/* Top line: notebook + tags */}
+          <div className="px-3 pt-1.5 pb-1 flex items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 flex-shrink-0">
+              <BookOpen className="w-3.5 h-3.5 opacity-60" />
+              <select
+                value={notebook}
+                onChange={e => onNotebookSelect(e.target.value)}
+                aria-label="Notebook"
+                className="bg-transparent border-0 outline-none cursor-pointer hover:text-foreground transition-colors capitalize"
+              >
+                {notebookOptions.map(nb => (
+                  <option key={nb.name} value={nb.name} className="bg-background">
+                    {nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
+                  </option>
+                ))}
+                <option value="__new__" className="bg-background text-emerald-300">+ New notebook…</option>
+              </select>
+            </span>
+            <span className="w-px h-4 bg-border/60 flex-shrink-0" aria-hidden />
+            <div className="flex items-center gap-1 flex-1 min-w-0 relative">
+              {tags.map(t => (
+                <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-foreground flex-shrink-0">
+                  <TagIcon className="w-2.5 h-2.5 opacity-60" />
+                  {t}
+                  <button type="button" aria-label={`Remove ${t}`} onClick={() => removeTag(t)} className="opacity-50 hover:opacity-100">
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              ))}
+              {tagInputOpen ? (
+                <div className="relative flex-shrink-0">
+                  <input
+                    autoFocus
+                    value={tagInput}
+                    onChange={e => { setTagInput(e.target.value); setTagAutocomplete(true); }}
+                    onFocus={() => setTagAutocomplete(true)}
+                    onBlur={() => { setTimeout(() => { setTagAutocomplete(false); if (tagInput.trim()) addTag(); setTagInputOpen(false); }, 120); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+                      else if (e.key === 'Escape') { e.preventDefault(); setTagInput(''); setTagInputOpen(false); }
+                      else if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
+                    }}
+                    placeholder="tag"
+                    className="bg-transparent border-0 outline-none text-[13px] w-24 placeholder:text-muted-foreground/50"
+                    aria-label="Add tag"
+                  />
+                  {tagAutocomplete && tagSuggestions.length > 0 && (
+                    <div className="absolute right-0 bottom-7 z-10 min-w-[140px] rounded-lg border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl py-1">
+                      {tagSuggestions.map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); addTag(t); }}
+                          className="w-full text-left px-2.5 py-1 text-xs text-foreground hover:bg-white/[0.06]"
+                        >
+                          #{t}
+                        </button>
+                      ))}
+                      {tagInput.trim() && !knownTags.includes(tagInput.trim().toLowerCase().replace(/^#/, '')) && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); addTag(); }}
+                          className="w-full text-left px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                        >
+                          + Create "{tagInput.trim().toLowerCase().replace(/^#/, '')}"
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button type="button" onClick={() => setTagInputOpen(true)} className="text-[13px] text-emerald-400/90 hover:text-emerald-300 transition-colors inline-flex items-center gap-0.5 flex-shrink-0">
+                  <Plus className="w-3 h-3" /> {tags.length === 0 ? 'Add tag' : 'Tag'}
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Bottom line: word count + save status */}
+          <div className="px-3 pb-1.5 flex items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
+            <span>{wordCount} word{wordCount === 1 ? '' : 's'}</span>
+            <span className="inline-flex items-center gap-1">
+              {saving ? (
+                <><Save className="w-3 h-3 text-amber-400 animate-pulse" /> Saving…</>
+              ) : dirty ? (
+                <><Save className="w-3 h-3 text-amber-400" /> Unsaved</>
+              ) : savedAt ? (
+                <><Check className="w-3 h-3 text-emerald-400" /> Saved · {timeAgoShort(savedAt)}</>
+              ) : null}
             </span>
           </div>
-          {/* Row 2 — block formatting */}
-          <div className="px-2 pb-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
-            <ToolbarBtn label="Heading 1" active={headingCycle === 1} onClick={() => applyHeading(headingCycle === 1 ? 0 : 1)}><Heading1 className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Heading 2" active={headingCycle === 2} onClick={() => applyHeading(headingCycle === 2 ? 0 : 2)}><Heading2 className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Heading 3" active={headingCycle === 3} onClick={() => applyHeading(headingCycle === 3 ? 0 : 3)}><Heading3 className="w-3.5 h-3.5" /></ToolbarBtn>
-            <span className="w-px h-4 bg-border/60 mx-1" aria-hidden />
-            <ToolbarBtn label="Bullet list (⌘⇧8)" active={activeFormats.has('ul')} onClick={() => applyFormat('insertUnorderedList')}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Numbered list (⌘⇧7)" active={activeFormats.has('ol')} onClick={() => applyFormat('insertOrderedList')}><ListOrdered className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Checklist (⌘⇧9)" onClick={insertChecklistItem}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Quote" onClick={applyQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
-            <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
-          </div>
         </div>
-      </div>
+      </footer>
     </>
   );
 

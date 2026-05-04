@@ -238,16 +238,17 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   // Flat list for mobile menu and other consumers
   const navItems = [...coreNavItems, ...financeNavItems, ...bottomNavItems];
 
-  // Core sections for bottom navigation (only 4 most used)
-  // Five primary tabs per Phase-5 spec. The MoreSheet is still reachable
-  // from the in-app menu, but the bottom rail keeps the surfaces a typical
-  // user actually thumbs between.
+  // Core sections for bottom navigation. The "Finance" combined tab was
+  // confusing — users couldn't tell whether it meant Expenses or
+  // Subscriptions until they tapped through. Splitting into two
+  // dedicated tabs trades one slot for a better target. Profile is
+  // still reachable from the menu / quick-access drawer.
   const bottomTabItems: TabItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, href: '/' },
-    { id: 'passwords', label: 'Passwords', icon: Key, href: '/passwords', count: stats.totalPasswords },
-    { id: 'notes', label: 'Notes', icon: FileText, href: '/notes', count: stats.totalNotes },
-    { id: 'finance', label: 'Finance', icon: DollarSign, href: '/expenses' },
-    { id: 'profile', label: 'Profile', icon: User, href: '/profile' },
+    { id: 'dashboard',     label: 'Home',           icon: BarChart3,  href: '/' },
+    { id: 'passwords',     label: 'Passwords',      icon: Key,        href: '/passwords',     count: stats.totalPasswords },
+    { id: 'notes',         label: 'Notes',          icon: FileText,   href: '/notes',         count: stats.totalNotes },
+    { id: 'expenses',      label: 'Expenses',       icon: DollarSign, href: '/expenses',      count: stats.totalExpenses },
+    { id: 'subscriptions', label: 'Subs',           icon: Bookmark,   href: '/subscriptions', count: stats.activeSubscriptions },
   ];
 
   // All sections for MoreSheet

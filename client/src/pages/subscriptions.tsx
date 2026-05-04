@@ -384,8 +384,8 @@ export default function Subscriptions() {
                   </Select>
                 </div>
 
-                {/* List / Grid view toggle — desktop only; mobile sticks to list */}
-                <div className="hidden sm:flex items-center justify-end mt-3">
+                {/* List / Grid view toggle — visible on every breakpoint */}
+                <div className="flex items-center justify-end mt-3">
                   <div className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
                     <button
                       type="button"

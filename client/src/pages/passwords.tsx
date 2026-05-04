@@ -340,8 +340,8 @@ export default function Passwords() {
                 <SelectItem value="strong">Strong</SelectItem>
               </SelectContent>
             </Select>
-            {/* List / Grid view toggle — desktop only; mobile sticks to list */}
-            <div className="hidden sm:flex items-center rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5">
+            {/* List / Grid view toggle — visible on every breakpoint */}
+            <div className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5 flex-shrink-0">
               <button
                 type="button"
                 aria-label="List view"

@@ -935,6 +935,34 @@ function AddExpenseModal({
     });
   }, [groupId, groups]);
 
+  // Auto-seed percent + share fields whenever participants change. Without
+  // this, switching to "%" or "Shares" with no values entered yet leaves
+  // every contact at 0, which then fails the reconciliation check and
+  // silently blocks Save. Defaulting to an even distribution makes the
+  // dialog Save-ready out of the box; the user can still edit values.
+  useEffect(() => {
+    if (!open) return;
+    const ids = Array.from(participants);
+    if (ids.length === 0) return;
+    const evenPct = round2(100 / ids.length);
+    setPercentSplits(prev => {
+      const next = { ...prev };
+      let changed = false;
+      ids.forEach(id => {
+        if (next[id] == null) { next[id] = evenPct; changed = true; }
+      });
+      return changed ? next : prev;
+    });
+    setShareSplits(prev => {
+      const next = { ...prev };
+      let changed = false;
+      ids.forEach(id => {
+        if (next[id] == null) { next[id] = 1; changed = true; }
+      });
+      return changed ? next : prev;
+    });
+  }, [open, participants]);
+
   // Compute resolved splits to show running totals
   const amountNum = parseFloat(amount) || 0;
   const partList = Array.from(participants);
@@ -964,7 +992,12 @@ function AddExpenseModal({
   }, [splitType, partList, amountNum, exactSplits, percentSplits, shareSplits]);
 
   const splitsTotal = resolvedSplits.reduce((s, x) => s + x.amount, 0);
-  const reconciledOk = Math.abs(splitsTotal - amountNum) < 0.02;
+  // Use a wider tolerance for percent + shares because rounding to cents
+  // can drift up to (n - 1) cents from the typed amount (3-way 33.33%
+  // splits round to 9.99 instead of 10.00 etc.). Equal split is always
+  // exact via evenShares.
+  const reconcileTolerance = splitType === 'equal' ? 0.005 : Math.max(0.02, partList.length * 0.01);
+  const reconciledOk = Math.abs(splitsTotal - amountNum) < reconcileTolerance;
 
   const togglePart = (id: string) => {
     setParticipants(prev => {
@@ -998,24 +1031,45 @@ function AddExpenseModal({
       toast({ title: 'Pick at least one participant', variant: 'destructive' });
       return;
     }
+    // If the splits don't reconcile against the typed amount, auto-normalize
+    // them by scaling proportionally — the user wanted Save to "just work"
+    // rather than be silently blocked. Exact-mode wildly-off splits still
+    // surface a toast so users notice the rebalance, but Save proceeds.
+    let finalSplits = resolvedSplits;
     if (!reconciledOk) {
-      toast({ title: 'Splits don\'t match the total', description: 'Adjust the split values to equal the amount.', variant: 'destructive' });
-      return;
+      console.warn('[EXPENSE-SAVE] Splits off:', { splitType, splitsTotal, amountNum, partList, resolvedSplits });
+      if (splitsTotal > 0) {
+        const factor = amountNum / splitsTotal;
+        finalSplits = resolvedSplits.map(s => ({ ...s, amount: round2(s.amount * factor) }));
+        toast({
+          title: 'Splits auto-balanced',
+          description: `Adjusted to total ${formatAmount(amountNum, cur)}.`,
+        });
+      } else {
+        // No values entered — fall back to an even split so Save isn't blocked.
+        const shares = evenShares(amountNum, partList.length);
+        finalSplits = partList.map((id, i) => ({ contactId: id, amount: shares[i] || 0 }));
+      }
     }
-    await onSave({
-      title: title.trim(),
-      amount: amountNum,
-      currency: cur,
-      paidBy,
-      splitType,
-      splits: resolvedSplits,
-      groupId,
-      category,
-      date: new Date(date),
-      notes: notes || undefined,
-      receiptDataUrl,
-      recurrence,
-    });
+    try {
+      await onSave({
+        title: title.trim(),
+        amount: amountNum,
+        currency: cur,
+        paidBy,
+        splitType,
+        splits: finalSplits,
+        groupId,
+        category,
+        date: new Date(date),
+        notes: notes || undefined,
+        receiptDataUrl,
+        recurrence,
+      });
+    } catch (e) {
+      console.error('[EXPENSE-SAVE] failed:', e);
+      toast({ title: "Couldn't save expense", description: 'See console for details.', variant: 'destructive' });
+    }
   };
 
   return (
