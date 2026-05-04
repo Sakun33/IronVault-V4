@@ -352,6 +352,11 @@ export const noteEntrySchema = z.object({
   notebook: z.string().default("Default"), // Organization folder/notebook
   tags: z.array(z.string()).default([]), // Tags for filtering/searching
   isPinned: z.boolean().default(false),
+  // Optional per-note accent. One of the design-system swatches
+  // ('emerald'|'violet'|'amber'|'rose'|'sky'|'slate') — when omitted the UI
+  // falls back to the notebook's color. Adding as optional is forward and
+  // backwards compatible with existing encrypted blobs.
+  color: z.string().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
