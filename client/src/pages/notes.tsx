@@ -28,12 +28,40 @@ function stripHtml(html: string): string {
   if (!html) return '';
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
-  return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+  return tmp.textContent || tmp.innerText || '';
+}
+
+// Strip markdown syntax so card previews render clean text instead of
+// "## Heading **bold** 1. item". Order matters: handle compound patterns
+// (bold/italic, links, images) before single-character markers (* _).
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')           // fenced code blocks
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')        // headings (#### Title)
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')    // images — drop entirely
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')   // links — keep label
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')       // **bold**
+    .replace(/__([^_\n]+)__/g, '$1')           // __bold__
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2') // *italic*
+    .replace(/(^|[^_])_([^_\n]+)_/g, '$1$2')   // _italic_
+    .replace(/~~([^~\n]+)~~/g, '$1')           // ~~strike~~
+    .replace(/`([^`\n]+)`/g, '$1')             // `inline code`
+    .replace(/^\s*[-*+]\s+/gm, '')             // - bullet
+    .replace(/^\s*\d+\.\s+/gm, '')             // 1. numbered
+    .replace(/^\s*>\s+/gm, '')                 // > blockquote
+    .replace(/^[-*_]{3,}\s*$/gm, '')           // --- horizontal rule
+    .replace(/<[^>]+>/g, '')                   // any HTML tag that slipped through
+    .replace(/\s*\n+\s*/g, ' ')                // collapse newlines + surrounding ws
+    .replace(/\s{2,}/g, ' ')                   // run-on whitespace
+    .trim();
 }
 
 function getPreview(content: string, max = 200): string {
-  const text = content.includes('<') ? stripHtml(content) : content;
-  return text.length > max ? text.slice(0, max) + '…' : text;
+  // First strip HTML (notes saved by the rich editor), then strip any
+  // markdown the user typed (legacy notes or copy/pasted Obsidian content).
+  const html = content.includes('<') ? stripHtml(content) : content;
+  const text = stripMarkdown(html);
+  return text.length > max ? text.slice(0, max).trimEnd() + '…' : text;
 }
 
 function timeAgoShort(date: Date | string | undefined): string {
@@ -276,12 +304,12 @@ export default function Notes() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-6 sm:space-y-7">
       {/* Header */}
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Notes</h1>
-          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             {notes.length} note{notes.length === 1 ? '' : 's'}
             {!isPro && notes.length > 0 && ` · ${notes.length}/${getLimit('notes')} used`}
             {sortedNotes.length !== notes.length && notes.length > 0 && ` · ${sortedNotes.length} matching`}
@@ -321,9 +349,15 @@ export default function Notes() {
         />
       </div>
 
-      {/* Notebook tabs + sort + view toggle */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 overflow-x-auto smooth-scrollbar -mx-1 px-1 flex-shrink min-w-0">
+      {/* Notebook tabs — own row, horizontally scrollable on mobile, hidden
+          scrollbar so the row stays clean. Negative margins so the scroll
+          area can bleed past the page padding without clipping the chips. */}
+      <div className="-mx-4 sm:mx-0">
+        <div
+          className="flex items-center gap-2 overflow-x-auto px-4 sm:px-0 pb-1 scroll-smooth"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <style>{`.iv-notes-tabs::-webkit-scrollbar { display: none; }`}</style>
           {notebookTabs.map(tab => {
             const active = selectedNotebook === tab;
             return (
@@ -331,7 +365,7 @@ export default function Notes() {
                 key={tab}
                 type="button"
                 onClick={() => setSelectedNotebook(tab)}
-                className={`relative text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
+                className={`iv-notes-tabs relative text-xs px-4 py-2 rounded-full border whitespace-nowrap transition-colors ${
                   active
                     ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-200'
                     : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'
@@ -351,7 +385,7 @@ export default function Notes() {
           <button
             type="button"
             onClick={() => setShowPinnedOnly(v => !v)}
-            className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1 whitespace-nowrap transition-colors ${
+            className={`iv-notes-tabs text-xs px-4 py-2 rounded-full border flex items-center gap-1.5 whitespace-nowrap transition-colors ${
               showPinnedOnly
                 ? 'border-amber-400/50 bg-amber-500/10 text-amber-300'
                 : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
@@ -360,38 +394,39 @@ export default function Notes() {
             <Pin className={`w-3 h-3 ${showPinnedOnly ? 'fill-amber-400' : ''}`} /> Pinned
           </button>
         </div>
+      </div>
 
-        <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-            <SelectTrigger className="h-8 w-auto min-w-[124px] text-xs rounded-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="updated">Newest first</SelectItem>
-              <SelectItem value="created">Oldest first</SelectItem>
-              <SelectItem value="alpha">A → Z</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5">
-            <button
-              type="button"
-              aria-label="Grid view"
-              aria-pressed={view === 'grid'}
-              onClick={() => setView('grid')}
-              className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${view === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="List view"
-              aria-pressed={view === 'list'}
-              onClick={() => setView('list')}
-              className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${view === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <ListIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      {/* Sort + view toggle — single row, sort on left, toggle on right */}
+      <div className="flex items-center justify-between gap-2">
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+          <SelectTrigger className="h-8 w-auto min-w-[128px] text-xs rounded-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="updated">Newest first</SelectItem>
+            <SelectItem value="created">Oldest first</SelectItem>
+            <SelectItem value="alpha">A → Z</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5 flex-shrink-0">
+          <button
+            type="button"
+            aria-label="Grid view"
+            aria-pressed={view === 'grid'}
+            onClick={() => setView('grid')}
+            className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${view === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="List view"
+            aria-pressed={view === 'list'}
+            onClick={() => setView('list')}
+            className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${view === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <ListIcon className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -621,7 +656,11 @@ interface CardProps {
 
 function NoteGridCard({ note, selected, selectionMode, reduceMotion, onClick, onToggleSelect, onContextMenu, onTouchStart, onTouchEnd, onTouchMove }: CardProps) {
   const accent = accentFor(note);
-  const preview = getPreview(note.content || '', 220);
+  const preview = getPreview(note.content || '', 240);
+  // Hide the notebook pill for the implicit "Default" / empty value — those
+  // chips just add visual noise. Show pills only for user-meaningful notebooks.
+  const notebookLabel = note.notebook && note.notebook.toLowerCase() !== 'default' ? note.notebook : null;
+
   return (
     <motion.div
       layout
@@ -630,51 +669,61 @@ function NoteGridCard({ note, selected, selectionMode, reduceMotion, onClick, on
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.18 } }}
       transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-      whileHover={reduceMotion ? undefined : { y: -2, boxShadow: `0 12px 30px -10px ${accent}55` }}
+      whileHover={reduceMotion ? undefined : { y: -2, boxShadow: `0 14px 36px -12px ${accent}66` }}
       whileTap={{ scale: 0.99 }}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onTouchMove={onTouchMove}
-      className={`group relative mb-3 break-inside-avoid glass-card cursor-pointer overflow-hidden ${selected ? 'ring-2 ring-emerald-400/40' : ''}`}
+      className={`group relative mb-4 break-inside-avoid glass-card cursor-pointer overflow-hidden rounded-xl ${selected ? 'ring-2 ring-emerald-400/40' : ''}`}
     >
       <div className="h-[3px] w-full" style={{ background: accent }} aria-hidden />
-      <div className="p-3 sm:p-4">
-        <div className="flex items-start gap-2 mb-1.5">
+      <div className="p-4">
+        <div className="flex items-start gap-2 mb-2">
           <h3
-            className="text-[14px] sm:text-[15px] font-bold text-foreground flex-1 truncate leading-snug"
+            className="text-[16px] font-semibold text-foreground flex-1 leading-snug line-clamp-2 break-words"
             data-testid={`note-title-${note.id}`}
           >
             {note.title || 'Untitled'}
           </h3>
           {note.isPinned && (
-            <Pin className="w-3 h-3 fill-amber-400 text-amber-400 flex-shrink-0 mt-1" />
+            <Pin className="w-3 h-3 fill-amber-400 text-amber-400 flex-shrink-0 mt-1.5" />
           )}
         </div>
         {preview && (
-          <p
-            data-testid={`note-content-${note.id}`}
-            className="text-[12px] sm:text-[13px] text-muted-foreground/85 leading-relaxed line-clamp-3 sm:line-clamp-4 whitespace-pre-wrap break-words"
-          >
-            {preview}
-          </p>
-        )}
-        <div className="flex items-center gap-1.5 mt-2.5 pt-2.5 border-t border-white/[0.06]">
-          <span className="text-[10px] text-muted-foreground/70 tabular-nums">{timeAgoShort(note.updatedAt)}</span>
-          {note.notebook && (
+          <div className="relative">
+            <p
+              data-testid={`note-content-${note.id}`}
+              className="text-[13px] text-muted-foreground/80 leading-[1.55] line-clamp-4 sm:line-clamp-5 break-words"
+            >
+              {preview}
+            </p>
+            {/* Soft fade-out at the bottom of the preview so long content
+                doesn't end on a hard cutoff. Pointer-events:none keeps the
+                whole card clickable. */}
             <span
-              className="ml-auto inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-              style={{ background: `${accent}1a`, color: accent, border: `1px solid ${accent}33` }}
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-[var(--card-bg-stop,rgba(13,18,28,0.85))] to-transparent dark:from-[rgba(13,18,28,0.85)]"
+              style={{ background: 'linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)' }}
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/[0.06]">
+          <span className="text-[11px] text-muted-foreground/60 tabular-nums">{timeAgoShort(note.updatedAt)}</span>
+          {notebookLabel && (
+            <span
+              className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium lowercase px-2 py-0.5 rounded-full"
+              style={{ background: `${accent}14`, color: `${accent}cc`, border: `1px solid ${accent}26` }}
             >
               <span className="w-1 h-1 rounded-full" style={{ background: accent }} />
-              <span className="truncate max-w-[60px] sm:max-w-[80px]">{note.notebook}</span>
+              <span className="truncate max-w-[80px] sm:max-w-[100px]">{notebookLabel}</span>
             </span>
           )}
         </div>
 
         {selectionMode && (
-          <div className="absolute top-2 left-2 z-[1]" onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}>
+          <div className="absolute top-2.5 left-2.5 z-[1]" onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}>
             <SelectionCheckbox checked={selected} onChange={onToggleSelect} label={`Select ${note.title}`} />
           </div>
         )}
@@ -694,7 +743,7 @@ interface ListRowProps {
 }
 function NoteListRow({ note, isLast, selected, selectionMode, onClick, onToggleSelect, onContextMenu }: ListRowProps) {
   const accent = accentFor(note);
-  const preview = getPreview(note.content || '', 90);
+  const preview = getPreview(note.content || '', 110);
   return (
     <motion.button
       layout
@@ -707,7 +756,7 @@ function NoteListRow({ note, isLast, selected, selectionMode, onClick, onToggleS
       data-testid={`note-card-${note.id}`}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`relative w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors ${!isLast ? 'border-b border-white/[0.06]' : ''} ${selected ? 'bg-emerald-500/5' : ''}`}
+      className={`relative w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors ${!isLast ? 'border-b border-white/[0.06]' : ''} ${selected ? 'bg-emerald-500/5' : ''}`}
     >
       <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r" style={{ background: accent }} />
       {selectionMode && (
@@ -720,15 +769,15 @@ function NoteListRow({ note, isLast, selected, selectionMode, onClick, onToggleS
         {note.isPinned && <Pin className="w-3 h-3 fill-amber-400 text-amber-400" />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[14px] sm:text-[15px] font-medium text-foreground truncate" data-testid={`note-title-${note.id}`}>
+        <div className="text-[16px] font-semibold text-foreground truncate leading-snug" data-testid={`note-title-${note.id}`}>
           {note.title || 'Untitled'}
         </div>
         {preview && (
-          <div className="text-[12px] sm:text-[13px] text-muted-foreground truncate mt-0.5" data-testid={`note-content-${note.id}`}>
+          <div className="text-[13px] text-muted-foreground/80 truncate mt-1" data-testid={`note-content-${note.id}`}>
             {preview}
           </div>
         )}
-        <div className="text-[10px] text-muted-foreground/60 mt-0.5">{timeAgoShort(note.updatedAt)}</div>
+        <div className="text-[11px] text-muted-foreground/55 mt-1">{timeAgoShort(note.updatedAt)}</div>
       </div>
       {!selectionMode && <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />}
     </motion.button>
