@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import DOMPurify from 'dompurify';
 import {
@@ -148,12 +148,11 @@ export function NoteEditor({
     return () => setNoteEditing(false);
   }, [open]);
 
-  // Reset state AND the contentEditable DOM when the note changes (open a
-  // different one). We set innerHTML directly here in the same effect that
-  // updates contentHtml — splitting them into two effects with the same
-  // dep array races (the second effect reads stale closure state and
-  // skips the DOM write), which is what made the body appear blank when
-  // a note was reopened on mobile.
+  // Reset all the form-shaped state (title / notebook / tags / pin / color
+  // / contentHtml) when the note id flips. The DOM-side innerHTML sync is
+  // handled by the useLayoutEffect below — that one runs synchronously
+  // after commit and is the actual fix for "body shows truncated content
+  // on reopen".
   useEffect(() => {
     if (!open) return;
     setTitle(note?.title ?? '');
@@ -163,13 +162,6 @@ export function NoteEditor({
     setColor(note?.color);
     const html = initialHtml(note, starter);
     setContentHtml(html);
-    // Apply to the live DOM. Use rAF so the contentEditable div has
-    // definitely mounted on a fresh open (AnimatePresence + motion.div).
-    requestAnimationFrame(() => {
-      if (editorRef.current && editorRef.current.innerHTML !== html) {
-        editorRef.current.innerHTML = html;
-      }
-    });
     setSavedAt(note?.updatedAt ? new Date(note.updatedAt) : null);
     setHeadingCycle(0);
     setTagInputOpen(false);
@@ -188,6 +180,26 @@ export function NoteEditor({
       if (!note) titleRef.current?.focus();
     });
   }, [open, note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // SYNCHRONOUS contentEditable population. Runs after every commit where
+  // a relevant prop changed, BEFORE the browser paints — so the user
+  // never sees a blank/half-populated body. Two important guards:
+  //   1) Skip when the user is currently typing (focus is on the editor)
+  //      so we never clobber an in-progress edit.
+  //   2) Trigger on note.id AND note.updatedAt so reopening the same id
+  //      after an external save (cloud pull, duplicate, undo) re-syncs.
+  // Without this, the previous rAF-based approach raced with motion.div's
+  // enter animation and sometimes left the body showing whatever short
+  // string the editor had been wiped to mid-session ("Shddh", etc.).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = editorRef.current;
+    if (!el) return;
+    if (typeof document !== 'undefined' && document.activeElement === el) return;
+    const html = initialHtml(note, starter);
+    if (el.innerHTML !== html) el.innerHTML = html;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, note?.id, note?.updatedAt, note?.content]);
 
   // Combined notebook list (metadata + notes' strings)
   const notebookOptions = useMemo<NotebookMeta[]>(() => {

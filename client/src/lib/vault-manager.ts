@@ -255,6 +255,36 @@ export class VaultManager {
         try { indexedDB.deleteDatabase(`IronVault_${v.id}`); } catch {}
       }
     }
+
+    // Cloud-aware pass: if we have a cloud token AND any cloud vaults at
+    // all for this user, drop registry entries whose ID isn't in that list.
+    // This catches the "5 of 5" ghost case where IDBs survived from a prior
+    // session/account on the same browser — they have data (so hasAnyData
+    // returns true) but they aren't "this user's" vaults at all.
+    //
+    // Guards:
+    //   - Skip when offline or the cloud list is empty (defensive: don't
+    //     mass-purge a real registry just because the network is down).
+    //   - Local-only vaults (marked via isVaultCloudSynced=false) are
+    //     preserved so users without a cloud account aren't impacted.
+    try {
+      const { listCloudVaults, isVaultCloudSynced, getCloudToken } = await import('./cloud-vault-sync');
+      if (getCloudToken()) {
+        const cloudVaults = await listCloudVaults();
+        if (cloudVaults.length > 0) {
+          const cloudIds = new Set(cloudVaults.map(v => v.vaultId));
+          for (const id of Array.from(liveIds)) {
+            // Keep if it's in the cloud list OR it was explicitly marked
+            // local-only (the user opted out of sync for this vault).
+            if (!cloudIds.has(id) && isVaultCloudSynced(id)) {
+              liveIds.delete(id);
+              try { indexedDB.deleteDatabase(`IronVault_${id}`); } catch {}
+            }
+          }
+        }
+      }
+    } catch { /* network/import failure → fall back to local-only prune */ }
+
     const kept = registry.filter(v => liveIds.has(v.id));
     const removed = registry.length - kept.length;
     if (removed > 0) {

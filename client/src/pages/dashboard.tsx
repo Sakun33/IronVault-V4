@@ -1,5 +1,6 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
+import { useAuth } from "@/contexts/auth-context";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
@@ -71,24 +72,40 @@ function getTimeEmoji(): string {
   return '🌙';
 }
 
-function getUserName(): string {
+/**
+ * Resolve the greeting name. Auth context's `accountEmail` is the source of
+ * truth (the email the user actually logged in with this session).
+ * customerProfile.name is consulted only when its email matches that
+ * accountEmail — otherwise it's a stale/seeded entry from another session
+ * (we used to literally show "John" because an old customerProfile row from
+ * test data was still in localStorage).
+ */
+function getUserName(accountEmail: string | null): string {
+  const namifyEmail = (email: string): string => {
+    const prefix = email.split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
+    if (!prefix) return '';
+    const first = prefix.split(' ')[0];
+    return first.charAt(0).toUpperCase() + first.slice(1);
+  };
   try {
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-    // Prefer full_name, then name, then display_name
-    const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
-    if (fullName && !fullName.includes('@')) return fullName.split(' ')[0];
+    // Only trust the stored profile if it's for the currently-logged-in
+    // email. Otherwise it's a leftover from a previous user (or seed data).
+    const profileMatchesAccount =
+      accountEmail &&
+      typeof cp.email === 'string' &&
+      cp.email.toLowerCase() === accountEmail.toLowerCase();
+    if (profileMatchesAccount) {
+      const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
+      if (fullName && !fullName.includes('@')) return fullName.split(' ')[0];
+    }
+    if (accountEmail) return namifyEmail(accountEmail);
+    // Last-resort: legacy iv_account_session blob.
     const session = localStorage.getItem('iv_account_session');
     if (session) {
       const { email, name } = JSON.parse(session);
       if (name && typeof name === 'string' && !name.includes('@')) return name.split(' ')[0];
-      if (email) {
-        // Capitalize and strip numbers from email prefix
-        const prefix = (email as string).split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
-        if (prefix) {
-          const first = prefix.split(' ')[0];
-          return first.charAt(0).toUpperCase() + first.slice(1);
-        }
-      }
+      if (email) return namifyEmail(email);
     }
   } catch { /* ignore */ }
   return '';
@@ -231,6 +248,7 @@ function ExpenseBars({
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
+  const { accountEmail } = useAuth();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
@@ -269,7 +287,7 @@ export default function Dashboard() {
   };
 
   const fmtAmt = (n: number) => formatCurrency(n, currency);
-  const userName = getUserName();
+  const userName = getUserName(accountEmail);
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   // ── Derived stats ─────────────────────────────────────────────────────────
