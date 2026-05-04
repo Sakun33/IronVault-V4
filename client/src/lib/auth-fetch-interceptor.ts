@@ -7,18 +7,19 @@
  * UI with a broken session — pushes failed quietly, vault sync stopped, and
  * the user had no idea they needed to log in again.
  *
- * Strategy:
- *  - Wrap `window.fetch` once on module load.
- *  - When a request includes an Authorization Bearer header (i.e., the
- *    caller intended an authenticated request) AND the response is 401,
- *    dispatch a `vault:auth:expired` event.
- *  - Auth-context listens for that event and runs accountLogout() →
- *    setLocation('/auth/login').
+ * REGRESSION-3 rework: the original time-based grace-period (5s) was too
+ * narrow. Users routinely spend 10–30s on the vault picker before unlocking,
+ * and any background API call during that window would 401 → bounce them
+ * back to /auth/login mid-unlock. Hardened with three guards:
  *
- * We INTENTIONALLY do not auto-logout on 401s without an Authorization
- * header — those are expected during login (wrong password, etc.) and
- * during anonymous endpoints. We also skip the /api/auth/token endpoint
- * itself, since wrong-password returns 401 there but the user is mid-login.
+ *   1) NO TOKEN → no expiry signal. If iv_cloud_token isn't in localStorage,
+ *      we don't have a cloud session at all, so a 401 is expected (anonymous
+ *      probe, stale page, etc.) — never an "expired" event.
+ *   2) 30-second grace window after the most recent auth transition (login
+ *      OR vault unlock). Long enough to cover the slow path through the
+ *      vault picker.
+ *   3) 10-second dispatch debounce. Even if multiple 401s fire in a burst
+ *      (e.g. polling + heartbeat racing), we only kick the user out once.
  */
 
 const SKIP_PATHS = [
@@ -31,15 +32,18 @@ const SKIP_PATHS = [
 
 let installed = false;
 
-// Tracks the timestamp of the most recent successful login. After a fresh
-// login, several background calls fire concurrently — heartbeat, vault
-// listing, plan check, session check — and any of them might race with a
-// stale token still in localStorage from a previous session. Without a
-// grace period, those 401s would synchronously redirect the user back to
-// /auth/login, producing a login → logout loop. We let the new session's
-// token settle for 5s before honoring 401s as session-expired signals.
+// Most recent successful auth transition: account login OR vault unlock.
+// markLoginComplete() bumps this to Date.now(); the interceptor honours a
+// 30-second grace window after the bump before treating 401s as expired.
 let lastLoginTime = 0;
-const LOGIN_GRACE_PERIOD_MS = 5000;
+const LOGIN_GRACE_PERIOD_MS = 30000;
+
+// Debounce: only dispatch one expired event per 10s window. Without this,
+// a burst of background polls (heartbeat + plan check + vault list +
+// /api/auth/me) all 401-ing at the same time would each fire a separate
+// logout → reload → ... cascade.
+let lastExpiredDispatch = 0;
+const EXPIRED_DEBOUNCE_MS = 10000;
 
 export function markLoginComplete(): void {
   lastLoginTime = Date.now();
@@ -70,11 +74,18 @@ export function installAuthFetchInterceptor(): void {
     if (!path.startsWith('/api/')) return response;
     if (SKIP_PATHS.some(p => path.startsWith(p))) return response;
 
-    // Grace period after a successful login. Background API calls that
-    // were already in flight (or that fire immediately on auth-state
-    // changes) may carry a stale token from the previous session and
-    // 401 — we MUST NOT redirect on those, or the user gets bounced
-    // straight back to the login page they just submitted.
+    // Guard #1: no cloud token in localStorage means there's no live cloud
+    // session at all — this 401 isn't an "expiry", it's just "we never had
+    // auth in the first place" (anonymous endpoint hit, stale page, etc.).
+    // Silently let it through.
+    try {
+      if (!localStorage.getItem('iv_cloud_token')) return response;
+    } catch { return response; }
+
+    // Guard #2: 30-second grace window after a login or vault unlock. The
+    // first 30s after sign-in often have racing background calls carrying
+    // a stale Bearer header (vault listing, plan check, heartbeat). We
+    // never want those to bounce the user straight back to /auth/login.
     if (lastLoginTime && Date.now() - lastLoginTime < LOGIN_GRACE_PERIOD_MS) {
       return response;
     }
@@ -97,6 +108,13 @@ export function installAuthFetchInterceptor(): void {
         return false;
       })();
     if (!hadAuth) return response;
+
+    // Guard #3: dispatch debounce. Only kick the user out once per 10s
+    // window — multiple racing 401s (heartbeat + plan check + vault list)
+    // would otherwise stack into a flicker storm.
+    const now = Date.now();
+    if (now - lastExpiredDispatch < EXPIRED_DEBOUNCE_MS) return response;
+    lastExpiredDispatch = now;
 
     // Fire-and-forget — auth-context will pick this up.
     try {

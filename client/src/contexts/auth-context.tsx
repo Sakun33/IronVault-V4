@@ -332,6 +332,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
         setMasterPassword(password);
+        // REGRESSION-3: vault unlock is an auth transition too. Bump the
+        // grace timestamp so background calls during the post-unlock burst
+        // (refreshData, cloud sync, plan check) can't 401 → bounce.
+        markLoginComplete();
         addLog('Vault Unlock', 'security', 'Vault unlocked successfully');
       }
       return success;
@@ -346,6 +350,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithoutVerification = (password: string): void => {
     setIsUnlocked(true);
     setMasterPassword(password);
+    markLoginComplete(); // REGRESSION-3 — same rationale as login()
   };
 
   const loginWithKey = async (base64Key: string): Promise<boolean> => {
@@ -355,6 +360,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsUnlocked(true);
         // Master password not available via biometric unlock
         setMasterPassword(null);
+        markLoginComplete(); // REGRESSION-3 — biometric unlock is also a transition
       }
       return success;
     } catch (error) {
