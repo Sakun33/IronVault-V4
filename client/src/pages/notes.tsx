@@ -30,15 +30,24 @@ import {
 
 function stripHtml(html: string): string {
   if (!html) return '';
+  // Convert block-level closers and <br> to newlines BEFORE extracting text,
+  // otherwise consecutive headings/paragraphs collapse together (e.g.
+  // "<h2>Concepts</h2><h3>Laws</h3>" → "ConceptsLaws") which then defeats
+  // the line-anchored markdown regex below.
+  const withBreaks = html
+    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n');
   const tmp = document.createElement('div');
-  tmp.innerHTML = html;
+  tmp.innerHTML = withBreaks;
   return tmp.textContent || tmp.innerText || '';
 }
 
 function stripMarkdown(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    // Headings: catch both line-anchored AND mid-string `###` that survived
+    // an HTML strip where block separators were lost.
+    .replace(/(^|\s)#{1,6}\s+/g, '$1')
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\*\*([^*\n]+)\*\*/g, '$1')
@@ -47,8 +56,9 @@ function stripMarkdown(text: string): string {
     .replace(/(^|[^_])_([^_\n]+)_/g, '$1$2')
     .replace(/~~([^~\n]+)~~/g, '$1')
     .replace(/`([^`\n]+)`/g, '$1')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/(^|\s)[-*+]\s+/g, '$1')
+    // Ordered list markers: line-anchored OR mid-string
+    .replace(/(^|\s)\d+\.\s+/g, '$1')
     .replace(/^\s*>\s+/gm, '')
     .replace(/^[-*_]{3,}\s*$/gm, '')
     .replace(/<[^>]+>/g, '')
@@ -244,12 +254,15 @@ export default function Notes() {
   });
   useEffect(() => { try { localStorage.setItem('iv_notes_leftpane_collapsed', leftPaneCollapsed ? '1' : '0'); } catch {} }, [leftPaneCollapsed]);
 
-  const [view, setView] = useState<'list' | 'grid'>(() => {
-    if (typeof window === 'undefined') return 'list';
-    const stored = localStorage.getItem('iv_notes_view');
-    return stored === 'grid' ? 'grid' : 'list';
-  });
-  useEffect(() => { try { localStorage.setItem('iv_notes_view', view); } catch {} }, [view]);
+  // Always default to flat list — Evernote-style. Users want clean rows
+  // grouped by date, not a masonry grid. Grid mode is opt-in via the menu
+  // and never persisted; revisiting the page returns to list.
+  const [view, setView] = useState<'list' | 'grid'>('list');
+  useEffect(() => {
+    // One-shot cleanup of any pre-existing 'grid' preference written by
+    // earlier builds — harmless if nothing's there.
+    try { localStorage.removeItem('iv_notes_view'); } catch {}
+  }, []);
 
   // Debounced search query for filtering
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
@@ -738,71 +751,65 @@ export default function Notes() {
     />
   );
 
-  // ── Three-pane desktop layout ────────────────────────────────────────────
+  // ── Desktop layout ───────────────────────────────────────────────────────
+  // Single-pane: full-width flat list by default, full-screen editor when
+  // a note is opened. The previous 3-pane (notebooks sidebar + list + editor)
+  // was too cramped; notebook/tag filtering is now a dropdown in the header.
   if (isThreePane) {
+    const editorActive = editorOpen || !!editingNote;
     return (
       <div className="flex flex-col h-full -mx-6 -my-6">
-        {/* Top header strip */}
-        <div className="px-6 pt-6 pb-4 space-y-3 border-b border-border/40 bg-background">
-          {headerBlock}
-          {searchBlock}
-          {activeFilterChips}
-        </div>
-
-        <div className="flex-1 min-h-0 flex">
-          {/* Left pane — notebooks + tags */}
-          <aside className={`relative ${leftPaneCollapsed ? 'w-12' : 'w-[220px]'} transition-[width] duration-200 border-r border-border/40 bg-background flex-shrink-0`}>
-            <button
-              type="button"
-              onClick={() => setLeftPaneCollapsed(v => !v)}
-              aria-label={leftPaneCollapsed ? 'Expand panel' : 'Collapse panel'}
-              className="absolute -right-3 top-3 z-10 h-6 w-6 rounded-full bg-background border border-border/60 flex items-center justify-center text-muted-foreground hover:text-foreground"
-            >
-              {leftPaneCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-            </button>
-            {!leftPaneCollapsed && (
-              <div className="h-full overflow-y-auto smooth-scrollbar p-3 pt-4">
-                <NotebookList
-                  notebooks={notebooks}
-                  counts={notebookCounts}
-                  total={notes.length}
-                  active={selectedNotebook}
-                  onSelect={setSelectedNotebook}
-                  onRename={beginRenameNotebook}
-                  onDelete={(name) => setDeleteNotebookTarget(name)}
-                />
-                <div className="h-3" />
-                <TagList
-                  tags={tagFrequencies}
-                  active={selectedTag}
-                  onSelect={(t) => setSelectedTag(prev => prev === t ? null : t)}
-                />
+        {!editorActive && (
+          <div className="px-6 pt-6 pb-3 space-y-3 border-b border-border/40 bg-background">
+            {headerBlock}
+            {searchBlock}
+            {/* Notebook + tag filter rail (replaces old left sidebar) */}
+            {(notebooks.length > 0 || tagFrequencies.length > 0) && (
+              <div className="-mx-1 px-1 flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+                <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
+                {notebooks.map(nb => (
+                  <FilterChip
+                    key={nb.name}
+                    label={nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
+                    count={notebookCounts[nb.name.toLowerCase()] ?? 0}
+                    active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()}
+                    onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }}
+                  />
+                ))}
+                {tagFrequencies.length > 0 && <span className="w-px h-5 bg-border/50 mx-1 flex-shrink-0" aria-hidden />}
+                {tagFrequencies.slice(0, 8).map(([tag, count]) => (
+                  <FilterChip
+                    key={`tag-${tag}`}
+                    label={`#${tag}`}
+                    count={count}
+                    active={selectedTag === tag}
+                    onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
+                  />
+                ))}
               </div>
             )}
-          </aside>
-
-          {/* Middle pane — notes list */}
-          <section className="w-[320px] flex-shrink-0 border-r border-border/40 bg-background overflow-y-auto smooth-scrollbar">
-            <div className="px-3 pt-3 pb-2 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border/40 flex items-center justify-between">
+            {activeFilterChips}
+            <div className="flex items-center justify-between pt-1">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 {selectedTag ? `#${selectedTag}` : selectedNotebook === 'all' ? 'All Notes' : selectedNotebook}
                 <span className="ml-1.5 text-muted-foreground/40">· {sortedNotes.length}</span>
               </span>
-              <Button
-                size="sm"
-                onClick={() => openNewNote()}
-                disabled={upgradeBlocked}
-                className="cta-tap-pulse h-7 px-2.5 text-xs"
-              >
-                <Plus className="w-3 h-3 mr-1" /> New
+              <Button size="sm" onClick={() => openNewNote()} disabled={upgradeBlocked} className="cta-tap-pulse h-7 px-3 text-xs">
+                <Plus className="w-3 h-3 mr-1" /> New note
               </Button>
             </div>
-            <div className="px-2">{notesListContent}</div>
-          </section>
+          </div>
+        )}
 
-          {/* Right pane — editor / viewer */}
-          <section className="flex-1 min-w-0 bg-background">
-            {editingNote || editorOpen ? (
+        {/* Main content area — list or full-screen editor */}
+        <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar bg-background">
+          {editorActive ? (
+            <div className="h-full">
+              <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-background sticky top-0 z-10 flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={closeEditor} className="rounded-xl">
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back to notes
+                </Button>
+              </div>
               <NoteEditor
                 open={editorOpen}
                 note={editingNote}
@@ -818,10 +825,10 @@ export default function Notes() {
                 bottomGutterPx={0}
                 embedded
               />
-            ) : (
-              <DesktopEditorEmpty onCreate={() => openNewNote()} disabled={upgradeBlocked} />
-            )}
-          </section>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto px-6 py-2">{notesListContent}</div>
+          )}
         </div>
 
         {dialogs}
@@ -1280,7 +1287,10 @@ function FilterChip({ label, count, active, onClick }: { label: string; count?: 
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs px-3.5 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
+      // flex-shrink-0 prevents the chip from collapsing when the rail
+      // overflows horizontally, which was making `#Develop #Food` visually
+      // collide on narrower viewports.
+      className={`flex-shrink-0 text-xs px-3.5 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
         active ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-200' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'
       }`}
     >

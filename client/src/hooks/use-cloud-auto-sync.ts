@@ -284,8 +284,13 @@ export function useCloudAutoSync(
         localStorage.setItem(`${LAST_PULL_COUNT_PREFIX}${vaultId}`, String(cloudCount));
       }
       window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
-    } catch {
-      // Silently fail
+    } catch (e) {
+      // Always clear the "Syncing from cloud" UI flag, even on error —
+      // otherwise the spinner gets stuck whenever downloadCloudVault or
+      // replaceVaultFromBlob throws (auth blip, network drop, blob decode
+      // failure, etc.) and never recovers without a page reload.
+      console.warn('[SYNC] Cloud pull failed; clearing syncing UI:', e);
+      window.dispatchEvent(new CustomEvent('vault:cloud:replaced'));
     }
   }, [vaultId, masterPassword]);
 

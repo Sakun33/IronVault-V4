@@ -182,16 +182,27 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isUnlocked]);
 
-  // Pull refresh: when cloud-sync hook replaces vault data from a remote device
+  // Pull refresh: when cloud-sync hook replaces vault data from a remote device.
+  // We also gate the syncing flag with a 15-second safety timeout — even if the
+  // `cloud:replaced` event is somehow missed (silent throw, race, lost listener),
+  // the spinner is guaranteed to clear so the user never sees a stuck indicator.
   useEffect(() => {
+    let safety: ReturnType<typeof setTimeout> | null = null;
+    const clearSafety = () => { if (safety) { clearTimeout(safety); safety = null; } };
     const handleCloudReplace = () => {
+      clearSafety();
       setIsCloudSyncing(false);
       if (isUnlocked) refreshData();
     };
-    const handleCloudSyncing = () => setIsCloudSyncing(true);
+    const handleCloudSyncing = () => {
+      setIsCloudSyncing(true);
+      clearSafety();
+      safety = setTimeout(() => { setIsCloudSyncing(false); safety = null; }, 15000);
+    };
     window.addEventListener('vault:cloud:replaced', handleCloudReplace);
     window.addEventListener('vault:cloud:syncing', handleCloudSyncing);
     return () => {
+      clearSafety();
       window.removeEventListener('vault:cloud:replaced', handleCloudReplace);
       window.removeEventListener('vault:cloud:syncing', handleCloudSyncing);
     };

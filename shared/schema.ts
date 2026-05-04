@@ -378,6 +378,116 @@ export const expenseEntrySchema = z.object({
   updatedAt: z.date().default(() => new Date()),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Splitwise-style shared expenses (encrypted-vault-only). The data model is
+// "personal but social-flavored": contacts and groups are local entities the
+// vault owner manages, expenses split a charge across self + N contacts, and
+// settlements record paid debts. Nothing syncs to other users.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const expenseContactSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+  avatarColor: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+export const expenseGroupSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  emoji: z.string().default('👥'),
+  description: z.string().optional(),
+  // Member contact ids — 'self' is implicit and always included.
+  memberIds: z.array(z.string()).default([]),
+  archived: z.boolean().default(false),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+export const sharedExpenseSplitSchema = z.object({
+  contactId: z.string(), // 'self' or expenseContact.id
+  amount: z.number(),    // exact share in expense currency
+});
+
+export const sharedExpenseSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1),
+  amount: z.number().positive(),
+  currency: z.string().default('USD'),
+  paidBy: z.string().default('self'), // 'self' or contactId
+  splitType: z.enum(['equal', 'exact', 'percent', 'shares']).default('equal'),
+  // Resolved per-contact shares. Always cents-accurate after the dialog reconciles.
+  splits: z.array(sharedExpenseSplitSchema).default([]),
+  groupId: z.string().optional(),
+  category: z.string().default('Other'),
+  date: z.date().default(() => new Date()),
+  notes: z.string().optional(),
+  receiptDataUrl: z.string().optional(),
+  recurrence: z.enum(['none', 'weekly', 'monthly', 'yearly']).default('none'),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+export const settlementSchema = z.object({
+  id: z.string(),
+  fromContact: z.string(), // 'self' or contactId
+  toContact: z.string(),
+  amount: z.number().positive(),
+  currency: z.string().default('USD'),
+  date: z.date().default(() => new Date()),
+  method: z.enum(['cash', 'upi', 'bank', 'card', 'other']).default('cash'),
+  groupId: z.string().optional(),
+  notes: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+});
+
+export const expenseActivitySchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    'expense_added', 'expense_edited', 'expense_deleted',
+    'settlement_added', 'group_added', 'contact_added',
+  ]),
+  refId: z.string(),
+  title: z.string(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  groupId: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+});
+
+export type ExpenseContact = z.infer<typeof expenseContactSchema>;
+export type ExpenseGroup = z.infer<typeof expenseGroupSchema>;
+export type SharedExpenseSplit = z.infer<typeof sharedExpenseSplitSchema>;
+export type SharedExpense = z.infer<typeof sharedExpenseSchema>;
+export type Settlement = z.infer<typeof settlementSchema>;
+export type ExpenseActivity = z.infer<typeof expenseActivitySchema>;
+
+export const SPLITWISE_CATEGORIES = [
+  'Food & Dining',
+  'Groceries',
+  'Transport',
+  'Rent',
+  'Utilities',
+  'Entertainment',
+  'Shopping',
+  'Travel',
+  'Health',
+  'Education',
+  'Other',
+] as const;
+
+export const SETTLEMENT_METHODS = [
+  { value: 'cash',  label: 'Cash' },
+  { value: 'upi',   label: 'UPI' },
+  { value: 'bank',  label: 'Bank transfer' },
+  { value: 'card',  label: 'Card' },
+  { value: 'other', label: 'Other' },
+] as const;
+
 // Reminder entries stored in IndexedDB (client-side only)
 export const reminderEntrySchema = z.object({
   id: z.string(),

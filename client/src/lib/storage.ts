@@ -1,10 +1,10 @@
-import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, VaultMetadata, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal } from '@shared/schema';
+import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, VaultMetadata, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, SharedExpense, ExpenseGroup, ExpenseContact, Settlement, ExpenseActivity } from '@shared/schema';
 import { CryptoService, KDFConfig as CryptoKDFConfig } from './crypto';
 import { PASSWORD_MANAGER_PARSERS, type ParserConfig } from './csv-parsers';
 
 export class VaultStorage {
   private dbName = 'IronVault';
-  private version = 4; // v4: by_store index on encrypted_data for faster per-category loads
+  private version = 5; // v5: splitwise-style stores (shared_expenses, expense_groups, expense_contacts, settlements, expense_activity)
   private db: IDBDatabase | undefined = undefined;
   private encryptionKey: CryptoKey | undefined = undefined;
   private failedAttempts: number = 0;
@@ -103,7 +103,12 @@ export class VaultStorage {
         const objectStores = [
           'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
           'metadata', 'encrypted_data', 'bankStatements', 'bankTransactions',
-          'investments', 'investmentGoals', 'persistent_data'
+          'investments', 'investmentGoals', 'persistent_data',
+          // Splitwise-style stores. The actual data lives in `encrypted_data`
+          // keyed by the store discriminator; these placeholders exist for
+          // schema-checks and parity with the older stores.
+          'shared_expenses', 'expense_groups', 'expense_contacts',
+          'settlements', 'expense_activity',
         ];
 
         objectStores.forEach(storeName => {
@@ -1937,6 +1942,45 @@ export class VaultStorage {
       request.onerror = () => reject(request.error);
     });
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Splitwise-style stores. These piggyback on encrypted_data with a `store:`
+  // discriminator so they share the same encryption + by_store index path as
+  // every other vault entity. No metadata counts — we don't gate on these.
+  // ──────────────────────────────────────────────────────────────────────────
+  private async deleteFromEncryptedData(id: string): Promise<void> {
+    this.assertVaultSelected();
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => {
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveSharedExpense(e: SharedExpense): Promise<void> { await this.encryptAndStore('shared_expenses', e); }
+  async getAllSharedExpenses(): Promise<SharedExpense[]> { return this.getAllEncrypted('shared_expenses'); }
+  async deleteSharedExpense(id: string): Promise<void> { await this.deleteFromEncryptedData(id); }
+
+  async saveExpenseGroup(g: ExpenseGroup): Promise<void> { await this.encryptAndStore('expense_groups', g); }
+  async getAllExpenseGroups(): Promise<ExpenseGroup[]> { return this.getAllEncrypted('expense_groups'); }
+  async deleteExpenseGroup(id: string): Promise<void> { await this.deleteFromEncryptedData(id); }
+
+  async saveExpenseContact(c: ExpenseContact): Promise<void> { await this.encryptAndStore('expense_contacts', c); }
+  async getAllExpenseContacts(): Promise<ExpenseContact[]> { return this.getAllEncrypted('expense_contacts'); }
+  async deleteExpenseContact(id: string): Promise<void> { await this.deleteFromEncryptedData(id); }
+
+  async saveSettlement(s: Settlement): Promise<void> { await this.encryptAndStore('settlements', s); }
+  async getAllSettlements(): Promise<Settlement[]> { return this.getAllEncrypted('settlements'); }
+  async deleteSettlement(id: string): Promise<void> { await this.deleteFromEncryptedData(id); }
+
+  async saveExpenseActivity(a: ExpenseActivity): Promise<void> { await this.encryptAndStore('expense_activity', a); }
+  async getAllExpenseActivity(): Promise<ExpenseActivity[]> { return this.getAllEncrypted('expense_activity'); }
 
   // Bank Statement CSV Import - Auto-detects multiple formats
   async importBankStatementsFromCSV(csvContent: string, currency: string = 'USD'): Promise<{ statements: number; transactions: number }> {
