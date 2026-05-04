@@ -223,6 +223,15 @@ export default function VaultPickerPage() {
     });
 
   const [cloudVaults, setCloudVaults] = useState<CloudVaultMeta[]>([]);
+  // P0 FIX: cloud-vault listing now reports a loading state + token-failure
+  // state. Previously, while the network request was in flight (or after it
+  // failed), `cloudVaults.length === 0` was indistinguishable from "you
+  // genuinely have zero cloud vaults" — so a Lifetime user with one cloud
+  // vault would briefly see "No cloud vaults" + the free-plan banner. The
+  // tri-state (loading / missing-token / loaded) lets the UI render an
+  // accurate placeholder + retry CTA instead.
+  const [cloudVaultsLoading, setCloudVaultsLoading] = useState(true);
+  const [cloudTokenMissing, setCloudTokenMissing] = useState(false);
   const [cloudDownloading, setCloudDownloading] = useState<string | null>(null);
   const [cloudPasswordInput, setCloudPasswordInput] = useState<Record<string, string>>({});
   const [cloudShowPw, setCloudShowPw] = useState<Record<string, boolean>>({});
@@ -300,18 +309,63 @@ export default function VaultPickerPage() {
     // Load cloud vaults — only possible once we know the account email
     const loadCloudVaults = async () => {
       if (!accountEmail) return;
+      setCloudVaultsLoading(true);
       // Ensure we have a cloud token
       let token = getCloudToken();
       if (!token) {
         const hash = getAccountPasswordHash();
         if (hash) token = await acquireCloudToken(accountEmail, hash);
       }
-      if (!token) return;
-      const remote = await listCloudVaults();
-      setCloudVaults(remote);
+      if (!token) {
+        // P0 FIX: surface the missing-token state instead of silently
+        // collapsing into "you have no cloud vaults". The retry banner
+        // (rendered below) lets the user re-acquire a token without a
+        // full sign-out → sign-in dance.
+        setCloudTokenMissing(true);
+        setCloudVaultsLoading(false);
+        return;
+      }
+      setCloudTokenMissing(false);
+      try {
+        const remote = await listCloudVaults();
+        setCloudVaults(remote);
+      } catch (e) {
+        console.error('[vault-picker] listCloudVaults failed:', e);
+      } finally {
+        setCloudVaultsLoading(false);
+      }
     };
     loadCloudVaults();
+    // Listen for the auth context's cloud-token-missing event so the picker
+    // shows the retry banner immediately after login if the token couldn't
+    // be acquired.
+    const onMissing = () => setCloudTokenMissing(true);
+    window.addEventListener('vault:cloud:token-missing', onMissing);
+    return () => window.removeEventListener('vault:cloud:token-missing', onMissing);
   }, [accountEmail]); // re-run when email is set (e.g. after initializeAuth completes)
+
+  // Manual retry — re-acquire the cloud token + re-list cloud vaults.
+  const retryCloudConnection = async () => {
+    if (!accountEmail) return;
+    setCloudVaultsLoading(true);
+    setCloudTokenMissing(false);
+    try {
+      const hash = getAccountPasswordHash();
+      const token = hash ? await acquireCloudToken(accountEmail, hash) : null;
+      if (!token) {
+        setCloudTokenMissing(true);
+        return;
+      }
+      const remote = await listCloudVaults();
+      setCloudVaults(remote);
+      // Plan/entitlement is fetched by the LicenseProvider, which also keys
+      // off the cloud token. Force its cache to refresh.
+      try { localStorage.removeItem('iv_plan_cache'); } catch { /* noop */ }
+      window.location.reload();
+    } finally {
+      setCloudVaultsLoading(false);
+    }
+  };
 
   // Auto-bypass the paywall for returning free users who already have at
   // least one vault (local or cloud). Forcing the upgrade gate on every
@@ -1184,9 +1238,41 @@ export default function VaultPickerPage() {
             </>
           )}
 
+          {/* P0 FIX: cloud-token-missing banner. Renders when accountLogin
+              successfully signed in but couldn't acquire a cloud JWT (or
+              the token expired). Without this banner, a Lifetime user with
+              one cloud vault would see "free plan + no vaults" and have no
+              indication that anything was wrong. The retry button
+              re-acquires the token + re-lists cloud vaults. */}
+          {cloudTokenMissing && (
+            <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="text-sm font-semibold text-amber-300">Cloud sign-in incomplete</p>
+              <p className="text-xs text-amber-200/80 mt-1">
+                We're signed in to your account but couldn't reach the cloud. Your
+                paid plan and cloud vaults will appear once we reconnect.
+              </p>
+              <button
+                type="button"
+                onClick={retryCloudConnection}
+                disabled={cloudVaultsLoading}
+                className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500 text-amber-950 text-xs font-semibold hover:bg-amber-400 disabled:opacity-60"
+                data-testid="button-retry-cloud-connection"
+              >
+                {cloudVaultsLoading ? 'Reconnecting…' : 'Retry'}
+              </button>
+            </div>
+          )}
+
           {/* Cloud vaults section — shown for paid users (web or native) */}
           {(isNativeApp() || isPaid) && (
-            cloudVaults.length > 0 ? (
+            cloudVaultsLoading && cloudVaults.length === 0 ? (
+              <div className="space-y-4 mb-6">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cloud Vaults</p>
+                <div className="glass-card p-4 text-sm text-muted-foreground">
+                  Loading cloud vaults…
+                </div>
+              </div>
+            ) : cloudVaults.length > 0 ? (
               <div className="space-y-4 mb-6">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cloud Vaults</p>
                 {cloudVaults.map(cv => (

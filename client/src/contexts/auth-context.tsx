@@ -13,7 +13,7 @@ import {
   getAccountPasswordHash,
   sha256,
 } from '@/lib/account-auth';
-import { acquireCloudToken, clearCloudToken } from '@/lib/cloud-vault-sync';
+import { acquireCloudToken, clearCloudToken, storeCloudToken, getCloudToken } from '@/lib/cloud-vault-sync';
 import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 import { markLoginComplete } from '@/lib/auth-fetch-interceptor';
@@ -210,7 +210,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // can't trigger the 401 → /auth/login bounce loop. See
     // auth-fetch-interceptor.ts for the cooldown logic.
     markLoginComplete();
-    await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
+    // P0 FIX: accountLogin / verifyTwoFactor now capture the JWT from their
+    // own response and call storeCloudToken directly. Only fall back to a
+    // fresh acquireCloudToken call if we somehow STILL don't have one — and
+    // if even that fails, surface a window event so the UI can show a toast
+    // and a retry. Silent null was the original P0 — Lifetime users
+    // appeared as "free + no vaults" because the cloud calls had no Bearer.
+    if (!getCloudToken()) {
+      const t = await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
+      if (!t) {
+        console.error('[auth] cloud token acquisition failed — entitlement + cloud vaults will be unavailable until next login');
+        try {
+          window.dispatchEvent(new CustomEvent('vault:cloud:token-missing', {
+            detail: { email: normalizedEmail },
+          }));
+        } catch { /* noop */ }
+      }
+    }
     setIsAccountLoggedIn(true);
     setAccountEmail(normalizedEmail);
   };
@@ -239,6 +255,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           add2faHint(normalizedEmail);
           setPendingTwoFactor({ email: normalizedEmail, tempToken: data.tempToken, password });
           return false;
+        }
+        // P0 FIX: capture the JWT from THIS response and store it directly.
+        // We used to call /api/auth/token a second time inside
+        // finalizeAccountLogin → acquireCloudToken to get the token, but
+        // that second call could 2FA-gate (totp_enabled flips between
+        // calls), rate-limit, or 5xx — silently leaving the user with no
+        // cloud token. The cloud-token-less user then falls back to "free
+        // plan" + empty cloud-vault list. Capturing here makes the auth
+        // path single-shot and removes the silent-failure window.
+        if (data.token) {
+          storeCloudToken(data.token);
         }
         await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
         return true;
@@ -285,6 +312,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ tempToken: pending.tempToken, code: code.trim() }),
       });
       if (!res.ok) return false;
+      // P0 FIX: capture and store the JWT from THIS response. The previous
+      // implementation discarded the body and then re-called /api/auth/token
+      // inside finalizeAccountLogin via acquireCloudToken — but that second
+      // call always 2FA-gates again (the user IS a 2FA account), returns
+      // requires2FA: true with no token, and acquireCloudToken silently
+      // returns null. Result: 2FA users had no cloud token, defaulted to
+      // "free" plan, and saw an empty cloud-vault list.
+      const data = await res.json().catch(() => ({} as any));
+      if (data?.token) {
+        storeCloudToken(data.token);
+      }
       const passwordHash = await sha256(pending.password);
       await finalizeAccountLogin(pending.email, pending.password, pending.email, passwordHash);
       setPendingTwoFactor(null);

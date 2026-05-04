@@ -135,10 +135,15 @@ export function usePlanFeatures(): PlanFeatures {
 
     try {
       // QA-R2 C2: server now requires Bearer auth on /api/crm/entitlement/:id
-      // (own row only, or ADMIN_API_KEY). Without a token we return early so
-      // the user falls back to the local cached plan / 'free' default.
+      // (own row only, or ADMIN_API_KEY).
       const cloudToken = localStorage.getItem('iv_cloud_token');
-      if (!cloudToken) { setIsLoading(false); return; }
+      if (!cloudToken) {
+        // P0 FIX: don't lock in 'free' silently — keep isLoading=true so the
+        // gating UI shows a loading state, and re-attempt when the token
+        // becomes available (the storage listener below picks it up the
+        // moment auth-context calls storeCloudToken).
+        return;
+      }
       const resp = await fetch(`/api/crm/entitlement/${encodeURIComponent(email)}`, {
         headers: { 'Authorization': `Bearer ${cloudToken}` },
       });
@@ -160,6 +165,28 @@ export function usePlanFeatures(): PlanFeatures {
 
   useEffect(() => {
     fetchPlan();
+    // P0 FIX: re-run fetchPlan when the cloud token appears in localStorage.
+    // Storage events don't fire in the same tab that wrote the value, so we
+    // also poll with a short backoff for ~5s right after mount — covers the
+    // common "auth-context just stored the token, plan-features mounted
+    // before that landed" race.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'iv_cloud_token' && e.newValue) fetchPlan();
+    };
+    window.addEventListener('storage', onStorage);
+    let attempts = 0;
+    const tick = setInterval(() => {
+      attempts++;
+      if (attempts > 5) { clearInterval(tick); return; }
+      if (localStorage.getItem('iv_cloud_token')) {
+        clearInterval(tick);
+        fetchPlan();
+      }
+    }, 1000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(tick);
+    };
   }, [fetchPlan]);
 
   const features = buildFeatures(planId);
