@@ -71,7 +71,7 @@ interface VaultContextType {
   updateSubscription: (id: string, updates: Partial<SubscriptionEntry>) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
   bulkDeleteSubscriptions: (ids: string[]) => Promise<number>;
-  addNote: (note: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addNote: (note: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<NoteEntry>;
   updateNote: (id: string, updates: Partial<NoteEntry>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   bulkDeleteNotes: (ids: string[]) => Promise<number>;
@@ -506,7 +506,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
-  const addNote = async (noteData: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addNote = async (noteData: Omit<NoteEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<NoteEntry> => {
     const note: NoteEntry = {
       ...noteData,
       id: crypto.randomUUID(),
@@ -521,6 +521,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     // Log the activity
     addLog('Add Note', 'note', `Added note "${noteData.title}"`);
     pushToCloud();
+    return note;
   };
 
   const updateNote = async (id: string, updates: Partial<NoteEntry>) => {

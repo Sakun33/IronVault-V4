@@ -69,7 +69,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MessageCircle, MoreVertical, Sun, Moon } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -341,9 +341,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[180px]">
-                <DropdownMenuItem className="gap-2" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }}>
-                  <MessageCircle className="w-4 h-4 text-muted-foreground" /> Support Chat
-                </DropdownMenuItem>
                 <DropdownMenuItem className="gap-2" onClick={toggleTheme}>
                   {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
                   Toggle Theme
@@ -475,15 +472,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               </TooltipTrigger>
               <TooltipContent>Quick Add</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => { (window as any).$zoho?.salesiq?.floatwindow?.visible?.('show'); }} className="p-2 rounded-xl" title="Support Chat" aria-label="Support Chat">
-                  <MessageCircle className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Support Chat</TooltipContent>
-            </Tooltip>
-
             <Tooltip>
               <TooltipTrigger asChild>
                 <span title="Notifications"><NotificationBell userId={notificationUserId} /></span>

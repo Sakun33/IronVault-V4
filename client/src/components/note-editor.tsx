@@ -99,6 +99,29 @@ export function NoteEditor({
   const lastSnapshotRef = useRef<string>('');
   const saveTimerRef = useRef<number | null>(null);
 
+  // Lift the bottom toolbar above the soft keyboard on mobile. iOS Safari
+  // doesn't resize the layout viewport when the keyboard opens — we have
+  // to read window.visualViewport.height vs window.innerHeight to detect
+  // the keyboard intrusion and translate the toolbar up by that delta.
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    const vv = (typeof window !== 'undefined' && window.visualViewport) || null;
+    if (!vv) return;
+    const update = () => {
+      const intrusion = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // Treat <40px as "keyboard closed" (browser chrome flicker)
+      setKeyboardOffset(intrusion > 40 ? Math.round(intrusion) : 0);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [open]);
+
   // Reset state when the note changes (open a different one)
   useEffect(() => {
     if (!open) return;
@@ -158,7 +181,7 @@ export function NoteEditor({
     if (!open || !dirty) return;
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => { void runSave(); }, 1500);
+    saveTimerRef.current = window.setTimeout(() => { void runSave(); }, 2000);
     return () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSnapshot, dirty, open]);
@@ -332,25 +355,22 @@ export function NoteEditor({
         >
           {/* Top bar — Evernote style: back, share, more */}
           <header className="flex items-center justify-between gap-2 px-2 py-2 border-b border-border/40 bg-background">
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Back"
-              className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-
-            {/* Inline saved indicator — tiny, lives in the title-bar gutter so
-                it doesn't need its own row */}
-            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground/70">
-              {saving ? (
-                <><Save className="w-3 h-3 text-amber-400 animate-pulse" />Saving…</>
-              ) : dirty ? (
-                <><Save className="w-3 h-3 text-amber-400" />Unsaved</>
-              ) : (
-                <><Check className="w-3 h-3 text-emerald-400" />Saved{savedAt ? ` · ${timeAgoShort(savedAt)}` : ''}</>
-              )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Back"
+                className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              {/* Subtle save indicator — a small dot to the right of the
+                  back button. Amber while dirty/saving, emerald check that
+                  fades 1s after a successful save, then disappears. */}
+              <SaveDot saving={saving} dirty={dirty} savedAt={savedAt} />
+            </div>
+            <span className="sr-only" aria-live="polite">
+              {saving ? 'Saving' : dirty ? 'Unsaved changes' : 'All changes saved'}
             </span>
 
             <div className="flex items-center gap-0.5">
@@ -528,18 +548,22 @@ export function NoteEditor({
                 onMouseUp={sampleActiveFormats}
                 onFocus={sampleActiveFormats}
                 spellCheck
-                className="iv-rich-editor min-h-[55vh] outline-none prose dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-[1.65] prose-headings:tracking-tight prose-h1:mt-5 prose-h2:mt-4 prose-h3:mt-3 prose-li:my-0.5 prose-li:leading-[1.6]"
+                className="iv-rich-editor"
                 data-placeholder="Start writing…"
-                style={{ paddingBottom: `calc(96px + ${bottomGutterPx}px)`, fontSize: '16px' }}
+                style={{ minHeight: '300px', paddingBottom: `calc(96px + ${bottomGutterPx}px)` }}
               />
             </div>
           </div>
 
-          {/* Minimal formatting strip at the bottom — small icons, muted by
-              default, lights up only for the active format. */}
+          {/* Minimal formatting strip — small icons, muted by default, only
+              the active format lights up. Translates above the soft keyboard
+              when one is open (visualViewport height delta). */}
           <div
-            className="sticky bottom-0 z-[2] bg-background/95 backdrop-blur-md border-t border-border/40"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            className="sticky bottom-0 z-[2] bg-background/95 backdrop-blur-md border-t border-border/40 transition-transform duration-150"
+            style={{
+              paddingBottom: keyboardOffset ? 0 : 'env(safe-area-inset-bottom)',
+              transform: keyboardOffset ? `translateY(-${keyboardOffset}px)` : undefined,
+            }}
           >
             <div className="max-w-3xl mx-auto w-full px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
               <ToolbarBtn label="Bold" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
@@ -560,11 +584,8 @@ export function NoteEditor({
               <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
               <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
 
-              {/* Compact word count at the right edge */}
-              <span className="ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0 sm:hidden">
-                {saving ? 'saving…' : dirty ? 'unsaved' : 'saved'} · {wordCount}w
-              </span>
-              <span className="hidden sm:inline ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0">
+              {/* Compact word count — status now lives next to Back button */}
+              <span className="ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0">
                 {wordCount} word{wordCount === 1 ? '' : 's'}
               </span>
             </div>
@@ -573,6 +594,50 @@ export function NoteEditor({
       )}
     </AnimatePresence>
   );
+}
+
+// Tiny status indicator anchored to the top-bar Back button. Stays visible
+// for 1s after a save completes (emerald check), shows an amber dot while
+// dirty/saving, and disappears entirely once the save settles.
+function SaveDot({ saving, dirty, savedAt }: { saving: boolean; dirty: boolean; savedAt: Date | null }) {
+  const [showCheck, setShowCheck] = useState(false);
+  const lastSavedAtRef = useRef<number | null>(savedAt?.getTime() ?? null);
+  useEffect(() => {
+    if (!savedAt) return;
+    const stamp = savedAt.getTime();
+    if (lastSavedAtRef.current === stamp) return;
+    lastSavedAtRef.current = stamp;
+    setShowCheck(true);
+    const t = setTimeout(() => setShowCheck(false), 1200);
+    return () => clearTimeout(t);
+  }, [savedAt]);
+
+  if (saving) {
+    return (
+      <span
+        aria-hidden
+        className="absolute -right-0.5 -top-0.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse"
+      />
+    );
+  }
+  if (dirty) {
+    return <span aria-hidden className="absolute -right-0.5 -top-0.5 w-2 h-2 rounded-full bg-amber-400" />;
+  }
+  if (showCheck) {
+    return (
+      <motion.span
+        aria-hidden
+        initial={{ opacity: 0, scale: 0.4 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        className="absolute -right-0.5 -top-0.5 w-3 h-3 rounded-full bg-emerald-500 flex items-center justify-center"
+      >
+        <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+      </motion.span>
+    );
+  }
+  return null;
 }
 
 function ToolbarBtn({ label, active, onClick, children }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode }) {

@@ -227,9 +227,13 @@ export default function Notes() {
       await updateNote(editingNote.id, payload);
       setEditingNote(prev => prev ? { ...prev, ...payload, updatedAt: new Date() } as NoteEntry : prev);
     } else {
-      await addNote(payload);
+      // First autosave on a brand-new note: create it, then transition the
+      // editor into "editing the just-created note" mode so the next
+      // autosave updates instead of creating a duplicate. The editor stays
+      // open — closing on autosave was the bug users reported.
+      const created = await addNote(payload);
       saveNotebook(payload.notebook);
-      setEditorOpen(false);
+      setEditingNote(created);
     }
   };
 
