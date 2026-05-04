@@ -68,7 +68,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, Database, Check, MessageCircle, MoreVertical, Sun, Moon } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MessageCircle, MoreVertical, Sun, Moon } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -86,6 +86,7 @@ import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
 import { QuickAddMenu } from "@/components/quick-add-fab";
+import { CommandPalette } from "@/components/command-palette";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
 import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
@@ -144,8 +145,32 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [showQuickAccess, setShowQuickAccess] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
+
+  // Cmd+K (Mac) / Ctrl+K (Win/Linux) opens the global command palette.
+  // Bound at the layout level so it works on every authenticated page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (isMod && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Collapsible sidebar — persists across reloads. Defaults to expanded.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('iv_sidebar_collapsed') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('iv_sidebar_collapsed', sidebarCollapsed ? '1' : '0'); } catch {}
+  }, [sidebarCollapsed]);
 
   const looksLikeEmail = useCallback((value: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -577,12 +602,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
-        <nav className="w-60 flex-shrink-0 glass-surface border-r p-3 flex flex-col h-full">
+        <motion.nav
+          animate={{ width: sidebarCollapsed ? 68 : 240 }}
+          initial={false}
+          transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+          className="flex-shrink-0 glass-surface border-r p-3 flex flex-col h-full"
+        >
           {/* Scrollable primary nav items with section groups */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0 smooth-scrollbar">
             {/* Core Vault group */}
-            <div className="px-2 pt-1 pb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Vault</span>
+            <div className={`px-2 pt-1 pb-1 ${sidebarCollapsed ? 'h-1' : ''}`}>
+              {!sidebarCollapsed && (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Vault</span>
+              )}
             </div>
             <div className="space-y-0.5 mb-1">
               {coreNavItems.map((item) => {
@@ -592,7 +624,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    aria-label={sidebarCollapsed ? item.label : undefined}
+                    className={`relative w-full ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 ${sidebarCollapsed ? '' : 'hover:translate-x-0.5'} hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
                     {isActive && (
                       <motion.span
@@ -602,15 +636,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                       />
                     )}
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
-                    <span className="text-sm">{item.label}</span>
-                    {'limitLabel' in item && item.limitLabel !== null ? (
-                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                        {item.limitLabel}
-                      </span>
-                    ) : item.count !== null && (
-                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                        {item.count > 99 ? '99+' : item.count}
-                      </span>
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="text-sm">{item.label}</span>
+                        {'limitLabel' in item && item.limitLabel !== null ? (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.limitLabel}
+                          </span>
+                        ) : item.count !== null && (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.count > 99 ? '99+' : item.count}
+                          </span>
+                        )}
+                      </>
                     )}
                   </Button>
                 </Link>
@@ -618,8 +656,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               })}
             </div>
             {/* Finance group */}
-            <div className="px-2 pt-2 pb-1 border-t border-border/30 mt-1">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Finance</span>
+            <div className={`px-2 pt-2 pb-1 border-t border-border/30 mt-1 ${sidebarCollapsed ? 'h-2' : ''}`}>
+              {!sidebarCollapsed && (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Finance</span>
+              )}
             </div>
             <div className="space-y-0.5">
               {financeNavItems.map((item) => {
@@ -629,7 +669,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    aria-label={sidebarCollapsed ? item.label : undefined}
+                    className={`relative w-full ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 ${sidebarCollapsed ? '' : 'hover:translate-x-0.5'} hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
                     {isActive && (
                       <motion.span
@@ -639,15 +681,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                       />
                     )}
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
-                    <span className="text-sm">{item.label}</span>
-                    {'limitLabel' in item && item.limitLabel !== null ? (
-                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                        {item.limitLabel}
-                      </span>
-                    ) : item.count !== null && (
-                      <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                        {item.count > 99 ? '99+' : item.count}
-                      </span>
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="text-sm">{item.label}</span>
+                        {'limitLabel' in item && item.limitLabel !== null ? (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.limitLabel}
+                          </span>
+                        ) : item.count !== null && (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.count > 99 ? '99+' : item.count}
+                          </span>
+                        )}
+                      </>
                     )}
                   </Button>
                 </Link>
@@ -668,7 +714,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               <Link key={item.id} href={itemPath}>
                 <Button
                   variant="ghost"
-                  className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                  title={sidebarCollapsed ? item.label : undefined}
+                  aria-label={sidebarCollapsed ? item.label : undefined}
+                  className={`relative w-full ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 ${sidebarCollapsed ? '' : 'hover:translate-x-0.5'} hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                 >
                   {isActive && (
                     <motion.span
@@ -678,13 +726,26 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                     />
                   )}
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
-                  <span className="text-sm">{item.label}</span>
+                  {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
                 </Button>
               </Link>
               );
             })}
+            {/* Collapse / expand toggle */}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(v => !v)}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-pressed={sidebarCollapsed}
+              className={`mt-1 w-full ${sidebarCollapsed ? 'justify-center' : 'justify-end gap-1.5 px-3'} flex items-center py-2 h-auto rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors`}
+            >
+              {sidebarCollapsed
+                ? <ChevronRight className="w-4 h-4" />
+                : <><span className="text-[11px]">Collapse</span><ChevronLeft className="w-4 h-4" /></>}
+            </button>
           </div>
-        </nav>
+        </motion.nav>
 
         {/* Main Content */}
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
@@ -752,6 +813,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Quick-Add Menu - controlled from header + button */}
       <QuickAddMenu open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />
+
+      {/* Global Cmd+K command palette */}
+      <CommandPalette open={showCommandPalette} onOpenChange={setShowCommandPalette} />
 
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
       <BottomTabs items={bottomTabItems} />
