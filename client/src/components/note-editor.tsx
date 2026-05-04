@@ -4,14 +4,14 @@ import DOMPurify from 'dompurify';
 import {
   ArrowLeft, Pin, Trash2, MoreHorizontal, Check, Save,
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  Heading1, Heading2, Heading3, List as ListBullets, ListOrdered, CheckSquare,
-  Code, Minus, Tag as TagIcon, Plus, X,
+  Heading2, List as ListBullets, ListOrdered, CheckSquare,
+  Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
+  Share2,
 } from 'lucide-react';
 import { NoteEntry, NOTE_NOTEBOOKS } from '@shared/schema';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 
-// Per-note accent palette. Same swatches as the list cards so the editor's
-// header strip matches what the user picked.
+// Per-note accent palette — kept in sync with the list cards.
 export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string }> = [
   { id: 'emerald', name: 'Emerald', hex: '#10b981' },
   { id: 'sky',     name: 'Sky',     hex: '#0ea5e9' },
@@ -25,20 +25,16 @@ export type NoteFormPayload = Pick<NoteEntry, 'title' | 'content' | 'notebook' |
 
 interface NoteEditorProps {
   open: boolean;
-  /** When editing an existing note, pass it. When creating a new one, pass null. */
   note: NoteEntry | null;
-  /** Optional starter content for new notes (e.g. from a template). */
   starter?: { content?: string; notebook?: string };
   defaultNotebook?: string;
   onClose: () => void;
   onSave: (payload: NoteFormPayload) => Promise<void> | void;
   onDelete?: () => void;
-  /** Hint to the layout: avoid the bottom-tabs gutter on mobile. */
+  onDuplicate?: () => void;
   bottomGutterPx?: number;
 }
 
-// Lightweight HTML → plain text for word counts. Avoids importing
-// DOMPurify just to count.
 function htmlToText(html: string): string {
   if (!html) return '';
   const tmp = document.createElement('div');
@@ -58,15 +54,20 @@ function timeAgoShort(date: Date | string | undefined): string {
 }
 
 /**
- * Full-screen note editor. ContentEditable-based; we don't pull in TipTap /
- * Quill / ProseMirror. Formatting goes through `document.execCommand` (still
- * the most reliable cross-browser path for contentEditable, deprecated tag
- * notwithstanding) and a couple of custom helpers for checkbox + divider.
+ * Evernote-style full-screen note editor.
+ *
+ * Visual contract:
+ * - Top bar: ← back · ↗ share · ⋯ more (with color picker, duplicate, delete)
+ * - Notebook + tag row: small, muted, just below the bar
+ * - Title: large 28px, no border, no underline, plain placeholder
+ * - Body: contentEditable, 16px, leading-1.65, generous spacing
+ * - Bottom: minimal formatting strip — small icons (28px), muted until used
+ * - Status: tiny "Saved" / "Saving" / "Unsaved" indicator inline in the top
+ *   bar, not a dedicated bar
  *
  * The editor is presentational: it receives a note and an `onSave` callback.
- * Save is debounced 1.5s after the last edit, and the parent decides what
- * "save" means (vault.addNote vs vault.updateNote). The component reports
- * the dirty/saving/saved state via the status bar at the bottom.
+ * Save is debounced 1.5s after the last edit. The component reports its
+ * dirty state via the inline indicator in the top bar.
  */
 export function NoteEditor({
   open,
@@ -76,6 +77,7 @@ export function NoteEditor({
   onClose,
   onSave,
   onDelete,
+  onDuplicate,
   bottomGutterPx = 0,
 }: NoteEditorProps) {
   const [title, setTitle] = useState(note?.title ?? '');
@@ -85,18 +87,19 @@ export function NoteEditor({
   const [color, setColor] = useState<string | undefined>(note?.color);
   const [contentHtml, setContentHtml] = useState<string>(() => initialHtml(note, starter));
   const [tagInput, setTagInput] = useState('');
+  const [tagInputOpen, setTagInputOpen] = useState(false);
   const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
-  const [headingCycle, setHeadingCycle] = useState(0); // 0 = none, 1 = h1, 2 = h2, 3 = h3
-  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [headingCycle, setHeadingCycle] = useState(0);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(note?.updatedAt ? new Date(note.updatedAt) : null);
   const [saving, setSaving] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
-  const lastSnapshotRef = useRef<string>(''); // last successfully saved snapshot
+  const lastSnapshotRef = useRef<string>('');
   const saveTimerRef = useRef<number | null>(null);
 
-  // Reset state when the note prop changes (open a different note)
+  // Reset state when the note changes (open a different one)
   useEffect(() => {
     if (!open) return;
     setTitle(note?.title ?? '');
@@ -108,19 +111,23 @@ export function NoteEditor({
     setContentHtml(html);
     setSavedAt(note?.updatedAt ? new Date(note.updatedAt) : null);
     setHeadingCycle(0);
-    lastSnapshotRef.current = serializeForCompare({ title: note?.title ?? '', html, notebook: note?.notebook ?? defaultNotebook, tags: note?.tags ?? [], isPinned: note?.isPinned ?? false, color: note?.color });
-    // Defer focus until the editor has actually mounted; on a brand-new note
-    // we focus the title, when editing we drop the cursor at the end of the
-    // body so the user can keep writing where they left off.
+    setTagInputOpen(false);
+    setMoreMenuOpen(false);
+    lastSnapshotRef.current = serializeForCompare({
+      title: note?.title ?? '',
+      html,
+      notebook: note?.notebook ?? defaultNotebook,
+      tags: note?.tags ?? [],
+      isPinned: note?.isPinned ?? false,
+      color: note?.color,
+    });
     requestAnimationFrame(() => {
       if (!note) titleRef.current?.focus();
       else editorRef.current?.focus();
     });
   }, [open, note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync the editable div's innerHTML on note change (we don't drive
-  // contentEditable from React state on every keystroke — that wrecks the
-  // selection — but we do reset it when the underlying note changes).
+  // Sync editable div's innerHTML when the underlying note changes
   useEffect(() => {
     if (!open || !editorRef.current) return;
     if (editorRef.current.innerHTML !== contentHtml) {
@@ -129,8 +136,6 @@ export function NoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, note?.id]);
 
-  // Existing notebooks for the picker — combines schema-defaults + any
-  // notebook a tag-merged note might have.
   const notebookOptions = useMemo(() => {
     const set = new Set<string>(NOTE_NOTEBOOKS);
     if (notebook) set.add(notebook);
@@ -141,56 +146,45 @@ export function NoteEditor({
     const text = htmlToText(contentHtml);
     return text ? text.split(' ').filter(Boolean).length : 0;
   }, [contentHtml]);
-  const charCount = useMemo(() => htmlToText(contentHtml).length, [contentHtml]);
 
-  // Dirty check — compare a stable serialized snapshot
   const currentSnapshot = useMemo(
     () => serializeForCompare({ title, html: contentHtml, notebook, tags, isPinned, color }),
     [title, contentHtml, notebook, tags, isPinned, color],
   );
   const dirty = currentSnapshot !== lastSnapshotRef.current;
 
-  // Debounced autosave: 1.5s after the last edit, fire onSave. We don't
-  // autosave a brand-new note until it has a non-empty title or body — that
-  // would litter the vault with empty drafts.
+  // Debounced autosave — 1.5s after the last edit. Skip empty drafts.
   useEffect(() => {
     if (!open || !dirty) return;
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => {
-      void runSave();
-    }, 1500);
-    return () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    };
+    saveTimerRef.current = window.setTimeout(() => { void runSave(); }, 1500);
+    return () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSnapshot, dirty, open]);
 
-  // Save on close — flush any pending autosave so the user never loses an
-  // edit by tapping Back too quickly.
+  // Flush on unmount/close
   useEffect(() => {
     if (!open) return;
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-      if (dirty && (title.trim() || htmlToText(contentHtml).trim())) {
-        void runSave();
-      }
+      if (dirty && (title.trim() || htmlToText(contentHtml).trim())) void runSave();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Cmd+S, Cmd+B/I/U, Cmd+Shift+L shortcuts on desktop
+  // Keyboard shortcuts
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+      if (e.key === 'Escape') {
+        if (moreMenuOpen) { setMoreMenuOpen(false); return; }
+        if (tagInputOpen) { setTagInputOpen(false); return; }
+      }
       if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === 's') {
-        e.preventDefault();
-        void runSave();
-        return;
-      }
+      if (key === 's') { e.preventDefault(); void runSave(); return; }
       if (key === 'b') { e.preventDefault(); applyFormat('bold'); return; }
       if (key === 'i') { e.preventDefault(); applyFormat('italic'); return; }
       if (key === 'u') { e.preventDefault(); applyFormat('underline'); return; }
@@ -199,10 +193,10 @@ export function NoteEditor({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, moreMenuOpen, tagInputOpen]);
 
   const runSave = async () => {
-    if (!title.trim() && !htmlToText(contentHtml).trim()) return; // skip empty
+    if (!title.trim() && !htmlToText(contentHtml).trim()) return;
     setSaving(true);
     try {
       const sanitized = DOMPurify.sanitize(contentHtml, {
@@ -220,14 +214,10 @@ export function NoteEditor({
       lastSnapshotRef.current = currentSnapshot;
       setSavedAt(new Date());
       void hapticSuccess();
-    } catch {
-      // surfaced by parent toast
-    } finally {
-      setSaving(false);
-    }
+    } catch { /* parent toast */ }
+    finally { setSaving(false); }
   };
 
-  // Format helpers ──────────────────────────────────────────────────────────
   const sampleActiveFormats = () => {
     if (!editorRef.current) return;
     const next = new Set<string>();
@@ -238,7 +228,7 @@ export function NoteEditor({
       if (document.queryCommandState('strikeThrough')) next.add('strike');
       if (document.queryCommandState('insertUnorderedList')) next.add('ul');
       if (document.queryCommandState('insertOrderedList')) next.add('ol');
-    } catch { /* noop — execCommand not available */ }
+    } catch { /* unsupported */ }
     setActiveFormats(next);
   };
 
@@ -253,7 +243,7 @@ export function NoteEditor({
   const cycleHeading = () => {
     if (!editorRef.current) return;
     editorRef.current.focus();
-    const next = (headingCycle + 1) % 4; // 0 → H1 → H2 → H3 → 0
+    const next = (headingCycle + 1) % 4;
     const block = next === 0 ? 'P' : `H${next}`;
     try { document.execCommand('formatBlock', false, block); } catch { /* noop */ }
     setHeadingCycle(next);
@@ -287,7 +277,7 @@ export function NoteEditor({
   };
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Markdown-ish shortcut: type `# ` at the start of a line → H2
+    // Markdown shortcut: `# `, `## `, `### ` at start of a line → heading
     if (e.key === ' ' && editorRef.current) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
@@ -296,11 +286,8 @@ export function NoteEditor({
       if (text === '#' || text === '##' || text === '###') {
         e.preventDefault();
         const level = text.length;
-        // Clear the # marker and apply the heading
         range.startContainer.textContent = '';
-        try {
-          document.execCommand('formatBlock', false, `H${Math.min(3, level + 1)}`);
-        } catch { /* noop */ }
+        try { document.execCommand('formatBlock', false, `H${Math.min(3, level + 1)}`); } catch {}
         setHeadingCycle(Math.min(3, level + 1));
         syncEditorState();
       }
@@ -310,13 +297,24 @@ export function NoteEditor({
   const addTag = () => {
     const t = tagInput.trim().toLowerCase().replace(/^#/, '');
     if (!t) return;
-    if (tags.includes(t)) { setTagInput(''); return; }
-    setTags(prev => [...prev, t]);
+    if (!tags.includes(t)) setTags(prev => [...prev, t]);
     setTagInput('');
   };
   const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
 
-  const accentHex = (color && NOTE_ACCENT_PALETTE.find(s => s.id === color)?.hex) || NOTE_ACCENT_PALETTE[0].hex;
+  const accentHex = (color && NOTE_ACCENT_PALETTE.find(s => s.id === color)?.hex) || null;
+
+  // Native share — falls back to clipboard
+  const handleShare = async () => {
+    const text = `${title.trim() || 'Untitled'}\n\n${htmlToText(contentHtml)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: title.trim() || 'Note', text });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch { /* user cancelled */ }
+  };
 
   return (
     <AnimatePresence>
@@ -332,103 +330,139 @@ export function NoteEditor({
           aria-modal="true"
           aria-label={note ? `Editing ${note.title}` : 'New note'}
         >
-          {/* Color accent rail */}
-          <div className="h-1 w-full" style={{ background: accentHex }} aria-hidden />
-
-          {/* Top bar */}
-          <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06] bg-background/80 backdrop-blur-md">
+          {/* Top bar — Evernote style: back, share, more */}
+          <header className="flex items-center justify-between gap-2 px-2 py-2 border-b border-border/40 bg-background">
             <button
               type="button"
               onClick={onClose}
               aria-label="Back"
-              className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-1">
+
+            {/* Inline saved indicator — tiny, lives in the title-bar gutter so
+                it doesn't need its own row */}
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground/70">
+              {saving ? (
+                <><Save className="w-3 h-3 text-amber-400 animate-pulse" />Saving…</>
+              ) : dirty ? (
+                <><Save className="w-3 h-3 text-amber-400" />Unsaved</>
+              ) : (
+                <><Check className="w-3 h-3 text-emerald-400" />Saved{savedAt ? ` · ${timeAgoShort(savedAt)}` : ''}</>
+              )}
+            </span>
+
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => { setIsPinned(p => !p); void hapticLight(); }}
                 aria-label={isPinned ? 'Unpin note' : 'Pin note'}
                 aria-pressed={isPinned}
-                className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors ${isPinned ? 'bg-amber-500/15 text-amber-300' : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'}`}
+                className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isPinned ? 'text-amber-300' : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'}`}
               >
                 <Pin className={`w-4 h-4 ${isPinned ? 'fill-amber-400' : ''}`} />
               </button>
               <button
                 type="button"
-                onClick={() => setShowColorPicker(v => !v)}
-                aria-label="More options"
-                className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+                onClick={handleShare}
+                aria-label="Share"
+                className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
               >
-                <MoreHorizontal className="w-4 h-4" />
+                <Share2 className="w-4 h-4" />
               </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setMoreMenuOpen(v => !v); }}
+                  aria-label="More options"
+                  aria-expanded={moreMenuOpen}
+                  className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors ${moreMenuOpen ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'}`}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+                <AnimatePresence>
+                  {moreMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                      transition={{ duration: 0.14 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-11 z-30 w-56 rounded-xl border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl py-2"
+                    >
+                      <div className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1.5">
+                        <Palette className="w-3 h-3" /> Accent color
+                      </div>
+                      <div className="px-3 pb-2 flex items-center gap-2">
+                        {NOTE_ACCENT_PALETTE.map(s => {
+                          const active = (color ?? null) === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              aria-label={`Accent ${s.name}`}
+                              aria-pressed={active}
+                              onClick={() => setColor(prev => prev === s.id ? undefined : s.id)}
+                              className={`relative h-5 w-5 rounded-full transition-transform ${active ? 'scale-110 ring-2 ring-white/40 ring-offset-2 ring-offset-background' : 'hover:scale-110 opacity-90'}`}
+                              style={{ background: s.hex }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="h-px bg-white/[0.06] my-1" />
+                      {onDuplicate && (
+                        <button
+                          type="button"
+                          onClick={() => { onDuplicate(); setMoreMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-white/[0.06] transition-colors"
+                        >
+                          <CopyIcon className="w-3.5 h-3.5" /> Duplicate
+                        </button>
+                      )}
+                      {onDelete && note && (
+                        <button
+                          type="button"
+                          onClick={() => { onDelete(); setMoreMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete note
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </header>
 
-          {/* Color picker dropdown — anchored to the More button */}
-          <AnimatePresence>
-            {showColorPicker && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.14 }}
-                className="absolute right-3 top-12 z-[5] glass-card p-3 flex items-center gap-2 shadow-lg"
-              >
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Accent</span>
-                {NOTE_ACCENT_PALETTE.map(s => {
-                  const active = (color ?? null) === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      aria-label={`Accent ${s.name}`}
-                      aria-pressed={active}
-                      onClick={() => { setColor(prev => prev === s.id ? undefined : s.id); }}
-                      className={`relative h-5 w-5 rounded-full transition-transform ${active ? 'scale-110 ring-2 ring-white/40 ring-offset-1 ring-offset-background' : 'hover:scale-110'}`}
-                      style={{ background: s.hex }}
-                    />
-                  );
-                })}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Color accent — thin line under the top bar (replaces the loud rail) */}
+          {accentHex && <div className="h-px w-full" style={{ background: accentHex }} aria-hidden />}
 
-          {/* Scrollable content */}
+          {/* Body — clean writing surface */}
           <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar">
-            <div className="px-4 sm:px-6 pt-4 pb-3 max-w-3xl mx-auto w-full">
-              <input
-                ref={titleRef}
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="Untitled"
-                className="w-full bg-transparent border-0 outline-none text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-muted-foreground/30 focus:placeholder:text-muted-foreground/20 pb-2 border-b border-transparent focus:border-emerald-400/30 transition-colors"
-                aria-label="Note title"
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus(); } }}
-              />
-
-              {/* Notebook + tags row */}
-              <div className="mt-3 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+            <div className="px-4 sm:px-8 pt-5 pb-3 max-w-3xl mx-auto w-full">
+              {/* Notebook + tag row — small, muted, content-focused */}
+              <div className="flex items-center justify-between gap-2 mb-4 text-[13px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentHex }} />
+                  <BookOpen className="w-3.5 h-3.5 opacity-60" />
                   <select
                     value={notebook}
                     onChange={e => setNotebook(e.target.value)}
                     aria-label="Notebook"
-                    className="bg-transparent border-0 outline-none text-foreground/90 cursor-pointer hover:text-foreground transition-colors"
+                    className="bg-transparent border-0 outline-none cursor-pointer hover:text-foreground transition-colors capitalize"
                   >
                     {notebookOptions.map(nb => (
                       <option key={nb} value={nb} className="bg-background">{nb}</option>
                     ))}
                   </select>
                 </span>
-                <span className="text-muted-foreground/40">·</span>
-                <span className="inline-flex items-center gap-1 flex-wrap">
+
+                <div className="flex items-center gap-1 flex-wrap justify-end min-w-0">
                   {tags.map(t => (
                     <span
                       key={t}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] text-foreground"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-foreground"
                     >
                       <TagIcon className="w-2.5 h-2.5 opacity-60" />
                       {t}
@@ -442,22 +476,45 @@ export function NoteEditor({
                       </button>
                     </span>
                   ))}
-                  <input
-                    value={tagInput}
-                    onChange={e => setTagInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
-                      if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
-                    }}
-                    onBlur={() => { if (tagInput.trim()) addTag(); }}
-                    placeholder={tags.length ? 'add tag' : '+ add tag'}
-                    className="bg-transparent border-0 outline-none text-[11px] w-20 placeholder:text-muted-foreground/50"
-                    aria-label="Add tag"
-                  />
-                </span>
+                  {tagInputOpen ? (
+                    <input
+                      autoFocus
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onBlur={() => { if (tagInput.trim()) addTag(); setTagInputOpen(false); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+                        else if (e.key === 'Escape') { setTagInput(''); setTagInputOpen(false); }
+                        else if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
+                      }}
+                      placeholder="tag"
+                      className="bg-transparent border-0 outline-none text-[13px] w-20 placeholder:text-muted-foreground/50"
+                      aria-label="Add tag"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setTagInputOpen(true)}
+                      className="text-[13px] text-emerald-400/90 hover:text-emerald-300 transition-colors"
+                    >
+                      {tags.length === 0 ? '+ Add tag' : '+ Tag'}
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Editor */}
+              {/* Title */}
+              <input
+                ref={titleRef}
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Title"
+                aria-label="Note title"
+                className="w-full bg-transparent border-0 outline-none text-[28px] sm:text-[32px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus(); } }}
+              />
+
+              {/* Body */}
               <div
                 ref={editorRef}
                 contentEditable
@@ -471,94 +528,45 @@ export function NoteEditor({
                 onMouseUp={sampleActiveFormats}
                 onFocus={sampleActiveFormats}
                 spellCheck
-                className="iv-rich-editor mt-5 min-h-[40vh] outline-none prose dark:prose-invert prose-sm sm:prose-base max-w-none prose-p:my-2 prose-headings:tracking-tight prose-h1:mt-4 prose-h2:mt-3 prose-h3:mt-2 prose-li:my-0.5"
-                data-placeholder="Start writing… use the toolbar below or type # to add headings."
-                style={{ paddingBottom: `calc(120px + ${bottomGutterPx}px)` }}
+                className="iv-rich-editor min-h-[55vh] outline-none prose dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-[1.65] prose-headings:tracking-tight prose-h1:mt-5 prose-h2:mt-4 prose-h3:mt-3 prose-li:my-0.5 prose-li:leading-[1.6]"
+                data-placeholder="Start writing…"
+                style={{ paddingBottom: `calc(96px + ${bottomGutterPx}px)`, fontSize: '16px' }}
               />
             </div>
           </div>
 
-          {/* Sticky toolbar — bottom on mobile, sticks above the keyboard via
-              env(keyboard-inset-height) on supporting browsers, otherwise sits
-              above the bottom-tabs gutter. */}
+          {/* Minimal formatting strip at the bottom — small icons, muted by
+              default, lights up only for the active format. */}
           <div
-            className="sticky bottom-0 z-[2] bg-background/85 backdrop-blur-xl border-t border-white/[0.06]"
-            style={{ paddingBottom: `max(env(safe-area-inset-bottom), 0px)` }}
+            className="sticky bottom-0 z-[2] bg-background/95 backdrop-blur-md border-t border-border/40"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            <div className="max-w-3xl mx-auto w-full px-2 py-1.5 flex items-center gap-1 overflow-x-auto smooth-scrollbar">
-              <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
-              <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
-              <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
+            <div className="max-w-3xl mx-auto w-full px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
+              <ToolbarBtn label="Bold" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
+              <ToolbarBtn label="Italic" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
+              <ToolbarBtn label="Underline" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
               <ToolbarBtn label="Strikethrough" active={activeFormats.has('strike')} onClick={() => applyFormat('strikeThrough')}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
-              <span className="w-px h-5 bg-white/10 mx-0.5" aria-hidden />
+              <span className="w-px h-4 bg-border/60 mx-1" aria-hidden />
               <ToolbarBtn
-                label={`Heading ${headingCycle === 0 ? '(off)' : `H${headingCycle}`}`}
+                label={`Heading${headingCycle === 0 ? '' : ` H${headingCycle}`}`}
                 active={headingCycle > 0}
                 onClick={cycleHeading}
               >
-                {headingCycle === 1 ? <Heading1 className="w-3.5 h-3.5" />
-                  : headingCycle === 2 ? <Heading2 className="w-3.5 h-3.5" />
-                  : headingCycle === 3 ? <Heading3 className="w-3.5 h-3.5" />
-                  : <Heading2 className="w-3.5 h-3.5" />}
+                <Heading2 className="w-3.5 h-3.5" />
               </ToolbarBtn>
-              <ToolbarBtn label="Bullet list (⌘⇧L)" active={activeFormats.has('ul')} onClick={() => applyFormat('insertUnorderedList')}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
+              <ToolbarBtn label="Bullet list" active={activeFormats.has('ul')} onClick={() => applyFormat('insertUnorderedList')}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
               <ToolbarBtn label="Numbered list" active={activeFormats.has('ol')} onClick={() => applyFormat('insertOrderedList')}><ListOrdered className="w-3.5 h-3.5" /></ToolbarBtn>
               <ToolbarBtn label="Checklist" onClick={insertChecklistItem}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
-              <ToolbarBtn label="Code" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
+              <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
               <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
 
-              {/* Color picker — small swatches at the right */}
-              <span className="ml-auto flex items-center gap-1 pl-2 pr-1 flex-shrink-0">
-                {NOTE_ACCENT_PALETTE.map(s => {
-                  const active = (color ?? null) === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      aria-label={`Accent ${s.name}`}
-                      aria-pressed={active}
-                      onClick={() => setColor(prev => prev === s.id ? undefined : s.id)}
-                      className={`h-3 w-3 rounded-full transition-all ${active ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-background scale-125' : 'opacity-70 hover:opacity-100'}`}
-                      style={{ background: s.hex }}
-                    />
-                  );
-                })}
+              {/* Compact word count at the right edge */}
+              <span className="ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0 sm:hidden">
+                {saving ? 'saving…' : dirty ? 'unsaved' : 'saved'} · {wordCount}w
               </span>
-            </div>
-
-            {/* Status bar */}
-            <div className="max-w-3xl mx-auto w-full px-3 py-1.5 flex items-center gap-3 text-[11px] text-muted-foreground border-t border-white/[0.04]">
-              <span className="tabular-nums">{wordCount} word{wordCount === 1 ? '' : 's'}</span>
-              <span className="text-muted-foreground/40">·</span>
-              <span className="tabular-nums hidden xs:inline sm:inline">{charCount} char{charCount === 1 ? '' : 's'}</span>
-              <span className="ml-auto inline-flex items-center gap-1.5">
-                {saving ? (
-                  <>
-                    <Save className="w-3 h-3 text-amber-400 animate-pulse" />
-                    <span>Saving…</span>
-                  </>
-                ) : dirty ? (
-                  <>
-                    <Save className="w-3 h-3 text-amber-400" />
-                    <span>Unsaved</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3 h-3 text-emerald-400" />
-                    <span>Saved{savedAt ? ` · ${timeAgoShort(savedAt)}` : ''}</span>
-                  </>
-                )}
+              <span className="hidden sm:inline ml-auto text-[10px] text-muted-foreground/55 tabular-nums pr-2 flex-shrink-0">
+                {wordCount} word{wordCount === 1 ? '' : 's'}
               </span>
-              {onDelete && note && (
-                <button
-                  type="button"
-                  onClick={() => { void hapticLight(); onDelete(); }}
-                  aria-label="Delete note"
-                  className="h-6 w-6 -mr-1 flex items-center justify-center rounded-md text-muted-foreground/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
             </div>
           </div>
         </motion.div>
@@ -571,15 +579,15 @@ function ToolbarBtn({ label, active, onClick, children }: { label: string; activ
   return (
     <button
       type="button"
-      onMouseDown={(e) => e.preventDefault() /* keep focus + selection */}
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       aria-label={label}
       title={label}
       aria-pressed={!!active}
-      className={`min-w-[36px] h-9 px-2 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+      className={`min-w-[28px] h-7 px-1.5 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
         active
-          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30'
-          : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'
+          ? 'bg-emerald-500/15 text-emerald-300'
+          : 'text-muted-foreground/80 hover:text-foreground hover:bg-white/[0.06]'
       }`}
     >
       {children}
@@ -591,8 +599,6 @@ function initialHtml(note: NoteEntry | null, starter?: { content?: string }): st
   if (note) {
     const raw = note.content || '';
     if (raw.includes('<')) return raw;
-    // Convert plain text → simple paragraphs so the rich editor has block
-    // structure to format against.
     return raw.split('\n').map(line => line ? `<p>${escapeHtml(line)}</p>` : '<p><br/></p>').join('');
   }
   if (starter?.content) {
