@@ -269,7 +269,7 @@ export default function Dashboard() {
     setIsRefreshing(true);
     try {
       await refreshData();
-      toast({ title: 'Refreshed', description: 'Dashboard updated' });
+      toast({ variant: 'success', title: 'Refreshed', description: 'Dashboard updated' });
     } finally {
       setIsRefreshing(false);
     }
@@ -279,7 +279,7 @@ export default function Dashboard() {
     try {
       await navigator.clipboard.writeText(password);
       setCopiedId(id);
-      toast({ title: 'Copied', description: 'Password copied to clipboard' });
+      toast({ variant: 'success', title: 'Copied', description: 'Password copied to clipboard' });
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
       toast({ title: 'Error', description: 'Failed to copy', variant: 'destructive' });

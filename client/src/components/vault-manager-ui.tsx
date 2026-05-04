@@ -347,7 +347,7 @@ export function VaultManagerUI() {
     try {
       setIsCreating(true);
       await createVault(newVaultName.trim());
-      toast({ title: 'Vault Created', description: `"${newVaultName.trim()}" has been created successfully.` });
+      toast({ variant: 'success', title: 'Vault Created', description: `"${newVaultName.trim()}" has been created successfully.` });
       setNewVaultName('');
       setIsCreateOpen(false);
     } catch (error) {

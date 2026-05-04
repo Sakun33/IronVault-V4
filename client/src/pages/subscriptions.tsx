@@ -192,7 +192,7 @@ export default function Subscriptions() {
     if (!deleteSubTarget) return;
     try {
       await deleteSubscription(deleteSubTarget.id);
-      toast({ title: "Deleted", description: "Subscription deleted successfully" });
+      toast({ variant: 'success', title: "Deleted", description: "Subscription deleted successfully" });
     } catch {
       toast({ title: "Error", description: "Failed to delete subscription", variant: "destructive" });
     } finally {

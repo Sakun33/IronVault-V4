@@ -410,7 +410,7 @@ export default function Notes() {
     if (!deleteTarget) return;
     try {
       await deleteNote(deleteTarget.id);
-      toast({ title: 'Note deleted' });
+      toast({ variant: 'success', title: 'Note deleted' });
       if (editorOpen && editingNote?.id === deleteTarget.id) closeEditor();
     } catch {
       toast({ title: 'Failed to delete', variant: 'destructive' });
@@ -464,7 +464,7 @@ export default function Notes() {
     const affected = notes.filter(n => (n.notebook || '').toLowerCase() === oldName.toLowerCase());
     for (const n of affected) await updateNote(n.id, { notebook: newName });
     if (selectedNotebook.toLowerCase() === oldName.toLowerCase()) setSelectedNotebook(newName);
-    toast({ title: 'Notebook renamed', description: `${affected.length} note${affected.length === 1 ? '' : 's'} updated.` });
+    toast({ variant: 'success', title: 'Notebook renamed', description: `${affected.length} note${affected.length === 1 ? '' : 's'} updated.` });
     setRenameNotebookTarget(null);
   };
   const confirmDeleteNotebook = async () => {

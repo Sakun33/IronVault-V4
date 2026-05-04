@@ -133,7 +133,7 @@ export default function SettingsPage() {
       a.download = `ironvault-analytics-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: 'Exported', description: 'Analytics data exported successfully' });
+      toast({ variant: 'success', title: 'Exported', description: 'Analytics data exported successfully' });
     } catch (error) {
       console.error('Export failed:', error);
       toast({ title: 'Export Failed', description: 'Failed to export analytics data', variant: 'destructive' });
@@ -524,7 +524,7 @@ export default function SettingsPage() {
                 a.download = `ironvault-tickets-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-                toast({ title: 'Exported', description: 'Support tickets exported successfully' });
+                toast({ variant: 'success', title: 'Exported', description: 'Support tickets exported successfully' });
               } catch (error) {
                 toast({ title: 'Export Failed', description: 'Failed to export support tickets', variant: 'destructive' });
               }

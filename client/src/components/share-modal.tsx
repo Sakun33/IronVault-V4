@@ -65,7 +65,7 @@ export function ShareModal({ item, itemType, children }: ShareModalProps) {
       const url = `${window.location.origin}/shared/${shareId}`;
       setShareUrl(url);
       setIsGenerating(false);
-      toast({ title: 'Share Link Generated', description: 'Your share link has been created successfully' });
+      toast({ variant: 'success', title: 'Share Link Generated', description: 'Your share link has been created successfully' });
     }, 700);
   };
 
@@ -93,7 +93,7 @@ export function ShareModal({ item, itemType, children }: ShareModalProps) {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      toast({ title: 'Copied', description: 'Share link copied to clipboard' });
+      toast({ variant: 'success', title: 'Copied', description: 'Share link copied to clipboard' });
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast({ title: 'Error', description: 'Failed to copy share link', variant: 'destructive' });

@@ -93,11 +93,11 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
     try {
       if (editingPassword?.id) {
         await updatePassword(editingPassword.id, formData);
-        toast({ title: "Updated", description: "Password updated successfully" });
+        toast({ variant: 'success', title: "Updated", description: "Password updated successfully" });
       } else {
         await addPassword(formData);
         saveUsername(formData.username);
-        toast({ title: "Saved", description: "Password saved successfully" });
+        toast({ variant: 'success', title: "Saved", description: "Password saved successfully" });
       }
       return true;
     } catch {

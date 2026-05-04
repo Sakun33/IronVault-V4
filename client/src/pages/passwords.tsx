@@ -132,7 +132,7 @@ export default function Passwords() {
         });
       } else {
         await navigator.clipboard.writeText(linkWithKey);
-        toast({ title: 'Share link copied!', description: 'One-time link valid for 24 hours' });
+        toast({ variant: 'success', title: 'Share link copied!', description: 'One-time link valid for 24 hours' });
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
@@ -184,7 +184,7 @@ export default function Passwords() {
       await navigator.clipboard.writeText(text);
       void hapticSuccess();
       setCopiedId(key);
-      toast({ title: "Copied", description: `${label} copied to clipboard` });
+      toast({ variant: 'success', title: "Copied", description: `${label} copied to clipboard` });
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
       toast({ title: "Error", description: `Failed to copy ${label}`, variant: "destructive" });
@@ -213,7 +213,7 @@ export default function Passwords() {
     if (!deleteTargetId) return;
     try {
       await deletePassword(deleteTargetId);
-      toast({ title: "Deleted", description: "Password deleted successfully" });
+      toast({ variant: 'success', title: "Deleted", description: "Password deleted successfully" });
       if (detailPassword?.id === deleteTargetId) setDetailPassword(null);
     } catch {
       toast({ title: "Error", description: "Failed to delete password", variant: "destructive" });

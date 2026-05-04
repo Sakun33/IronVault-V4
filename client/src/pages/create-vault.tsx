@@ -112,7 +112,7 @@ export default function CreateVaultPage() {
             toast({ title: 'Cloud sync failed', description: 'Vault created locally. Will retry when online.', variant: 'destructive' });
             queueOfflineSync(newVault.id, newVault.name, 'push');
           } else {
-            toast({ title: 'Cloud vault created', description: 'Your vault is now synced to the cloud.' });
+            toast({ variant: 'success', title: 'Cloud vault created', description: 'Your vault is now synced to the cloud.' });
             markVaultAsCloudSynced(newVault.id);
           }
         } catch {

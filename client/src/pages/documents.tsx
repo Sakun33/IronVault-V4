@@ -666,7 +666,7 @@ export default function Documents() {
     try {
       await documentService.deleteDocument(deleteTargetId);
       setDocuments(prev => prev.filter(doc => doc.id !== deleteTargetId));
-      toast({ title: "Document Deleted", description: "Document has been permanently deleted." });
+      toast({ variant: 'success', title: "Document Deleted", description: "Document has been permanently deleted." });
     } catch (error) {
       console.error('Delete error:', error);
       toast({ title: "Delete Error", description: "Failed to delete document. Please try again.", variant: "destructive" });

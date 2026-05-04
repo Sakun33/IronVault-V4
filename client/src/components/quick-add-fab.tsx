@@ -105,7 +105,7 @@ function QuickPasswordSheet({ open, onClose, onSave, toast }: any) {
     setSaving(true);
     try {
       await onSave({ name, username, password, url: '', category: '', notes: '' });
-      toast({ title: "Saved", description: `Password for ${name} saved` });
+      toast({ variant: 'success', title: "Saved", description: `Password for ${name} saved` });
       reset(); onClose();
     } catch { toast({ title: "Error", description: "Failed to save", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -138,7 +138,7 @@ function QuickNoteSheet({ open, onClose, onSave, toast }: any) {
     setSaving(true);
     try {
       await onSave({ title, content, notebook: 'Default', tags: [], isPinned: false });
-      toast({ title: "Saved", description: `"${title}" note saved` });
+      toast({ variant: 'success', title: "Saved", description: `"${title}" note saved` });
       reset(); onClose();
     } catch { toast({ title: "Error", description: "Failed to save", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -172,7 +172,7 @@ function QuickExpenseSheet({ open, onClose, onSave, toast, currency }: any) {
     setSaving(true);
     try {
       await onSave({ title, amount: amt, currency, category, date: new Date(), notes: '', isRecurring: false, tags: [] });
-      toast({ title: "Saved", description: `${title} expense saved` });
+      toast({ variant: 'success', title: "Saved", description: `${title} expense saved` });
       reset(); onClose();
     } catch { toast({ title: "Error", description: "Failed to save", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -222,7 +222,7 @@ function QuickReminderSheet({ open, onClose, onSave, toast }: any) {
     setSaving(true);
     try {
       await onSave({ title, dueDate: new Date(dueDate + 'T09:00'), priority: 'medium', category: 'Personal', isCompleted: false, isRecurring: false, tags: [], color: '#6366f1', notificationEnabled: true, alarmEnabled: false, alertMinutesBefore: 15, preAlertEnabled: false });
-      toast({ title: "Saved", description: `Reminder "${title}" created` });
+      toast({ variant: 'success', title: "Saved", description: `Reminder "${title}" created` });
       reset(); onClose();
     } catch { toast({ title: "Error", description: "Failed to save", variant: "destructive" }); }
     finally { setSaving(false); }

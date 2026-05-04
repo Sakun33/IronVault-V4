@@ -207,7 +207,7 @@ export default function Investments() {
       try {
         await deleteInvestment(id);
         addLog('Investment deleted', 'system', `Deleted investment: ${name}`);
-        toast({ title: "Investment Deleted", description: `"${name}" has been removed from your portfolio.` });
+        toast({ variant: 'success', title: "Investment Deleted", description: `"${name}" has been removed from your portfolio.` });
       } catch (error) {
         console.error('Failed to delete investment:', error);
         toast({ title: "Error", description: "Failed to delete investment. Please try again.", variant: "destructive" });
@@ -434,7 +434,7 @@ export default function Investments() {
       try {
         await deleteInvestmentGoal(id);
         addLog(`Goal deleted: ${name}`, 'system', 'User deleted investment goal');
-        toast({ title: "Goal Deleted", description: `Successfully deleted goal: ${name}` });
+        toast({ variant: 'success', title: "Goal Deleted", description: `Successfully deleted goal: ${name}` });
       } catch (error) {
         console.error('Error deleting goal:', error);
         toast({ title: "Error", description: "Failed to delete goal. Please try again.", variant: "destructive" });
@@ -1255,7 +1255,7 @@ export default function Investments() {
                   const ids = investments.map((inv) => inv.id);
                   const removed = await bulkDeleteInvestments(ids);
                   setShowBulkDeleteConfirm(false);
-                  toast({ title: 'Deleted', description: `${removed} investment${removed === 1 ? '' : 's'} removed.` });
+                  toast({ variant: 'success', title: 'Deleted', description: `${removed} investment${removed === 1 ? '' : 's'} removed.` });
                   addLog('Investments Cleared', 'security', `Bulk-deleted ${removed} investments`);
                 }}
                 className="bg-red-600 hover:bg-red-700"

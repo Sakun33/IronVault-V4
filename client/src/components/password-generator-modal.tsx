@@ -149,7 +149,7 @@ export function PasswordGeneratorModal({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setSparkleKey(k => k + 1);
-      toast({ title: 'Copied', description: 'Password copied to clipboard' });
+      toast({ variant: 'success', title: 'Copied', description: 'Password copied to clipboard' });
       setTimeout(() => setCopied(false), 1800);
     } catch {
       toast({ title: 'Error', description: 'Failed to copy password', variant: 'destructive' });

@@ -565,7 +565,7 @@ export default function BankStatements() {
                     const ids = statements.map(s => s.id);
                     const removed = await bulkDeleteBankStatements(ids);
                     setShowBulkDeleteConfirm(false);
-                    toast({ title: 'Deleted', description: `${removed} statement${removed === 1 ? '' : 's'} removed.` });
+                    toast({ variant: 'success', title: 'Deleted', description: `${removed} statement${removed === 1 ? '' : 's'} removed.` });
                   }}
                 >
                   Delete {statements.length}
@@ -744,7 +744,7 @@ export default function BankStatements() {
                 if (!deleteStatementId) return;
                 try {
                   await deleteBankStatement(deleteStatementId);
-                  toast({ title: "Statement Deleted", description: "Bank statement removed from your vault." });
+                  toast({ variant: 'success', title: "Statement Deleted", description: "Bank statement removed from your vault." });
                 } catch {
                   toast({ title: "Error", description: "Failed to delete statement.", variant: "destructive" });
                 } finally {
