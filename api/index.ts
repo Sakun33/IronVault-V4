@@ -667,6 +667,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminAuthed = !!expectedAdminKey && !!adminKey && safeEq(adminKey, expectedAdminKey);
     if (!adminAuthed) {
       const cloudUser = await getCloudUser(req);
+      // DEBUG: investigating why this endpoint returns 401 with a Bearer
+      // token that succeeds on /api/auth/me + /api/vaults/cloud. Same
+      // getCloudUser, same token, same request. Logging path/userId/
+      // cloudUser + raw header presence so we can see what's actually
+      // arriving inside this code path.
+      const _authHeader = req.headers.authorization as string | undefined;
+      console.error('[entitlement debug] path=%s userId=%s hasAuth=%s authPrefix=%s cloudUser=%j',
+        path, userId,
+        !!_authHeader,
+        _authHeader ? _authHeader.slice(0, 12) : 'none',
+        cloudUser);
       if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
       // Allow lookup by either id or email, but only the user's own row.
       const matchesOwn =
