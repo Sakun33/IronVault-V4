@@ -669,14 +669,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const cloudUser = await getCloudUser(req);
       // DEBUG: investigating why this endpoint returns 401 with a Bearer
       // token that succeeds on /api/auth/me + /api/vaults/cloud. Same
-      // getCloudUser, same token, same request. Logging path/userId/
-      // cloudUser + raw header presence so we can see what's actually
-      // arriving inside this code path.
+      // getCloudUser, same token, same request. Logging the full chain
+      // of token parsing: header length, JWT segment lengths, signature
+      // recompute match, and final decode result.
       const _authHeader = req.headers.authorization as string | undefined;
-      console.error('[entitlement debug] path=%s userId=%s hasAuth=%s authPrefix=%s cloudUser=%j',
+      const _tok = _authHeader && _authHeader.startsWith('Bearer ') ? _authHeader.substring(7) : '';
+      const _segs = _tok.split('.');
+      const _decoded = _tok ? verifyCloudToken(_tok) : null;
+      let _sigCheck: string = 'n/a';
+      if (_segs.length === 3) {
+        const expected = b64url(createHmac('sha256', JWT_SECRET).update(`${_segs[0]}.${_segs[1]}`).digest());
+        _sigCheck = expected === _segs[2] ? 'match' : `mismatch:exp=${expected.slice(0, 8)} got=${_segs[2].slice(0, 8)}`;
+      }
+      console.error('[entitlement debug] path=%s userId=%s hdrLen=%d tokLen=%d segs=%d sig=%s decoded=%j cloudUser=%j',
         path, userId,
-        !!_authHeader,
-        _authHeader ? _authHeader.slice(0, 12) : 'none',
+        _authHeader?.length || 0,
+        _tok.length,
+        _segs.length,
+        _sigCheck,
+        _decoded,
         cloudUser);
       if (!cloudUser) return res.status(401).json({ error: 'Unauthorized' });
       // Allow lookup by either id or email, but only the user's own row.
