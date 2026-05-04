@@ -39,26 +39,43 @@ class PWAService {
     try {
       this.registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
+        // Bypass HTTP cache for sw.js itself — without this Chrome can serve
+        // a stale sw.js (24h max-age) and we never see the new version.
+        updateViaCache: 'none',
       });
 
+      // Force an update check on every load. The browser does this on its
+      // own roughly every 24h; we want every page-load to pick up a deploy.
+      this.registration.update().catch(() => { /* not fatal */ });
 
-      // Handle updates
+      // Handle updates: when a new SW finishes installing while another
+      // controller is active, we have a fresh version waiting. Send the
+      // SKIP_WAITING message and reload — this is the auto-update path the
+      // user asked for. notifyUpdateAvailable() still fires for any UI that
+      // wants to show "Updating…" first.
       this.registration.addEventListener('updatefound', () => {
         const installingWorker = this.registration!.installing;
-        if (installingWorker) {
-          installingWorker.addEventListener('statechange', () => {
-            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              this.updateAvailable = true;
-              this.notifyUpdateAvailable();
-            }
-          });
-        }
+        if (!installingWorker) return;
+        installingWorker.addEventListener('statechange', () => {
+          if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            this.updateAvailable = true;
+            this.notifyUpdateAvailable();
+            // Tell the waiting worker to take over immediately. We then wait
+            // for `controllerchange` (below) to do the page reload — by that
+            // point clients.claim() has run and the new SW is in control.
+            installingWorker.postMessage({ action: 'SKIP_WAITING' });
+          }
+        });
       });
 
-      // Listen for messages from service worker
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'CACHE_UPDATED') {
-        }
+      // When the active controller changes, the new SW is in charge. Reload
+      // once so the page picks up the new bundle. The `_reloadedForSW` guard
+      // prevents an infinite loop if controllerchange fires repeatedly.
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
       });
 
     } catch (error) {
@@ -103,12 +120,21 @@ class PWAService {
 
   // Update Detection
   private setupUpdateDetection() {
-    // Check for updates every 10 minutes when online
+    // Poll for updates every 60s while online. The browser fires the same
+    // check on its own ~24h cadence, which is far too slow when we're
+    // actively shipping fixes.
     setInterval(() => {
       if (this.isOnline && this.registration) {
-        this.registration.update().catch(console.error);
+        this.registration.update().catch(() => { /* swallow — best effort */ });
       }
-    }, 10 * 60 * 1000);
+    }, 60 * 1000);
+
+    // Also re-check when the page becomes visible again (tab switch / wake).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.isOnline && this.registration) {
+        this.registration.update().catch(() => {});
+      }
+    });
   }
 
   // Public API

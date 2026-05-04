@@ -754,8 +754,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
         </motion.nav>
 
-        {/* Main Content */}
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
+        {/* Main Content — flex-col + overflow-y-auto + min-h-0 lets the inner
+            content scroll independently of the fixed sidebar. min-h-0 is
+            critical: in a column flex layout, children with flex-1 default to
+            min-content sizing which prevents overflow:auto from kicking in. */}
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
           {isCloudSyncing && (
             <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
               <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -785,7 +788,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Main Content — no footer on mobile (BottomTabs replace it) */}
-      <main className="lg:hidden flex-1 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
+      <main className="lg:hidden flex-1 min-h-0 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
         {isCloudSyncing && (
           <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
             <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
