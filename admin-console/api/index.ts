@@ -486,28 +486,120 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── GET /api/customers/:id/journey ─────────────────────────────────────────
+  // Synthesizes a timeline from the data we already have: signup, plan changes
+  // (plan_audit_log), tickets opened. Cheaper than building a dedicated events
+  // table and good enough for the admin overview.
   const journeyMatch = path.match(/^\/api\/customers\/([^/]+)\/journey$/);
   if (journeyMatch && method === "GET") {
-    return res.json([]);
+    const id = journeyMatch[1];
+    try {
+      const { rows: u } = await db.query(
+        `SELECT email, created_at FROM crm_users WHERE id = $1`, [id]
+      );
+      if (!u[0]) return res.json([]);
+      const events: any[] = [
+        { event: 'Signed up', timestamp: u[0].created_at, details: u[0].email, status: 'completed' },
+      ];
+      const { rows: planEvents } = await db.query(
+        `SELECT old_plan, new_plan, created_at FROM plan_audit_log WHERE customer_email = $1 ORDER BY created_at ASC`,
+        [u[0].email]
+      ).catch(() => ({ rows: [] as any[] }));
+      for (const r of planEvents) {
+        events.push({
+          event: 'Plan change',
+          timestamp: r.created_at,
+          details: `${r.old_plan || 'free'} → ${r.new_plan}`,
+          status: 'completed',
+        });
+      }
+      const { rows: tEvents } = await db.query(
+        `SELECT subject, status, created_at FROM tickets WHERE customer_id = $1 ORDER BY created_at ASC`,
+        [id]
+      ).catch(() => ({ rows: [] as any[] }));
+      for (const r of tEvents) {
+        events.push({
+          event: `Ticket: ${r.subject}`,
+          timestamp: r.created_at,
+          details: `Status: ${r.status}`,
+          status: r.status === 'closed' || r.status === 'resolved' ? 'completed' : 'pending',
+        });
+      }
+      events.sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
+      return res.json(events);
+    } catch (err: any) { return res.json([]); }
   }
 
   // ── GET /api/customers/:id/tickets ─────────────────────────────────────────
   const ticketsByCustomerMatch = path.match(/^\/api\/customers\/([^/]+)\/tickets$/);
   if (ticketsByCustomerMatch && method === "GET") {
-    return res.json([]);
+    const id = ticketsByCustomerMatch[1];
+    try {
+      const { rows } = await db.query(
+        `SELECT id, subject, description, status, priority, created_at, updated_at
+         FROM tickets WHERE customer_id = $1 ORDER BY created_at DESC`,
+        [id]
+      );
+      return res.json(rows);
+    } catch (err: any) { return res.json([]); }
   }
 
-  // ── GET /api/customers/:id/notes ───────────────────────────────────────────
+  // ── GET/POST /api/customers/:id/notes ──────────────────────────────────────
   const notesByCustomerMatch = path.match(/^\/api\/customers\/([^/]+)\/notes$/);
   if (notesByCustomerMatch) {
-    if (method === "GET") return res.json([]);
-    if (method === "POST") return res.json({ success: true });
+    const id = notesByCustomerMatch[1];
+    // Auto-provision table on first hit so a fresh deploy doesn't 500. Cheap
+    // (CREATE IF NOT EXISTS is a no-op once the table exists).
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS customer_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        customer_id UUID NOT NULL,
+        content TEXT NOT NULL,
+        author TEXT NOT NULL DEFAULT 'admin',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_notes_customer_id ON customer_notes(customer_id);
+    `).catch(() => {});
+    if (method === "GET") {
+      try {
+        const { rows } = await db.query(
+          `SELECT id, content, author, created_at FROM customer_notes WHERE customer_id = $1 ORDER BY created_at DESC`,
+          [id]
+        );
+        return res.json(rows);
+      } catch (err: any) { return res.json([]); }
+    }
+    if (method === "POST") {
+      const { content, author } = (req.body as Record<string, string>) || {};
+      if (!content || !content.trim()) return res.status(400).json({ error: "content required" });
+      try {
+        const { rows } = await db.query(
+          `INSERT INTO customer_notes (customer_id, content, author)
+           VALUES ($1, $2, $3) RETURNING id, content, author, created_at`,
+          [id, content.trim(), author || 'admin']
+        );
+        return res.json({ success: true, note: rows[0] });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
   }
 
   // ── GET /api/customers/:id/communications ──────────────────────────────────
+  // No dedicated outbound-email log yet; surfaces ticket replies as "comms"
+  // so the admin sees inbound/outbound exchanges in one place.
   const commsMatch = path.match(/^\/api\/customers\/([^/]+)\/communications$/);
   if (commsMatch && method === "GET") {
-    return res.json([]);
+    const id = commsMatch[1];
+    try {
+      const { rows } = await db.query(
+        `SELECT r.id, r.message AS subject, r.author_type AS type,
+                COALESCE(t.status, 'open') AS status, r.created_at AS timestamp
+         FROM ticket_replies r
+         JOIN tickets t ON t.id = r.ticket_id
+         WHERE t.customer_id = $1
+         ORDER BY r.created_at DESC LIMIT 50`,
+        [id]
+      );
+      return res.json(rows);
+    } catch (err: any) { return res.json([]); }
   }
 
   // ── /api/customers/:id/tags ────────────────────────────────────────────────
@@ -893,7 +985,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 COUNT(*) FILTER (WHERE u.last_active_at >= NOW() - INTERVAL '30 days')::int AS active_30d,
                 COUNT(*) FILTER (WHERE u.created_at >= NOW() - INTERVAL '24 hours')::int AS new_24h,
                 COUNT(*) FILTER (WHERE e.status='trial')::int AS trials,
-                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) IN ('premium','pro','family'))::int AS paid_recurring,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) IN ('premium','pro'))::int AS pro_count,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) = 'family')::int AS family_count,
                 COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) = 'lifetime')::int AS lifetime,
                 COUNT(*) FILTER (WHERE LOWER(COALESCE(e.plan,'free')) IN ('premium','pro','family','lifetime'))::int AS paid
          FROM crm_users u
@@ -901,9 +994,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       const r = rows[0];
       const proPrice = PLANS.find(p => p.id === "pro")?.price ?? 0;
+      const familyPrice = PLANS.find(p => p.id === "family")?.price ?? 0;
       const lifetimePrice = PLANS.find(p => p.id === "lifetime")?.price ?? 0;
-      const mrr = Number((r.paid_recurring * proPrice).toFixed(2));
-      const totalRevenue = Number(((r.paid_recurring * proPrice) + (r.lifetime * lifetimePrice)).toFixed(2));
+      // Recurring MRR — Pro and Family priced separately; Lifetime is one-shot.
+      // We surface lifetime amortized over 12 months as `mrrEquivalent` so the
+      // dashboard's "monthly business" tile isn't $0 when 100% of revenue is
+      // from lifetime sales.
+      const recurringMrr = Number(((r.pro_count * proPrice) + (r.family_count * familyPrice)).toFixed(2));
+      const lifetimeAmortized = Number(((r.lifetime * lifetimePrice) / 12).toFixed(2));
+      const mrr = recurringMrr;
+      const mrrEquivalent = Number((recurringMrr + lifetimeAmortized).toFixed(2));
+      const totalRevenue = Number(
+        ((r.pro_count * proPrice) + (r.family_count * familyPrice) + (r.lifetime * lifetimePrice)).toFixed(2)
+      );
       return res.json({
         totalCustomers: r.total,
         activeCustomers: r.active_30d,
@@ -912,6 +1015,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         newSignups: r.new_24h,
         churnRate: 0,
         mrr,
+        mrrEquivalent,
         totalRevenue,
         churn: 0,
       });

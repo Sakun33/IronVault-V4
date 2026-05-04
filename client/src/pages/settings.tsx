@@ -42,6 +42,8 @@ import { useTheme } from '@/contexts/theme-context';
 import ThemeSelector from '@/components/theme-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Link } from 'wouter';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { securitySettingsService, AUTO_LOCK_OPTIONS, type AutoLockInterval } from '@/lib/security/security-settings';
 
 export default function SettingsPage() {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(
@@ -63,6 +65,19 @@ export default function SettingsPage() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   // Clear data confirmation dialog
   const [showClearDataDialog, setShowClearDataDialog] = useState(false);
+
+  // Security settings (auto-lock + lock-on-background) — backed by
+  // securitySettingsService which persists to localStorage and drives the
+  // idle-vault-lock timer.
+  const [autoLockInterval, setAutoLockInterval] = useState<AutoLockInterval>(
+    () => securitySettingsService.getSettings().autoLockInterval
+  );
+  const [lockOnBackground, setLockOnBackground] = useState<boolean>(
+    () => securitySettingsService.getSettings().lockOnBackground
+  );
+  const [clipboardAutoClear, setClipboardAutoClear] = useState<boolean>(
+    () => securitySettingsService.getSettings().clipboardAutoClear
+  );
   
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
@@ -323,6 +338,81 @@ export default function SettingsPage() {
                 </Button>
               ))}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Security — auto-lock & lock-on-background */}
+      <Card className="rounded-2xl shadow-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5" />
+            Security
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <Label htmlFor="auto-lock" className="flex items-center gap-2">
+                <Lock className="w-4 h-4" />
+                Auto-lock vault
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Lock the vault after this period of inactivity. Requires the master password to unlock.
+              </p>
+            </div>
+            <Select
+              value={autoLockInterval}
+              onValueChange={(v) => {
+                const next = v as AutoLockInterval;
+                setAutoLockInterval(next);
+                securitySettingsService.updateSettings({ autoLockInterval: next });
+                toast({ title: 'Auto-lock updated', description: `Vault will lock after ${securitySettingsService.getAutoLockIntervalLabel(next).toLowerCase()}.` });
+              }}
+            >
+              <SelectTrigger id="auto-lock" className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUTO_LOCK_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="lock-bg">Lock when app is in background</Label>
+              <p className="text-sm text-muted-foreground">
+                Re-lock the vault as soon as the tab/app loses focus (mobile and desktop).
+              </p>
+            </div>
+            <Switch
+              id="lock-bg"
+              checked={lockOnBackground}
+              onCheckedChange={(checked) => {
+                setLockOnBackground(checked);
+                securitySettingsService.updateSettings({ lockOnBackground: checked });
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="clipboard-clear">Auto-clear copied secrets</Label>
+              <p className="text-sm text-muted-foreground">
+                Clear copied passwords/codes from the clipboard 30 seconds after copy.
+              </p>
+            </div>
+            <Switch
+              id="clipboard-clear"
+              checked={clipboardAutoClear}
+              onCheckedChange={(checked) => {
+                setClipboardAutoClear(checked);
+                securitySettingsService.updateSettings({ clipboardAutoClear: checked });
+              }}
+            />
           </div>
         </CardContent>
       </Card>

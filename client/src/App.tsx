@@ -226,7 +226,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600', requiresPro: true },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600', requiresPro: true },
     { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
-    { id: 'investments', label: 'Investment / Goals', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
+    { id: 'investments', label: 'Investments', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
+    { id: 'goals', label: 'Goals', icon: Target, count: null, color: 'text-emerald-700', requiresPro: true },
     { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600', requiresPro: false },
   ];
   // Bottom pinned items (system/account)
