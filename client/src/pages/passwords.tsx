@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight, CheckSquare } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
@@ -59,6 +59,15 @@ export default function Passwords() {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [detailPassword, setDetailPassword] = useState<any>(null);
+  // View mode: 'list' (current row layout) or 'grid' (3-col card layout).
+  // Persisted so the user's choice sticks across reloads.
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'list';
+    return (localStorage.getItem('iv_passwords_view') as 'list' | 'grid') || 'list';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('iv_passwords_view', viewMode); } catch {}
+  }, [viewMode]);
   // Multi-select state populated below once filteredPasswords is known.
 
   const PASSWORD_TEMPLATES = [
@@ -296,11 +305,11 @@ export default function Passwords() {
         {/* Search + Filters */}
         <div className="space-y-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 w-4 h-4 pointer-events-none" />
             <Input
               type="text"
               placeholder="Search passwords..."
-              className="pl-10 rounded-xl border-input bg-muted/50"
+              className="pl-10 rounded-xl"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -328,12 +337,110 @@ export default function Passwords() {
                 <SelectItem value="strong">Strong</SelectItem>
               </SelectContent>
             </Select>
+            {/* List / Grid view toggle — desktop only; mobile sticks to list */}
+            <div className="hidden sm:flex items-center rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5">
+              <button
+                type="button"
+                aria-label="List view"
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <ListIcon className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Grid view"
+                aria-pressed={viewMode === 'grid'}
+                onClick={() => setViewMode('grid')}
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Password List */}
+        {/* Password List / Grid */}
         {isLoading && passwords.length === 0 ? (
           <ListSkeleton rows={6} showHeader={false} />
+        ) : filteredPasswords.length > 0 && viewMode === 'grid' ? (
+          <motion.div
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+          >
+            {filteredPasswords.map(password => {
+              const checked = selection.isSelected(password.id);
+              const { score } = PasswordGenerator.calculateStrength(password.password);
+              const strengthColor = score < 30 ? 'from-red-500 to-rose-400' : score < 60 ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
+              const strengthLabel = score < 30 ? 'Weak' : score < 60 ? 'Medium' : 'Strong';
+              return (
+                <motion.div
+                  key={password.id}
+                  data-testid={`password-card-${password.id}`}
+                  variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                  whileHover={{ y: -3, scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => {
+                    if (selection.isSelectionMode) selection.toggle(password.id);
+                    else openDetail(password);
+                  }}
+                  onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
+                  className={`group glass-card cursor-pointer p-4 ${checked ? 'ring-2 ring-emerald-400/40' : ''}`}
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <Favicon url={password.url} name={password.name} className="w-10 h-10 flex-shrink-0 rounded-xl" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-semibold text-foreground truncate">{password.name}</div>
+                      <div className="text-xs text-muted-foreground truncate font-mono">{password.username || '—'}</div>
+                    </div>
+                    {selection.isSelectionMode && (
+                      <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
+                    )}
+                  </div>
+                  {/* Strength bar */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Strength</span>
+                      <span className="text-[11px] font-medium text-foreground/80">{strengthLabel}</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.max(8, score)}%` }}
+                        transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+                        className={`h-full bg-gradient-to-r ${strengthColor}`}
+                      />
+                    </div>
+                  </div>
+                  {/* Quick actions */}
+                  <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      aria-label="Copy password"
+                      onClick={(e) => { e.stopPropagation(); copyPassword(password.password, password.id); }}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-white/[0.08] transition-colors"
+                    >
+                      {copiedId === password.id
+                        ? <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        : <Copy className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Edit password"
+                      onClick={(e) => { e.stopPropagation(); setEditingPassword(password); setShowAddModal(true); }}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-white/[0.08] transition-colors"
+                    >
+                      <Edit className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
         ) : filteredPasswords.length > 0 ? (
           <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
             <motion.div
@@ -630,7 +737,12 @@ export default function Passwords() {
           fully visible, and suppressed during selection mode so it doesn't
           collide with the SelectionBar. */}
       {!selection.isSelectionMode && (
-        <Button
+        <motion.button
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 22, delay: 0.15 }}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => {
             if (!isPro && passwords.length >= getLimit('passwords')) {
               toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
@@ -639,12 +751,12 @@ export default function Passwords() {
             setEditingPassword(null);
             setShowAddModal(true);
           }}
-          className="lg:hidden fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30 z-40 p-0"
+          className="lg:hidden fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-[0_12px_32px_-6px_rgba(16,185,129,0.7)] hover:shadow-[0_16px_40px_-6px_rgba(16,185,129,0.85)] z-40 flex items-center justify-center"
           aria-label={!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade to add more passwords' : 'Add password'}
           data-testid="add-password-fab"
         >
           <Plus className="w-6 h-6" />
-        </Button>
+        </motion.button>
       )}
     </div>
   );

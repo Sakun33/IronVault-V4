@@ -17,7 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Edit, Trash2, Search, BookOpen, Tag, Pin, Calendar,
   StickyNote, Archive, FileText, LayoutTemplate,
-  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, ChevronRight, CheckSquare
+  Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, ChevronRight, CheckSquare,
+  LayoutGrid, List as ListIcon,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useMultiSelect } from '@/hooks/use-multi-select';
@@ -62,6 +63,13 @@ export default function Notes() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [deleteNoteTarget, setDeleteNoteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [notesView, setNotesView] = useState<'list' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'list';
+    return (localStorage.getItem('iv_notes_view') as 'list' | 'grid') || 'list';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('iv_notes_view', notesView); } catch {}
+  }, [notesView]);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
@@ -449,6 +457,26 @@ export default function Notes() {
               Clear
             </button>
           )}
+          <div className="ml-auto hidden sm:flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5">
+            <button
+              type="button"
+              aria-label="List view"
+              aria-pressed={notesView === 'list'}
+              onClick={() => setNotesView('list')}
+              className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${notesView === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Masonry view"
+              aria-pressed={notesView === 'grid'}
+              onClick={() => setNotesView('grid')}
+              className={`h-7 w-7 flex items-center justify-center rounded-full transition-colors ${notesView === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Tag filter chips */}
@@ -488,6 +516,58 @@ export default function Notes() {
             </Button>
           )}
         </div>
+      ) : notesView === 'grid' ? (
+        // Masonry — CSS columns gives a Pinterest-style flow without a JS lib.
+        // break-inside-avoid keeps each card whole.
+        <motion.div
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+          initial="hidden"
+          animate="show"
+          className="columns-1 sm:columns-2 lg:columns-3 gap-3 [column-fill:_balance]"
+        >
+          {sortedNotes.map(note => {
+            const color = notebookColor(note.notebook);
+            const preview = getPreview(note.content || '');
+            const checked = selection.isSelected(note.id);
+            return (
+              <motion.div
+                key={note.id}
+                data-testid={`note-card-${note.id}`}
+                variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                whileHover={{ y: -3, scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={() => {
+                  if (selection.isSelectionMode) selection.toggle(note.id);
+                  else setViewingNote(note);
+                }}
+                onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(note.id); }}
+                className={`mb-3 break-inside-avoid glass-card cursor-pointer p-4 ${checked ? 'ring-2 ring-emerald-400/40' : ''}`}
+                style={{ borderLeft: `3px solid ${color}` }}
+              >
+                <div className="flex items-start gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: color }} />
+                  <h3 className="text-[15px] font-semibold text-foreground flex-1 break-words">{note.title || 'Untitled'}</h3>
+                  {note.isPinned && <Pin className="w-3.5 h-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />}
+                </div>
+                {preview && (
+                  <p className="text-[13px] text-muted-foreground/90 leading-relaxed line-clamp-6 whitespace-pre-wrap">
+                    {preview}
+                  </p>
+                )}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
+                  <Calendar className="w-3 h-3 text-muted-foreground/60" />
+                  <span className="text-[11px] text-muted-foreground/70">{format(new Date(note.updatedAt), 'MMM d')}</span>
+                  {note.notebook && (
+                    <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                      {note.notebook}
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
       ) : (
         <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
           <motion.div

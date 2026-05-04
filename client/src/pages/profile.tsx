@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { motion } from 'motion/react';
 import { getPlan } from '@/lib/plans';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1384,9 +1385,18 @@ export default function Profile() {
         </CardHeader>
         <CardContent>
           <div className="flex items-start gap-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
-              {(userProfile.name || '?').split(' ').filter(n => n).map(n => n[0]).join('')}
-            </div>
+            {/* Avatar with gradient ring (emerald → teal → blue), pulse on mount */}
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="relative shrink-0"
+            >
+              <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-emerald-400 via-teal-500 to-blue-500 opacity-90 blur-[2px]" aria-hidden />
+              <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold ring-2 ring-background">
+                {(userProfile.name || '?').split(' ').filter(n => n).map(n => n[0]).join('')}
+              </div>
+            </motion.div>
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">
@@ -1418,13 +1428,37 @@ export default function Profile() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex w-full overflow-x-auto gap-1 p-1">
-          <TabsTrigger value="overview" className="flex-shrink-0 text-xs px-3">Overview</TabsTrigger>
-          <TabsTrigger value="vaults" className="flex-shrink-0 text-xs px-3">Vaults</TabsTrigger>
-          <TabsTrigger value="subscription" className="flex-shrink-0 text-xs px-3">Subscription</TabsTrigger>
-          <TabsTrigger value="data" className="flex-shrink-0 text-xs px-3">Data</TabsTrigger>
-          <TabsTrigger value="support" className="flex-shrink-0 text-xs px-3">Support</TabsTrigger>
-          <TabsTrigger value="security" className="flex-shrink-0 text-xs px-3">Security</TabsTrigger>
+        <TabsList className="relative flex w-full overflow-x-auto gap-1 p-1 bg-white/[0.04] backdrop-blur-md border border-white/10 rounded-2xl">
+          {[
+            { value: 'overview', label: 'Overview' },
+            { value: 'vaults', label: 'Vaults' },
+            { value: 'subscription', label: 'Subscription' },
+            { value: 'data', label: 'Data' },
+            { value: 'support', label: 'Support' },
+            { value: 'security', label: 'Security' },
+          ].map(({ value, label }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="relative flex-shrink-0 text-xs px-3 z-10 data-[state=active]:bg-transparent data-[state=active]:text-emerald-200 data-[state=active]:shadow-none transition-colors"
+            >
+              {activeTab === value && (
+                <motion.span
+                  layoutId="profileActiveTab"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  className="absolute inset-0 -z-10 rounded-xl bg-emerald-500/15 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.3)]"
+                />
+              )}
+              {label}
+              {activeTab === value && (
+                <motion.span
+                  layoutId="profileActiveTabUnderline"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  className="absolute left-3 right-3 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.6)]"
+                />
+              )}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* Overview Tab */}

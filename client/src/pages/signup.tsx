@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
+import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -227,16 +228,33 @@ export default function SignupPage() {
         </p>
       </header>
 
-      {/* Progress indicator */}
-      <div className="flex items-center justify-center gap-2 py-4 border-b border-border/30 bg-muted/20">
-        <div className="flex items-center gap-1.5">
-          <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">1</span>
-          <span className="text-sm font-medium">Create account</span>
-        </div>
-        <div className="w-8 h-px bg-border" />
-        <div className="flex items-center gap-1.5 opacity-50">
-          <span className="w-6 h-6 rounded-full border-2 border-border text-xs font-bold flex items-center justify-center">2</span>
-          <span className="text-sm">Create vault</span>
+      {/* Progress stepper — animated connecting line that fills as you advance */}
+      <div className="flex items-center justify-center py-5 border-b border-border/30 bg-muted/10">
+        <div className="flex items-center gap-3">
+          {/* Step 1 — current */}
+          <div className="flex items-center gap-1.5">
+            <span className="relative w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-xs font-bold flex items-center justify-center shadow-[0_4px_14px_-2px_rgba(16,185,129,0.6)]">
+              1
+              <span aria-hidden className="absolute inset-0 rounded-full ring-2 ring-emerald-400/40 animate-pulse" />
+            </span>
+            <span className="text-sm font-medium text-foreground">Create account</span>
+          </div>
+          {/* Connector — fills the first half (step 1 active, step 2 pending) */}
+          <div className="relative w-16 h-[3px] rounded-full overflow-hidden bg-border/50">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: '50%' }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-teal-400"
+            />
+          </div>
+          {/* Step 2 — pending */}
+          <div className="flex items-center gap-1.5 opacity-60">
+            <span className="w-7 h-7 rounded-full border-2 border-white/15 bg-white/[0.04] text-xs font-bold flex items-center justify-center text-muted-foreground">
+              2
+            </span>
+            <span className="text-sm text-muted-foreground">Create vault</span>
+          </div>
         </div>
       </div>
 
@@ -498,6 +516,37 @@ export default function SignupPage() {
                   {showAccountPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {/* Strength meter — appears as soon as the user starts typing */}
+              {accountPassword.length > 0 && (() => {
+                // Lightweight inline scoring; mirrors PasswordGenerator buckets
+                // (weak/medium/strong) without pulling in the full module here.
+                let score = 0;
+                if (accountPassword.length >= 8) score += 25;
+                if (accountPassword.length >= 12) score += 20;
+                if (/[a-z]/.test(accountPassword)) score += 15;
+                if (/[A-Z]/.test(accountPassword)) score += 15;
+                if (/[0-9]/.test(accountPassword)) score += 15;
+                if (/[^A-Za-z0-9]/.test(accountPassword)) score += 10;
+                score = Math.min(100, score);
+                const label = score < 40 ? 'Weak' : score < 70 ? 'Medium' : 'Strong';
+                const color = score < 40 ? 'from-red-500 to-rose-400' : score < 70 ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
+                const labelColor = score < 40 ? 'text-red-400' : score < 70 ? 'text-amber-400' : 'text-emerald-400';
+                return (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Strength</span>
+                      <span className={`text-[11px] font-medium ${labelColor}`}>{label}</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                      <motion.div
+                        animate={{ width: `${Math.max(8, score)}%` }}
+                        transition={{ type: 'spring', stiffness: 180, damping: 24 }}
+                        className={`h-full bg-gradient-to-r ${color}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Confirm Account Password */}

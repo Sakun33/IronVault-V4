@@ -463,16 +463,20 @@ export default function Documents() {
     }
     fileInputRef.current?.click();
   };
-  
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-    
+
+  // Shared upload pipeline so the file-input change handler and the drop-zone
+  // can hand off the same way. Encrypts each file then appends to state.
+  const ingestFiles = async (filesIn: FileList | File[] | null) => {
+    if (!filesIn) return;
+    const files = Array.from(filesIn);
+    if (files.length === 0) return;
+    if (!isPaidUser && documents.length + files.length > maxDocuments) {
+      setShowUpgradeModal(true);
+      return;
+    }
     try {
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         const documentMetadata = await documentService.storeDocument(file, currentFolderId);
-        
-        // Convert DocumentMetadata to Document format
         const document: Document = {
           id: documentMetadata.id,
           name: documentMetadata.name,
@@ -486,12 +490,10 @@ export default function Documents() {
           tags: documentMetadata.tags,
           password: documentMetadata.password,
           ocrText: documentMetadata.ocrText,
-          metadata: documentMetadata.metadata
+          metadata: documentMetadata.metadata,
         };
-        
         setDocuments(prev => [...prev, document]);
       }
-      
       toast({
         title: "Documents Uploaded",
         description: `${files.length} document(s) uploaded and encrypted successfully.`,
@@ -504,6 +506,37 @@ export default function Documents() {
         variant: "destructive"
       });
     }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    await ingestFiles(event.target.files);
+  };
+
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const dragDepthRef = useRef(0);
+  const onDropZoneDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer?.types?.includes('Files')) {
+      dragDepthRef.current += 1;
+      setIsDraggingFile(true);
+    }
+  };
+  const onDropZoneDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDraggingFile(false);
+  };
+  const onDropZoneDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDropZoneDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDraggingFile(false);
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    await ingestFiles(dt.files);
   };
   
   const handleCreateFolder = () => {
@@ -973,6 +1006,37 @@ export default function Documents() {
         </CardContent>
       </Card>
       
+      {/* Drag-and-drop upload zone — glass card with pulsing border on dragover */}
+      <div
+        onDragEnter={onDropZoneDragEnter}
+        onDragLeave={onDropZoneDragLeave}
+        onDragOver={onDropZoneDragOver}
+        onDrop={onDropZoneDrop}
+        onClick={handleUpload}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleUpload(); } }}
+        aria-label="Drop files to upload, or click to browse"
+        className={`relative rounded-2xl glass-card border-2 border-dashed cursor-pointer p-6 text-center transition-all duration-200 ${
+          isDraggingFile
+            ? 'border-emerald-400/80 bg-emerald-500/[0.06] scale-[1.005] shadow-[0_0_0_6px_rgba(16,185,129,0.12)]'
+            : 'border-white/15 hover:border-emerald-400/40 hover:bg-white/[0.06]'
+        }`}
+      >
+        {isDraggingFile && (
+          <span aria-hidden className="absolute inset-0 rounded-2xl ring-2 ring-emerald-400/50 animate-pulse pointer-events-none" />
+        )}
+        <div className="flex flex-col items-center gap-2">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isDraggingFile ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white scale-110' : 'bg-white/[0.06] text-muted-foreground'}`}>
+            <Upload className="w-5 h-5" />
+          </div>
+          <div className="text-sm font-medium text-foreground">
+            {isDraggingFile ? 'Drop to upload' : 'Drag files here or click to browse'}
+          </div>
+          <div className="text-[11px] text-muted-foreground">PDF, image, document — encrypted on device before upload</div>
+        </div>
+      </div>
+
       {/* Folders */}
       {filteredFolders.length > 0 && (
         <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">

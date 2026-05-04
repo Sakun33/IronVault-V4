@@ -15,7 +15,19 @@ import { ImportExportModal } from "@/components/import-export-modal";
 import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { PasswordGenerator } from "@/lib/password-generator";
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
+
+// Small motion-driven counter for stat tiles. Eases from 0 → value with a
+// short delay so the number lands after the card slides in.
+function AnimatedNumber({ value, duration = 0.9, delay = 0 }: { value: number; duration?: number; delay?: number }) {
+  const mv = useMotionValue(0);
+  const rounded = useTransform(mv, latest => Math.round(latest).toLocaleString());
+  useEffect(() => {
+    const controls = motionAnimate(mv, value, { duration, delay, ease: [0.22, 1, 0.36, 1] });
+    return () => controls.stop();
+  }, [value, duration, delay, mv]);
+  return <motion.span>{rounded}</motion.span>;
+}
 
 // ── Animation variants ────────────────────────────────────────────────────────
 const fadeUp = {
@@ -550,28 +562,44 @@ export default function Dashboard() {
         })}
       </motion.div>
 
-      {/* ── Stats grid ────────────────────────────────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-        {statItems.map(s => (
+      {/* ── Stats bento grid ─────────────────────────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {statItems.map((s, i) => (
           <Link key={s.label} href={s.href}>
-            <div className="rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
+            <motion.div
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+              className={`group relative rounded-2xl glass-card overflow-hidden cursor-pointer ${i === 0 ? 'lg:col-span-2' : ''}`}
+            >
+              {/* colored top accent line */}
               <div className="h-1 w-full" style={{ background: s.accent }} />
-              <div className="p-4">
+              {/* soft accent halo on hover */}
+              <div
+                aria-hidden
+                className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-300"
+                style={{ background: s.accent }}
+              />
+              <div className="relative p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${s.accent}18` }}>
-                    <s.icon className="w-3.5 h-3.5" style={{ color: s.accent }} />
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/10"
+                    style={{ background: `${s.accent}22`, boxShadow: `0 0 16px -4px ${s.accent}66` }}
+                  >
+                    <s.icon className="w-4 h-4" style={{ color: s.accent }} />
                   </div>
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
                     {s.label}
                   </span>
                 </div>
-                <div className="text-2xl font-bold tabular-nums text-foreground">{s.value}</div>
+                <div className="text-2xl font-bold tabular-nums text-foreground">
+                  <AnimatedNumber value={s.value} delay={0.05 * i} />
+                </div>
                 {s.sub && (
                   <div className="text-[11px] mt-0.5 font-medium" style={{ color: s.subColor }}>{s.sub}</div>
                 )}
               </div>
-            </div>
+            </motion.div>
           </Link>
         ))}
       </motion.div>
@@ -771,16 +799,27 @@ export default function Dashboard() {
         <WidgetCard title="Recent Activity" viewAllHref="/logging"
           empty={recentActivity.length === 0} emptyText="No activity yet"
           accentClass="bg-blue-500/10" iconEl={<Activity className="w-3.5 h-3.5 text-blue-500" />}>
-          <div className="space-y-0.5">
-            {recentActivity.map(item => {
+          {/* Timeline-style: vertical track on the left with icon dots, staggered entrance */}
+          <motion.div
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+            initial="hidden"
+            animate="show"
+            className="relative pl-1"
+          >
+            <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gradient-to-b from-border via-border to-transparent" />
+            {recentActivity.map((item) => {
               const Icon = item.icon;
               return (
-                <div key={`${item.action}-${item.id}`}
-                  className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors">
-                  <div className={`w-7 h-7 rounded-full ${item.iconBg} flex items-center justify-center flex-shrink-0`}>
+                <motion.div
+                  key={`${item.action}-${item.id}`}
+                  variants={{ hidden: { opacity: 0, x: -8 }, show: { opacity: 1, x: 0 } }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                  className="relative flex items-center gap-3 pl-1 py-2 rounded-xl hover:bg-muted/40 transition-colors"
+                >
+                  <div className={`w-7 h-7 rounded-full ${item.iconBg} ring-2 ring-background flex items-center justify-center flex-shrink-0 z-10 shadow-sm`}>
                     <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 ml-1">
                     <div className="text-sm text-foreground truncate">{item.text}</div>
                     <div className="text-[11px] text-muted-foreground">
                       {formatDistanceToNow(item.timestamp, { addSuffix: true })}
@@ -789,10 +828,10 @@ export default function Dashboard() {
                   <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">
                     {item.action}
                   </span>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </WidgetCard>
       </motion.div>
 
