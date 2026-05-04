@@ -912,6 +912,35 @@ html, body {
   display: block;
 }
 
+/* execCommand sometimes wraps a highlight as <span style="background-color">;
+   use <mark> for explicit highlights to keep storage clean. */
+.note-content mark,
+.iv-rich-editor mark {
+  background: rgba(250, 204, 21, 0.22);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Cmd+F search: visible match highlight + the active match */
+.iv-search-match {
+  background: rgba(250, 204, 21, 0.30);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4) inset;
+}
+.iv-search-match.iv-search-active {
+  background: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.7) inset;
+}
+
+/* Tiny query highlight for list-card preview snippets */
+.iv-snippet-hit {
+  background: rgba(16, 185, 129, 0.18);
+  border-radius: 2px;
+  padding: 0 2px;
+  color: hsl(var(--foreground));
+}
+
 /* ---------- Primary CTA tap pulse (used on Sign In / Unlock Vault) ---------- */
 @keyframes iv-cta-tap-pulse {
   0% {
