@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { vaultStorage } from '@/lib/storage';
 import { pushCloudVault, isVaultCloudSynced, listCloudVaults, downloadCloudVault, getCloudToken, markVaultAsCloudSynced } from '@/lib/cloud-vault-sync';
+import { isNoteEditing } from '@/lib/note-editing-guard';
 
 const DEBOUNCE_MS = 3000;
 const POLL_MS = 60_000;
@@ -212,6 +213,11 @@ export function useCloudAutoSync(
     if (pushPendingRef.current) return;
     // Never pull while dirty flag is set — unpushed local changes take priority
     if (localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`)) return;
+    // Never pull while the user is actively editing a note. A pull does a
+    // destructive replaceVaultFromBlob() which wipes local IDB and re-imports
+    // the cloud blob; if the in-progress edit hasn't pushed yet, that wipe
+    // makes the editor's note disappear and trips the close-on-delete path.
+    if (isNoteEditing()) return;
 
     try {
       const remotes = await listCloudVaults();

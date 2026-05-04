@@ -459,19 +459,12 @@ export default function Notes() {
 
   const upgradeBlocked = !isPro && notes.length >= getLimit('notes');
 
-  // Reconcile the open editor's note ID against `notes`, but ONLY if the
-  // note has been deleted (closed-from-elsewhere flow). We deliberately do
-  // NOT replace `editingNote` with a fresh storage copy on every refresh —
-  // that was racing with the editor's own typing/autosave and made the
-  // editor feel like it was being "auto-closed" or wiping in-progress
-  // input whenever a cloud sync landed mid-edit. The editor is the source
-  // of truth while it's open; the parent only watches for deletes.
-  useEffect(() => {
-    if (!editingNote) return;
-    const stillExists = notes.some(n => n.id === editingNote.id);
-    if (!stillExists && editorOpen) closeEditor();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes, editingNote?.id]);
+  // We intentionally do NOT auto-sync `editingNote` against `notes` when
+  // the underlying array changes. The editor is the source of truth while
+  // it's open; isNoteEditing() in vault-context + use-cloud-auto-sync now
+  // blocks any background refresh that would otherwise rewrite or delete
+  // the note out from under the user. Closing the editor (or explicitly
+  // deleting from the More menu) is the only way to leave the editor.
 
   // ── Layout components ────────────────────────────────────────────────────
   const isThreePane = tier === 'desktop';

@@ -494,14 +494,25 @@ function ExpenseRow({
 }) {
   const group = expense.groupId ? groups.find(g => g.id === expense.groupId) : null;
   const youPaid = expense.paidBy === 'self';
-  const yourShare = expense.splits.find(s => s.contactId === 'self')?.amount || 0;
-  const youOweOnThis = !youPaid ? yourShare : 0;
-  const youAreOwedOnThis = youPaid ? expense.amount - yourShare : 0;
-  const lentLabel = youAreOwedOnThis > 0
-    ? <><span className="text-muted-foreground">you lent </span><span className="text-emerald-500 font-semibold">{formatAmount(youAreOwedOnThis, expense.currency)}</span></>
-    : youOweOnThis > 0
-      ? <><span className="text-muted-foreground">you owe </span><span className="text-rose-500 font-semibold">{formatAmount(youOweOnThis, expense.currency)}</span></>
-      : <span className="text-muted-foreground">no balance</span>;
+  const otherCount = expense.splits.filter(s => s.contactId !== 'self').length;
+  // Headline meta line: "Paid by You · Split with N · Group"
+  // The user asked for the title to be the most prominent thing in the
+  // row, with secondary metadata muted on the line below — and the
+  // amount + relative date stacked on the right.
+  const metaParts: string[] = [];
+  metaParts.push(youPaid ? 'Paid by You' : `Paid by ${contactNameOf(expense.paidBy, contacts)}`);
+  if (otherCount > 0) {
+    metaParts.push(otherCount === 1 ? 'Split with 1' : `Split with ${otherCount}`);
+  }
+  if (group) metaParts.push(`${group.emoji} ${group.name}`);
+
+  const expenseDate = new Date(expense.date);
+  const dateLabel = isToday(expenseDate)
+    ? 'Today'
+    : isYesterday(expenseDate)
+      ? 'Yesterday'
+      : format(expenseDate, 'MMM d');
+
   return (
     <div
       data-testid={`expense-row-${expense.id}`}
@@ -509,13 +520,18 @@ function ExpenseRow({
     >
       <CategoryDot category={expense.category} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm font-medium truncate">{expense.title}</p>
-          {group && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 rounded-full">{group.emoji} {group.name}</Badge>}
-        </div>
-        <p className="text-xs text-muted-foreground truncate">
-          {youPaid ? 'You paid' : `${contactNameOf(expense.paidBy, contacts)} paid`} {formatAmount(expense.amount, expense.currency)} · {lentLabel}
+        <p className="text-[15px] font-semibold text-foreground truncate" data-testid={`expense-title-${expense.id}`}>
+          {expense.title}
         </p>
+        <p className="text-xs text-muted-foreground truncate">
+          {metaParts.join(' · ')}
+        </p>
+      </div>
+      <div className="flex flex-col items-end flex-shrink-0 min-w-[72px]">
+        <span className="text-[15px] font-semibold tabular-nums" data-testid={`expense-amount-${expense.id}`}>
+          {formatAmount(expense.amount, expense.currency)}
+        </span>
+        <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100" onClick={onEdit} aria-label="Edit" data-testid={`button-edit-expense-${expense.id}`}>
@@ -872,11 +888,21 @@ function AddExpenseModal({
       setParticipants(new Set(existing.splits.map(s => s.contactId)));
       setReceiptDataUrl(existing.receiptDataUrl);
       setRecurrence(existing.recurrence || 'none');
+      // Re-derive editable values for ALL split types from the resolved
+      // amounts so the dialog reconciles ✓ on first open and the Save
+      // button isn't blocked by an invalid 0% / 0-share state.
+      const totalAmt = existing.splits.reduce((s, x) => s + (x.amount || 0), 0);
       const exact: Record<string, number> = {};
-      existing.splits.forEach(s => exact[s.contactId] = s.amount);
+      const percent: Record<string, number> = {};
+      const shares: Record<string, number> = {};
+      existing.splits.forEach(s => {
+        exact[s.contactId] = s.amount;
+        percent[s.contactId] = totalAmt > 0 ? round2((s.amount / totalAmt) * 100) : 0;
+        shares[s.contactId] = 1; // even shares baseline; user adjusts
+      });
       setExactSplits(exact);
-      setPercentSplits({});
-      setShareSplits({});
+      setPercentSplits(percent);
+      setShareSplits(shares);
     } else {
       setTitle('');
       setAmount('');
@@ -1045,14 +1071,26 @@ function AddExpenseModal({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Group (optional)</Label>
+              <Label className={partList.length >= 3 && !groupId ? 'text-emerald-400' : ''}>
+                Group{partList.length >= 3 && !groupId ? ' · suggested' : ' (optional)'}
+              </Label>
               <Select value={groupId || 'none'} onValueChange={(v) => setGroupId(v === 'none' ? undefined : v)}>
-                <SelectTrigger data-testid="select-group"><SelectValue placeholder="No group" /></SelectTrigger>
+                <SelectTrigger
+                  data-testid="select-group"
+                  className={partList.length >= 3 && !groupId ? 'ring-1 ring-emerald-500/40 border-emerald-500/40' : ''}
+                >
+                  <SelectValue placeholder={partList.length >= 3 ? 'Pick or skip' : 'No group'} />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No group</SelectItem>
                   {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.emoji} {g.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {partList.length >= 3 && !groupId && (
+                <p className="text-[11px] text-emerald-400/80">
+                  Splitting between {partList.length} people — grouping makes settling up easier later.
+                </p>
+              )}
             </div>
           </div>
 

@@ -6,6 +6,7 @@ import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
 import { useAuth } from './auth-context';
 import { useLogging } from './logging-context';
 import type { ParserConfig } from '@/lib/csv-parsers';
+import { isNoteEditing } from '@/lib/note-editing-guard';
 
 // Date fields that need hydration from JSON strings back to Date objects after decryption
 const DATE_FIELDS = ['createdAt', 'updatedAt', 'lastUsed', 'date', 'nextBillingDate', 'expiryDate', 'dueDate', 'completedAt', 'nextReminderDate', 'nextDueDate', 'purchaseDate', 'maturityDate', 'importDate', 'achievedDate', 'targetDate'];
@@ -341,7 +342,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         // re-download what we just pushed (and trigger a no-op
         // replaceVaultFromBlob, which wipes encrypted_data mid-session).
         localStorage.setItem(`iv_last_pull_${vaultId}`, new Date().toISOString());
-        toastRef.current({ title: '☁️ Synced', description: 'Vault saved to cloud', duration: 2000 });
+        // Sync success is intentionally silent — the user reported the
+        // "Synced" banner as noise that pushed content down. Errors
+        // (further down) still toast so failed pushes are visible.
         return { ok: true, blobLength: blob.length };
       }
       const reason = serverNewer
@@ -374,6 +377,15 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
   const refreshData = async () => {
     if (!isUnlocked) return;
+    // Hard guard: never refresh while the user is actively editing a note.
+    // A mid-edit refresh re-hydrates `notes` from storage, which races
+    // with the editor's own typing/autosave and was repeatedly closing the
+    // editor when a cloud sync landed during a session. The editor is the
+    // source of truth while open; the next refresh will run after close.
+    if (isNoteEditing()) {
+      console.debug('[VAULT] Skipping refresh — note editor is open');
+      return;
+    }
 
     setIsLoading(true);
     try {

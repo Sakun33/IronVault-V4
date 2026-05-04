@@ -13,6 +13,7 @@ import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { combineNotebookList, upsertNotebook, type NotebookMeta } from '@/lib/notebooks-store';
 import { SlashMenu, SLASH_COMMANDS } from '@/components/slash-menu';
 import { InNoteSearch } from '@/components/in-note-search';
+import { setNoteEditing } from '@/lib/note-editing-guard';
 
 export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string }> = [
   { id: 'emerald', name: 'Emerald', hex: '#10b981' },
@@ -137,7 +138,22 @@ export function NoteEditor({
     };
   }, [open, embedded]);
 
-  // Reset state when the note changes (open a different one)
+  // Tell the rest of the app the editor is open so background sync code
+  // paths (vault-context.refreshData, cloud auto-pull) can skip
+  // destructive refreshes that would otherwise unmount or reset the editor
+  // mid-edit. Cleared on unmount AND when `open` flips false.
+  useEffect(() => {
+    if (!open) return;
+    setNoteEditing(true);
+    return () => setNoteEditing(false);
+  }, [open]);
+
+  // Reset state AND the contentEditable DOM when the note changes (open a
+  // different one). We set innerHTML directly here in the same effect that
+  // updates contentHtml — splitting them into two effects with the same
+  // dep array races (the second effect reads stale closure state and
+  // skips the DOM write), which is what made the body appear blank when
+  // a note was reopened on mobile.
   useEffect(() => {
     if (!open) return;
     setTitle(note?.title ?? '');
@@ -147,6 +163,13 @@ export function NoteEditor({
     setColor(note?.color);
     const html = initialHtml(note, starter);
     setContentHtml(html);
+    // Apply to the live DOM. Use rAF so the contentEditable div has
+    // definitely mounted on a fresh open (AnimatePresence + motion.div).
+    requestAnimationFrame(() => {
+      if (editorRef.current && editorRef.current.innerHTML !== html) {
+        editorRef.current.innerHTML = html;
+      }
+    });
     setSavedAt(note?.updatedAt ? new Date(note.updatedAt) : null);
     setHeadingCycle(0);
     setTagInputOpen(false);
@@ -165,15 +188,6 @@ export function NoteEditor({
       if (!note) titleRef.current?.focus();
     });
   }, [open, note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync editable div's innerHTML when the underlying note changes
-  useEffect(() => {
-    if (!open || !editorRef.current) return;
-    if (editorRef.current.innerHTML !== contentHtml) {
-      editorRef.current.innerHTML = contentHtml;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, note?.id]);
 
   // Combined notebook list (metadata + notes' strings)
   const notebookOptions = useMemo<NotebookMeta[]>(() => {
@@ -504,13 +518,15 @@ export function NoteEditor({
 
   const accentHex = (color && NOTE_ACCENT_PALETTE.find(s => s.id === color)?.hex) || null;
 
-  // Wrapper outer container differs between fullscreen + embedded (3-pane)
+  // Wrapper outer container differs between fullscreen + embedded (3-pane).
+  // The mobile fullscreen overlay also reserves the iOS safe-area inset at
+  // the top so the back button + title aren't tucked behind the notch.
   const Wrapper = embedded ? 'div' : motion.div;
   const wrapperProps = embedded
     ? { className: 'flex flex-col h-full bg-background' }
     : ({
         key: 'note-editor',
-        className: 'fixed inset-0 z-[180] flex flex-col bg-background',
+        className: 'fixed inset-0 z-[180] flex flex-col bg-background pt-[env(safe-area-inset-top)]',
         initial: { x: '100%', opacity: 0.6 },
         animate: { x: 0, opacity: 1 },
         exit: { x: '100%', opacity: 0 },
@@ -524,15 +540,17 @@ export function NoteEditor({
     <>
       {/* Top bar */}
       <header className="flex items-center justify-between gap-1 px-2 py-2 border-b border-border/40 bg-background relative">
-        <div className="relative">
+        <div className="relative flex items-center gap-1">
           {!embedded && (
             <button
               type="button"
               onClick={onClose}
-              aria-label="Back"
-              className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+              aria-label="Back to notes"
+              data-testid="button-editor-back"
+              className="h-10 px-2.5 rounded-xl flex items-center gap-1 text-foreground hover:bg-white/[0.06] transition-colors font-medium"
             >
               <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm">Notes</span>
             </button>
           )}
           {!embedded && <SaveDot saving={saving} dirty={dirty} savedAt={savedAt} />}
@@ -579,6 +597,22 @@ export function NoteEditor({
           >
             <Share2 className="w-4 h-4" />
           </button>
+          {!embedded && (
+            // Explicit Done button for mobile — saves immediately and closes.
+            // Autosave already covers most cases, but a visible action gives
+            // the user confidence and a clean way out of the editor.
+            <button
+              type="button"
+              onClick={async () => { await runSave(); onClose(); }}
+              aria-label="Save and close"
+              data-testid="button-editor-done"
+              className="ml-1 h-10 px-3 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center gap-1.5 hover:bg-emerald-600 active:bg-emerald-700 transition-colors disabled:opacity-60"
+              disabled={saving}
+            >
+              <Check className="w-4 h-4" />
+              Done
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"

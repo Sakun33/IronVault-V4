@@ -19,6 +19,20 @@ input::-webkit-strong-password-auto-fill-button {
   margin: 0 !important;
 }
 
+/* iOS Safari auto-zooms in on form fields whose computed font-size is below
+   16px. Force ≥16px on every input/select/textarea so tapping a password,
+   amount, or settings field never triggers the obnoxious zoom-in (which on
+   our app also obscured the Save/Done buttons behind the keyboard). The
+   `@supports` block scopes this to WebKit/iOS so non-touch desktop styling
+   keeps its original 14px/13px sizing. */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* =============================================
    IronVault Premium Design System v2.0
    Inspired by: Linear, Arc, Notion, Stripe
