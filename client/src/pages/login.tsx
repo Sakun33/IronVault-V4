@@ -356,7 +356,7 @@ export default function Login() {
             <Button
               type="submit"
               data-testid="button-account-login"
-              className="w-full h-11 text-base font-semibold"
+              className="cta-tap-pulse w-full h-11 text-base font-semibold"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in…' : 'Sign In'}

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
+import { motion } from 'motion/react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -335,36 +336,46 @@ export default function Passwords() {
           <ListSkeleton rows={6} showHeader={false} />
         ) : filteredPasswords.length > 0 ? (
           <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
-            {filteredPasswords.map((password, idx) => {
-              const checked = selection.isSelected(password.id);
-              return (
-                <button
-                  key={password.id}
-                  data-testid={`password-row-${password.id}`}
-                  onClick={() => {
-                    if (selection.isSelectionMode) selection.toggle(password.id);
-                    else openDetail(password);
-                  }}
-                  onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
-                >
-                  {selection.isSelectionMode && (
-                    <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
-                  )}
-                  <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
-                    <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                      <Lock size={11} className="flex-shrink-0" />
-                      <span className="truncate">{password.username}</span>
+            <motion.div
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+              initial="hidden"
+              animate="show"
+            >
+              {filteredPasswords.map((password, idx) => {
+                const checked = selection.isSelected(password.id);
+                return (
+                  <motion.button
+                    key={password.id}
+                    variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                    whileHover={{ scale: 1.005 }}
+                    whileTap={{ scale: 0.995 }}
+                    data-testid={`password-row-${password.id}`}
+                    onClick={() => {
+                      if (selection.isSelectionMode) selection.toggle(password.id);
+                      else openDetail(password);
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''} ${checked ? 'bg-primary/5' : ''}`}
+                  >
+                    {selection.isSelectionMode && (
+                      <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
+                    )}
+                    <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
+                      <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                        <Lock size={11} className="flex-shrink-0" />
+                        <span className="truncate">{password.username}</span>
+                      </div>
                     </div>
-                  </div>
-                  {!selection.isSelectionMode && (
-                    <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
-                  )}
-                </button>
-              );
-            })}
+                    {!selection.isSelectionMode && (
+                      <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </motion.div>
           </Card>
         ) : (
           <Card className="rounded-2xl shadow-sm border-0 bg-card">

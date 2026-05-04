@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
+import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -199,6 +200,18 @@ export default function VaultPickerPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricVaultId, setBiometricVaultId] = useState<string | null>(null);
+  const [unlockSuccess, setUnlockSuccess] = useState<string | null>(null);
+
+  // Brief celebratory overlay before navigating to the dashboard. Resolves
+  // after the animation finishes so the caller can `await` it.
+  const playUnlockAnimation = (vaultName: string) =>
+    new Promise<void>((resolve) => {
+      setUnlockSuccess(vaultName);
+      setTimeout(() => {
+        setUnlockSuccess(null);
+        resolve();
+      }, 600);
+    });
 
   const [cloudVaults, setCloudVaults] = useState<CloudVaultMeta[]>([]);
   const [cloudDownloading, setCloudDownloading] = useState<string | null>(null);
@@ -352,6 +365,7 @@ export default function VaultPickerPage() {
         await vaultManager.resetFailedAttempts();
         resetViewportZoom();
         toast({ title: 'Vault Unlocked', description: `Welcome back! Opened "${vaultName}"` });
+        await playUnlockAnimation(vaultName);
         setLocation('/');
       } else {
         setErrors(e => ({ ...e, [vaultId]: 'Incorrect master password. Please try again.' }));
@@ -387,6 +401,7 @@ export default function VaultPickerPage() {
         if (success) {
           resetViewportZoom();
           toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
+          await playUnlockAnimation(vault.name);
           setLocation('/');
           return;
         }
@@ -399,6 +414,7 @@ export default function VaultPickerPage() {
         if (success) {
           resetViewportZoom();
           toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
+          await playUnlockAnimation(vault.name);
           setLocation('/');
           return;
         }
@@ -507,6 +523,7 @@ export default function VaultPickerPage() {
         localStorage.setItem(`iv_last_pull_${cloudVault.vaultId}`, new Date().toISOString());
         resetViewportZoom();
         toast({ title: 'Vault Unlocked', description: `Welcome back to "${cloudVault.vaultName}"` });
+        await playUnlockAnimation(cloudVault.vaultName);
         setLocation('/');
         return;
       }
@@ -535,6 +552,7 @@ export default function VaultPickerPage() {
       void pushCloudVault(cloudVault.vaultId, cloudVault.vaultName, full.encryptedBlob, cloudVault.isDefault || false);
       resetViewportZoom();
       toast({ title: 'Cloud Vault Unlocked', description: `Welcome back! Opened "${cloudVault.vaultName}" from cloud` });
+      await playUnlockAnimation(cloudVault.vaultName);
       setLocation('/');
     } catch (err: any) {
       const raw = (err?.message || '').toString();
@@ -768,6 +786,45 @@ export default function VaultPickerPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Unlock success overlay — Shield pulse + checkmark, then routes away */}
+      <AnimatePresence>
+        {unlockSuccess && (
+          <motion.div
+            key="unlock-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-md"
+            aria-live="polite"
+            aria-label={`Vault ${unlockSuccess} unlocked`}
+          >
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: [0.6, 1.15, 1], opacity: 1 }}
+              transition={{ duration: 0.5, times: [0, 0.6, 1], ease: 'easeOut' }}
+              className="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-[0_12px_40px_-8px_rgba(16,185,129,0.7)]"
+            >
+              <ShieldCheck className="w-14 h-14 text-white" strokeWidth={2.4} />
+              <motion.div
+                initial={{ scale: 1, opacity: 0.6 }}
+                animate={{ scale: 1.6, opacity: 0 }}
+                transition={{ duration: 0.7, ease: 'easeOut' }}
+                className="absolute inset-0 rounded-full border-2 border-emerald-300"
+              />
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.25 }}
+              className="absolute bottom-1/3 text-sm font-medium text-emerald-300"
+            >
+              Unlocked &middot; {unlockSuccess}
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border/50">
         <div className="flex items-center gap-2">
@@ -1017,7 +1074,13 @@ export default function VaultPickerPage() {
               ) : (
                 <div className="space-y-4 mb-6">
                   {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).map(vault => (
-                    <div key={vault.id} className="glass-card gradient-border p-4 transition-all duration-200 hover:bg-white/[0.07]">
+                    <motion.div
+                      key={vault.id}
+                      whileHover={{ scale: 1.01, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                      className="glass-card gradient-border p-4 hover:bg-white/[0.07]"
+                    >
                       <div className="flex items-center gap-2 mb-3">
                         <ShieldCheck className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
                         <span className="font-semibold">{vault.name}</span>
@@ -1063,13 +1126,13 @@ export default function VaultPickerPage() {
                       </div>
                       <Button
                         data-testid="button-unlock-vault"
-                        className="w-full"
+                        className="cta-tap-pulse w-full"
                         onClick={() => handleUnlock(vault.id, vault.name)}
                         disabled={loading === vault.id}
                       >
                         {loading === vault.id ? 'Unlocking…' : 'Unlock Vault'}
                       </Button>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               )}
@@ -1116,7 +1179,13 @@ export default function VaultPickerPage() {
               <div className="space-y-4 mb-6">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cloud Vaults</p>
                 {cloudVaults.map(cv => (
-                  <div key={cv.vaultId} className="glass-card gradient-border p-4 transition-all duration-200 hover:bg-white/[0.07]">
+                  <motion.div
+                    key={cv.vaultId}
+                    whileHover={{ scale: 1.01, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                    className="glass-card gradient-border p-4 hover:bg-white/[0.07]"
+                  >
                     <div className="flex items-center gap-2 mb-3">
                       <Cloud className="w-5 h-5 text-blue-500" />
                       <span className="font-semibold">{cv.vaultName}</span>
@@ -1167,13 +1236,13 @@ export default function VaultPickerPage() {
                     </div>
                     <Button
                       data-testid="button-unlock-cloud-vault"
-                      className="w-full"
+                      className="cta-tap-pulse w-full"
                       onClick={() => handleCloudUnlock(cv)}
                       disabled={cloudDownloading === cv.vaultId}
                     >
                       {cloudDownloading === cv.vaultId ? 'Downloading…' : 'Unlock Vault'}
                     </Button>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             ) : (

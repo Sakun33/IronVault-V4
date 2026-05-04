@@ -1,4 +1,5 @@
 import { Switch, Route, Link, useLocation } from "wouter";
+import { AnimatePresence, motion } from "motion/react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -591,8 +592,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' nav-active-indicator bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                    className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
+                    {isActive && (
+                      <motion.span
+                        layoutId="sidebarActiveIndicator"
+                        className="absolute left-0 top-[25%] bottom-[25%] w-[3px] rounded-r bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>
                     {'limitLabel' in item && item.limitLabel !== null ? (
@@ -621,8 +629,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.id} href={itemPath}>
                   <Button
                     variant="ghost"
-                    className={`w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' nav-active-indicator bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                    className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                   >
+                    {isActive && (
+                      <motion.span
+                        layoutId="sidebarActiveIndicator"
+                        className="absolute left-0 top-[25%] bottom-[25%] w-[3px] rounded-r bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     <span className="text-sm">{item.label}</span>
                     {'limitLabel' in item && item.limitLabel !== null ? (
@@ -653,8 +668,15 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               <Link key={item.id} href={itemPath}>
                 <Button
                   variant="ghost"
-                  className={`w-full justify-start gap-3 px-3 py-2.5 h-auto hover:bg-accent/80 text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5${isActive ? ' bg-accent font-semibold' : ''}`}
+                  className={`relative w-full justify-start gap-3 px-3 py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
                 >
+                  {isActive && (
+                    <motion.span
+                      layoutId="sidebarActiveIndicator"
+                      className="absolute left-0 top-[25%] bottom-[25%] w-[3px] rounded-r bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
                   <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                   <span className="text-sm">{item.label}</span>
                 </Button>
@@ -675,10 +697,21 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               Syncing from cloud…
             </div>
           )}
-          <div className="p-6 flex-1 min-w-0 animate-fade-in">
+          <div className="p-6 flex-1 min-w-0">
             <AnalyticsIntegration>
               <ErrorBoundary level="page" resetKey={location}>
-                {children}
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={location}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    className="will-change-transform"
+                  >
+                    {children}
+                  </motion.div>
+                </AnimatePresence>
               </ErrorBoundary>
             </AnalyticsIntegration>
           </div>
@@ -697,10 +730,21 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             Syncing from cloud…
           </div>
         )}
-        <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden animate-fade-in">
+        <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden">
           <AnalyticsIntegration>
             <ErrorBoundary level="page" resetKey={location}>
-              {children}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={location}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="will-change-transform"
+                >
+                  {children}
+                </motion.div>
+              </AnimatePresence>
             </ErrorBoundary>
           </AnalyticsIntegration>
         </div>

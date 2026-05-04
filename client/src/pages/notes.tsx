@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import DOMPurify from 'dompurify';
 import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { useSubscription } from '@/hooks/use-subscription';
@@ -489,13 +490,22 @@ export default function Notes() {
         </div>
       ) : (
         <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+          <motion.div
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+            initial="hidden"
+            animate="show"
+          >
           {sortedNotes.map((note, idx) => {
             const color = notebookColor(note.notebook);
             const preview = getPreview(note.content || '');
             const checked = selection.isSelected(note.id);
             return (
-              <button
+              <motion.button
                 key={note.id}
+                variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                whileHover={{ scale: 1.005 }}
+                whileTap={{ scale: 0.995 }}
                 data-testid={`note-card-${note.id}`}
                 onClick={() => {
                   if (selection.isSelectionMode) selection.toggle(note.id);
@@ -525,9 +535,10 @@ export default function Notes() {
                 {!selection.isSelectionMode && (
                   <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                 )}
-              </button>
+              </motion.button>
             );
           })}
+          </motion.div>
         </Card>
       )}
 

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -382,13 +383,22 @@ export default function Subscriptions() {
               <ListSkeleton rows={5} showHeader={false} />
             ) : filteredSubscriptions.length > 0 ? (
               <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+                <motion.div
+                  variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+                  initial="hidden"
+                  animate="show"
+                >
                 {filteredSubscriptions.map((subscription, idx) => {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
                   const checked = selection.isSelected(subscription.id);
                   return (
-                    <button
+                    <motion.button
                       key={subscription.id}
+                      variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+                      transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                      whileHover={{ scale: 1.005 }}
+                      whileTap={{ scale: 0.995 }}
                       data-testid={`subscription-row-${subscription.id}`}
                       onClick={() => {
                         if (selection.isSelectionMode) selection.toggle(subscription.id);
@@ -417,9 +427,10 @@ export default function Subscriptions() {
                       {!selection.isSelectionMode && (
                         <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                       )}
-                    </button>
+                    </motion.button>
                   );
                 })}
+                </motion.div>
               </Card>
             ) : (
               <Card className="rounded-2xl shadow-sm border-0 bg-card">
