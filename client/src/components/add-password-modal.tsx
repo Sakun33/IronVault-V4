@@ -50,9 +50,11 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setSubmitted(false);
       if (editingPassword) {
         setFormData({
           name: editingPassword.name || '',
@@ -85,8 +87,9 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
   }, []);
 
   const doSave = async (): Promise<boolean> => {
-    if (!formData.name || !formData.username || !formData.password) {
-      toast({ title: "Error", description: "Name, username, and password are required", variant: "destructive" });
+    setSubmitted(true);
+    if (!formData.name.trim() || !formData.username.trim() || !formData.password) {
+      toast({ title: "Missing required fields", description: "Please fill in name, username, and password.", variant: "destructive" });
       return false;
     }
     setIsSubmitting(true);
@@ -193,8 +196,13 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
+              aria-invalid={submitted && !formData.name.trim()}
+              className={submitted && !formData.name.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
               data-testid="input-site-name"
             />
+            {submitted && !formData.name.trim() && (
+              <p className="text-sm text-red-400 mt-1">Name is required</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -217,8 +225,13 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
               value={formData.username}
               onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
               required
+              aria-invalid={submitted && !formData.username.trim()}
+              className={submitted && !formData.username.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
               data-testid="input-username"
             />
+            {submitted && !formData.username.trim() && (
+              <p className="text-sm text-red-400 mt-1">Username is required</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -232,7 +245,8 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
                   value={formData.password}
                   onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                   required
-                  className="pr-10"
+                  aria-invalid={submitted && !formData.password}
+                  className={`pr-10 ${submitted && !formData.password ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}`}
                   data-testid="input-password"
                 />
                 <Button
@@ -253,6 +267,9 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
                 Generate
               </Button>
             </div>
+            {submitted && !formData.password && (
+              <p className="text-sm text-red-400 mt-1">Password is required</p>
+            )}
             {formData.password && <PasswordStrengthMeter password={formData.password} />}
           </div>
 

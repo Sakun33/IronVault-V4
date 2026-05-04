@@ -230,6 +230,7 @@ export default function ExpensesPage() {
         defaultCurrency={currency}
         defaultGroupId={openGroupId || undefined}
         onAddContact={sx.addContact}
+        onUpdateGroup={sx.updateGroup}
         onClose={() => { setShowAdd(false); setEditing(null); }}
         onSave={async (data) => {
           if (editing) {
@@ -821,7 +822,7 @@ function ChartTip({ active, payload, currency }: any) {
 // Add / Edit expense modal
 // ─────────────────────────────────────────────────────────────────────────────
 function AddExpenseModal({
-  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave, onAddContact,
+  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave, onAddContact, onUpdateGroup,
 }: {
   open: boolean;
   existing: SharedExpense | null;
@@ -832,6 +833,7 @@ function AddExpenseModal({
   onClose: () => void;
   onSave: (data: Omit<SharedExpense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onAddContact: (data: Omit<ExpenseContact, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ExpenseContact>;
+  onUpdateGroup?: (id: string, patch: Partial<ExpenseGroup>) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState('');
@@ -850,6 +852,7 @@ function AddExpenseModal({
   const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>(undefined);
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly' | 'yearly'>('none');
   const [newPersonInput, setNewPersonInput] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleAddInlinePerson = async () => {
@@ -858,23 +861,36 @@ function AddExpenseModal({
     // Reuse existing contact if one with the same name already exists,
     // otherwise create a new one and immediately tick it as a participant.
     const dup = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
+    let contactId: string;
     if (dup) {
-      setParticipants(prev => new Set(prev).add(dup.id));
-      setNewPersonInput('');
-      return;
+      contactId = dup.id;
+    } else {
+      try {
+        const c = await onAddContact({ name, email: '', phone: '', notes: '' });
+        contactId = c.id;
+      } catch {
+        toast({ title: "Couldn't add person", variant: 'destructive' });
+        return;
+      }
     }
-    try {
-      const c = await onAddContact({ name, email: '', phone: '', notes: '' });
-      setParticipants(prev => new Set(prev).add(c.id));
-      setNewPersonInput('');
-    } catch {
-      toast({ title: "Couldn't add person", variant: 'destructive' });
+    setParticipants(prev => new Set(prev).add(contactId));
+    setNewPersonInput('');
+    // If a group is selected on the expense, also persist the contact as a
+    // member of that group so they show up next time the group is opened.
+    if (groupId && onUpdateGroup) {
+      const g = groups.find(x => x.id === groupId);
+      if (g && !g.memberIds.includes(contactId)) {
+        try {
+          await onUpdateGroup(groupId, { memberIds: [...g.memberIds, contactId] });
+        } catch { /* non-fatal — participant still ticked locally */ }
+      }
     }
   };
 
   // Reset form on open
   useEffect(() => {
     if (!open) return;
+    setSubmitted(false);
     if (existing) {
       setTitle(existing.title);
       setAmount(String(existing.amount));
@@ -1019,12 +1035,9 @@ function AddExpenseModal({
   };
 
   const handleSave = async () => {
-    if (!title.trim()) {
-      toast({ title: 'Title required', variant: 'destructive' });
-      return;
-    }
-    if (amountNum <= 0) {
-      toast({ title: 'Amount must be positive', variant: 'destructive' });
+    setSubmitted(true);
+    if (!title.trim() || amountNum <= 0) {
+      toast({ title: 'Missing required fields', description: 'Please add a title and amount.', variant: 'destructive' });
       return;
     }
     if (partList.length === 0) {
@@ -1085,11 +1098,35 @@ function AddExpenseModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1.5">
               <Label htmlFor="title">Title</Label>
-              <Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Dinner, Groceries…" data-testid="input-expense-title" />
+              <Input
+                id="title"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Dinner, Groceries…"
+                data-testid="input-expense-title"
+                aria-invalid={submitted && !title.trim()}
+                className={submitted && !title.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
+              />
+              {submitted && !title.trim() && (
+                <p className="text-sm text-red-400">Title is required</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="amount">Amount</Label>
-              <Input id="amount" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" data-testid="input-expense-amount" />
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                data-testid="input-expense-amount"
+                aria-invalid={submitted && amountNum <= 0}
+                className={submitted && amountNum <= 0 ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
+              />
+              {submitted && amountNum <= 0 && (
+                <p className="text-sm text-red-400">Amount is required</p>
+              )}
             </div>
           </div>
 

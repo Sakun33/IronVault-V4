@@ -13,6 +13,7 @@ import {
   Pin, StickyNote, LayoutTemplate, Trash2, Copy as CopyIcon, CheckSquare,
   Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, FileText,
   LayoutGrid, List as ListIcon, BookOpen, Hash, Pencil,
+  ShoppingCart, ChefHat, Plane,
 } from 'lucide-react';
 import { format, isToday, isYesterday, startOfDay, isThisWeek } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -166,14 +167,20 @@ function useViewportTier(): 'mobile' | 'tablet' | 'desktop' {
 }
 
 // ── Built-in templates ────────────────────────────────────────────────────
+// Template registry — 10 pre-built note shapes covering the most common
+// "I need to dump structured info into a note" cases. Helper makes a
+// single empty checklist row so we don't keep repeating the verbose
+// data-todo HTML below.
+const _todoRow = `<div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div>`;
 const NOTE_TEMPLATES: Array<{ id: string; name: string; description: string; icon: React.ElementType; notebook: string; content: string }> = [
+  { id: 'blank', name: 'Quick Note', description: 'Just a title to start writing', icon: Lightbulb, notebook: 'personal', content: '' },
   {
     id: 'meeting',
     name: 'Meeting Notes',
     description: 'Date, attendees, agenda, action items',
     icon: Users,
     notebook: 'work',
-    content: `<h2>Meeting Notes</h2><p><strong>Date:</strong> ${new Date().toLocaleDateString()}<br/><strong>Attendees:</strong> </p><h3>Agenda</h3><ol><li></li></ol><h3>Key Points</h3><ul><li></li></ul><h3>Action Items</h3><div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div>`,
+    content: `<h2>Meeting Notes</h2><p><strong>Date:</strong> ${new Date().toLocaleDateString()}<br/><strong>Attendees:</strong> </p><h3>Agenda</h3><ol><li></li></ol><h3>Discussion Points</h3><ul><li></li></ul><h3>Action Items</h3>${_todoRow}${_todoRow}<h3>Next Steps</h3><p></p>`,
   },
   {
     id: 'todo',
@@ -181,41 +188,64 @@ const NOTE_TEMPLATES: Array<{ id: string; name: string; description: string; ico
     description: 'Daily checklist',
     icon: ListTodo,
     notebook: 'personal',
-    content: `<h2>Tasks for ${new Date().toLocaleDateString()}</h2><div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div><div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div><div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div>`,
+    content: `<h2>Tasks for ${new Date().toLocaleDateString()}</h2>${_todoRow}${_todoRow}${_todoRow}${_todoRow}${_todoRow}`,
+  },
+  {
+    id: 'journal',
+    name: 'Daily Journal',
+    description: 'Mood, gratitude, reflections',
+    icon: PenLine,
+    notebook: 'personal',
+    content: `<h2>Journal · ${new Date().toLocaleDateString()}</h2><h3>Mood</h3><p></p><h3>Today I'm grateful for</h3><ol><li></li><li></li><li></li></ol><h3>What happened today</h3><p></p><h3>Tomorrow I want to</h3><ul><li></li></ul>`,
   },
   {
     id: 'project',
     name: 'Project Plan',
-    description: 'Overview, milestones, tasks',
+    description: 'Goal, timeline, milestones, risks',
     icon: Sparkles,
     notebook: 'work',
-    content: `<h2>Project</h2><h3>Overview</h3><p></p><h3>Milestones</h3><ul><li>Phase 1</li><li>Phase 2</li><li>Phase 3</li></ul><h3>Tasks</h3><div data-todo="1"><input type="checkbox" class="iv-todo-check"/>&nbsp;<span></span></div>`,
+    content: `<h2>Project</h2><p><strong>Project Name:</strong> </p><h3>Goal</h3><p></p><h3>Timeline</h3><p></p><h3>Milestones</h3>${_todoRow}${_todoRow}${_todoRow}<h3>Resources</h3><ul><li></li></ul><h3>Risks</h3><ul><li></li></ul>`,
   },
   {
-    id: 'journal',
-    name: 'Journal Entry',
-    description: 'Mood, what happened, gratitude',
-    icon: PenLine,
+    id: 'shopping',
+    name: 'Shopping List',
+    description: 'Store + checklist by category',
+    icon: ShoppingCart,
     notebook: 'personal',
-    content: `<h2>Journal · ${new Date().toLocaleDateString()}</h2><h3>Mood</h3><p></p><h3>What happened</h3><p></p><h3>Grateful for</h3><ol><li></li><li></li><li></li></ol>`,
+    content: `<h2>Shopping List</h2><p><strong>Store:</strong> </p><h3>Produce</h3>${_todoRow}${_todoRow}<h3>Pantry</h3>${_todoRow}${_todoRow}<h3>Household</h3>${_todoRow}`,
+  },
+  {
+    id: 'recipe',
+    name: 'Recipe',
+    description: 'Ingredients + step-by-step instructions',
+    icon: ChefHat,
+    notebook: 'personal',
+    content: `<h2>Recipe Name</h2><p><strong>Servings:</strong> &nbsp;·&nbsp; <strong>Prep Time:</strong> &nbsp;·&nbsp; <strong>Cook Time:</strong> </p><h3>Ingredients</h3><ul><li></li><li></li><li></li></ul><h3>Instructions</h3><ol><li></li><li></li><li></li></ol>`,
+  },
+  {
+    id: 'travel',
+    name: 'Travel Plan',
+    description: 'Destination, dates, itinerary, packing',
+    icon: Plane,
+    notebook: 'travel',
+    content: `<h2>Trip to </h2><p><strong>Dates:</strong> &nbsp;·&nbsp; <strong>Destination:</strong> </p><h3>Flight Details</h3><p></p><h3>Hotel</h3><p></p><h3>Itinerary</h3><p><strong>Day 1</strong></p><ul><li></li></ul><p><strong>Day 2</strong></p><ul><li></li></ul><h3>Packing List</h3>${_todoRow}${_todoRow}${_todoRow}`,
   },
   {
     id: 'reading',
-    name: 'Reading Notes',
-    description: 'Book, key ideas, quotes',
-    icon: FileText,
+    name: 'Book Notes',
+    description: 'Key ideas, quotes, takeaways',
+    icon: BookOpen,
     notebook: 'ideas',
-    content: `<h2>Book</h2><p><strong>Author:</strong></p><h3>Key ideas</h3><ul><li></li></ul><h3>Quotes</h3><blockquote></blockquote>`,
+    content: `<h2>Book Title</h2><p><strong>Author:</strong> </p><h3>Key Ideas</h3><ul><li></li></ul><h3>Favorite Quotes</h3><blockquote></blockquote><h3>My Takeaways</h3><p></p>`,
   },
   {
     id: 'review',
     name: 'Weekly Review',
-    description: 'Wins, improvements, goals',
+    description: 'Wins, lessons, next week',
     icon: Target,
     notebook: 'work',
-    content: `<h2>Weekly Review · ${format(new Date(), 'MMM d, yyyy')}</h2><h3>What went well</h3><ul><li></li></ul><h3>What to improve</h3><ul><li></li></ul><h3>Goals for next week</h3><ol><li></li></ol>`,
+    content: `<h2>Weekly Review · ${format(new Date(), 'MMM d, yyyy')}</h2><h3>This Week's Wins</h3><ul><li></li></ul><h3>Challenges</h3><ul><li></li></ul><h3>Lessons</h3><ul><li></li></ul><h3>Next Week Goals</h3><ol><li></li></ol>`,
   },
-  { id: 'blank', name: 'Blank Note', description: 'Empty canvas', icon: Lightbulb, notebook: 'personal', content: '' },
 ];
 
 // ── Page ───────────────────────────────────────────────────────────────────

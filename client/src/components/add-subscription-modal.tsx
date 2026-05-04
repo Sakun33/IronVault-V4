@@ -107,13 +107,19 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  React.useEffect(() => {
+    if (open) setSubmitted(false);
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.cost || !formData.nextBillingDate) {
+    setSubmitted(true);
+    if (!formData.name.trim() || !formData.cost || !formData.nextBillingDate) {
       toast({
-        title: "Error",
-        description: "Please fill in all required fields",
+        title: "Missing required fields",
+        description: "Please fill in name, cost, and next billing date.",
         variant: "destructive",
       });
       return;
@@ -261,8 +267,13 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
+              aria-invalid={submitted && !formData.name.trim()}
+              className={submitted && !formData.name.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
               data-testid="input-service-name"
             />
+            {submitted && !formData.name.trim() && (
+              <p className="text-sm text-red-400 mt-1">Service name is required</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -288,8 +299,13 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
                 value={formData.cost}
                 onChange={(e) => setFormData(prev => ({ ...prev, cost: e.target.value }))}
                 required
+                aria-invalid={submitted && !formData.cost}
+                className={submitted && !formData.cost ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
                 data-testid="input-cost"
               />
+              {submitted && !formData.cost && (
+                <p className="text-sm text-red-400 mt-1">Cost is required</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -350,7 +366,12 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
               }}
               data-testid="billing-date-trigger"
               required
+              aria-invalid={submitted && !formData.nextBillingDate}
+              className={submitted && !formData.nextBillingDate ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
             />
+            {submitted && !formData.nextBillingDate && (
+              <p className="text-sm text-red-400 mt-1">Next billing date is required</p>
+            )}
           </div>
 
           <div className="space-y-2">

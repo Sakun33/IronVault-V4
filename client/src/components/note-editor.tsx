@@ -113,6 +113,7 @@ export function NoteEditor({
   const [slashMenu, setSlashMenu] = useState<{ open: boolean; pos: { top: number; left: number } | null; query: string }>({ open: false, pos: null, query: '' });
   const [newNotebookOpen, setNewNotebookOpen] = useState(false);
   const [newNotebookValue, setNewNotebookValue] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
@@ -167,6 +168,7 @@ export function NoteEditor({
     setTagInputOpen(false);
     setMoreMenuOpen(false);
     setSearchOpen(false);
+    setSubmitted(false);
     setViewerMode(!!note); // existing → view, new → edit
     lastSnapshotRef.current = serializeForCompare({
       title: note?.title ?? '',
@@ -628,7 +630,15 @@ export function NoteEditor({
             // the user confidence and a clean way out of the editor.
             <button
               type="button"
-              onClick={async () => { await runSave(); onClose(); }}
+              onClick={async () => {
+                setSubmitted(true);
+                if (!title.trim()) {
+                  titleRef.current?.focus();
+                  return;
+                }
+                await runSave();
+                onClose();
+              }}
               aria-label="Save and close"
               data-testid="button-editor-done"
               className="ml-1 h-10 px-3 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center gap-1.5 hover:bg-emerald-600 active:bg-emerald-700 transition-colors disabled:opacity-60"
@@ -750,9 +760,15 @@ export function NoteEditor({
             onChange={e => setTitle(e.target.value)}
             placeholder="Untitled"
             aria-label="Note title"
-            className="w-full bg-transparent border-0 outline-none text-[26px] sm:text-[28px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3"
+            aria-invalid={submitted && !title.trim()}
+            className={`w-full bg-transparent border-0 outline-none text-[26px] sm:text-[28px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3 rounded-md ${
+              submitted && !title.trim() ? 'ring-1 ring-red-400/60 px-2 -mx-2' : ''
+            }`}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus(); } }}
           />
+          {submitted && !title.trim() && (
+            <p className="text-sm text-red-400 mb-2 -mt-1">Title is required</p>
+          )}
 
           {/* Body */}
           <div
