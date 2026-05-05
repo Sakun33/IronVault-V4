@@ -24,7 +24,11 @@ import { getAccountEmail, getAccountPasswordHash } from "@/lib/account-auth";
 import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import LandingPage from "@/pages/landing";
+// Landing is lazy too — keeping it eager pinned ~746 KB of main-bundle
+// contexts and vendor code into every first-paint, even though landing
+// doesn't use any of them. Users now download a small landing chunk on
+// demand; subsequent navigation still pre-warms via modulepreload hints.
+const LandingPage = React.lazy(() => import("@/pages/landing"));
 import VaultPickerPage from "@/pages/vault-picker";
 // Heavy / less-frequently-visited pages are code-split so they don't bloat the
 // initial bundle. The Suspense fallback inside <Router /> covers their loading.

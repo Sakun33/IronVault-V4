@@ -783,7 +783,19 @@ input:-webkit-autofill:active {
 
 /* ============================================
    Landing page — animated bg, particles, feature scroll
+   These keyframes replace the framer-motion animations on landing.tsx.
+   That swap pulls the entire `vendor-motion` chunk (~46 KB gzipped) out
+   of the initial bundle and is the single biggest mobile-Lighthouse
+   perf win available without lazy-loading the page itself.
    ============================================ */
+@keyframes landingFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes landingHeroFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
 @keyframes gradientShift {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }

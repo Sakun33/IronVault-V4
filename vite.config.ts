@@ -64,14 +64,47 @@ export default defineConfig({
     rollupOptions: {
       external: ['@revenuecat/purchases-capacitor'],
       output: {
-        manualChunks: {
-          'vendor-react':     ['react', 'react-dom'],
-          'vendor-router':    ['wouter'],
-          'vendor-motion':    ['framer-motion'],
-          'vendor-icons':     ['lucide-react'],
-          'vendor-zod':       ['zod'],
-          'vendor-dompurify': ['dompurify'],
-          'vendor-datefns':   ['date-fns'],
+        // Tighter chunk splits — every heavy library lives in its own
+        // chunk so a route that doesn't use it never downloads it.
+        // The landing page in particular only needs react + router +
+        // its own page chunk. Motion is now CSS-only on landing, so
+        // `vendor-motion` is fetched only when an authenticated page
+        // (which uses framer-motion for transitions) opens.
+        manualChunks(id: string) {
+          // Manual chunking with a function so we can split heavy
+          // first-party files (storage.ts, vault-manager.ts) out of
+          // the main bundle in addition to the third-party vendor
+          // splits below. The main entry was 729 KB pre-split — most
+          // of it was the encrypted-storage layer, which the LANDING
+          // page never touches.
+          if (id.includes('node_modules')) {
+            // ORDER MATTERS — `lucide-react` etc. have "react" in their
+            // package name, so the icon/motion/etc. checks must run
+            // BEFORE the generic `react`/`react-dom` catch-all.
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('framer-motion') || id.includes('/motion/')) return 'vendor-motion';
+            if (id.includes('wouter')) return 'vendor-router';
+            if (id.includes('zod')) return 'vendor-zod';
+            if (id.includes('dompurify')) return 'vendor-dompurify';
+            if (id.includes('date-fns')) return 'vendor-datefns';
+            if (id.includes('otplib') || id.includes('qrcode')) return 'vendor-totp';
+            if (id.includes('recharts')) return 'vendor-recharts';
+            if (id.includes('@radix-ui')) return 'vendor-radix';
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/scheduler/') ||
+              id.includes('/react@') ||
+              id.includes('/react-dom@')
+            ) return 'vendor-react';
+          }
+          // Heavy first-party modules that landing doesn't need.
+          if (id.includes('client/src/lib/storage')) return 'app-storage';
+          if (id.includes('client/src/lib/crypto')) return 'app-crypto';
+          if (id.includes('client/src/lib/vault-manager')) return 'app-vault-manager';
+          if (id.includes('client/src/lib/csv-parsers')) return 'app-csv';
+          if (id.includes('client/src/lib/expense-engine')) return 'app-expense-engine';
+          return undefined;
         },
       },
     },

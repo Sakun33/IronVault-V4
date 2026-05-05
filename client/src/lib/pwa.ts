@@ -20,14 +20,26 @@ class PWAService {
   private updateAvailableCallbacks: (() => void)[] = [];
 
   constructor() {
-    this.initialize();
-  }
-
-  private async initialize() {
-    await this.registerServiceWorker();
+    // Online + install detection is cheap and needed up-front so the UI
+    // can react to offline state immediately. The service-worker
+    // registration is deferred until after first paint + a 3-second
+    // grace window so it doesn't compete with the main thread during
+    // initial load — main lever for moving mobile Lighthouse from 58
+    // toward 75+.
     this.setupOnlineDetection();
     this.setupInstallPrompt();
     this.setupUpdateDetection();
+    this.deferredRegisterServiceWorker();
+  }
+
+  private deferredRegisterServiceWorker(): void {
+    if (typeof window === 'undefined') return;
+    const schedule = () => window.setTimeout(() => { void this.registerServiceWorker(); }, 3000);
+    if (document.readyState === 'complete') {
+      schedule();
+    } else {
+      window.addEventListener('load', schedule, { once: true });
+    }
   }
 
   // Service Worker Registration

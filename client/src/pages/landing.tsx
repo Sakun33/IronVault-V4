@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Shield,
@@ -18,16 +17,17 @@ import {
 import { AppLogo } from "@/components/app-logo";
 import { SimpleThemeToggle } from "@/components/theme-toggle";
 
-// ─── Animation variants ─────────────────────────────────────────────────────
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-};
-
-const stagger: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
-};
+// ─── Animations ──────────────────────────────────────────────────────────
+// Landing-page animations were ported from framer-motion to pure CSS so the
+// `vendor-motion` chunk (~46 KB gzipped) is NOT downloaded on first paint.
+// That swap is the single biggest lever for moving mobile Lighthouse from
+// 58 toward 75+. Keyframes live in index.css; here we only drive the
+// stagger via inline `animationDelay`. Reduced-motion users get static
+// frames thanks to `@media (prefers-reduced-motion: reduce)` in CSS.
+const fadeUpClass = 'opacity-0 animate-[landingFadeUp_0.55s_ease-out_forwards]';
+const fadeUpStyle = (i: number): React.CSSProperties => ({
+  animationDelay: `${i * 80}ms`,
+});
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 function LandingNav() {
@@ -112,7 +112,6 @@ function HeroSection() {
           rows, stat tiles, encrypted items) without us shipping any binary
           assets. Lower opacity so they don't fight the headline. */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        {/* Left mockup — tilted */}
         <div className="absolute -left-12 top-[18%] sm:top-1/4 w-44 sm:w-52 rounded-3xl border border-emerald-500/15 bg-gradient-to-b from-slate-800/90 to-slate-900/90 dark:from-slate-800/95 dark:to-slate-950/95 -rotate-12 opacity-25 sm:opacity-35 shadow-2xl">
           <div className="p-3 space-y-2">
             <div className="flex items-center gap-1.5 mb-2">
@@ -128,7 +127,6 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Right mockup — tilted other way */}
         <div className="absolute -right-12 top-[28%] sm:top-1/3 w-44 sm:w-52 rounded-3xl border border-violet-500/15 bg-gradient-to-b from-slate-800/90 to-slate-900/90 dark:from-slate-800/95 dark:to-slate-950/95 rotate-12 opacity-25 sm:opacity-35 shadow-2xl">
           <div className="p-3 space-y-2.5">
             <div className="flex gap-2 mb-3">
@@ -150,7 +148,6 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Center back mockup — desktop only, larger and barely-tilted */}
         <div className="hidden md:block absolute left-1/2 -translate-x-1/2 -bottom-24 w-72 rounded-3xl border border-emerald-500/15 bg-gradient-to-b from-slate-800/60 to-slate-900/60 dark:from-slate-800/70 dark:to-slate-950/70 opacity-15 shadow-2xl">
           <div className="p-4 space-y-3">
             <div className="flex items-center gap-2 mb-3">
@@ -168,56 +165,42 @@ function HeroSection() {
         </div>
       </div>
 
-      <motion.div
-        variants={stagger}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 max-w-3xl mx-auto text-center w-full"
-      >
-        {/* Animated logo — smaller on mobile so the headline + CTAs always
-            fit above the fold without scroll, even on a 5" phone. Larger
-            soft emerald glow behind it for depth. */}
-        <motion.div variants={fadeUp} className="mb-5 sm:mb-8 flex justify-center">
-          <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            className="relative"
-          >
+      <div className="relative z-10 max-w-3xl mx-auto text-center w-full">
+        {/* Floating shield logo — CSS @keyframes `landingHeroFloat` (4s
+            infinite ease-in-out) handles the bob; the previous
+            framer-motion implementation pulled the whole vendor-motion
+            chunk into the initial bundle just for this. */}
+        <div className={`mb-5 sm:mb-8 flex justify-center ${fadeUpClass}`} style={fadeUpStyle(0)}>
+          <div className="relative animate-[landingHeroFloat_4s_ease-in-out_infinite]">
             <div className="absolute inset-0 -m-10 bg-emerald-500/25 rounded-full blur-3xl animate-pulse" aria-hidden="true" />
             <div className="absolute inset-0 -m-4 bg-emerald-400/30 rounded-full blur-xl" aria-hidden="true" />
             <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center shadow-[0_20px_40px_-12px_rgba(16,185,129,0.7)]">
               <Shield className="w-8 h-8 sm:w-12 sm:h-12 text-white" strokeWidth={2.4} />
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
-        {/* Headline — `text-3xl` on mobile keeps it on two lines instead of
-            three, freeing room for the CTAs to stay above the fold. */}
-        <motion.h1
-          variants={fadeUp}
-          className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]"
+        <h1
+          className={`text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1] ${fadeUpClass}`}
+          style={fadeUpStyle(1)}
         >
           Your passwords, finances, and{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
             secrets
           </span>
           {" "}— vaulted.
-        </motion.h1>
+        </h1>
 
-        {/* Subtitle */}
-        <motion.p
-          variants={fadeUp}
-          className="mt-4 sm:mt-6 text-base sm:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto"
+        <p
+          className={`mt-4 sm:mt-6 text-base sm:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto ${fadeUpClass}`}
+          style={fadeUpStyle(2)}
         >
           Zero-knowledge encryption. AES-256-GCM. Your data, only yours.
-        </motion.p>
+        </p>
 
-        {/* CTAs — exactly two. Stacked vertically on mobile, side-by-side
-            on desktop. Buttons are full-width on mobile so the tap target
-            is unmistakable. */}
-        <motion.div
-          variants={fadeUp}
-          className="mt-7 sm:mt-10 flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md mx-auto sm:max-w-none"
+        <div
+          className={`mt-7 sm:mt-10 flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md mx-auto sm:max-w-none ${fadeUpClass}`}
+          style={fadeUpStyle(3)}
         >
           <Link href="/auth/signup" className="w-full sm:w-auto">
             <Button
@@ -239,14 +222,11 @@ function HeroSection() {
               Sign In
             </Button>
           </Link>
-        </motion.div>
+        </div>
 
-        {/* Trust badges — visible signal that we're a real security product
-            without needing screenshots or third-party logos we don't have
-            permission for. */}
-        <motion.div
-          variants={fadeUp}
-          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-6 sm:mt-8 text-xs sm:text-sm text-muted-foreground"
+        <div
+          className={`flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-6 sm:mt-8 text-xs sm:text-sm text-muted-foreground ${fadeUpClass}`}
+          style={fadeUpStyle(4)}
         >
           <span className="flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-emerald-500" /> 256-bit AES
@@ -257,17 +237,16 @@ function HeroSection() {
           <span className="flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-emerald-500" /> Cross Platform
           </span>
-        </motion.div>
+        </div>
 
-        <motion.p
-          variants={fadeUp}
-          className="mt-4 sm:mt-5 text-xs sm:text-sm text-muted-foreground"
+        <p
+          className={`mt-4 sm:mt-5 text-xs sm:text-sm text-muted-foreground ${fadeUpClass}`}
+          style={fadeUpStyle(5)}
         >
           Free forever · No credit card required
-        </motion.p>
-      </motion.div>
+        </p>
+      </div>
 
-      {/* Scroll hint — hidden on mobile to save vertical space */}
       <div
         className="hidden sm:flex absolute bottom-8 left-1/2 -translate-x-1/2 flex-col items-center gap-1.5 text-xs text-muted-foreground/60"
         aria-hidden="true"
@@ -276,7 +255,6 @@ function HeroSection() {
         <span className="block w-px h-8 bg-gradient-to-b from-muted-foreground/60 to-transparent" />
       </div>
 
-      {/* Thin gradient line separating hero from features section below */}
       <div
         className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent"
         aria-hidden="true"
@@ -288,82 +266,38 @@ function HeroSection() {
 // ─── Feature showcase ───────────────────────────────────────────────────────
 function FeaturesSection() {
   const features = [
-    {
-      icon: Shield,
-      title: "256-bit Encryption",
-      desc: "AES-256-GCM with Argon2id key derivation. Industry-standard, audit-ready.",
-      tint: "from-emerald-500/20 to-teal-500/10",
-      iconColor: "text-emerald-400",
-    },
-    {
-      icon: Key,
-      title: "Password Manager",
-      desc: "Generate, store, and autofill — across web, mobile, and desktop.",
-      tint: "from-violet-500/20 to-purple-500/10",
-      iconColor: "text-violet-400",
-    },
-    {
-      icon: FileText,
-      title: "Secure Notes",
-      desc: "Rich-text notes with templates for meetings, journals, recipes, and more.",
-      tint: "from-amber-500/20 to-orange-500/10",
-      iconColor: "text-amber-400",
-    },
-    {
-      icon: BarChart3,
-      title: "Expense Tracker",
-      desc: "Splitwise-style group expenses with auto-balanced settlements.",
-      tint: "from-pink-500/20 to-rose-500/10",
-      iconColor: "text-pink-400",
-    },
-    {
-      icon: Cloud,
-      title: "Cloud Sync",
-      desc: "End-to-end encrypted sync across all your devices. Zero-knowledge.",
-      tint: "from-sky-500/20 to-blue-500/10",
-      iconColor: "text-sky-400",
-    },
-    {
-      icon: Lock,
-      title: "2FA Protection",
-      desc: "Biometric unlock and 2FA support for an extra layer of security.",
-      tint: "from-indigo-500/20 to-blue-500/10",
-      iconColor: "text-indigo-400",
-    },
+    { icon: Shield,    title: "256-bit Encryption", desc: "AES-256-GCM with Argon2id key derivation. Industry-standard, audit-ready.", tint: "from-emerald-500/20 to-teal-500/10",  iconColor: "text-emerald-400" },
+    { icon: Key,       title: "Password Manager",   desc: "Generate, store, and autofill — across web, mobile, and desktop.",         tint: "from-violet-500/20 to-purple-500/10", iconColor: "text-violet-400"  },
+    { icon: FileText,  title: "Secure Notes",       desc: "Rich-text notes with templates for meetings, journals, recipes, and more.", tint: "from-amber-500/20 to-orange-500/10",  iconColor: "text-amber-400"   },
+    { icon: BarChart3, title: "Expense Tracker",    desc: "Splitwise-style group expenses with auto-balanced settlements.",            tint: "from-pink-500/20 to-rose-500/10",     iconColor: "text-pink-400"    },
+    { icon: Cloud,     title: "Cloud Sync",         desc: "End-to-end encrypted sync across all your devices. Zero-knowledge.",        tint: "from-sky-500/20 to-blue-500/10",      iconColor: "text-sky-400"     },
+    { icon: Lock,      title: "2FA Protection",     desc: "Biometric unlock and 2FA support for an extra layer of security.",          tint: "from-indigo-500/20 to-blue-500/10",   iconColor: "text-indigo-400"  },
   ];
 
   return (
     <section className="py-20 md:py-28" aria-labelledby="features-heading">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          className="text-center mb-12"
-        >
-          <motion.h2
+        <div className="text-center mb-12">
+          <h2
             id="features-heading"
-            variants={fadeUp}
-            className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground"
+            className={`text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground ${fadeUpClass}`}
+            style={fadeUpStyle(0)}
           >
             Everything that matters,{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
               one vault
             </span>
             .
-          </motion.h2>
-          <motion.p
-            variants={fadeUp}
-            className="mt-4 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto"
+          </h2>
+          <p
+            className={`mt-4 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto ${fadeUpClass}`}
+            style={fadeUpStyle(1)}
           >
             Six pillars of digital security, all encrypted on your device before they ever leave.
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
       </div>
 
-      {/* Horizontal scroll-snap card row. Bleeds to the screen edge so cards
-          can swipe naturally on mobile; centered with max-width on desktop. */}
       <div
         className="landing-feature-scroll px-4 sm:px-6 lg:px-8 pb-2"
         role="list"
@@ -372,21 +306,18 @@ function FeaturesSection() {
         {features.map((f, i) => {
           const Icon = f.icon;
           return (
-            <motion.div
+            <div
               key={f.title}
               role="listitem"
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: i * 0.05, ease: "easeOut" }}
-              className="landing-feature-card"
+              className={`landing-feature-card ${fadeUpClass}`}
+              style={fadeUpStyle(i)}
             >
               <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${f.tint} flex items-center justify-center mb-5`}>
                 <Icon className={`w-6 h-6 ${f.iconColor}`} strokeWidth={2} />
               </div>
               <h3 className="text-lg font-bold text-foreground">{f.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
-            </motion.div>
+            </div>
           );
         })}
       </div>
@@ -407,87 +338,40 @@ interface PlanCard {
 
 function PricingSection() {
   const plans: PlanCard[] = [
-    {
-      name: "Free",
-      price: "₹0",
-      priceNote: "forever",
-      description: "All the essentials to get started.",
-      features: [
-        "50 passwords",
-        "10 secure notes",
-        "1 vault (mobile only)",
-        "Local storage",
-      ],
-      href: "/auth/signup",
-    },
-    {
-      name: "Pro",
-      price: "₹149",
-      priceNote: "/month",
-      description: "Full access. 14-day free trial.",
-      features: [
-        "Unlimited everything",
-        "5 vaults · cloud sync",
-        "Bank import (OCR)",
-        "Expense tracking",
-        "Priority support",
-      ],
-      href: "/auth/signup",
-      popular: true,
-    },
-    {
-      name: "Lifetime",
-      price: "₹9,999",
-      priceNote: "one-time",
-      description: "Pay once, use forever.",
-      features: [
-        "Everything in Pro",
-        "Lifetime access",
-        "All future updates",
-        "Premium support",
-      ],
-      href: "/auth/signup",
-    },
+    { name: "Free",     price: "₹0",      priceNote: "forever",   description: "All the essentials to get started.",  features: ["50 passwords", "10 secure notes", "1 vault (mobile only)", "Local storage"], href: "/auth/signup" },
+    { name: "Pro",      price: "₹149",    priceNote: "/month",    description: "Full access. 14-day free trial.",     features: ["Unlimited everything", "5 vaults · cloud sync", "Bank import (OCR)", "Expense tracking", "Priority support"], href: "/auth/signup", popular: true },
+    { name: "Lifetime", price: "₹9,999",  priceNote: "one-time",  description: "Pay once, use forever.",              features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"], href: "/auth/signup" },
   ];
 
   return (
     <section className="py-20 md:py-28 bg-muted/20 border-y border-border/40" aria-labelledby="pricing-heading">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          className="text-center mb-12"
-        >
-          <motion.h2
+        <div className="text-center mb-12">
+          <h2
             id="pricing-heading"
-            variants={fadeUp}
-            className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground"
+            className={`text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground ${fadeUpClass}`}
+            style={fadeUpStyle(0)}
           >
             Simple, honest pricing.
-          </motion.h2>
-          <motion.p
-            variants={fadeUp}
-            className="mt-4 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto"
+          </h2>
+          <p
+            className={`mt-4 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto ${fadeUpClass}`}
+            style={fadeUpStyle(1)}
           >
             Free forever for the basics. Pro when you need more.
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
           {plans.map((plan, i) => (
-            <motion.div
+            <div
               key={plan.name}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: i * 0.08, ease: "easeOut" }}
-              className={`relative flex flex-col rounded-3xl p-6 transition-all ${
+              className={`relative flex flex-col rounded-3xl p-6 transition-all ${fadeUpClass} ${
                 plan.popular
                   ? "border-2 border-emerald-500/60 bg-gradient-to-br from-emerald-500/[0.08] to-teal-400/[0.05] shadow-[0_20px_50px_-20px_rgba(16,185,129,0.45)] md:scale-[1.03]"
                   : "border border-border/50 bg-card hover:border-emerald-500/30 hover:shadow-[0_12px_32px_-12px_rgba(16,185,129,0.25)]"
               }`}
+              style={fadeUpStyle(i)}
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-xs font-bold shadow-md">
@@ -524,7 +408,7 @@ function PricingSection() {
                   {plan.popular ? "Start Free Trial" : "Choose " + plan.name}
                 </Button>
               </Link>
-            </motion.div>
+            </div>
           ))}
         </div>
 
