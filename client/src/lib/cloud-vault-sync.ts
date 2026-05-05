@@ -65,13 +65,45 @@ function authHeaders(): Record<string, string> {
 }
 
 // ── List cloud vaults (metadata only) ────────────────────────────────────────
+// MUST never throw — callers (vault picker on a fresh device, etc.) treat a
+// failed cloud probe as "no cloud vaults visible right now" and fall back to
+// the local-vault-only flow. Throwing here would block the entire vault picker
+// behind a "vault cannot be fetched" error and prevent the user from creating
+// a new local vault. We log the actual error so ops can spot tenant-wide
+// auth/network issues, but the return shape is always [].
 export async function listCloudVaults(): Promise<CloudVaultMeta[]> {
+  const result = await listCloudVaultsWithStatus();
+  return result.vaults;
+}
+
+// Same probe as listCloudVaults, but also reports whether the call SUCCEEDED.
+// Use this from the vault picker so the UI can distinguish between
+//   "we reached the server and there are no cloud vaults" (ok=true, vaults=[])
+// and
+//   "we couldn't reach the server / got 5xx / parsed garbage" (ok=false).
+// Without this signal, a transient network error looks identical to a fresh
+// account with no cloud vaults — and a user on a new device gets no hint
+// that retrying might help.
+export interface ListCloudVaultsResult {
+  ok: boolean;
+  vaults: CloudVaultMeta[];
+  status?: number;
+}
+export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult> {
   try {
     const res = await fetch(`${CLOUD_API}/api/vaults/cloud`, { headers: authHeaders() });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.error('[listCloudVaults] non-OK response:', res.status, res.statusText);
+      // 401 specifically means "your token expired/was revoked" — the global
+      // 401 interceptor will already redirect, so don't surface a banner.
+      return { ok: res.status === 401, vaults: [], status: res.status };
+    }
     const { vaults } = await res.json();
-    return vaults ?? [];
-  } catch { return []; }
+    return { ok: true, vaults: vaults ?? [], status: res.status };
+  } catch (err) {
+    console.error('[listCloudVaults] failed:', err);
+    return { ok: false, vaults: [] };
+  }
 }
 
 // ── Download vault blob ───────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
-import { listCloudVaults, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
+import { listCloudVaults, listCloudVaultsWithStatus, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures, clearPlanCache } from '@/hooks/use-plan-features';
@@ -232,6 +232,12 @@ export default function VaultPickerPage() {
   // accurate placeholder + retry CTA instead.
   const [cloudVaultsLoading, setCloudVaultsLoading] = useState(true);
   const [cloudTokenMissing, setCloudTokenMissing] = useState(false);
+  // P0: when listCloudVaultsWithStatus reports ok=false (network glitch,
+  // 5xx, parse error, anything other than 401), we surface a non-blocking
+  // amber banner so the user knows cloud vaults *might* exist but couldn't
+  // be loaded. The Create vault button stays visible in this state — they
+  // can still create a local vault and continue.
+  const [cloudListFailed, setCloudListFailed] = useState(false);
   const [cloudDownloading, setCloudDownloading] = useState<string | null>(null);
   const [cloudPasswordInput, setCloudPasswordInput] = useState<Record<string, string>>({});
   const [cloudShowPw, setCloudShowPw] = useState<Record<string, boolean>>({});
@@ -327,10 +333,16 @@ export default function VaultPickerPage() {
       }
       setCloudTokenMissing(false);
       try {
-        const remote = await listCloudVaults();
-        setCloudVaults(remote);
+        const result = await listCloudVaultsWithStatus();
+        setCloudVaults(result.vaults);
+        // Only flag failure when ok=false AND we're not already redirecting
+        // for a 401 (the global interceptor handles that). For any other
+        // failure path the user sees a soft amber banner and the page
+        // continues to render the create-vault button.
+        setCloudListFailed(!result.ok);
       } catch (e) {
         console.error('[vault-picker] listCloudVaults failed:', e);
+        setCloudListFailed(true);
       } finally {
         setCloudVaultsLoading(false);
       }
@@ -356,8 +368,9 @@ export default function VaultPickerPage() {
         setCloudTokenMissing(true);
         return;
       }
-      const remote = await listCloudVaults();
-      setCloudVaults(remote);
+      const result = await listCloudVaultsWithStatus();
+      setCloudVaults(result.vaults);
+      setCloudListFailed(!result.ok);
       // Plan/entitlement is fetched by the LicenseProvider, which also keys
       // off the cloud token. Force its cache to refresh.
       try { localStorage.removeItem('iv_plan_cache'); } catch { /* noop */ }
@@ -1257,6 +1270,29 @@ export default function VaultPickerPage() {
                 disabled={cloudVaultsLoading}
                 className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500 text-amber-950 text-xs font-semibold hover:bg-amber-400 disabled:opacity-60"
                 data-testid="button-retry-cloud-connection"
+              >
+                {cloudVaultsLoading ? 'Reconnecting…' : 'Retry'}
+              </button>
+            </div>
+          )}
+
+          {/* P0: cloud listing failed (network / 5xx / parse error) — show a
+              non-blocking amber notice so the user understands cloud vaults
+              MIGHT exist but couldn't be loaded. The Create vault button
+              below stays visible so the user is never trapped. */}
+          {cloudListFailed && !cloudTokenMissing && (
+            <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="text-sm font-semibold text-amber-300">Cloud vaults couldn't be loaded</p>
+              <p className="text-xs text-amber-200/80 mt-1">
+                We couldn't reach the cloud right now — you can still create or
+                open a local vault below.
+              </p>
+              <button
+                type="button"
+                onClick={retryCloudConnection}
+                disabled={cloudVaultsLoading}
+                className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500 text-amber-950 text-xs font-semibold hover:bg-amber-400 disabled:opacity-60"
+                data-testid="button-retry-cloud-list"
               >
                 {cloudVaultsLoading ? 'Reconnecting…' : 'Retry'}
               </button>
