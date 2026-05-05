@@ -33,6 +33,13 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop-chrome', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-iphone',  use: { ...devices['iPhone 14'] } },
+    // Mobile project uses iPhone 14 viewport / touch / userAgent BUT runs
+    // against Chromium so the suite doesn't require a WebKit install on
+    // every machine. WebKit-specific behaviour belongs in a separate
+    // tagged project layered on top of this one.
+    {
+      name: 'mobile-iphone',
+      use: { ...devices['iPhone 14'], defaultBrowserType: 'chromium', browserName: 'chromium' },
+    },
   ],
 });

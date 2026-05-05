@@ -306,10 +306,14 @@ test.describe('GAP 8: Dark Mode', () => {
   const darkModeScreens = ['/passwords', '/notes', '/subscriptions', '/reminders', '/documents', '/settings', '/profile'];
   for (const screen of darkModeScreens) {
     test(`Dark mode: ${screen} has no white bleed`, async ({ page }) => {
-      // Enable dark mode via localStorage before navigating
+      // Enable dark mode via localStorage before navigating.
+      // The ThemeProvider reads from key 'securevault-theme' (see
+      // client/src/contexts/theme-context.tsx:41) — using the wrong key here
+      // makes ThemeProvider fall through to 'system' which on a headless
+      // runner resolves to light, and its effect strips any imperative
+      // .dark class we added.
       await page.addInitScript(() => {
-        localStorage.setItem('theme', 'dark');
-        document.documentElement.classList.add('dark');
+        localStorage.setItem('securevault-theme', 'dark');
       });
       await loginAndUnlock(page);
       await navigate(page, screen);
