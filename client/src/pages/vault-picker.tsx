@@ -199,6 +199,13 @@ export default function VaultPickerPage() {
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [showPw, setShowPw] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<string | null>(null);
+  // Phase copy that scrolls through "Unlocking…" → "Deriving key…" →
+  // "Decrypting vault…" → "Almost done…" while the actual PBKDF2 +
+  // AES-GCM work runs. The derivation itself can take 4–30 s on
+  // throttled CPUs (600k iterations) — the moving copy keeps the user
+  // confident the app didn't freeze. No real progress is reported by
+  // the crypto layer; this is pure UX feedback.
+  const [unlockPhase, setUnlockPhase] = useState<string>('Unlocking…');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricVaultId, setBiometricVaultId] = useState<string | null>(null);
@@ -433,6 +440,14 @@ export default function VaultPickerPage() {
     }
     setErrors(e => ({ ...e, [vaultId]: '' }));
     setLoading(vaultId);
+    setUnlockPhase('Unlocking…');
+    // Phase progression timers — purely cosmetic, the crypto layer
+    // doesn't report progress. Cleared on completion or unmount.
+    const phaseTimers: ReturnType<typeof setTimeout>[] = [];
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Deriving key…'), 1500));
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Decrypting vault…'), 8000));
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Almost done…'), 16000));
+    const clearPhaseTimers = () => phaseTimers.forEach(clearTimeout);
     try {
       vaultManager.setActiveVaultId(vaultId);
       await vaultStorage.switchToVault(vaultId);
@@ -459,6 +474,8 @@ export default function VaultPickerPage() {
           : 'Failed to unlock vault.',
       }));
     } finally {
+      clearPhaseTimers();
+      setUnlockPhase('Unlocking…');
       setLoading(null);
     }
   };
@@ -513,6 +530,12 @@ export default function VaultPickerPage() {
     }
     setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: '' }));
     setCloudDownloading(cloudVault.vaultId);
+    setUnlockPhase('Downloading…');
+    const phaseTimers: ReturnType<typeof setTimeout>[] = [];
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Deriving key…'), 2000));
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Decrypting vault…'), 10000));
+    phaseTimers.push(setTimeout(() => setUnlockPhase('Almost done…'), 20000));
+    const clearPhaseTimers = () => phaseTimers.forEach(clearTimeout);
     try {
       vaultManager.setActiveVaultId(cloudVault.vaultId);
       await vaultStorage.switchToVault(cloudVault.vaultId);
@@ -648,6 +671,8 @@ export default function VaultPickerPage() {
         : raw || 'Failed to unlock cloud vault.';
       setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: friendly }));
     } finally {
+      clearPhaseTimers();
+      setUnlockPhase('Unlocking…');
       setCloudDownloading(null);
     }
   };
@@ -1185,6 +1210,7 @@ export default function VaultPickerPage() {
                           data-testid="input-unlock-password"
                           type={showPw[vault.id] ? 'text' : 'password'}
                           placeholder="Master password"
+                          aria-label={`Master password for ${vault.name}`}
                           value={passwords[vault.id] || ''}
                           onChange={e => setPasswords(p => ({ ...p, [vault.id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && handleUnlock(vault.id, vault.name)}
@@ -1208,7 +1234,7 @@ export default function VaultPickerPage() {
                         onClick={() => handleUnlock(vault.id, vault.name)}
                         disabled={loading === vault.id}
                       >
-                        {loading === vault.id ? 'Unlocking…' : 'Unlock Vault'}
+                        {loading === vault.id ? unlockPhase : 'Unlock Vault'}
                       </Button>
                     </motion.div>
                   ))}
@@ -1350,6 +1376,7 @@ export default function VaultPickerPage() {
                         data-testid="input-unlock-password"
                         type={cloudShowPw[cv.vaultId] ? 'text' : 'password'}
                         placeholder="Master password"
+                        aria-label={`Master password for ${cv.vaultName}`}
                         value={cloudPasswordInput[cv.vaultId] || ''}
                         onChange={e => setCloudPasswordInput(p => ({ ...p, [cv.vaultId]: e.target.value }))}
                         onKeyDown={e => e.key === 'Enter' && handleCloudUnlock(cv)}
@@ -1373,7 +1400,7 @@ export default function VaultPickerPage() {
                       onClick={() => handleCloudUnlock(cv)}
                       disabled={cloudDownloading === cv.vaultId}
                     >
-                      {cloudDownloading === cv.vaultId ? 'Downloading…' : 'Unlock Vault'}
+                      {cloudDownloading === cv.vaultId ? unlockPhase : 'Unlock Vault'}
                     </Button>
                   </motion.div>
                 ))}

@@ -13,8 +13,12 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  // 120s per test — the slow-cloud unlock path (PBKDF2 600k iterations
+  // + cloud blob fetch + IDB import) can chew through 30–45 s on a
+  // headless runner, leaving only a thin margin for the rest of the
+  // test under a 60 s budget.
+  timeout: 120_000,
+  expect: { timeout: 20_000 },
   retries: 2,
   workers: 1,
   reporter: [
