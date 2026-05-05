@@ -17,6 +17,7 @@ import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-sele
 import { useSubscription } from "@/hooks/use-subscription";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
+import { resetNoteEditing } from "@/lib/note-editing-guard";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
 import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
@@ -142,6 +143,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [isUnlocked, activeVault?.id, masterPassword]);
   const [location, setLocation] = useLocation();
+  // Belt-and-suspenders: any route change clears the note-editing guard.
+  // Even if the NoteEditor's portal cleanup somehow misses (hot-reload
+  // race, fast unmount, etc.), navigating to another page guarantees the
+  // flag is reset and cloud sync can resume.
+  useEffect(() => {
+    resetNoteEditing();
+  }, [location]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showExtensionPairing, setShowExtensionPairing] = useState(false);

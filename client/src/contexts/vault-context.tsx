@@ -322,9 +322,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     | { ok: false; reason: string; status?: number };
 
   const pushToCloudNow = async (): Promise<PushResult> => {
+    console.info('[CLOUD-PUSH] pushToCloudNow invoked');
     const token = localStorage.getItem('iv_cloud_token');
     if (!token) {
       const reason = 'No cloud token — local-only vault, push skipped';
+      console.warn('[CLOUD-PUSH]', reason);
       return { ok: false, reason };
     }
     if (!masterPassword) {
@@ -337,11 +339,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       const { vaultManager } = await import('@/lib/vault-manager');
       const vaultId = vaultManager.getActiveVaultId();
       if (!vaultId) return { ok: false, reason: 'No active vault' };
-      // Local vault check: a local-only vault has no cloud entry — pushing
-      // would either silently fail or unexpectedly create one. Skip cleanly.
-      const { isVaultCloudSynced } = await import('@/lib/cloud-vault-sync');
-      if (!isVaultCloudSynced(vaultId)) {
-        const reason = 'Active vault is local-only — cloud push skipped';
+      // Opt-out gate. Previously this checked `isVaultCloudSynced(vaultId)`
+      // — a localStorage registry that gets wiped by every browser cache
+      // clear. After a wipe + re-login, every CRUD push silently no-op'd
+      // with "local-only" until the user manually re-enabled cloud sync.
+      // Inverted to: attempt push unless explicitly opted into local-only
+      // via `iv_local_only_${vaultId}`. The server's plan check is the
+      // authoritative gate; on success we re-mark the vault as cloud-synced
+      // so the registry self-heals.
+      if (localStorage.getItem(`iv_local_only_${vaultId}`) === '1') {
+        const reason = 'Active vault opted into local-only — cloud push skipped';
         return { ok: false, reason };
       }
       // Vault isolation: the open DB must belong to this vault. If it
@@ -355,6 +362,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason };
       }
       localStorage.setItem(`iv_dirty_${vaultId}`, '1');
+      window.dispatchEvent(new CustomEvent('vault:cloud:push:start', { detail: { vaultId } }));
       const blob = await vaultStorage.exportVault(mp);
       const vaultMeta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
       const vaultName = vaultMeta?.name ?? 'My Vault';
@@ -396,35 +404,62 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       }
       if (ok) {
         localStorage.removeItem(`iv_dirty_${vaultId}`);
+        localStorage.removeItem(`iv_last_sync_error_${vaultId}`);
         // Advance lastPull so the 60-s doPull poll doesn't immediately
         // re-download what we just pushed (and trigger a no-op
         // replaceVaultFromBlob, which wipes encrypted_data mid-session).
         localStorage.setItem(`iv_last_pull_${vaultId}`, new Date().toISOString());
-        // Sync success is intentionally silent — the user reported the
-        // "Synced" banner as noise that pushed content down. Errors
-        // (further down) still toast so failed pushes are visible.
+        // Heal the cloud-synced registry on every successful push, so a
+        // future cache wipe doesn't silently downgrade the user to
+        // local-only on the next session.
+        const { markVaultAsCloudSynced } = await import('@/lib/cloud-vault-sync');
+        markVaultAsCloudSynced(vaultId);
+        console.info(`[CLOUD-PUSH] success — vault ${vaultId} (${blob.length} bytes)`);
+        window.dispatchEvent(new CustomEvent('vault:cloud:push:done', {
+          detail: { vaultId, blobLength: blob.length },
+        }));
         return { ok: true, blobLength: blob.length };
       }
-      const reason = serverNewer
-        ? 'Server has newer data — please pull before retrying'
-        : `Server error ${status}`;
-      console.error('[CLOUD-PUSH]', reason);
-      toastRef.current({
-        title: '⚠️ Cloud sync failed',
-        description: reason,
-        variant: 'destructive',
-        duration: 5000,
-      });
+      // Plan-error: extract code from response so we can surface a friendly
+      // upgrade prompt and stop retrying on every save.
+      let planError = false;
+      let serverErrorMsg = '';
+      if (status === 403) {
+        try {
+          const errBody = await res.clone().json().catch(() => null);
+          if (errBody?.code === 'PLAN_UPGRADE_REQUIRED') {
+            planError = true;
+            // Mark vault as local-only so subsequent saves don't keep
+            // re-attempting the same 403 + retoasting the user.
+            localStorage.setItem(`iv_local_only_${vaultId}`, '1');
+          }
+          serverErrorMsg = errBody?.error || '';
+        } catch { /* body not JSON */ }
+      }
+      const reason = planError
+        ? 'Cloud sync requires Pro or Lifetime plan'
+        : serverNewer
+          ? 'Server has newer data — please pull before retrying'
+          : (serverErrorMsg || `Server error ${status}`);
+      console.error('[CLOUD-PUSH]', reason, { status, vaultId });
+      localStorage.setItem(`iv_last_sync_error_${vaultId}`, reason);
+      window.dispatchEvent(new CustomEvent('vault:cloud:push:failed', {
+        detail: { vaultId, error: reason, planError },
+      }));
       return { ok: false, reason, status };
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       console.error('[CLOUD-PUSH]', e);
-      toastRef.current({
-        title: '⚠️ Cloud sync error',
-        description: reason,
-        variant: 'destructive',
-        duration: 5000,
-      });
+      // Hoist vaultId out of the closure so the failed event still has
+      // context. If we couldn't even resolve a vaultId, fall back to the
+      // active one for the event payload.
+      const fallbackVid = (await import('@/lib/vault-manager')).vaultManager.getActiveVaultId();
+      if (fallbackVid) {
+        localStorage.setItem(`iv_last_sync_error_${fallbackVid}`, reason);
+      }
+      window.dispatchEvent(new CustomEvent('vault:cloud:push:failed', {
+        detail: { vaultId: fallbackVid || null, error: reason, planError: false },
+      }));
       return { ok: false, reason };
     }
   };
