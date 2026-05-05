@@ -19,7 +19,8 @@ import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { CloudSyncPill } from "@/components/cloud-sync-pill";
 import { resetNoteEditing } from "@/lib/note-editing-guard";
-import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
+import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault, acquireCloudToken, getCloudToken } from "@/lib/cloud-vault-sync";
+import { getAccountEmail, getAccountPasswordHash } from "@/lib/account-auth";
 import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
@@ -106,6 +107,33 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
   useCloudAutoSync(activeVault?.id, masterPassword);
+
+  // Auto-recover the cloud token whenever it's missing AND we have the
+  // cached account credentials (email + password hash from localStorage's
+  // `iv_account`). A Lifetime user who clears their browser cache lands
+  // in a state where the account session is restored (cookie) but the
+  // cloud-token JWT is gone — this effect re-acquires it silently so the
+  // sync pill flips out of "Reconnecting…" without manual intervention.
+  // Re-runs on unlock and on every vault switch in case the token expired
+  // mid-session.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    if (getCloudToken()) return;
+    const email = getAccountEmail();
+    const hash = getAccountPasswordHash();
+    if (!email || !hash) return;
+    let cancelled = false;
+    (async () => {
+      const token = await acquireCloudToken(email, hash).catch(() => null);
+      if (cancelled) return;
+      if (token) {
+        console.info('[CLOUD-TOKEN] auto-recovered after missing-token detection');
+      } else {
+        console.warn('[CLOUD-TOKEN] auto-recover failed — user will need to log in again');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isUnlocked, activeVault?.id]);
 
   // On every unlock: heal pre-fix vaults by checking server for cloud entry and pushing current state
   useEffect(() => {

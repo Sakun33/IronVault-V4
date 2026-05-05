@@ -4,10 +4,11 @@ import {
   getSyncStatus,
   getLastSyncAt,
   getLastSyncError,
-  isCloudSyncEligible,
+  isLocalOnly,
   retryNow,
   type SyncStatus,
 } from '@/lib/cloud-sync-queue';
+import { getCloudToken } from '@/lib/cloud-vault-sync';
 
 interface Props {
   /** Active vault id; used to decide whether sync is even applicable. */
@@ -26,21 +27,28 @@ function formatRelative(ts: number | null): string {
 }
 
 /**
- * Always-visible cloud-sync status pill. Renders next to the vault name in
- * the header so the user can see at a glance whether their data is on the
- * server. Clicking the pill in the failed state retries the push.
+ * Always-visible cloud-sync status pill.
  *
- * State diagram (driven by `cloud-sync-queue` + the push-status events):
- *   - no token / opted into local-only      → CloudOff "Local only"
- *   - idle (initial mount, never synced)    → Cloud "Not synced yet"
- *   - syncing / pending / retrying          → spinner "Syncing…"
- *   - synced                                → Check "Synced N min ago"
- *   - failed                                → AlertTriangle "Sync failed · Retry"
+ * State priority (highest first):
+ *   1. Vault opted into local-only      → CloudOff "Local only"
+ *   2. Push in flight / queued / retry  → spinner "Syncing…"
+ *   3. Push failed                      → AlertTriangle "Sync failed · Retry"
+ *   4. Has a recorded successful push   → Check "Synced N min ago"
+ *   5. Cloud token missing (paid user mid token-refresh after cache clear)
+ *                                       → Cloud "Reconnecting…"
+ *   6. Otherwise (eligible, never synced yet)
+ *                                       → Cloud "Cloud sync on"
+ *
+ * Only state 1 reads "Local only" — and that ONLY happens for users who
+ * explicitly opted in (or whose server replied 403 PLAN_UPGRADE_REQUIRED
+ * on a push). A Lifetime/Pro user mid token-refresh now reads
+ * "Reconnecting…" instead of the alarming "Local only".
  */
 export function CloudSyncPill({ vaultId, compact }: Props) {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus());
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(getLastSyncAt());
   const [lastError, setLastError] = useState<string | null>(getLastSyncError());
+  const [hasToken, setHasToken] = useState<boolean>(!!getCloudToken());
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -48,26 +56,38 @@ export function CloudSyncPill({ vaultId, compact }: Props) {
       setStatus(getSyncStatus());
       setLastSyncAt(getLastSyncAt());
       setLastError(getLastSyncError());
+      setHasToken(!!getCloudToken());
     };
     const onStart = () => refresh();
     const onDone = () => refresh();
     const onFailed = () => refresh();
+    // The token can land at any point during reconnect — re-check on a
+    // localStorage change so we flip out of "Reconnecting…" the instant
+    // it arrives (login flow stores it via storeCloudToken which triggers
+    // a `storage` event in other tabs and we also poll once a minute as
+    // a fallback for same-tab writes).
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'iv_cloud_token') refresh();
+    };
     window.addEventListener('vault:cloud:push:start', onStart);
     window.addEventListener('vault:cloud:push:done', onDone);
     window.addEventListener('vault:cloud:push:failed', onFailed);
-    // Tick once a minute so "Synced 2m ago" updates while the user idles.
-    const tickId = window.setInterval(() => setTick(t => t + 1), 60_000);
+    window.addEventListener('storage', onStorage);
+    const tickId = window.setInterval(() => {
+      setHasToken(!!getCloudToken());
+      setTick(t => t + 1);
+    }, 60_000);
     return () => {
       window.removeEventListener('vault:cloud:push:start', onStart);
       window.removeEventListener('vault:cloud:push:done', onDone);
       window.removeEventListener('vault:cloud:push:failed', onFailed);
+      window.removeEventListener('storage', onStorage);
       window.clearInterval(tickId);
     };
   }, []);
 
-  const eligible = isCloudSyncEligible(vaultId ?? null);
-
-  if (!eligible) {
+  // Explicit opt-out — the only state that reads "Local only".
+  if (vaultId && isLocalOnly(vaultId)) {
     return (
       <span
         className={`inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/40 text-muted-foreground ${
@@ -79,6 +99,10 @@ export function CloudSyncPill({ vaultId, compact }: Props) {
         <CloudOff className="w-3 h-3 flex-shrink-0" /> Local only
       </span>
     );
+  }
+
+  if (!vaultId) {
+    return null;
   }
 
   if (status === 'syncing' || status === 'pending' || status === 'retrying') {
@@ -113,8 +137,8 @@ export function CloudSyncPill({ vaultId, compact }: Props) {
     );
   }
 
-  // 'idle' or 'synced' — both render as the green-dot variant when we have
-  // a lastSyncAt; otherwise show the neutral "not synced yet" state.
+  // 'idle' or 'synced' — render the green-dot variant when we have a
+  // recorded lastSyncAt.
   if (lastSyncAt) {
     return (
       <span
@@ -130,9 +154,30 @@ export function CloudSyncPill({ vaultId, compact }: Props) {
     );
   }
 
+  // No token yet — paid user mid token-refresh after a cache clear, or a
+  // newly-signed-up user whose token-acquire hasn't landed yet. Showing
+  // "Local only" here would scare a Lifetime customer into thinking their
+  // data is stranded; show a soft "Reconnecting…" instead. The queue's
+  // retry loop will surface a real success or failure once the next push
+  // attempt runs.
+  if (!hasToken) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 ${
+          compact ? 'h-6 px-2 text-[11px]' : 'h-7 px-2.5 text-xs'
+        }`}
+        title="Reconnecting to cloud sync — your local data is safe"
+        data-testid="cloud-sync-pill-reconnecting"
+      >
+        <RefreshCw className="w-3 h-3 flex-shrink-0 animate-spin" />
+        Reconnecting…
+      </span>
+    );
+  }
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/40 text-muted-foreground ${
+      className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 ${
         compact ? 'h-6 px-2 text-[11px]' : 'h-7 px-2.5 text-xs'
       }`}
       title="Cloud sync is on for this vault — first push will run after your next save"

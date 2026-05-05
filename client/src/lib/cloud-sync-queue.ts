@@ -79,16 +79,44 @@ export function isPushPending(): boolean { return pending !== null || inFlight; 
 
 /**
  * Whether the active vault is opted into cloud sync at all.
- * The two opt-out signals are: no token (user not signed into cloud) and
- * the explicit per-vault local-only flag set by the user via Settings.
+ *
+ * Eligibility is decoupled from `getCloudToken()` on purpose: a paid user
+ * who has just cleared their browser cache will land in the app with no
+ * cloud token for a beat (the token is fetched as part of the next
+ * authenticated request). Marking them "ineligible" during that window
+ * surfaced as the alarming "Local only" pill on a Lifetime account.
+ *
+ * The only signal that disables sync for a vault is the explicit
+ * `iv_local_only_${vaultId}` opt-out flag. That flag is set ONLY by:
+ *   1. The user explicitly choosing "create local vault" in vault-picker
+ *   2. The server returning 403 PLAN_UPGRADE_REQUIRED on a push (free
+ *      plan can't sync)
+ * So the flag is the authoritative source of "this vault is local-only".
+ *
+ * If the queue runs without a token, `pushCloudVault` returns
+ * `{ success: false, status: 0, error: 'Not signed in to cloud' }`, the
+ * queue retries with backoff, and once the token comes back the retry
+ * succeeds — no manual reconnection needed.
  */
 export function isCloudSyncEligible(vaultId: string | null | undefined): boolean {
-  if (!getCloudToken()) return false;
   if (!vaultId) return false;
   try {
     if (localStorage.getItem(`${LOCAL_ONLY_PREFIX}${vaultId}`) === '1') return false;
   } catch { /* localStorage disabled — assume eligible */ }
   return true;
+}
+
+/**
+ * Whether this vault has been explicitly opted into local-only mode.
+ * Distinguishes a paid user mid-token-refresh ("not opted out, just
+ * waiting for the token") from a free-plan user or someone who chose a
+ * local vault on purpose.
+ */
+export function isLocalOnly(vaultId: string | null | undefined): boolean {
+  if (!vaultId) return false;
+  try {
+    return localStorage.getItem(`${LOCAL_ONLY_PREFIX}${vaultId}`) === '1';
+  } catch { return false; }
 }
 
 /**
