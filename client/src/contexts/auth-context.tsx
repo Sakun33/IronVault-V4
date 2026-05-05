@@ -444,10 +444,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // BEFORE confirming success. If the push fails, roll back the local change
     // so local + cloud stay consistent.
     try {
-      const { isVaultCloudSynced, pushCloudVault } = await import('@/lib/cloud-vault-sync');
+      const { pushCloudVault, getCloudToken } = await import('@/lib/cloud-vault-sync');
       const { vaultManager } = await import('@/lib/vault-manager');
       const vaultId = vaultManager.getActiveVaultId();
-      if (vaultId && isVaultCloudSynced(vaultId)) {
+      // Push the re-encrypted blob whenever the user has a cloud token AND
+      // hasn't explicitly opted into local-only for this vault. The previous
+      // gate consulted the `iv_cloud_synced_vaults` registry, which gets
+      // wiped on every cache clear and silently broke master-password
+      // changes for users whose registry was empty.
+      const shouldPushReencrypted = !!vaultId
+        && !!getCloudToken()
+        && localStorage.getItem(`iv_local_only_${vaultId}`) !== '1';
+      if (shouldPushReencrypted) {
         const meta = vaultManager.getVaultInfo(vaultId);
         const vaultName = meta?.name || 'Vault';
         const isDefault = !!meta?.isDefault;

@@ -4,7 +4,7 @@ import { vaultStorage } from '@/lib/storage';
 import { useLicense } from './license-context';
 import { useAuth } from './auth-context';
 import { useVault } from './vault-context';
-import { deleteCloudVault, isVaultCloudSynced } from '@/lib/cloud-vault-sync';
+import { deleteCloudVault } from '@/lib/cloud-vault-sync';
 import { getPlan } from '@/lib/plans';
 import {
   Dialog,
@@ -186,15 +186,19 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteVault = async (vaultId: string): Promise<void> => {
-    // Best-effort cloud cleanup BEFORE local delete. If we delete locally
-    // first and the cloud call later fails, the cloud copy is orphaned with
-    // no way to clean it up from this device. We only attempt the cloud call
-    // when the vault was previously synced — for local-only vaults there's
-    // nothing on the server.
-    if (isVaultCloudSynced(vaultId)) {
+    // Best-effort cloud cleanup BEFORE local delete. We attempt the delete
+    // whenever the user has a cloud token — `deleteCloudVault` returns
+    // `false` on 404, so an orphan check is free. The previous behavior
+    // gated on `isVaultCloudSynced` (a localStorage registry that gets
+    // wiped on cache clear), which left orphan cloud entries for any vault
+    // whose registry flag was missing.
+    const { getCloudToken } = await import('@/lib/cloud-vault-sync');
+    if (getCloudToken()) {
       try {
         await deleteCloudVault(vaultId);
       } catch (err) {
+        // Network or auth failure — the cloud entry stays; the user can
+        // retry from another device. Local deletion still proceeds.
       }
     }
     await vaultManager.deleteVault(vaultId);

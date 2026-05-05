@@ -17,6 +17,7 @@ import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-sele
 import { useSubscription } from "@/hooks/use-subscription";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
+import { CloudSyncPill } from "@/components/cloud-sync-pill";
 import { resetNoteEditing } from "@/lib/note-editing-guard";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
 import { vaultStorage } from "@/lib/storage";
@@ -325,6 +326,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {/* Always-visible cloud sync status. Tap when failed to retry. */}
+            <CloudSyncPill vaultId={activeVault?.id ?? null} compact />
           </div>
 
           {/* Right: Search | Quick Add | Overflow ⋮ */}
@@ -410,6 +413,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Cloud sync</span>
+                    <CloudSyncPill vaultId={activeVault?.id ?? null} />
+                  </div>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <a href="/vaults" className="gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
@@ -419,6 +427,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {/* Always-visible cloud sync status. Tap when failed to retry. */}
+            <CloudSyncPill vaultId={activeVault?.id ?? null} />
           </div>
 
           <div className="flex items-center gap-3">
