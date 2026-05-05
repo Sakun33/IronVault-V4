@@ -138,6 +138,15 @@ interface VaultContextType {
 
   isLoading: boolean;
   isCloudSyncing: boolean;
+  /** Per-mutation push status. 'idle' → no recent activity; 'syncing' →
+      push or pull in flight; 'synced' → most recent push succeeded
+      (auto-clears after a few seconds); 'failed' → most recent push
+      failed (sticks until next push or manual retry). */
+  cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'failed';
+  /** Last push error message, when cloudSyncStatus === 'failed'. */
+  lastSyncError: string | null;
+  /** Manually retry the last failed push. */
+  retryCloudSync: () => void;
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
@@ -166,6 +175,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   // useSearch() hook so they only re-render on actual search changes.
   const [isLoading, setIsLoading] = useState(false);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'failed'>('idle');
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
   // Security state
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -206,12 +217,53 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       clearSafety();
       safety = setTimeout(() => { setIsCloudSyncing(false); safety = null; }, 15000);
     };
+    // Push-side status events from use-cloud-auto-sync. Drives the
+    // header indicator (Syncing… / Synced ✓ / Sync failed ⚠ + retry).
+    let syncedClearTimer: ReturnType<typeof setTimeout> | null = null;
+    const handlePushStart = () => {
+      if (syncedClearTimer) { clearTimeout(syncedClearTimer); syncedClearTimer = null; }
+      setCloudSyncStatus('syncing');
+      setLastSyncError(null);
+    };
+    const handlePushDone = () => {
+      setCloudSyncStatus('synced');
+      setLastSyncError(null);
+      // Auto-revert to idle after 3s so the indicator doesn't stay green
+      // forever on a quiet vault.
+      if (syncedClearTimer) clearTimeout(syncedClearTimer);
+      syncedClearTimer = setTimeout(() => {
+        setCloudSyncStatus('idle');
+        syncedClearTimer = null;
+      }, 3000);
+    };
+    const handlePushFailed = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      setCloudSyncStatus('failed');
+      setLastSyncError(detail.error || 'Sync failed');
+      // Plan-error: surface a one-time toast prompting upgrade. Subsequent
+      // saves won't retry (auto-sync hook flags vault as local-only) so the
+      // toast is bounded.
+      if (detail.planError) {
+        toastRef.current({
+          title: 'Cloud sync requires Pro',
+          description: 'Upgrade to enable cross-device sync. Your data is still safe on this device.',
+          variant: 'destructive',
+        });
+      }
+    };
     window.addEventListener('vault:cloud:replaced', handleCloudReplace);
     window.addEventListener('vault:cloud:syncing', handleCloudSyncing);
+    window.addEventListener('vault:cloud:push:start', handlePushStart);
+    window.addEventListener('vault:cloud:push:done', handlePushDone);
+    window.addEventListener('vault:cloud:push:failed', handlePushFailed);
     return () => {
       clearSafety();
+      if (syncedClearTimer) clearTimeout(syncedClearTimer);
       window.removeEventListener('vault:cloud:replaced', handleCloudReplace);
       window.removeEventListener('vault:cloud:syncing', handleCloudSyncing);
+      window.removeEventListener('vault:cloud:push:start', handlePushStart);
+      window.removeEventListener('vault:cloud:push:done', handlePushDone);
+      window.removeEventListener('vault:cloud:push:failed', handlePushFailed);
     };
   }, [isUnlocked]);
 
@@ -1225,6 +1277,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
     isLoading,
     isCloudSyncing,
+    cloudSyncStatus,
+    lastSyncError,
+    retryCloudSync: () => {
+      window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+    },
   };
 
   return (

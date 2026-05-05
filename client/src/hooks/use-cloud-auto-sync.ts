@@ -32,24 +32,35 @@ export function useCloudAutoSync(
   // ── Core push executor ────────────────────────────────────────────────────
   // Takes explicit vid/mpwd so it can be called from cleanup with current refs.
   // Only advances lastPull and clears dirty flag on actual success.
+  // Dispatches start/done/failed events so the header indicator can show
+  // "Syncing…" → "Synced ✓" / "Sync failed ⚠" with the actual error.
   const executePush = useCallback(async (vid: string, mpwd: string): Promise<boolean> => {
+    const fail = (reason: string, planError = false) => {
+      console.error(`[SYNC] Push failed for ${vid}: ${reason}`);
+      localStorage.setItem(`iv_last_sync_error_${vid}`, reason);
+      window.dispatchEvent(new CustomEvent('vault:cloud:push:failed', {
+        detail: { vaultId: vid, error: reason, planError },
+      }));
+      return false;
+    };
+
+    window.dispatchEvent(new CustomEvent('vault:cloud:push:start', { detail: { vaultId: vid } }));
     try {
       // Vault isolation: the singleton's open DB MUST be the vault we're
       // about to export. If they've drifted (e.g. a UI path forgot to call
       // vaultStorage.switchToVault), refuse rather than push the wrong
       // vault's data to this vault's cloud entry.
       if (vaultStorage.getCurrentVaultId() !== vid) {
-        console.error(
-          `[SYNC] Refusing push: storage is on vault "${vaultStorage.getCurrentVaultId()}" ` +
-          `but auto-sync expected "${vid}". This would leak data across vaults.`,
+        return fail(
+          `Vault mismatch: storage is on "${vaultStorage.getCurrentVaultId()}" but expected "${vid}"`,
         );
-        return false;
       }
-      // Anti-wipe gate: if local item count has collapsed compared to the
-      // last successful sync, refuse to push. This protects against the race
-      // where an unmount/cleanup fires before in-memory state has hydrated
-      // from IDB (counts read 0) — pushing that empty snapshot would replace
-      // the cloud blob with nothing.
+      // Anti-wipe gate: previously refused any push where local item count
+      // dropped below 50% of the last known good count. That fired on
+      // legitimate large deletes and silently locked the user out of cloud
+      // sync forever (no UI, no log). Tightened to "going to ZERO from
+      // 20+", which still protects the original race (unmount-before-
+      // hydrate reads 0) but doesn't punish real deletes.
       const localCount = await vaultStorage.getTotalItemCount();
       const lastPushRaw = localStorage.getItem(`${LAST_PUSH_COUNT_PREFIX}${vid}`);
       const lastPullRaw = localStorage.getItem(`${LAST_PULL_COUNT_PREFIX}${vid}`);
@@ -57,8 +68,8 @@ export function useCloudAutoSync(
         lastPushRaw ? parseInt(lastPushRaw, 10) || 0 : 0,
         lastPullRaw ? parseInt(lastPullRaw, 10) || 0 : 0,
       );
-      if (lastKnown >= MIN_GATED_COUNT && localCount < lastKnown * 0.5) {
-        return false;
+      if (lastKnown >= 20 && localCount === 0) {
+        return fail(`Anti-wipe: refusing to push empty vault (cloud has ${lastKnown} items)`);
       }
 
       const blob = await vaultStorage.exportVault(mpwd);
@@ -70,13 +81,27 @@ export function useCloudAutoSync(
         localStorage.setItem(`${LAST_PULL_PREFIX}${vid}`, new Date().toISOString());
         localStorage.setItem(`${LAST_PUSH_COUNT_PREFIX}${vid}`, String(localCount));
         localStorage.removeItem(`${DIRTY_PREFIX}${vid}`);
+        localStorage.removeItem(`iv_last_sync_error_${vid}`);
+        // Heal the cloud-synced registry: a successful push proves the
+        // vault is on cloud, so make sure subsequent saves don't get
+        // skipped by `isVaultCloudSynced` returning false (which can
+        // happen if the registry got cleared by a cache wipe).
+        markVaultAsCloudSynced(vid);
+        window.dispatchEvent(new CustomEvent('vault:cloud:push:done', {
+          detail: { vaultId: vid, count: localCount },
+        }));
         return true;
       }
-      // Don't advance lastPull on failure — let next poll retry
-      return false;
-    } catch (e) {
-      console.error('[SYNC] Cloud push threw:', e);
-      return false;
+      // Push failed — surface why. On a plan-upgrade-required response,
+      // mark the vault as local-only so we don't retry on every save and
+      // spam the user with toasts. Removing this flag (or upgrading) lets
+      // sync resume.
+      if (result.planError) {
+        localStorage.setItem(`iv_local_only_${vid}`, '1');
+      }
+      return fail(result.error || `Push refused (status ${result.status ?? 'unknown'})`, !!result.planError);
+    } catch (e: any) {
+      return fail(e?.message || String(e));
     }
   }, []);
 
@@ -86,11 +111,19 @@ export function useCloudAutoSync(
 
     const handleItemSaved = () => {
       if (!getCloudToken()) return;
-      // Local-only vaults must NEVER be auto-promoted to cloud-synced — the
-      // user explicitly chose local storage (Free plan or "create local
-      // vault"). Auto-marking would cause every save to attempt a cloud
-      // push and surface confusing "cloud sync failed" toasts.
-      if (!isVaultCloudSynced(vaultId)) return;
+      // Local-only vaults must NEVER be auto-promoted to cloud-synced —
+      // the user explicitly chose local storage (Free plan or "create
+      // local vault"). We use `iv_local_only_${vaultId}` as the explicit
+      // opt-out marker. The previous `isVaultCloudSynced` gate was too
+      // aggressive: a single cache wipe cleared the registry and
+      // permanently silently blocked cloud sync for a Pro user — the
+      // exact bug this fix is targeting. Now the gate is inverted:
+      // attempt the push unless the user explicitly opted into local-only,
+      // and let the server's plan check decide if it's allowed. A success
+      // re-marks the vault as cloud-synced (heal path); a 403 with
+      // PLAN_UPGRADE_REQUIRED surfaces a plan-error toast instead of a
+      // generic failure.
+      if (localStorage.getItem(`iv_local_only_${vaultId}`) === '1') return;
       // Mark dirty immediately — survives if logout races before debounce fires
       pushPendingRef.current = true;
       localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');
@@ -127,7 +160,8 @@ export function useCloudAutoSync(
   // doPull does not overwrite it with the old cloud version.
   useEffect(() => {
     if (!vaultId || !masterPassword) return;
-    if (!isVaultCloudSynced(vaultId)) return;
+    if (!getCloudToken()) return;
+    if (localStorage.getItem(`iv_local_only_${vaultId}`) === '1') return;
     const isDirty = localStorage.getItem(`${DIRTY_PREFIX}${vaultId}`);
     if (!isDirty) return;
 
@@ -188,10 +222,10 @@ export function useCloudAutoSync(
 
     const handleForcePush = async () => {
       if (!getCloudToken()) return;
-      // Same gate as handleItemSaved — local vaults stay local. The CRUD
-      // flows that fire `vault:force-cloud-push` already check the active
-      // vault is cloud-synced; this is the safety net.
-      if (!isVaultCloudSynced(vaultId)) return;
+      // Same opt-out gate as handleItemSaved — only skip when the user
+      // explicitly chose local-only. Otherwise let the server's plan check
+      // decide whether the push is permitted.
+      if (localStorage.getItem(`iv_local_only_${vaultId}`) === '1') return;
       if (timerRef.current) clearTimeout(timerRef.current);
       pushPendingRef.current = true;
       localStorage.setItem(`${DIRTY_PREFIX}${vaultId}`, '1');

@@ -92,6 +92,12 @@ export interface PushResult {
   serverNewer?: boolean;
   serverBlob?: string;
   planError?: boolean;
+  /** HTTP status code (or 0 for network errors). Used by callers to decide
+      whether to retry, surface a plan-upgrade prompt, or show a generic
+      "sync failed" toast. */
+  status?: number;
+  /** Human-readable reason that pushes can be surfaced to the user. */
+  error?: string;
 }
 
 export async function pushCloudVault(
@@ -101,9 +107,15 @@ export async function pushCloudVault(
   isDefault = false,
 ): Promise<PushResult> {
   const token = getCloudToken();
-  if (!token) return { success: false };
+  if (!token) {
+    console.error('[CLOUD-PUSH] No cloud token — user is not authenticated for cloud sync');
+    return { success: false, status: 0, error: 'Not signed in to cloud' };
+  }
   const clientModifiedAt = new Date().toISOString();
   const sourceDeviceId = getOrCreateDeviceId();
+  // Log every push attempt with the size of the blob and the vault id so
+  // failures can be triaged from the browser console without a debugger.
+  console.info(`[CLOUD-PUSH] pushing vault ${vaultId} (${(encryptedBlob.length / 1024).toFixed(1)} KB) at ${clientModifiedAt}`);
   try {
     // Try PUT first (update existing)
     const putRes = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
@@ -113,30 +125,55 @@ export async function pushCloudVault(
     });
     if (putRes.status === 404) {
       // Not in cloud yet — create it
+      console.info(`[CLOUD-PUSH] vault ${vaultId} not in cloud yet — creating`);
       const postRes = await fetch(`${CLOUD_API}/api/vaults/cloud`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ vaultId, vaultName, encryptedBlob, isDefault, clientModifiedAt, sourceDeviceId }),
       });
       if (postRes.status === 403) {
-        const body = await postRes.json();
-        if (body.code === 'PLAN_UPGRADE_REQUIRED') return { success: false, planError: true };
-        return { success: false };
+        const body = await postRes.json().catch(() => ({}));
+        const planError = body.code === 'PLAN_UPGRADE_REQUIRED';
+        const error = planError ? 'Cloud sync requires Pro or Lifetime plan' : (body.error || 'Forbidden');
+        console.error(`[CLOUD-PUSH] POST ${vaultId} → 403:`, error);
+        return { success: false, status: 403, error, planError };
       }
-      return { success: postRes.ok };
+      if (!postRes.ok) {
+        const text = await postRes.text().catch(() => '');
+        console.error(`[CLOUD-PUSH] POST ${vaultId} → ${postRes.status}:`, text);
+        return { success: false, status: postRes.status, error: text || `HTTP ${postRes.status}` };
+      }
+      console.info(`[CLOUD-PUSH] POST ${vaultId} success (created cloud entry)`);
+      return { success: true, status: postRes.status };
     }
     if (putRes.status === 403) {
-      const body = await putRes.json();
-      if (body.code === 'PLAN_UPGRADE_REQUIRED') return { success: false, planError: true };
-      return { success: false };
+      const body = await putRes.json().catch(() => ({}));
+      const planError = body.code === 'PLAN_UPGRADE_REQUIRED';
+      const error = planError ? 'Cloud sync requires Pro or Lifetime plan' : (body.error || 'Forbidden');
+      console.error(`[CLOUD-PUSH] PUT ${vaultId} → 403:`, error);
+      return { success: false, status: 403, error, planError };
     }
-    if (!putRes.ok) return { success: false };
-    const body = await putRes.json();
+    if (putRes.status === 401) {
+      console.error(`[CLOUD-PUSH] PUT ${vaultId} → 401: token expired or invalid`);
+      return { success: false, status: 401, error: 'Cloud session expired — please sign in again' };
+    }
+    if (!putRes.ok) {
+      const text = await putRes.text().catch(() => '');
+      console.error(`[CLOUD-PUSH] PUT ${vaultId} → ${putRes.status}:`, text);
+      return { success: false, status: putRes.status, error: text || `HTTP ${putRes.status}` };
+    }
+    const body = await putRes.json().catch(() => ({}));
     if (body.serverNewer) {
-      return { success: false, serverNewer: true, serverBlob: body.vault?.encryptedBlob };
+      console.warn(`[CLOUD-PUSH] PUT ${vaultId} → serverNewer (server has newer data, push refused)`);
+      return { success: false, status: 200, serverNewer: true, serverBlob: body.vault?.encryptedBlob, error: 'Server has newer data' };
     }
-    return { success: true };
-  } catch { return { success: false }; }
+    console.info(`[CLOUD-PUSH] PUT ${vaultId} success`);
+    return { success: true, status: 200 };
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    console.error(`[CLOUD-PUSH] threw for vault ${vaultId}:`, msg);
+    return { success: false, status: 0, error: msg };
+  }
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────

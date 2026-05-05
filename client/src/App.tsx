@@ -16,6 +16,7 @@ import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
+import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault } from "@/lib/cloud-vault-sync";
 import { vaultStorage } from "@/lib/storage";
 import NotFound from "@/pages/not-found";
@@ -98,7 +99,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const slideUp = makeSlideUp(reducedMotion);
   const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
   const notificationUserId = accountEmail || 'guest';
-  const { searchQuery, setSearchQuery, stats, isCloudSyncing, passwords, subscriptions, notes, expenses, reminders } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
@@ -750,15 +751,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             critical: in a column flex layout, children with flex-1 default to
             min-content sizing which prevents overflow:auto from kicking in. */}
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
-          {isCloudSyncing && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
-              <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              Syncing from cloud…
-            </div>
-          )}
+          <CloudSyncBanner
+            isCloudSyncing={isCloudSyncing}
+            cloudSyncStatus={cloudSyncStatus}
+            lastSyncError={lastSyncError}
+            onRetry={retryCloudSync}
+          />
           <div className="p-6 flex-1 min-w-0">
             <AnalyticsIntegration>
               <ErrorBoundary level="page" resetKey={location}>
@@ -780,15 +778,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Main Content — no footer on mobile (BottomTabs replace it) */}
       <main className="lg:hidden flex-1 min-h-0 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
-        {isCloudSyncing && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 text-primary text-sm">
-            <svg className="w-3.5 h-3.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-            Syncing from cloud…
-          </div>
-        )}
+        <CloudSyncBanner
+          isCloudSyncing={isCloudSyncing}
+          cloudSyncStatus={cloudSyncStatus}
+          lastSyncError={lastSyncError}
+          onRetry={retryCloudSync}
+        />
         <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden">
           <AnalyticsIntegration>
             <ErrorBoundary level="page" resetKey={location}>
