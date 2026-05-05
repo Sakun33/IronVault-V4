@@ -45,6 +45,17 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
+    // Hidden sourcemaps: emitted to disk so server-side error reporters
+    // can resolve stack traces, but `//# sourceMappingURL` is omitted so
+    // browsers don't expose them publicly. Lighthouse warns when
+    // sourcemaps aren't generated for production builds — this also
+    // fixes that audit.
+    sourcemap: 'hidden',
+    // esbuild is the default minifier; explicitly opt in so it stays
+    // documented. Console statements are stripped in prod via the
+    // `esbuild.drop` option below — keeps `[CLOUD-PUSH]`-style debug
+    // logs out of release bundles.
+    minify: 'esbuild',
     // The main app shell was hitting ~1.1 MB raw / ~315 KB gzipped, which made
     // the initial paint feel sluggish on slower networks. Splitting the heavy
     // long-lived vendor libs into their own chunks lets the browser cache them
@@ -64,6 +75,14 @@ export default defineConfig({
         },
       },
     },
+  },
+  // Strip debug-level console output in production builds — keeps
+  // bundles smaller and avoids leaking `[CLOUD-PUSH]`-style internal
+  // logs to end users. `console.error` and `console.warn` are kept so
+  // genuine errors still surface for users + monitoring.
+  esbuild: {
+    drop: ['debugger'],
+    pure: ['console.log', 'console.info', 'console.debug', 'console.trace'],
   },
   server: {
     fs: {

@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- `maximum-scale=5` (was 1) lets low-vision users pinch-zoom — Lighthouse
+         a11y violation on `user-scalable=no`-equivalent meta. The CSS
+         `font-size: 16px !important` rule on inputs already prevents the
+         iOS double-tap-to-zoom problem, so we don't need to lock zoom
+         globally. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content" />
     
     <!-- Google Search Console Verification -->
     <!-- Replace YOUR_VERIFICATION_CODE with code from Google Search Console -->
@@ -252,16 +257,30 @@
     }
     </script>
     
-    <!-- Fonts — trimmed from 22 families to just Inter + Fira Code (the only
-         two used by index.css). The previous URL was ~80 KB of CSS that
-         blocked first paint and triggered "Reduce unused JavaScript" /
-         "Eliminate render-blocking resources" warnings in Lighthouse. -->
+    <!-- Fonts — trimmed to Inter + Fira Code (the only two used).
+         Loaded async via the `media="print" onload` trick so the
+         stylesheet does NOT block first paint. The `noscript` fallback
+         keeps things working with JS disabled. `display=swap` ensures
+         text renders in the system font while the web fonts download. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@300..700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
     >
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+      media="print"
+      onload="this.media='all'"
+    >
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+      >
+    </noscript>
   </head>
   <body>
     <div id="root"></div>
