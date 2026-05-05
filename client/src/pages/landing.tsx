@@ -13,6 +13,7 @@ import {
   Github,
   Linkedin,
   ArrowRight,
+  Globe,
 } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { SimpleThemeToggle } from "@/components/theme-toggle";
@@ -93,7 +94,7 @@ function HeroSection() {
   return (
     <section
       id="hero"
-      className="landing-hero-bg relative min-h-[100dvh] flex items-center justify-center overflow-hidden"
+      className="landing-hero-bg relative min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden px-6 pt-24 pb-12 sm:pt-28 sm:pb-16"
       aria-label="Hero"
     >
       {/* Floating particles — pure CSS, no JS */}
@@ -106,30 +107,95 @@ function HeroSection() {
         <span className="landing-particle landing-particle-6" />
       </div>
 
+      {/* Floating app-screen mockups behind the hero — pure CSS / Tailwind,
+          no images. They suggest a vault/password-manager surface (chip
+          rows, stat tiles, encrypted items) without us shipping any binary
+          assets. Lower opacity so they don't fight the headline. */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        {/* Left mockup — tilted */}
+        <div className="absolute -left-12 top-[18%] sm:top-1/4 w-44 sm:w-52 rounded-3xl border border-emerald-500/15 bg-gradient-to-b from-slate-800/90 to-slate-900/90 dark:from-slate-800/95 dark:to-slate-950/95 -rotate-12 opacity-25 sm:opacity-35 shadow-2xl">
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-1.5 mb-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/60" />
+              <div className="h-2 w-16 rounded bg-white/15" />
+            </div>
+            <div className="h-2 w-full rounded bg-white/10" />
+            <div className="h-9 w-full rounded-lg bg-white/5 border border-white/10" />
+            <div className="h-9 w-full rounded-lg bg-white/5 border border-white/10" />
+            <div className="h-9 w-full rounded-lg bg-white/5 border border-white/10" />
+            <div className="h-9 w-full rounded-lg bg-white/5 border border-white/10" />
+            <div className="h-3 w-20 rounded bg-emerald-500/25 mt-2" />
+          </div>
+        </div>
+
+        {/* Right mockup — tilted other way */}
+        <div className="absolute -right-12 top-[28%] sm:top-1/3 w-44 sm:w-52 rounded-3xl border border-violet-500/15 bg-gradient-to-b from-slate-800/90 to-slate-900/90 dark:from-slate-800/95 dark:to-slate-950/95 rotate-12 opacity-25 sm:opacity-35 shadow-2xl">
+          <div className="p-3 space-y-2.5">
+            <div className="flex gap-2 mb-3">
+              <div className="h-9 w-9 rounded-full bg-emerald-500/25" />
+              <div className="flex-1 space-y-1.5 mt-1">
+                <div className="h-2 w-20 rounded bg-white/20" />
+                <div className="h-2 w-28 rounded bg-white/10" />
+              </div>
+            </div>
+            <div className="h-16 w-full rounded-xl bg-white/5 border border-white/10 p-2 space-y-1">
+              <div className="h-2 w-24 rounded bg-white/15" />
+              <div className="h-2 w-full rounded bg-white/5" />
+              <div className="h-2 w-3/4 rounded bg-white/5" />
+            </div>
+            <div className="h-16 w-full rounded-xl bg-white/5 border border-white/10 p-2 space-y-1">
+              <div className="h-2 w-20 rounded bg-violet-500/25" />
+              <div className="h-2 w-full rounded bg-white/5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Center back mockup — desktop only, larger and barely-tilted */}
+        <div className="hidden md:block absolute left-1/2 -translate-x-1/2 -bottom-24 w-72 rounded-3xl border border-emerald-500/15 bg-gradient-to-b from-slate-800/60 to-slate-900/60 dark:from-slate-800/70 dark:to-slate-950/70 opacity-15 shadow-2xl">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/30" />
+              <div className="h-3 w-24 rounded bg-white/15" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="h-16 rounded-xl bg-emerald-500/15 border border-emerald-500/25" />
+              <div className="h-16 rounded-xl bg-violet-500/15 border border-violet-500/25" />
+              <div className="h-16 rounded-xl bg-amber-500/15 border border-amber-500/25" />
+              <div className="h-16 rounded-xl bg-sky-500/15 border border-sky-500/25" />
+            </div>
+            <div className="h-20 rounded-xl bg-white/5 border border-white/10" />
+          </div>
+        </div>
+      </div>
+
       <motion.div
         variants={stagger}
         initial="hidden"
         animate="visible"
-        className="max-w-3xl mx-auto px-4 sm:px-6 text-center"
+        className="relative z-10 max-w-3xl mx-auto text-center w-full"
       >
-        {/* Animated logo */}
-        <motion.div variants={fadeUp} className="mb-8 flex justify-center">
+        {/* Animated logo — smaller on mobile so the headline + CTAs always
+            fit above the fold without scroll, even on a 5" phone. Larger
+            soft emerald glow behind it for depth. */}
+        <motion.div variants={fadeUp} className="mb-5 sm:mb-8 flex justify-center">
           <motion.div
             animate={{ y: [0, -8, 0] }}
             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
             className="relative"
           >
-            <div className="absolute inset-0 -m-6 bg-emerald-500/20 rounded-full blur-2xl animate-pulse" />
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center shadow-[0_20px_40px_-12px_rgba(16,185,129,0.7)]">
-              <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-white" strokeWidth={2.4} />
+            <div className="absolute inset-0 -m-10 bg-emerald-500/25 rounded-full blur-3xl animate-pulse" aria-hidden="true" />
+            <div className="absolute inset-0 -m-4 bg-emerald-400/30 rounded-full blur-xl" aria-hidden="true" />
+            <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center shadow-[0_20px_40px_-12px_rgba(16,185,129,0.7)]">
+              <Shield className="w-8 h-8 sm:w-12 sm:h-12 text-white" strokeWidth={2.4} />
             </div>
           </motion.div>
         </motion.div>
 
-        {/* Headline */}
+        {/* Headline — `text-3xl` on mobile keeps it on two lines instead of
+            three, freeing room for the CTAs to stay above the fold. */}
         <motion.h1
           variants={fadeUp}
-          className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]"
+          className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]"
         >
           Your passwords, finances, and{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
@@ -141,17 +207,19 @@ function HeroSection() {
         {/* Subtitle */}
         <motion.p
           variants={fadeUp}
-          className="mt-6 text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto"
+          className="mt-4 sm:mt-6 text-base sm:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto"
         >
           Zero-knowledge encryption. AES-256-GCM. Your data, only yours.
         </motion.p>
 
-        {/* CTAs — exactly two */}
+        {/* CTAs — exactly two. Stacked vertically on mobile, side-by-side
+            on desktop. Buttons are full-width on mobile so the tap target
+            is unmistakable. */}
         <motion.div
           variants={fadeUp}
-          className="mt-10 flex flex-col sm:flex-row gap-3 justify-center"
+          className="mt-7 sm:mt-10 flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md mx-auto sm:max-w-none"
         >
-          <Link href="/auth/signup">
+          <Link href="/auth/signup" className="w-full sm:w-auto">
             <Button
               size="lg"
               className="w-full sm:w-auto text-base font-semibold px-8 h-12 bg-gradient-to-r from-emerald-500 to-teal-400 text-white hover:from-emerald-600 hover:to-teal-500 shadow-[0_8px_24px_-8px_rgba(16,185,129,0.7)]"
@@ -161,7 +229,7 @@ function HeroSection() {
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
-          <Link href="/auth/login">
+          <Link href="/auth/login" className="w-full sm:w-auto">
             <Button
               size="lg"
               variant="outline"
@@ -173,22 +241,46 @@ function HeroSection() {
           </Link>
         </motion.div>
 
+        {/* Trust badges — visible signal that we're a real security product
+            without needing screenshots or third-party logos we don't have
+            permission for. */}
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-6 sm:mt-8 text-xs sm:text-sm text-muted-foreground"
+        >
+          <span className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-emerald-500" /> 256-bit AES
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-emerald-500" /> Zero Knowledge
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-emerald-500" /> Cross Platform
+          </span>
+        </motion.div>
+
         <motion.p
           variants={fadeUp}
-          className="mt-6 text-sm text-muted-foreground"
+          className="mt-4 sm:mt-5 text-xs sm:text-sm text-muted-foreground"
         >
           Free forever · No credit card required
         </motion.p>
       </motion.div>
 
-      {/* Scroll hint */}
+      {/* Scroll hint — hidden on mobile to save vertical space */}
       <div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 text-xs text-muted-foreground/60"
+        className="hidden sm:flex absolute bottom-8 left-1/2 -translate-x-1/2 flex-col items-center gap-1.5 text-xs text-muted-foreground/60"
         aria-hidden="true"
       >
         <span className="uppercase tracking-widest">Scroll</span>
         <span className="block w-px h-8 bg-gradient-to-b from-muted-foreground/60 to-transparent" />
       </div>
+
+      {/* Thin gradient line separating hero from features section below */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent"
+        aria-hidden="true"
+      />
     </section>
   );
 }
