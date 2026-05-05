@@ -6,6 +6,14 @@ import { useVault } from '@/contexts/vault-context';
 import { useAuth } from '@/contexts/auth-context';
 import { NoteEntry } from '@shared/schema';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
@@ -660,6 +668,47 @@ export default function Notes() {
     <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Notes</h1>
       <div className="flex items-center gap-1">
+        {/* Primary "New Note" button — visible without scrolling. Drops down
+            with "Blank Note" + the 10 templates so users can pick a starter
+            structure without first navigating to the templates modal. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              disabled={upgradeBlocked}
+              data-testid="button-new-note-header"
+              className="h-9 px-3 mr-1 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-full shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)] hover:shadow-[0_6px_18px_-4px_rgba(16,185,129,0.75)]"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> New Note
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem
+              onClick={() => openNewNote()}
+              data-testid="menu-item-blank-note"
+              className="font-medium"
+            >
+              <StickyNote className="w-4 h-4 mr-2 text-emerald-500" /> Blank Note
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/80">
+              Templates
+            </DropdownMenuLabel>
+            {NOTE_TEMPLATES.filter(t => t.id !== 'blank').map(t => {
+              const Icon = t.icon;
+              return (
+                <DropdownMenuItem
+                  key={t.id}
+                  onClick={() => openNewNote(t)}
+                  data-testid={`menu-item-template-${t.id}`}
+                >
+                  <Icon className="w-4 h-4 mr-2 text-emerald-400/80" />
+                  {t.name}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           onClick={() => setSearchOpen(v => !v)}
