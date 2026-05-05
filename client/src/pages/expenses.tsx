@@ -230,6 +230,7 @@ export default function ExpensesPage() {
         defaultCurrency={currency}
         defaultGroupId={openGroupId || undefined}
         onAddContact={sx.addContact}
+        onAddGroup={sx.addGroup}
         onUpdateGroup={sx.updateGroup}
         onClose={() => { setShowAdd(false); setEditing(null); }}
         onSave={async (data) => {
@@ -822,7 +823,7 @@ function ChartTip({ active, payload, currency }: any) {
 // Add / Edit expense modal
 // ─────────────────────────────────────────────────────────────────────────────
 function AddExpenseModal({
-  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave, onAddContact, onUpdateGroup,
+  open, existing, groups, contacts, defaultCurrency, defaultGroupId, onClose, onSave, onAddContact, onAddGroup, onUpdateGroup,
 }: {
   open: boolean;
   existing: SharedExpense | null;
@@ -833,6 +834,7 @@ function AddExpenseModal({
   onClose: () => void;
   onSave: (data: Omit<SharedExpense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onAddContact: (data: Omit<ExpenseContact, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ExpenseContact>;
+  onAddGroup?: (data: Omit<ExpenseGroup, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ExpenseGroup>;
   onUpdateGroup?: (id: string, patch: Partial<ExpenseGroup>) => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -853,7 +855,32 @@ function AddExpenseModal({
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly' | 'yearly'>('none');
   const [newPersonInput, setNewPersonInput] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupEmoji, setNewGroupEmoji] = useState('👥');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleCreateInlineGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name || !onAddGroup) return;
+    try {
+      const g = await onAddGroup({
+        name,
+        emoji: newGroupEmoji,
+        memberIds: Array.from(participants).filter(id => id !== 'self'),
+        description: '',
+        archived: false,
+      });
+      setGroupId(g.id);
+      setNewGroupName('');
+      setNewGroupOpen(false);
+      toast({ title: `Created group "${name}"` });
+    } catch (e) {
+      console.error('[GROUP-CREATE] failed:', e);
+      toast({ title: "Couldn't create group", variant: 'destructive' });
+    }
+  };
 
   const handleAddInlinePerson = async () => {
     const name = newPersonInput.trim();
@@ -1036,6 +1063,7 @@ function AddExpenseModal({
 
   const handleSave = async () => {
     setSubmitted(true);
+    setSaveError(null);
     if (!title.trim() || amountNum <= 0) {
       toast({ title: 'Missing required fields', description: 'Please add a title and amount.', variant: 'destructive' });
       return;
@@ -1044,27 +1072,32 @@ function AddExpenseModal({
       toast({ title: 'Pick at least one participant', variant: 'destructive' });
       return;
     }
-    // If the splits don't reconcile against the typed amount, auto-normalize
-    // them by scaling proportionally — the user wanted Save to "just work"
-    // rather than be silently blocked. Exact-mode wildly-off splits still
-    // surface a toast so users notice the rebalance, but Save proceeds.
+    // Auto-normalize splits whenever they don't reconcile to the typed
+    // amount. Math.abs tolerance < 0.01 per the spec — anything beyond that
+    // gets scaled proportionally OR fallback-evenly so Save is never
+    // silently blocked on rounding noise.
     let finalSplits = resolvedSplits;
-    if (!reconciledOk) {
-      console.warn('[EXPENSE-SAVE] Splits off:', { splitType, splitsTotal, amountNum, partList, resolvedSplits });
+    const drift = Math.abs(splitsTotal - amountNum);
+    if (drift >= 0.01) {
+      console.warn('[EXPENSE-SAVE] Splits off, normalizing:', { splitType, splitsTotal, amountNum, drift, partList, resolvedSplits });
       if (splitsTotal > 0) {
         const factor = amountNum / splitsTotal;
         finalSplits = resolvedSplits.map(s => ({ ...s, amount: round2(s.amount * factor) }));
-        toast({
-          title: 'Splits auto-balanced',
-          description: `Adjusted to total ${formatAmount(amountNum, cur)}.`,
-        });
       } else {
-        // No values entered — fall back to an even split so Save isn't blocked.
         const shares = evenShares(amountNum, partList.length);
         finalSplits = partList.map((id, i) => ({ contactId: id, amount: shares[i] || 0 }));
       }
+      // Fix any residual cent drift in the last share so the final total
+      // matches the entered amount exactly (avoids 30.00 → 29.99 surprises).
+      const finalTotal = finalSplits.reduce((s, x) => s + x.amount, 0);
+      const residual = round2(amountNum - finalTotal);
+      if (residual !== 0 && finalSplits.length > 0) {
+        const lastIdx = finalSplits.length - 1;
+        finalSplits[lastIdx] = { ...finalSplits[lastIdx], amount: round2(finalSplits[lastIdx].amount + residual) };
+      }
     }
     try {
+      console.log('[EXPENSE-SAVE] saving:', { title: title.trim(), amount: amountNum, splits: finalSplits, groupId, paidBy, splitType });
       await onSave({
         title: title.trim(),
         amount: amountNum,
@@ -1079,9 +1112,12 @@ function AddExpenseModal({
         receiptDataUrl,
         recurrence,
       });
-    } catch (e) {
+      console.log('[EXPENSE-SAVE] success');
+    } catch (e: any) {
+      const msg = e?.message || String(e) || 'Unknown error';
       console.error('[EXPENSE-SAVE] failed:', e);
-      toast({ title: "Couldn't save expense", description: 'See console for details.', variant: 'destructive' });
+      setSaveError(msg);
+      toast({ title: "Couldn't save expense", description: msg, variant: 'destructive' });
     }
   };
 
@@ -1164,8 +1200,22 @@ function AddExpenseModal({
             <div className="space-y-1.5">
               <Label className={partList.length >= 3 && !groupId ? 'text-emerald-400' : ''}>
                 Group{partList.length >= 3 && !groupId ? ' · suggested' : ' (optional)'}
+                {groups.length > 0 && (
+                  <span className="ml-1 text-[11px] text-muted-foreground/70">
+                    ({groups.length} available)
+                  </span>
+                )}
               </Label>
-              <Select value={groupId || 'none'} onValueChange={(v) => setGroupId(v === 'none' ? undefined : v)}>
+              <Select
+                value={groupId || 'none'}
+                onValueChange={(v) => {
+                  if (v === '__new__') {
+                    setNewGroupOpen(true);
+                    return;
+                  }
+                  setGroupId(v === 'none' ? undefined : v);
+                }}
+              >
                 <SelectTrigger
                   data-testid="select-group"
                   className={partList.length >= 3 && !groupId ? 'ring-1 ring-emerald-500/40 border-emerald-500/40' : ''}
@@ -1174,9 +1224,56 @@ function AddExpenseModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No group</SelectItem>
-                  {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.emoji} {g.name}</SelectItem>)}
+                  {groups.map(g => (
+                    <SelectItem key={g.id} value={g.id} data-testid={`group-option-${g.id}`}>
+                      {g.emoji || '👥'} {g.name}
+                    </SelectItem>
+                  ))}
+                  {onAddGroup && (
+                    <SelectItem value="__new__" className="text-emerald-400">
+                      + Create new group…
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+              {newGroupOpen && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.05] p-2">
+                  <select
+                    value={newGroupEmoji}
+                    onChange={(e) => setNewGroupEmoji(e.target.value)}
+                    className="bg-transparent border-0 outline-none text-base"
+                    aria-label="Group emoji"
+                  >
+                    {['👥', '🏠', '✈️', '🍕', '🎉', '🛒', '🚗', '💼', '🎮', '🏖️'].map(e => (
+                      <option key={e} value={e}>{e}</option>
+                    ))}
+                  </select>
+                  <Input
+                    autoFocus
+                    placeholder="Group name (e.g. Trip to Goa)"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); void handleCreateInlineGroup(); }
+                      else if (e.key === 'Escape') { e.preventDefault(); setNewGroupOpen(false); setNewGroupName(''); }
+                    }}
+                    className="h-8 flex-1"
+                    data-testid="input-new-group-name"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => void handleCreateInlineGroup()}
+                    disabled={!newGroupName.trim()}
+                    className="h-8 bg-emerald-500 hover:bg-emerald-600 text-white"
+                    data-testid="button-create-inline-group"
+                  >
+                    Create
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setNewGroupOpen(false); setNewGroupName(''); }} className="h-8">
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
               {partList.length >= 3 && !groupId && (
                 <p className="text-[11px] text-emerald-400/80">
                   Splitting between {partList.length} people — grouping makes settling up easier later.
@@ -1367,10 +1464,16 @@ function AddExpenseModal({
             <Label>Notes (optional)</Label>
             <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any details…" className="min-h-[60px]" />
           </div>
+
+          {saveError && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/[0.07] p-2 text-xs text-red-300">
+              <strong>Save failed:</strong> {saveError}
+            </div>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} data-testid="button-save-expense">
+          <Button onClick={handleSave} data-testid="button-save-expense" className="bg-emerald-500 hover:bg-emerald-600 text-white">
             <Check className="w-4 h-4 mr-1" /> {existing ? 'Save' : 'Add expense'}
           </Button>
         </DialogFooter>

@@ -430,15 +430,35 @@ export default function Reminders() {
   };
 
   const renderReminderCard = (reminder: ReminderEntry) => (
-    <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={reminder.isCompleted ? 'opacity-60' : ''} data-testid={`card-reminder-${reminder.id}`}>
-      <CardContent className="p-4">
+    <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={`${reminder.isCompleted ? 'opacity-60' : ''} cursor-pointer hover:border-emerald-500/40 transition-colors`} data-testid={`card-reminder-${reminder.id}`}>
+      <CardContent
+        className="p-4"
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          // Ignore clicks that originated from buttons inside the card
+          // (complete toggle, edit, delete) — only the surface behind them
+          // should open the edit dialog.
+          const target = e.target as HTMLElement;
+          if (target.closest('button')) return;
+          handleEdit(reminder);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleEdit(reminder);
+          }
+        }}
+        aria-label={`Open ${reminder.title}`}
+        data-testid={`reminder-row-${reminder.id}`}
+      >
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-3 flex-1">
             <Button
               variant="ghost"
               size="sm"
               className="p-0 h-auto hover:bg-transparent"
-              onClick={() => toggleComplete(reminder)}
+              onClick={(e) => { e.stopPropagation(); toggleComplete(reminder); }}
               data-testid={`button-complete-${reminder.id}`}
             >
               {reminder.isCompleted ? (
@@ -447,7 +467,7 @@ export default function Reminders() {
                 <Circle className="h-5 w-5 text-muted-foreground" />
               )}
             </Button>
-            
+
             <Favicon
               url={reminder.subscriptionId ? subscriptionUrlMap[reminder.subscriptionId] : undefined}
               name={reminder.category || reminder.title}
@@ -521,10 +541,10 @@ export default function Reminders() {
               style={{ backgroundColor: reminder.color }}
               data-testid={`color-indicator-${reminder.id}`}
             />
-            <Button variant="ghost" size="sm" onClick={() => handleEdit(reminder)} data-testid={`button-edit-${reminder.id}`}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(reminder); }} data-testid={`button-edit-${reminder.id}`}>
               <Edit className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleDelete(reminder)} data-testid={`button-delete-${reminder.id}`}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(reminder); }} data-testid={`button-delete-${reminder.id}`}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>

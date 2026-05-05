@@ -19,18 +19,15 @@ input::-webkit-strong-password-auto-fill-button {
   margin: 0 !important;
 }
 
-/* iOS Safari auto-zooms in on form fields whose computed font-size is below
-   16px. Force ≥16px on every input/select/textarea so tapping a password,
-   amount, or settings field never triggers the obnoxious zoom-in (which on
-   our app also obscured the Save/Done buttons behind the keyboard). The
-   `@supports` block scopes this to WebKit/iOS so non-touch desktop styling
-   keeps its original 14px/13px sizing. */
-@supports (-webkit-touch-callout: none) {
-  input,
-  select,
-  textarea {
-    font-size: max(16px, 1em) !important;
-  }
+/* iOS Safari auto-zooms when an input's computed font-size is below 16px.
+   Force ≥16px on every form control GLOBALLY (not just iOS) — Tailwind
+   utilities like `text-sm` / `text-xs` on inputs would otherwise re-trigger
+   the bug. This rule wins via !important. Buttons, labels, and chip-style
+   controls are unaffected. */
+input,
+select,
+textarea {
+  font-size: 16px !important;
 }
 
 /* =============================================
@@ -714,6 +711,40 @@ input::-webkit-strong-password-auto-fill-button {
   background-color: rgba(10, 14, 22, 0.7);
   border-color: rgba(255, 255, 255, 0.06);
 }
+
+/* ---------- Light theme — text visibility patches ----------
+   Many components hardcode `text-white/60`-style classes that look great
+   on the dark navy background but render as nearly-invisible white on the
+   bright light theme. Re-bind these utilities to use the foreground color
+   with the same alpha when we're NOT in dark mode, so muted captions stay
+   readable in light mode without per-component refactors.
+
+   Buttons/badges that intentionally use `text-white` over a colored bg
+   (emerald, indigo, etc.) keep working — those use `text-white` without
+   the `/`-opacity variant, which we leave alone. */
+:root:not(.dark) .text-white\/40 { color: hsl(var(--foreground) / 0.4) !important; }
+:root:not(.dark) .text-white\/50 { color: hsl(var(--foreground) / 0.5) !important; }
+:root:not(.dark) .text-white\/60 { color: hsl(var(--foreground) / 0.6) !important; }
+:root:not(.dark) .text-white\/70 { color: hsl(var(--foreground) / 0.7) !important; }
+:root:not(.dark) .text-white\/80 { color: hsl(var(--foreground) / 0.8) !important; }
+:root:not(.dark) .text-white\/90 { color: hsl(var(--foreground) / 0.9) !important; }
+
+/* Background opacity tints used as inline pills/cards over a dark bg also
+   need to flip — `bg-white/[0.04]` over a light bg is invisible. Map these
+   to the foreground color so they remain a subtle wash in light mode. */
+:root:not(.dark) .bg-white\/\[0\.03\] { background-color: hsl(var(--foreground) / 0.04) !important; }
+:root:not(.dark) .bg-white\/\[0\.04\] { background-color: hsl(var(--foreground) / 0.04) !important; }
+:root:not(.dark) .bg-white\/\[0\.06\] { background-color: hsl(var(--foreground) / 0.06) !important; }
+:root:not(.dark) .bg-white\/\[0\.08\] { background-color: hsl(var(--foreground) / 0.07) !important; }
+:root:not(.dark) .bg-white\/5 { background-color: hsl(var(--foreground) / 0.05) !important; }
+:root:not(.dark) .bg-white\/10 { background-color: hsl(var(--foreground) / 0.08) !important; }
+
+/* Borders that hardcode `border-white/10` etc. likewise need to flip so
+   they read as faint dividers rather than disappearing entirely. */
+:root:not(.dark) .border-white\/5 { border-color: hsl(var(--foreground) / 0.08) !important; }
+:root:not(.dark) .border-white\/10 { border-color: hsl(var(--foreground) / 0.1) !important; }
+:root:not(.dark) .border-white\/20 { border-color: hsl(var(--foreground) / 0.15) !important; }
+:root:not(.dark) .border-white\/30 { border-color: hsl(var(--foreground) / 0.2) !important; }
 
 /* ---------- Emerald glow ---------- */
 .glow-emerald {

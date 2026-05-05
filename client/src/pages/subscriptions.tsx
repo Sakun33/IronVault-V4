@@ -14,6 +14,7 @@ import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Favicon } from '@/components/favicon';
+import { ViewToggle } from '@/components/view-toggle';
 import { useVault } from '@/contexts/vault-context';
 import { useCurrency } from '@/contexts/currency-context';
 import { useToast } from '@/hooks/use-toast';
@@ -386,28 +387,7 @@ export default function Subscriptions() {
 
                 {/* List / Grid view toggle — visible on every breakpoint */}
                 <div className="flex items-center justify-end mt-3">
-                  <div className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
-                    <button
-                      type="button"
-                      aria-label="List view"
-                      aria-pressed={viewMode === 'list'}
-                      onClick={() => setViewMode('list')}
-                      className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="subs-view-list"
-                    >
-                      <ListIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Grid view"
-                      aria-pressed={viewMode === 'grid'}
-                      onClick={() => setViewMode('grid')}
-                      className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="subs-view-grid"
-                    >
-                      <LayoutGrid className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <ViewToggle view={viewMode} onChange={setViewMode} />
                 </div>
               </CardContent>
             </Card>

@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ListSkeleton } from '@/components/list-skeleton';
+import { ViewToggle } from '@/components/view-toggle';
 
 interface APIKey {
   id: string;
@@ -388,30 +389,7 @@ export default function APIKeys() {
               data-testid="input-search-api-keys"
             />
           </div>
-          <div className="flex items-center gap-1 rounded-xl bg-muted/40 border border-border/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-label="Grid view"
-              aria-pressed={viewMode === 'grid'}
-              className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors ${
-                viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              aria-label="List view"
-              aria-pressed={viewMode === 'list'}
-              className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors ${
-                viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <ListIcon className="w-4 h-4" />
-            </button>
-          </div>
+          <ViewToggle view={viewMode} onChange={setViewMode} />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

@@ -21,6 +21,7 @@ import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { GuidedImportButton } from '@/components/guided-import';
+import { ViewToggle } from '@/components/view-toggle';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
@@ -340,27 +341,7 @@ export default function Passwords() {
                 <SelectItem value="strong">Strong</SelectItem>
               </SelectContent>
             </Select>
-            {/* List / Grid view toggle — visible on every breakpoint */}
-            <div className="flex items-center rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-0.5 flex-shrink-0">
-              <button
-                type="button"
-                aria-label="List view"
-                aria-pressed={viewMode === 'list'}
-                onClick={() => setViewMode('list')}
-                className={`h-11 w-11 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <ListIcon className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Grid view"
-                aria-pressed={viewMode === 'grid'}
-                onClick={() => setViewMode('grid')}
-                className={`h-11 w-11 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
+            <ViewToggle view={viewMode} onChange={setViewMode} className="flex-shrink-0" />
           </div>
         </div>
 
