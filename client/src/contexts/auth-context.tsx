@@ -183,18 +183,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // succeed. Pulled out so accountLogin (no-2FA path), verifyTwoFactor, and the
   // offline fallback can share the same identity-handover logic.
   const finalizeAccountLogin = async (email: string, password: string, normalizedEmail: string, passwordHash: string) => {
-    // SECURITY: wipe any cloud token from a previous user's session BEFORE
-    // setting isAccountLoggedIn. Without this, the old token stays in
-    // localStorage and vault listing runs with it, leaking another user's vaults.
-    clearCloudToken();
-
+    // P0 FIX (round 2): clearCloudToken used to fire UNCONDITIONALLY here,
+    // which wiped the freshly-stored token that accountLogin/verifyTwoFactor
+    // had just written from the login response (line ~268, ~324). On flaky
+    // new devices the fallback acquireCloudToken below could then fail and
+    // leave the user with no token at all → empty cloud-vault list, plan
+    // collapses to "free". Gate it: only wipe on USER CHANGE so a fresh
+    // token survives this hand-off untouched.
     const previousEmail = (() => {
       try {
         const raw = localStorage.getItem('iv_account');
         return raw ? (JSON.parse(raw)?.email || null) : null;
       } catch { return null; }
     })();
-    if (previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail) {
+    const userChanged = previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+    console.error('[AUTH-DEBUG] finalizeAccountLogin', {
+      normalizedEmail,
+      previousEmail,
+      userChanged,
+      tokenPresentBefore: !!getCloudToken(),
+    });
+    if (userChanged) {
+      // Different user logging in on a shared device — wipe the previous
+      // user's cloud token AND vault data so we don't leak.
+      clearCloudToken();
       vaultStorage.setEncryptionKey(null as any);
       sessionStorage.removeItem(SESSION_KEY);
       await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
@@ -210,14 +222,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // can't trigger the 401 → /auth/login bounce loop. See
     // auth-fetch-interceptor.ts for the cooldown logic.
     markLoginComplete();
-    // P0 FIX: accountLogin / verifyTwoFactor now capture the JWT from their
-    // own response and call storeCloudToken directly. Only fall back to a
-    // fresh acquireCloudToken call if we somehow STILL don't have one — and
-    // if even that fails, surface a window event so the UI can show a toast
-    // and a retry. Silent null was the original P0 — Lifetime users
-    // appeared as "free + no vaults" because the cloud calls had no Bearer.
+    // accountLogin / verifyTwoFactor capture the JWT from their own response
+    // and call storeCloudToken directly. Only fall back to a fresh
+    // acquireCloudToken call if we STILL don't have one — and if even that
+    // fails, surface a window event so the UI can show a toast and a retry.
     if (!getCloudToken()) {
+      console.error('[AUTH-DEBUG] no token after login — falling back to acquireCloudToken');
       const t = await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
+      console.error('[AUTH-DEBUG] acquireCloudToken result', { tokenAcquired: !!t });
       if (!t) {
         console.error('[auth] cloud token acquisition failed — entitlement + cloud vaults will be unavailable until next login');
         try {
@@ -227,6 +239,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch { /* noop */ }
       }
     }
+    console.error('[AUTH-DEBUG] finalizeAccountLogin done', {
+      tokenPresentAfter: !!getCloudToken(),
+      tokenLen: getCloudToken()?.length || 0,
+    });
     setIsAccountLoggedIn(true);
     setAccountEmail(normalizedEmail);
   };

@@ -323,11 +323,18 @@ export default function VaultPickerPage() {
     const loadCloudVaults = async () => {
       if (!accountEmail) return;
       setCloudVaultsLoading(true);
+      console.error('[VAULT-DEBUG] loadCloudVaults entered', {
+        accountEmail,
+        tokenPresent: !!getCloudToken(),
+        tokenLen: getCloudToken()?.length || 0,
+      });
       // Ensure we have a cloud token
       let token = getCloudToken();
       if (!token) {
         const hash = getAccountPasswordHash();
+        console.error('[VAULT-DEBUG] no token, falling back to acquireCloudToken', { hashPresent: !!hash });
         if (hash) token = await acquireCloudToken(accountEmail, hash);
+        console.error('[VAULT-DEBUG] acquireCloudToken returned', { tokenPresent: !!token });
       }
       if (!token) {
         // P0 FIX: surface the missing-token state instead of silently
@@ -341,6 +348,11 @@ export default function VaultPickerPage() {
       setCloudTokenMissing(false);
       try {
         const result = await listCloudVaultsWithStatus();
+        console.error('[VAULT-DEBUG] listCloudVaults result', {
+          ok: result.ok,
+          status: result.status,
+          vaultCount: result.vaults?.length || 0,
+        });
         setCloudVaults(result.vaults);
         // Only flag failure when ok=false AND we're not already redirecting
         // for a 401 (the global interceptor handles that). For any other
@@ -1322,6 +1334,20 @@ export default function VaultPickerPage() {
               >
                 {cloudVaultsLoading ? 'Reconnecting…' : 'Retry'}
               </button>
+              {/* Tap-to-expand diagnostic — populates only when cloud listing
+                  fails. Lets a remote tester (e.g. user on Samsung) report
+                  the exact cloud-token state without needing devtools. No
+                  secrets leaked: token length only, never the token value. */}
+              <details className="mt-3 text-[11px] text-amber-200/70" data-testid="cloud-debug-panel">
+                <summary className="cursor-pointer select-none">Debug info</summary>
+                <pre className="mt-2 whitespace-pre-wrap font-mono text-amber-100/80">
+{`Token present: ${getCloudToken() ? 'YES' : 'NO'}
+Token length: ${getCloudToken()?.length || 0}
+Account email: ${accountEmail || '(none)'}
+Time: ${new Date().toISOString()}
+UA: ${typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '(n/a)'}`}
+                </pre>
+              </details>
             </div>
           )}
 

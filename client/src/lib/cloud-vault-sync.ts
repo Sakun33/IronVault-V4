@@ -90,8 +90,11 @@ export interface ListCloudVaultsResult {
   status?: number;
 }
 export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult> {
+  const tokenLen = (getCloudToken() || '').length;
+  console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus call', { tokenPresent: tokenLen > 0, tokenLen });
   try {
     const res = await fetch(`${CLOUD_API}/api/vaults/cloud`, { headers: authHeaders() });
+    console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus response', { status: res.status, ok: res.ok });
     if (!res.ok) {
       console.error('[listCloudVaults] non-OK response:', res.status, res.statusText);
       // 401 specifically means "your token expired/was revoked" — the global
