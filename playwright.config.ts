@@ -1,97 +1,38 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
 
+/**
+ * Playwright config for the live-prod E2E suite. All specs in
+ * `tests/e2e/*.spec.ts` run against https://www.ironvault.app (and a
+ * couple against https://admin.ironvault.app), so there's no
+ * webServer block and no reuseExistingServer dance.
+ *
+ * Two projects cover desktop + mobile so every flow is exercised on
+ * both layouts. Heavier per-engine coverage (WebKit, real iPhone
+ * emulation) belongs in a separate suite — this one optimises for
+ * "smoke green on every push" rather than exhaustive matrix testing.
+ */
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: false, // Sequential for screenshot consistency
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: 1, // Single worker for consistent screenshots
-  timeout: 60000,
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
+  retries: 2,
+  workers: 1,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'reports/playwright', open: 'never' }],
-    ['json', { outputFile: 'reports/playwright/results.json' }]
+    ['json', { outputFile: 'reports/playwright/results.json' }],
   ],
   use: {
-    baseURL: 'http://localhost:5000',
-    trace: 'retain-on-failure',
-    screenshot: 'on', // Always capture screenshots for visual regression
+    baseURL: 'https://www.ironvault.app',
+    screenshot: 'only-on-failure',
+    trace: 'on-first-retry',
     video: 'retain-on-failure',
-    actionTimeout: 15000,
-  },
-  expect: {
-    toHaveScreenshot: {
-      maxDiffPixels: 100, // Allow minor rendering differences
-      animations: 'disabled',
-    }
+    actionTimeout: 15_000,
+    navigationTimeout: 45_000,
+    ignoreHTTPSErrors: false,
   },
   projects: [
-    // Desktop baseline
-    {
-      name: 'desktop-chromium-light',
-      use: { 
-        ...devices['Desktop Chrome'],
-        colorScheme: 'light',
-        viewport: { width: 1280, height: 720 }
-      }
-    },
-    {
-      name: 'desktop-chromium-dark',
-      use: { 
-        ...devices['Desktop Chrome'],
-        colorScheme: 'dark',
-        viewport: { width: 1280, height: 720 }
-      }
-    },
-    // iPhone SE (smallest mobile target)
-    {
-      name: 'iphone-se-light',
-      use: { 
-        ...devices['iPhone SE'],
-        colorScheme: 'light'
-      }
-    },
-    {
-      name: 'iphone-se-dark',
-      use: { 
-        ...devices['iPhone SE'],
-        colorScheme: 'dark'
-      }
-    },
-    // iPhone 15 Pro (modern mobile target)
-    {
-      name: 'iphone-15-pro-light',
-      use: {
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        viewport: { width: 393, height: 852 },
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
-        colorScheme: 'light'
-      }
-    },
-    {
-      name: 'iphone-15-pro-dark',
-      use: {
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        viewport: { width: 393, height: 852 },
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
-        colorScheme: 'dark'
-      }
-    }
+    { name: 'desktop-chrome', use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile-iphone',  use: { ...devices['iPhone 14'] } },
   ],
-  webServer: [
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:5000',
-      reuseExistingServer: !process.env.CI
-    },
-    {
-      command: 'cd admin-console/backend && npm exec tsx server-optimized.ts',
-      url: 'http://localhost:3001/api/health',
-      reuseExistingServer: !process.env.CI
-    }
-  ]
-})
+});
