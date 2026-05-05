@@ -82,12 +82,23 @@ import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, 
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
-import { PasswordGeneratorModal } from "@/components/password-generator-modal";
-import { ImportExportModal } from "@/components/import-export-modal";
-import { ExtensionPairingModal } from "@/components/extension-pairing-modal";
+// ── Modal/dialog components — these only render when their `open` state
+// flips true. Lazy-importing them keeps the dialog code (and any heavy
+// sub-deps they pull in) OUT of the main bundle that loads on first
+// paint. The Suspense boundary inside MainLayout handles their loading
+// without a visible flash because they render `null` until opened.
+const PasswordGeneratorModal = React.lazy(() => import("@/components/password-generator-modal").then(m => ({ default: m.PasswordGeneratorModal })));
+const ImportExportModal = React.lazy(() => import("@/components/import-export-modal").then(m => ({ default: m.ImportExportModal })));
+const ExtensionPairingModal = React.lazy(() => import("@/components/extension-pairing-modal").then(m => ({ default: m.ExtensionPairingModal })));
+// SecuritySettingsModal stays eagerly imported because its `trigger`
+// pattern renders the trigger button inline — going lazy would make the
+// button disappear during the chunk fetch.
 import { SecuritySettingsModal } from "@/components/security-settings-modal";
+const BrowserExtensionPrompt = React.lazy(() => import("@/components/browser-extension-prompt").then(m => ({ default: m.BrowserExtensionPrompt })));
+const QuickAddMenu = React.lazy(() => import("@/components/quick-add-fab").then(m => ({ default: m.QuickAddMenu })));
+const CommandPalette = React.lazy(() => import("@/components/command-palette").then(m => ({ default: m.CommandPalette })));
+const BiometricSetupPrompt = React.lazy(() => import("@/components/biometric-setup-prompt").then(m => ({ default: m.BiometricSetupPrompt })));
 import { PWAOfflineIndicator } from "@/components/pwa-offline-indicator";
-import { BrowserExtensionPrompt } from "@/components/browser-extension-prompt";
 import { SimpleThemeToggle, ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import { NotificationService } from "@/lib/notifications";
@@ -95,10 +106,7 @@ import { SectionCard } from "@/components/StatCard";
 import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
 import { Footer } from "@/components/footer";
-import { QuickAddMenu } from "@/components/quick-add-fab";
-import { CommandPalette } from "@/components/command-palette";
 import { ZohoSalesIQIdentity } from "@/components/zoho-salesiq-identity";
-import { BiometricSetupPrompt } from "@/components/biometric-setup-prompt";
 
 // Main Layout Component for authenticated users
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -871,11 +879,21 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      {/* Quick-Add Menu - controlled from header + button */}
-      <QuickAddMenu open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />
-
-      {/* Global Cmd+K command palette */}
-      <CommandPalette open={showCommandPalette} onOpenChange={setShowCommandPalette} />
+      {/* Lazy-loaded modals — only mount when their `open` flag is true so
+          the dialog code (and any heavy sub-deps it pulls in) is fetched
+          on demand rather than baked into the main bundle. Each one is
+          wrapped in its own Suspense so a slow chunk fetch can't suspend
+          the whole authenticated layout. */}
+      <React.Suspense fallback={null}>
+        {showQuickAdd && (
+          <QuickAddMenu open={showQuickAdd} onClose={() => setShowQuickAdd(false)} />
+        )}
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        {showCommandPalette && (
+          <CommandPalette open={showCommandPalette} onOpenChange={setShowCommandPalette} />
+        )}
+      </React.Suspense>
 
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
       <BottomTabs items={bottomTabItems} />
@@ -918,24 +936,33 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         })()}
       />
 
-      <PasswordGeneratorModal
-        open={showGenerator}
-        onOpenChange={setShowGenerator}
-      />
-      <ImportExportModal
-        open={showImportExport}
-        onOpenChange={setShowImportExport}
-      />
-      <ExtensionPairingModal
-        open={showExtensionPairing}
-        onOpenChange={setShowExtensionPairing}
-      />
+      <React.Suspense fallback={null}>
+        {showGenerator && (
+          <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
+        )}
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        {showImportExport && (
+          <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
+        )}
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        {showExtensionPairing && (
+          <ExtensionPairingModal open={showExtensionPairing} onOpenChange={setShowExtensionPairing} />
+        )}
+      </React.Suspense>
 
       {/* Vault switcher is now handled inline via Radix DropdownMenu in both
           the mobile chip and desktop button — no portal needed. */}
 
-      {/* Biometric setup prompt — shown once per session after password unlock on native */}
-      <BiometricSetupPrompt masterPassword={masterPassword} vaultId={activeVault?.id ?? null} />
+      {/* Biometric setup prompt — only mounts after the vault is unlocked
+          AND a master password is in memory. Wrapped in Suspense so the
+          lazy chunk doesn't block first paint. */}
+      <React.Suspense fallback={null}>
+        {!!masterPassword && (
+          <BiometricSetupPrompt masterPassword={masterPassword} vaultId={activeVault?.id ?? null} />
+        )}
+      </React.Suspense>
     </div>
   );
 }
@@ -1207,9 +1234,15 @@ function App() {
                           <Toaster />
                           <ZohoSalesIQIdentity />
                           <Router />
-                          {/* PWA / extension nudges */}
+                          {/* PWA / extension nudges. The browser-extension
+                              prompt is lazy + idle — its only purpose is
+                              suggesting the Chrome extension to logged-in
+                              users, so blocking initial paint to load it
+                              is wasteful. */}
                           <PWAOfflineIndicator />
-                          <BrowserExtensionPrompt />
+                          <React.Suspense fallback={null}>
+                            <BrowserExtensionPrompt />
+                          </React.Suspense>
                         </VaultSelectionProvider>
                       </LicenseProvider>
                     </SearchProvider>
