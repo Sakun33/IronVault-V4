@@ -686,19 +686,25 @@ textarea {
    Glassmorphism + emerald glow + smooth scroll
    ============================================= */
 
-/* ---------- Glassmorphism ---------- */
+/* ---------- Glassmorphism ----------
+   `glass-card` historically used a near-transparent `bg-white/[0.04]` over
+   the page background, which made it look noticeably lighter than the
+   `bg-card` Card surface that passwords/subscriptions used. The two
+   appearances are now reconciled: glass-card pulls from the same `--card`
+   token so every list / card surface across the app reads as the same
+   dark navy in dark mode and the same near-white surface in light mode. */
 .glass-card {
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
-  background-color: hsl(var(--background) / 0.55);
+  background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border) / 0.6);
   border-radius: 1rem;
   box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 .dark .glass-card {
-  background-color: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border) / 0.65);
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .glass-surface {
@@ -745,6 +751,89 @@ textarea {
 :root:not(.dark) .border-white\/10 { border-color: hsl(var(--foreground) / 0.1) !important; }
 :root:not(.dark) .border-white\/20 { border-color: hsl(var(--foreground) / 0.15) !important; }
 :root:not(.dark) .border-white\/30 { border-color: hsl(var(--foreground) / 0.2) !important; }
+
+/* ============================================
+   Landing page — animated bg, particles, feature scroll
+   ============================================ */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes particleFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0.4; }
+  50%  { transform: translateY(-30px) translateX(10px); opacity: 0.7; }
+  100% { transform: translateY(0) translateX(0); opacity: 0.4; }
+}
+
+.landing-hero-bg {
+  background: linear-gradient(-45deg, #050811, #0a1414, #0a0f1a, #0f0a1a, #050811);
+  background-size: 400% 400%;
+  animation: gradientShift 18s ease infinite;
+}
+:root:not(.dark) .landing-hero-bg {
+  background: linear-gradient(-45deg, #f3f6ff, #e8f5f0, #eef0fb, #f5edfa, #f3f6ff);
+  background-size: 400% 400%;
+  animation: gradientShift 18s ease infinite;
+}
+
+.landing-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, rgba(16, 185, 129, 0) 70%);
+  filter: blur(1px);
+  animation: particleFloat 9s ease-in-out infinite;
+}
+.landing-particle-1 { top: 12%; left: 8%;  width: 220px; height: 220px; animation-delay: 0s;  }
+.landing-particle-2 { top: 18%; right: 10%; width: 160px; height: 160px; animation-delay: 1.5s;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.4) 0%, rgba(20, 184, 166, 0) 70%); }
+.landing-particle-3 { bottom: 22%; left: 14%; width: 140px; height: 140px; animation-delay: 3s;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0) 70%); }
+.landing-particle-4 { top: 50%; right: 18%; width: 100px; height: 100px; animation-delay: 4.5s;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0) 70%); }
+.landing-particle-5 { bottom: 14%; right: 30%; width: 180px; height: 180px; animation-delay: 6s; }
+.landing-particle-6 { top: 8%; left: 45%; width: 80px; height: 80px; animation-delay: 7.5s;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.3) 0%, rgba(56, 189, 248, 0) 70%); }
+
+.landing-feature-scroll {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0.5rem;
+  scrollbar-width: thin;
+}
+.landing-feature-scroll::-webkit-scrollbar { height: 4px; }
+.landing-feature-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.15);
+  border-radius: 9999px;
+}
+
+.landing-feature-card {
+  scroll-snap-align: center;
+  flex: 0 0 280px;
+  min-height: 200px;
+  padding: 1.5rem;
+  border-radius: 1.25rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.6);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.landing-feature-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 12px 32px -12px rgba(16, 185, 129, 0.35);
+}
+@media (min-width: 768px) {
+  .landing-feature-card { flex: 0 0 320px; }
+}
+
+/* Respect users who prefer no motion — kill all of the above. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-bg,
+  .landing-particle { animation: none; }
+}
 
 /* ---------- Emerald glow ---------- */
 .glow-emerald {

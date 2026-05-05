@@ -6,10 +6,14 @@ const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
+  // Solid `bg-card` instead of translucent `bg-white/[0.04]` — keeps every
+  // Card across the app on the same dark navy surface that
+  // passwords/subscriptions already used. Per-page overrides via `className`
+  // still win because they appear after the defaults in the merge order.
   <div
     ref={ref}
     className={cn(
-      "rounded-2xl border border-white/10 bg-white/[0.04] dark:bg-white/[0.04] backdrop-blur-xl text-card-foreground shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] transition-all duration-200 hover:bg-white/[0.07] hover:border-white/15 hover:shadow-[0_12px_36px_-12px_rgba(0,0,0,0.45)]",
+      "rounded-2xl border border-border/50 bg-card text-card-foreground shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] transition-all duration-200 hover:border-border hover:shadow-[0_12px_36px_-12px_rgba(0,0,0,0.45)]",
       className
     )}
     {...props}
