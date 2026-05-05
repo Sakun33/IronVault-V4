@@ -823,13 +823,14 @@ export default function Documents() {
           </Button>
 
           <Button
-            size="icon"
             onClick={handleUpload}
-            className="h-9 w-9"
+            className="h-9 px-3 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)] hover:from-emerald-600 hover:to-teal-500"
             title="Upload Documents"
             aria-label="Upload documents"
+            data-testid="button-upload-documents"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 mr-1.5" />
+            Upload
           </Button>
         </div>
       </div>

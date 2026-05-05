@@ -38,6 +38,16 @@ let installed = false;
 let lastLoginTime = 0;
 const LOGIN_GRACE_PERIOD_MS = 30000;
 
+// Boot-time grace window. The first 15 seconds after the page loads
+// regularly have racing background calls (heartbeat, plan check, vault
+// listing, entitlement lookup) firing BEFORE the auth context has
+// restored the cloud token from localStorage / cookie. Without this
+// guard, opening `https://ironvault.app/passwords` directly via the URL
+// bar reproducibly bounced the user to /auth/login because one of those
+// races came back 401 before the token finished loading.
+const BOOT_TIME = Date.now();
+const BOOT_GRACE_PERIOD_MS = 15_000;
+
 // Debounce: only dispatch one expired event per 10s window. Without this,
 // a burst of background polls (heartbeat + plan check + vault list +
 // /api/auth/me) all 401-ing at the same time would each fire a separate
@@ -82,7 +92,16 @@ export function installAuthFetchInterceptor(): void {
       if (!localStorage.getItem('iv_cloud_token')) return response;
     } catch { return response; }
 
-    // Guard #2: 30-second grace window after a login or vault unlock. The
+    // Guard #2: boot-time grace. The first BOOT_GRACE_PERIOD_MS ms after
+    // page load is dominated by races where API calls go out before the
+    // cloud token finishes restoring. Direct URL navigation to a deep
+    // route (e.g. /passwords) was bouncing the user to /auth/login because
+    // of this — fix is simply to not treat any 401 as an expiry during
+    // the boot window.
+    if (Date.now() - BOOT_TIME < BOOT_GRACE_PERIOD_MS) {
+      return response;
+    }
+    // Guard #3: 30-second grace window after a login or vault unlock. The
     // first 30s after sign-in often have racing background calls carrying
     // a stale Bearer header (vault listing, plan check, heartbeat). We
     // never want those to bounce the user straight back to /auth/login.

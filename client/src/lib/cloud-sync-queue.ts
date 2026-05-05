@@ -192,6 +192,15 @@ async function runPush(): Promise<void> {
       try {
         localStorage.setItem(LAST_SYNC_AT_KEY, String(lastSyncAt));
         localStorage.removeItem(LAST_SYNC_ERROR_KEY);
+        // Advance the per-vault `iv_last_pull_${vaultId}` watermark so the
+        // 60-s pull poll in `use-cloud-auto-sync` doesn't immediately
+        // download the blob we just pushed and replace local IDB with it.
+        // That re-import was racing against in-memory React state and
+        // making freshly-saved notes disappear from the list ("notes
+        // don't persist" P0 bug from user testing). The queue is the
+        // only push path now, so this is the single right place to keep
+        // the watermark in sync.
+        localStorage.setItem(`iv_last_pull_${job.vaultId}`, new Date().toISOString());
       } catch { /* localStorage full / disabled — non-fatal */ }
       setStatus('synced');
       window.dispatchEvent(new CustomEvent('vault:cloud:push:done', {

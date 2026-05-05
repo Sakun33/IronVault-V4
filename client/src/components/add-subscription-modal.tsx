@@ -477,16 +477,24 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm">Email</Label>
+                <Label htmlFor="subscription-email" className="text-sm">Email</Label>
                 <Input
-                  id="email"
+                  id="subscription-email"
+                  name="subscription-email"
                   type="email"
                   placeholder="your@email.com"
                   value={formData.credentials.email}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
                     credentials: { ...prev.credentials, email: e.target.value }
                   }))}
+                  // Browsers autofill bare `id="email"` + `type="email"` with
+                  // the user's most-recent saved email — that's the
+                  // "wrong account email pre-filled in subscriptions"
+                  // bug. Disabling autofill keeps the field blank until
+                  // the user types or pastes.
+                  autoComplete="off"
+                  data-form-type="other"
                 />
               </div>
 

@@ -106,9 +106,16 @@ export default function Passwords() {
       const { encrypted, iv } = await CryptoService.encrypt(payload, key);
       const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
 
+      // /api/share/create requires Bearer auth (the server gates it behind
+      // getCloudUser). Without the Authorization header every share would
+      // 401, surfacing to the user as a generic "Could not create share
+      // link" toast — which 100% reproduced for any signed-in user.
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (cloudToken) headers['Authorization'] = `Bearer ${cloudToken}`;
       const res = await fetch('/api/share/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           data: {
             v: 2,
@@ -118,7 +125,11 @@ export default function Passwords() {
           expiresIn: 24,
         }),
       });
-      if (!res.ok) throw new Error('Failed to create share link');
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('[SHARE] create failed', res.status, txt);
+        throw new Error(`Failed to create share link (${res.status})`);
+      }
       const { link } = await res.json();
 
       // The fragment is never sent in HTTP requests — server cannot read the key.
@@ -582,7 +593,17 @@ export default function Passwords() {
                       <div className="text-[14px] text-foreground truncate">{pw.url}</div>
                     </div>
                     <button
-                      onClick={() => window.open(pw.url, '_blank', 'noopener,noreferrer')}
+                      onClick={() => {
+                        // A URL like "google.com" (no scheme) makes
+                        // window.open treat it as a relative path —
+                        // navigating the SPA to /google.com and tearing
+                        // down the auth state. Force https:// when no
+                        // scheme is present.
+                        const raw = (pw.url || '').trim();
+                        if (!raw) return;
+                        const safe = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                        window.open(safe, '_blank', 'noopener,noreferrer');
+                      }}
                       className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
                       aria-label={`Open ${pw.name} website in new tab`}
                       type="button"

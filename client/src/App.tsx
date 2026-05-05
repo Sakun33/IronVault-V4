@@ -74,7 +74,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -311,6 +311,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     // Account group
     { id: 'profile', label: 'Profile', icon: User, href: '/profile', group: 'account' },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, href: '/settings', group: 'account' },
+    // Sign out — surfaced in the mobile bottom sheet so users don't have
+    // to dig into the More menu in the header to find it. Calls the same
+    // logout() that locks the vault and clears the cloud token.
+    { id: 'logout', label: 'Sign out', icon: LogOut, onClick: () => logout(), group: 'account' },
   ];
 
   return (
@@ -383,17 +387,24 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuContent align="end" className="min-w-[200px]">
+                <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                  {accountEmail || 'Signed in'}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/profile')}>
+                  <User className="w-4 h-4 text-muted-foreground" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/settings')}>
+                  <SettingsIcon className="w-4 h-4 text-muted-foreground" /> Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem className="gap-2" onClick={toggleTheme}>
                   {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
                   Toggle Theme
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/profile')}>
-                  <User className="w-4 h-4 text-muted-foreground" /> Profile
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={handleLockVault}>
-                  <Lock className="w-4 h-4" /> Lock Vault
+                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={handleLockVault} data-testid="menu-sign-out-mobile">
+                  <LogOut className="w-4 h-4" /> Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -537,23 +548,29 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
             <div className="h-6 w-px bg-border/50" />
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => setLocation('/profile')} className="p-2 rounded-xl hover:bg-accent text-foreground" title="Profile" aria-label="Profile">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="p-2 rounded-xl hover:bg-accent text-foreground" title="Account" aria-label="Account menu" data-testid="user-menu-desktop">
                   <User className="w-5 h-5" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Profile</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={handleLockVault} className="p-2 rounded-xl hover:bg-accent text-foreground" title="Lock Vault" aria-label="Lock Vault">
-                  <Lock className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Lock Vault</TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px]">
+                <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                  {accountEmail || 'Signed in'}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/profile')}>
+                  <User className="w-4 h-4 text-muted-foreground" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2" onClick={() => setLocation('/settings')}>
+                  <SettingsIcon className="w-4 h-4 text-muted-foreground" /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={handleLockVault} data-testid="menu-sign-out-desktop">
+                  <LogOut className="w-4 h-4" /> Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

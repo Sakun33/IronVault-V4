@@ -135,7 +135,11 @@ export default function Subscriptions() {
 
   const openPlatform = (url: string, subscriptionName: string) => {
     if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Force https:// when missing — a bare "netflix.com" passed to
+      // window.open is treated as a relative path and navigates the SPA
+      // away, tearing down the unlocked vault session.
+      const safe = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+      window.open(safe, '_blank', 'noopener,noreferrer');
       toast({
         title: "Opening Platform",
         description: `Opening ${subscriptionName} in a new tab`,

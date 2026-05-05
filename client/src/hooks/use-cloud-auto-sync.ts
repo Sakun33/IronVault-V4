@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { vaultStorage } from '@/lib/storage';
 import { listCloudVaults, downloadCloudVault, getCloudToken } from '@/lib/cloud-vault-sync';
 import { isNoteEditing } from '@/lib/note-editing-guard';
-import { enqueuePush, isCloudSyncEligible } from '@/lib/cloud-sync-queue';
+import { enqueuePush, isCloudSyncEligible, isPushPending, getLastSyncAt } from '@/lib/cloud-sync-queue';
 import { vaultManager } from '@/lib/vault-manager';
 
 /**
@@ -82,6 +82,15 @@ export function useCloudAutoSync(
     // while a note is being edited — the in-progress edit would vanish.
     if (isNoteEditing()) return;
     if (isPullingRef.current) return;
+    // Never pull while a push is queued or in flight, OR within 30s of a
+    // successful push. Without this gate, a pull immediately after a push
+    // re-downloads the blob we just uploaded and runs `replaceVaultFromBlob`
+    // which wipes IDB + re-imports — racing against any in-memory state
+    // updates that haven't yet flushed (causing freshly-saved notes to
+    // disappear from the list, the "Notes don't persist" P0 bug).
+    if (isPushPending()) return;
+    const lastPushAt = getLastSyncAt();
+    if (lastPushAt && Date.now() - lastPushAt < 30_000) return;
     isPullingRef.current = true;
     try {
       const remotes = await listCloudVaults();

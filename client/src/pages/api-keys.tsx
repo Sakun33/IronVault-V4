@@ -666,7 +666,12 @@ export default function APIKeys() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
-                          onClick={() => window.open(key.endpoint!, '_blank', 'noopener')}
+                          onClick={() => {
+                            const raw = (key.endpoint || '').trim();
+                            if (!raw) return;
+                            const safe = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                            window.open(safe, '_blank', 'noopener,noreferrer');
+                          }}
                           title="Open endpoint"
                           aria-label="Open endpoint"
                         >

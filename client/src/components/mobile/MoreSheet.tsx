@@ -9,7 +9,11 @@ export interface SectionItem {
   id: string;
   label: string;
   icon: LucideIcon;
-  href: string;
+  /** Either a route href OR an action handler. Action items render as a
+   *  button instead of a Link so we can put Sign-out / Lock vault in the
+   *  same sheet without abusing routing. */
+  href?: string;
+  onClick?: () => void;
   count?: number | null;
   color?: string;
   group: 'vault' | 'finance' | 'tools' | 'account';
@@ -147,32 +151,34 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
             <div className="space-y-1">
               {filteredSections.map((item) => {
                 const Icon = item.icon;
-                return (
-                  <Link key={item.id} href={item.href}>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start gap-3 px-4 py-3 h-auto rounded-xl hover:bg-accent/60 transition-all duration-200"
-                      onClick={() => {
-                        onOpenChange(false);
-                        window.scrollTo({ top: 0, behavior: 'instant' });
-                      }}
-                    >
-                      <div className={cn('p-2 rounded-xl', item.color, 'bg-current/10')}>
-                        <Icon className="w-5 h-5" />
+                const inner = (
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-4 py-3 h-auto rounded-xl hover:bg-accent/60 transition-all duration-200"
+                    onClick={() => {
+                      onOpenChange(false);
+                      if (item.onClick) item.onClick();
+                      else window.scrollTo({ top: 0, behavior: 'instant' });
+                    }}
+                  >
+                    <div className={cn('p-2 rounded-xl', item.color, 'bg-current/10')}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-sm text-foreground">
+                        {item.label}
                       </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-medium text-sm text-foreground">
-                          {item.label}
+                      {item.count !== null && item.count !== undefined && (
+                        <div className="text-xs text-muted-foreground">
+                          {item.count} {item.count === 1 ? 'item' : 'items'}
                         </div>
-                        {item.count !== null && item.count !== undefined && (
-                          <div className="text-xs text-muted-foreground">
-                            {item.count} {item.count === 1 ? 'item' : 'items'}
-                          </div>
-                        )}
-                      </div>
-                    </Button>
-                  </Link>
+                      )}
+                    </div>
+                  </Button>
                 );
+                return item.href
+                  ? <Link key={item.id} href={item.href}>{inner}</Link>
+                  : <div key={item.id}>{inner}</div>;
               })}
             </div>
           </div>

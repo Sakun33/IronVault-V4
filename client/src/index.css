@@ -28,6 +28,30 @@ input,
 select,
 textarea {
   font-size: 16px !important;
+  /* Defensive: typed password characters / dots were going invisible in
+     some browsers because of cascaded background overrides making the
+     text-fill-color match the input bg. Forcing both `color` and the
+     WebKit text-fill keeps glyphs legible regardless of autofill state
+     or theme overrides. */
+  color: hsl(var(--foreground)) !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  caret-color: hsl(var(--foreground)) !important;
+}
+
+/* Browser autofill (yellow/blue tint) was clobbering text color and
+   leaving the master-password field looking empty even after typing.
+   Pin the fill color via WebKit's autofill-specific API so the dots /
+   plain text always read against the real foreground. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  caret-color: hsl(var(--foreground)) !important;
+  /* Keep the original input background by anchoring autofill to a long
+     transparent inset shadow — the browser uses this as the fill paint. */
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 /* =============================================
