@@ -385,10 +385,11 @@ export default function Notes() {
     } catch { /* noop */ }
   };
   useEffect(() => {
-    const onPop = () => {
+    const onPop = (e: PopStateEvent) => {
       // The browser already popped the entry by the time popstate fires —
       // clear the ref and just close the editor in React state.
       if (editorHashPushedRef.current) {
+        console.warn('[NOTE-EDITOR] CLOSING via popstate', { state: e.state, stack: new Error().stack });
         editorHashPushedRef.current = false;
         setEditorOpen(false);
         setTimeout(() => {
@@ -422,7 +423,8 @@ export default function Notes() {
     setEditorOpen(true);
     pushEditorHistoryMarker();
   };
-  const closeEditor = () => {
+  const closeEditor = (reason: string = 'user') => {
+    console.info('[NOTE-EDITOR] CLOSING — reason:', reason);
     popEditorHistoryMarker();
     setEditorOpen(false);
     setTimeout(() => {

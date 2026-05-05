@@ -2363,28 +2363,84 @@ export default function Profile() {
             isEnabled={twoFAEnabled}
             onSetup={async () => {
               const token = getCloudToken();
-              if (!token) return null;
-              const res = await fetch('/api/auth/2fa/setup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              });
-              if (!res.ok) return null;
-              return res.json();
+              if (!token) {
+                console.error('[2FA-SETUP] no cloud token — user not signed in');
+                return null;
+              }
+              try {
+                const res = await fetch('/api/auth/2fa/setup', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                });
+                if (!res.ok) {
+                  const txt = await res.text().catch(() => '');
+                  console.error('[2FA-SETUP] failed', res.status, txt);
+                  return null;
+                }
+                const data = await res.json();
+                // Server intentionally doesn't echo the raw secret in the
+                // response body — but the otpauth URI carries it as a
+                // query param, and the modal renders it as a manual
+                // backup. Extract it client-side so the user sees something
+                // other than "undefined" when they want to type the
+                // secret into a desktop authenticator.
+                let secret = data.secret as string | undefined;
+                if (!secret && typeof data.otpauthUrl === 'string') {
+                  try {
+                    const u = new URL(data.otpauthUrl);
+                    secret = u.searchParams.get('secret') || '';
+                  } catch { secret = ''; }
+                }
+                return { ...data, secret: secret || '' };
+              } catch (e: any) {
+                console.error('[2FA-SETUP] threw:', e?.message || e);
+                return null;
+              }
             }}
             onVerifyEnable={async (code) => {
               const token = getCloudToken();
-              if (!token) return null;
-              const res = await fetch('/api/auth/2fa/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ code }),
-              });
-              if (!res.ok) return null;
-              const data = await res.json();
-              if (!data?.enabled) return null;
-              setTwoFAEnabled(true);
-              localStorage.setItem('ironvault_2fa_enabled', 'true');
-              return data.backupCodes || [];
+              if (!token) {
+                console.error('[2FA-VERIFY] no cloud token');
+                return null;
+              }
+              try {
+                const res = await fetch('/api/auth/2fa/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  body: JSON.stringify({ code }),
+                });
+                if (!res.ok) {
+                  const txt = await res.text().catch(() => '');
+                  console.error('[2FA-VERIFY] failed', res.status, txt);
+                  return null;
+                }
+                const data = await res.json();
+                if (!data?.enabled) {
+                  console.error('[2FA-VERIFY] server returned enabled=false', data);
+                  return null;
+                }
+                console.info('[2FA-VERIFY] success — 2FA enabled, refetching status');
+                setTwoFAEnabled(true);
+                localStorage.setItem('ironvault_2fa_enabled', 'true');
+                // Re-confirm with the server so a stale 2fa state from
+                // another tab can't mask a successful enable.
+                try {
+                  const statusRes = await fetch('/api/auth/2fa/status', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                  });
+                  if (statusRes.ok) {
+                    const s = await statusRes.json();
+                    if (typeof s?.enabled === 'boolean') {
+                      setTwoFAEnabled(s.enabled);
+                      localStorage.setItem('ironvault_2fa_enabled', s.enabled ? 'true' : 'false');
+                    }
+                  }
+                } catch { /* status refetch is advisory */ }
+                return Array.isArray(data.backupCodes) ? data.backupCodes : [];
+              } catch (e: any) {
+                console.error('[2FA-VERIFY] threw:', e?.message || e);
+                return null;
+              }
             }}
             onDisable={async (code) => {
               const token = getCloudToken();
