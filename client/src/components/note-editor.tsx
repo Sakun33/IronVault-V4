@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import DOMPurify from 'dompurify';
 import {
@@ -140,12 +141,16 @@ export function NoteEditor({
   }, [open, embedded]);
 
   // Tell the rest of the app the editor is open so background sync code
-  // paths (vault-context.refreshData, cloud auto-pull) can skip
-  // destructive refreshes that would otherwise unmount or reset the editor
-  // mid-edit. Cleared on unmount AND when `open` flips false.
+  // paths (vault-context.refreshData, cloud auto-pull, auto-lock idle
+  // timer) can skip destructive refreshes that would otherwise unmount
+  // or reset the editor mid-edit. We set the flag SYNCHRONOUSLY during
+  // render (not in a useEffect) so the very first render — before any
+  // paint — already has the guard active; otherwise a sync that landed
+  // in the same microtask as the editor mount could still slip through.
+  // The cleanup useEffect below clears it on unmount.
+  if (open) setNoteEditing(true);
   useEffect(() => {
     if (!open) return;
-    setNoteEditing(true);
     return () => setNoteEditing(false);
   }, [open]);
 
@@ -960,10 +965,23 @@ export function NoteEditor({
     return <Wrapper {...wrapperProps}>{editorBody}</Wrapper>;
   }
 
-  return (
+  // Portal the fullscreen overlay to <body>. The page tree (notes.tsx,
+  // vault context, motion ancestors) can re-render freely without ever
+  // unmounting the editor — which was the root cause of the "editor
+  // closes mid-typing" reports. Closing is now strictly user-driven
+  // (Back / Done / Escape / explicit delete).
+  if (typeof document === 'undefined') {
+    return (
+      <AnimatePresence>
+        {open && <Wrapper {...wrapperProps}>{editorBody}</Wrapper>}
+      </AnimatePresence>
+    );
+  }
+  return createPortal(
     <AnimatePresence>
       {open && <Wrapper {...wrapperProps}>{editorBody}</Wrapper>}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

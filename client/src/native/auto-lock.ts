@@ -5,6 +5,7 @@
 
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { isNoteEditing } from '@/lib/note-editing-guard';
 
 type LockCallback = () => void;
 
@@ -113,6 +114,17 @@ class AutoLockService {
   }
 
   private triggerLock(): void {
+    // Hard guard: never auto-lock while the user is actively editing a note.
+    // Idle/visibility/background events can fire even when the user is mid-
+    // sentence (contentEditable inputs don't always reset every event we
+    // listen for, especially on iOS Safari), and locking the vault closes
+    // the editor and discards in-flight work.
+    if (isNoteEditing()) {
+      console.debug('[AutoLock] Skipping lock — note editor is open');
+      // Reset the idle timer so we re-check after the editor closes.
+      this.resetIdleTimer();
+      return;
+    }
     if (this.lockCallback) {
       this.lockCallback();
     }
@@ -140,7 +152,10 @@ class AutoLockService {
   private startIdleDetection(): void {
     if (!this.idleEnabled) return;
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click'];
+    // 'input' is added so typing inside contentEditable surfaces (notes
+    // editor, etc.) reliably resets the idle timer — keydown alone misses
+    // some IME / autocomplete edit paths on iOS Safari.
+    const events = ['mousedown', 'mousemove', 'keydown', 'input', 'touchstart', 'scroll', 'click'];
     events.forEach(event => {
       document.addEventListener(event, this.boundResetIdle, { passive: true });
     });
@@ -152,7 +167,7 @@ class AutoLockService {
    * Stop idle detection listeners
    */
   private stopIdleDetection(): void {
-    const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click'];
+    const events = ['mousedown', 'mousemove', 'keydown', 'input', 'touchstart', 'scroll', 'click'];
     events.forEach(event => {
       document.removeEventListener(event, this.boundResetIdle);
     });

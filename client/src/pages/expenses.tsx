@@ -515,10 +515,30 @@ function ExpenseRow({
       ? 'Yesterday'
       : format(expenseDate, 'MMM d');
 
+  // Per-person split summary — surfaces the saved splits array so users
+  // can verify the data persisted. Clicking the row opens the edit dialog
+  // where the full breakdown + edit controls live.
+  const ownShare = expense.splits.find(s => s.contactId === 'self')?.amount ?? 0;
+  const splitSummary = expense.splits.length > 1
+    ? expense.splits
+        .map(s => `${s.contactId === 'self' ? 'You' : contactNameOf(s.contactId, contacts).split(' ')[0]} ${formatAmount(s.amount, expense.currency)}`)
+        .join(' · ')
+    : null;
+
   return (
     <div
       data-testid={`expense-row-${expense.id}`}
-      className={`group flex items-center gap-3 px-3 py-3 hover:bg-accent/40 transition-colors ${divider ? 'border-b border-border/40' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button')) return;
+        onEdit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); }
+      }}
+      className={`group flex items-center gap-3 px-3 py-3 hover:bg-accent/40 transition-colors cursor-pointer ${divider ? 'border-b border-border/40' : ''}`}
     >
       <CategoryDot category={expense.category} />
       <div className="flex-1 min-w-0">
@@ -528,18 +548,28 @@ function ExpenseRow({
         <p className="text-xs text-muted-foreground truncate">
           {metaParts.join(' · ')}
         </p>
+        {splitSummary && (
+          <p className="text-[11px] text-muted-foreground/80 truncate mt-0.5" data-testid={`expense-splits-${expense.id}`}>
+            {splitSummary}
+          </p>
+        )}
       </div>
       <div className="flex flex-col items-end flex-shrink-0 min-w-[72px]">
         <span className="text-[15px] font-semibold tabular-nums" data-testid={`expense-amount-${expense.id}`}>
           {formatAmount(expense.amount, expense.currency)}
         </span>
         <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
+        {expense.splits.length > 1 && ownShare > 0 && (
+          <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+            your share {formatAmount(ownShare, expense.currency)}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
-        <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100" onClick={onEdit} aria-label="Edit" data-testid={`button-edit-expense-${expense.id}`}>
+        <Button variant="ghost" size="sm" className="p-1 h-auto sm:opacity-0 sm:group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Edit" data-testid={`button-edit-expense-${expense.id}`}>
           <Edit className="w-3.5 h-3.5 text-muted-foreground" />
         </Button>
-        <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100" onClick={onDelete} aria-label="Delete" data-testid={`button-delete-expense-${expense.id}`}>
+        <Button variant="ghost" size="sm" className="p-1 h-auto sm:opacity-0 sm:group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Delete" data-testid={`button-delete-expense-${expense.id}`}>
           <Trash2 className="w-3.5 h-3.5 text-destructive" />
         </Button>
       </div>

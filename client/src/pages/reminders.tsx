@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useVault } from '@/contexts/vault-context';
 import { scheduleReminderNotification, requestNotificationPermission, checkNotificationPermission } from '@/native/notifications';
+import {
+  startReminderLoop,
+  getNotificationPermission,
+  requestNotificationPermission as requestWebNotificationPermission,
+  scheduleNativeReminder,
+} from '@/lib/reminder-notifications';
 import { ReminderEntry, REMINDER_CATEGORIES, REMINDER_COLORS } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,6 +94,17 @@ export default function Reminders() {
   });
   
   const [newTag, setNewTag] = useState('');
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission());
+
+  // Tick the reminder check loop every 60s while this page is mounted, so a
+  // reminder whose `dueDate - alertMinutesBefore` arrives surfaces a Web
+  // Notification even when the user is sitting on the page (no setTimeout
+  // ghost waits — those break across reloads). We pass a getter so each
+  // tick reads the latest reminders array without re-binding the interval.
+  useEffect(() => {
+    const stop = startReminderLoop(() => reminders);
+    return stop;
+  }, [reminders]);
 
   // Get all unique tags from reminders
   const allTags = useMemo(() => {
@@ -235,8 +252,10 @@ export default function Reminders() {
 
       if (editingReminder) {
         await updateReminder(editingReminder.id, reminderData);
-        
-        // Schedule native notification if enabled
+
+        // Schedule native notification if enabled (Capacitor LocalNotifications
+        // for the OS-level alarm, plus our in-app loop polls every 60s while
+        // the tab is open in case the native scheduler isn't available).
         if (reminderData.notificationEnabled) {
           const notificationId = parseInt(editingReminder.id.replace(/\D/g, '').slice(0, 8)) || Math.floor(Math.random() * 1000000);
           await scheduleReminderNotification(
@@ -245,15 +264,16 @@ export default function Reminders() {
             reminderData.description || `Reminder due: ${format(reminderData.dueDate, 'MMM dd, HH:mm')}`,
             reminderData.dueDate
           );
+          await scheduleNativeReminder({ id: editingReminder.id, ...reminderData } as any);
         }
-        
+
         toast({
           title: "Reminder updated",
           description: "Your reminder has been updated successfully.",
         });
       } else {
         const newReminder = await addReminder(reminderData);
-        
+
         // Schedule native notification if enabled
         if (reminderData.notificationEnabled && newReminder) {
           const notificationId = parseInt((newReminder as any).id?.replace(/\D/g, '').slice(0, 8)) || Math.floor(Math.random() * 1000000);
@@ -263,11 +283,16 @@ export default function Reminders() {
             reminderData.description || `Reminder due: ${format(reminderData.dueDate, 'MMM dd, HH:mm')}`,
             reminderData.dueDate
           );
+          if ((newReminder as any).id) {
+            await scheduleNativeReminder({ ...(newReminder as any), ...reminderData });
+          }
         }
-        
+
         toast({
           title: "Reminder created",
-          description: "Your reminder has been created with a phone notification.",
+          description: notifPermission === 'granted'
+            ? "Your reminder has been created. You'll get a notification when it's due."
+            : "Your reminder has been created. Enable notifications above to get alerted.",
         });
       }
 
@@ -555,6 +580,39 @@ export default function Reminders() {
 
   return (
     <div className="space-y-5 overflow-x-hidden">
+      {/* Notification permission banner — shown only when the browser
+          supports it AND the user hasn't decided yet (default). Without
+          permission, our `startReminderLoop` no-ops and reminders won't
+          surface device-level alerts even though they're stored. */}
+      {notifPermission === 'default' && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-500/30 bg-purple-500/[0.08] p-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <Bell className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Enable reminder alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Get a device notification when a reminder is due.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            data-testid="button-enable-notifications"
+            onClick={async () => {
+              const result = await requestWebNotificationPermission();
+              setNotifPermission(result);
+              if (result === 'granted') {
+                toast({ title: 'Notifications enabled', description: "We'll alert you when reminders are due." });
+              } else if (result === 'denied') {
+                toast({ title: 'Notifications blocked', description: 'Re-enable them in your browser settings.', variant: 'destructive' });
+              }
+            }}
+            className="bg-purple-500 hover:bg-purple-600 text-white shrink-0"
+          >
+            Enable
+          </Button>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-purple-500/10 flex items-center justify-center flex-shrink-0">
