@@ -163,7 +163,7 @@ test.describe('authenticated', () => {
   test.skip(!haveCreds, 'IRONVAULT_E2E_* env vars not supplied — skipping authed tests');
 
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     await login(page);
     await unlockVault(page);
   });

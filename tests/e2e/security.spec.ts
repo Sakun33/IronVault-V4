@@ -17,7 +17,7 @@ test.describe('security — input fuzzing', () => {
   });
 
   test('XSS payload in note title is rendered as text, not executed', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     await unlockVault(page);
     await spaNavigate(page, '/notes');
     let alertFired = false;

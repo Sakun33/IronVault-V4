@@ -3,7 +3,7 @@ import { unlockVault, spaNavigate, expectNoHorizontalOverflow } from './helpers'
 
 test.describe('dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     await unlockVault(page);
     await spaNavigate(page, '/dashboard');
   });

@@ -3,7 +3,7 @@ import { unlockVault, spaNavigate, expectNoHorizontalOverflow } from './helpers'
 
 test.describe('subscriptions page', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     await unlockVault(page);
     await spaNavigate(page, '/subscriptions');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
