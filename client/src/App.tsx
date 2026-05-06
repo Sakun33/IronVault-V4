@@ -832,7 +832,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             lastSyncError={lastSyncError}
             onRetry={retryCloudSync}
           />
-          <div className="p-6 flex-1 min-w-0">
+          <div className="px-6 pb-6 pt-3 flex-1 min-w-0">
             <AnalyticsIntegration>
               <ErrorBoundary level="page" resetKey={location}>
                 <AnimatePresence mode="wait" initial={false}>
@@ -859,7 +859,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           lastSyncError={lastSyncError}
           onRetry={retryCloudSync}
         />
-        <div className="w-full min-w-0 p-4 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden">
+        <div className="w-full min-w-0 px-4 pt-2 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden">
           <AnalyticsIntegration>
             <ErrorBoundary level="page" resetKey={location}>
               <AnimatePresence mode="wait" initial={false}>

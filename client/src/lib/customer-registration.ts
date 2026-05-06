@@ -115,7 +115,33 @@ export async function autoRegisterOnVaultCreation(
  * Get user's entitlement status
  */
 export async function getEntitlementStatus(): Promise<CustomerRegistrationResponse['entitlement'] | null> {
+  // QA-R2 C2: this endpoint now requires Bearer auth (own row or admin).
+  const cloudToken = localStorage.getItem('iv_cloud_token');
+  if (!cloudToken) return null;
+
+  // P0 FIX (2026-05-06): localStorage crmUserId can become stale when the
+  // user re-registers or when the CRM row was recreated by an admin action,
+  // leading to a UUID that doesn't match the JWT's userId. The entitlement
+  // endpoint then returns 403 (wrong user) and the app defaults to Free.
+  //
+  // Strategy: always extract the authoritative userId from the cloud JWT and
+  // sync it to localStorage. Fall back to email if the JWT can't be decoded.
   let lookupId = localStorage.getItem('crmUserId');
+  let jwtUserId: string | null = null;
+  try {
+    const parts = cloudToken.split('.');
+    if (parts[1]) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.userId) {
+        jwtUserId = payload.userId;
+        // Always keep crmUserId in sync with the JWT
+        if (jwtUserId && jwtUserId !== lookupId) {
+          localStorage.setItem('crmUserId', jwtUserId);
+          lookupId = jwtUserId;
+        }
+      }
+    }
+  } catch { /* JWT decode failed — fall through to existing lookupId */ }
 
   // Fall back to email from account session for users who registered before
   // crmUserId was stored (key mismatch bug: API returned `id`, code read `userId`)
@@ -130,20 +156,27 @@ export async function getEntitlementStatus(): Promise<CustomerRegistrationRespon
 
   try {
     // Always use the main Vercel API for entitlement lookup (customers table).
-    // VITE_BACKEND_API_URL points to backoffice.ironvault.app which uses a
-    // different table (crm_users) and would return 404 for most users.
     const endpoint = `/api/crm/entitlement/${lookupId}`;
-
-    // QA-R2 C2: this endpoint now requires Bearer auth (own row or admin).
-    const cloudToken = localStorage.getItem('iv_cloud_token');
-    if (!cloudToken) return null;
     const response = await fetch(endpoint, {
       headers: { 'Authorization': `Bearer ${cloudToken}` },
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // If we got 403 and haven't tried the JWT userId yet, retry with it
+      if (response.status === 403 && jwtUserId && jwtUserId !== lookupId) {
+        const retryResponse = await fetch(`/api/crm/entitlement/${jwtUserId}`, {
+          headers: { 'Authorization': `Bearer ${cloudToken}` },
+        });
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          if (retryData.id) localStorage.setItem('crmUserId', String(retryData.id));
+          return retryData.entitlement;
+        }
+      }
+      return null;
+    }
     const data = await response.json();
     // Cache the canonical UUID so future calls skip the email lookup
-    if (data.id && !localStorage.getItem('crmUserId')) {
+    if (data.id) {
       localStorage.setItem('crmUserId', String(data.id));
     }
     return data.entitlement;

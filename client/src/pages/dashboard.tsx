@@ -87,6 +87,14 @@ function getUserName(accountEmail: string | null): string {
     const first = prefix.split(' ')[0];
     return first.charAt(0).toUpperCase() + first.slice(1);
   };
+
+  const isEmailPrefix = (name: string, email: string | null): boolean => {
+    if (!email) return false;
+    const emailLocal = email.split('@')[0];
+    // Check if the name equals the email prefix exactly (case-insensitive)
+    return name.toLowerCase() === emailLocal.toLowerCase();
+  };
+
   try {
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
     // Only trust the stored profile if it's for the currently-logged-in
@@ -97,14 +105,23 @@ function getUserName(accountEmail: string | null): string {
       cp.email.toLowerCase() === accountEmail.toLowerCase();
     if (profileMatchesAccount) {
       const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
-      if (fullName && !fullName.includes('@')) return fullName.split(' ')[0];
+      if (fullName && !fullName.includes('@')) {
+        // If the name is just the email prefix, treat it as not set
+        if (!isEmailPrefix(fullName, accountEmail)) {
+          return fullName.split(' ')[0];
+        }
+      }
     }
     if (accountEmail) return namifyEmail(accountEmail);
     // Last-resort: legacy iv_account_session blob.
     const session = localStorage.getItem('iv_account_session');
     if (session) {
       const { email, name } = JSON.parse(session);
-      if (name && typeof name === 'string' && !name.includes('@')) return name.split(' ')[0];
+      if (name && typeof name === 'string' && !name.includes('@')) {
+        if (!isEmailPrefix(name, email)) {
+          return name.split(' ')[0];
+        }
+      }
       if (email) return namifyEmail(email);
     }
   } catch { /* ignore */ }
@@ -306,6 +323,13 @@ export default function Dashboard() {
         if (cancelled) return;
         const name = (data?.fullName || '').trim();
         if (name) {
+          // Check if the name is just the email prefix (e.g., "saketsuman1312")
+          // If so, treat it as not set and let the client fall back to email humanization
+          const emailLocal = accountEmail.split('@')[0];
+          if (name.toLowerCase() === emailLocal.toLowerCase()) {
+            // Name is email prefix, don't use it
+            return;
+          }
           // Use the first word only — same convention the namifyEmail
           // fallback uses, and matches user expectation ("Saket Suman"
           // → "Saket").

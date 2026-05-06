@@ -1302,8 +1302,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const backupCodes = generateBackupCodes(10);
       const hashedBackup = await Promise.all(backupCodes.map(hashBackupCodeAsync));
+      // Cast to text[] for PostgreSQL array storage
       await db.query(
-        `UPDATE crm_users SET totp_enabled = true, totp_backup_codes = $1 WHERE id = $2`,
+        `UPDATE crm_users SET totp_enabled = true, totp_backup_codes = $1::text[] WHERE id = $2`,
         [hashedBackup, cloudUser.userId]
       );
       return res.json({ enabled: true, backupCodes });
@@ -1450,7 +1451,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const backupCodes = generateBackupCodes(10);
       const hashedBackup = await Promise.all(backupCodes.map(hashBackupCodeAsync));
-      await db.query(`UPDATE crm_users SET totp_backup_codes = $1 WHERE id = $2`, [hashedBackup, cloudUser.userId]);
+      // Cast to text[] for PostgreSQL array storage
+      await db.query(`UPDATE crm_users SET totp_backup_codes = $1::text[] WHERE id = $2`, [hashedBackup, cloudUser.userId]);
       return res.json({ backupCodes });
     } catch (err: any) {
       console.error('[2fa/backup-codes]', err.message);
@@ -1905,6 +1907,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // QA-R2 H9: returns the authenticated user's display name + email so the
   // dashboard greeting can show the ACTUAL name the user typed at signup
   // ("Saket" rather than "Saketsuman1312" parsed out of the email prefix).
+  // If full_name matches the email prefix exactly, return null so the client
+  // falls back to email-based humanization which produces a better result.
   // Tiny endpoint by design — anything more belongs in /api/profile.
   if (path === '/api/auth/me' && req.method === 'GET') {
     const cloudUser = await getCloudUser(req);
@@ -1916,10 +1920,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       const row = rows[0];
       if (!row) return res.status(404).json({ error: 'Not found' });
+
+      // Check if full_name is just the email prefix
+      let fullName = row.full_name || null;
+      if (fullName) {
+        const emailLocal = row.email.split('@')[0];
+        if (fullName.toLowerCase() === emailLocal.toLowerCase()) {
+          fullName = null; // Treat email prefix as not set
+        }
+      }
+
       return res.json({
         userId: row.id,
         email: row.email,
-        fullName: row.full_name || null,
+        fullName,
       });
     } catch (err: any) {
       console.error('[auth/me] error:', err.message);
