@@ -6,8 +6,7 @@
  */
 
 import { vaultIndex, VaultIndexEntry } from './vault-index';
-
-const API_BASE_URL = '/api';
+import { apiBase } from '@/native/platform';
 
 export interface VaultSyncData {
   email: string;
@@ -67,7 +66,7 @@ export async function syncVaultsToBackend(): Promise<boolean> {
       })),
     };
 
-    const response = await fetch(`${API_BASE_URL}/crm/vaults/sync`, {
+    const response = await fetch(`${apiBase()}/api/crm/vaults/sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

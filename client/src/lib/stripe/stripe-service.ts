@@ -7,6 +7,7 @@
 
 import type { Entitlements, PlanType } from '../entitlements/types';
 import { PLAN_CAPABILITIES } from '../entitlements/types';
+import { apiBase } from '@/native/platform';
 
 // Stripe product IDs (configured in Stripe Dashboard)
 export const STRIPE_PRODUCTS = {
@@ -44,7 +45,7 @@ class StripeService {
 
   constructor() {
     this.publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || null;
-    this.apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+    this.apiBaseUrl = import.meta.env.VITE_API_URL || `${apiBase()}/api`;
   }
 
   /**

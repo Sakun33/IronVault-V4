@@ -1,3 +1,5 @@
+import { apiBase } from '@/native/platform';
+
 export interface Notification {
   id: string;
   type: 'info' | 'success' | 'warning' | 'error' | 'subscription' | 'payment' | 'security';
@@ -228,8 +230,8 @@ export class NotificationService {
     if (!crmUserId) return;
 
     try {
-      const apiUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_API_URL) || '';
-      const endpoint = apiUrl ? `${apiUrl}/api/crm/notifications/${crmUserId}` : `/api/crm/notifications/${crmUserId}`;
+      const apiUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_API_URL) || apiBase();
+      const endpoint = `${apiUrl}/api/crm/notifications/${crmUserId}`;
       const res = await fetch(endpoint);
       if (!res.ok) return;
       const data = await res.json();

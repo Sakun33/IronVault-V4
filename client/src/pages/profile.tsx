@@ -399,8 +399,8 @@ export default function Profile() {
     setInvitesLoading(true);
     try {
       const [outRes, inRes] = await Promise.all([
-        fetch(`/api/crm/family-invites/${encodeURIComponent(userProfile.email)}`),
-        fetch(`/api/crm/family-invites/invitee/${encodeURIComponent(userProfile.email)}`),
+        fetch(`${apiBase()}/api/crm/family-invites/${encodeURIComponent(userProfile.email)}`),
+        fetch(`${apiBase()}/api/crm/family-invites/invitee/${encodeURIComponent(userProfile.email)}`),
       ]);
       if (outRes.ok) { const d = await outRes.json(); setOutgoingInvites(d.invites ?? []); }
       if (inRes.ok) { const d = await inRes.json(); setIncomingInvites(d.invites ?? []); }
@@ -434,7 +434,7 @@ export default function Profile() {
 
   const handleUpdateInvite = async (id: string, status: 'accepted' | 'declined' | 'revoked') => {
     try {
-      const res = await fetch(`/api/crm/family-invites/${id}`, {
+      const res = await fetch(`${apiBase()}/api/crm/family-invites/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -744,8 +744,8 @@ export default function Profile() {
     if (!crmUserId) return;
     const cloudToken = localStorage.getItem('iv_cloud_token');
     if (!cloudToken) return; // QA-R2 C2: endpoint now requires Bearer auth
-    const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-    const entEndpoint = apiUrl ? `${apiUrl}/api/crm/entitlement/${crmUserId}` : `/api/crm/entitlement/${crmUserId}`;
+    const apiUrl = import.meta.env.VITE_BACKEND_API_URL || apiBase();
+    const entEndpoint = `${apiUrl}/api/crm/entitlement/${crmUserId}`;
     fetch(entEndpoint, { headers: { 'Authorization': `Bearer ${cloudToken}` } })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -780,7 +780,7 @@ export default function Profile() {
     try { email = JSON.parse(localStorage.getItem('iv_account') || '{}').email || ''; } catch {}
     if (!email) try { email = JSON.parse(localStorage.getItem('iv_account_session') || '{}').email || ''; } catch {}
     if (!email) return;
-    fetch(`/api/crm/tickets/${encodeURIComponent(email)}`)
+    fetch(`${apiBase()}/api/crm/tickets/${encodeURIComponent(email)}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data.tickets)) {
@@ -1122,7 +1122,7 @@ export default function Profile() {
     const token = localStorage.getItem('iv_cloud_token');
     if (!token) return;
     try {
-      const res = await fetch(`/api/auth/sessions/${encodeURIComponent(id)}/revoke`, {
+      const res = await fetch(`${apiBase()}/api/auth/sessions/${encodeURIComponent(id)}/revoke`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1161,7 +1161,7 @@ export default function Profile() {
       const params = new URLSearchParams({ limit: '50', offset: '0' });
       if (activityFilterType !== 'all') params.set('type', activityFilterType);
       if (activityFilterAction !== 'all') params.set('action', activityFilterAction);
-      const res = await fetch(`/api/vault/activity?${params.toString()}`, {
+      const res = await fetch(`${apiBase()}/api/vault/activity?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { setActivity([]); return; }

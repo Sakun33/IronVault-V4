@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiBase } from '@/native/platform';
 
 // Maps common service names to their domains so we can fetch favicons
 // even when no URL is stored on the entry.
@@ -191,7 +192,7 @@ export function getFaviconUrl(url?: string, name?: string): string | null {
   // Same-origin proxy — ad-blockers filter all third-party favicon services
   // (Google s2, DuckDuckGo, Clearbit, etc.), so we route through /api/favicon.
   const domain = getDomain(url, name);
-  return domain ? `/api/favicon?d=${encodeURIComponent(domain)}` : null;
+  return domain ? `${apiBase()}/api/favicon?d=${encodeURIComponent(domain)}` : null;
 }
 
 interface FaviconProps {
@@ -209,7 +210,7 @@ export function Favicon({ url, name, className = 'w-10 h-10' }: FaviconProps) {
   const [failed, setFailed] = useState(false);
 
   const domain = getDomain(url, name);
-  const src = domain ? `/api/favicon?d=${encodeURIComponent(domain)}` : null;
+  const src = domain ? `${apiBase()}/api/favicon?d=${encodeURIComponent(domain)}` : null;
 
   if (!src || failed) {
     const color = getFallbackColor(name);

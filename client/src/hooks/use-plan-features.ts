@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPlan, PLANS, type Plan, type PlanId } from '@/lib/plans';
 import { getAccountSessionEmail } from '@/lib/account-auth';
+import { apiBase } from '@/native/platform';
 
 const PLAN_CACHE_KEY = 'iv_plan_cache';
 const PLAN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -144,7 +145,7 @@ export function usePlanFeatures(): PlanFeatures {
         // moment auth-context calls storeCloudToken).
         return;
       }
-      const resp = await fetch(`/api/crm/entitlement/${encodeURIComponent(email)}`, {
+      const resp = await fetch(`${apiBase()}/api/crm/entitlement/${encodeURIComponent(email)}`, {
         headers: { 'Authorization': `Bearer ${cloudToken}` },
       });
       if (resp.ok) {

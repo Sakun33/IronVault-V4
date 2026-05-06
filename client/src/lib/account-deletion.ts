@@ -1,10 +1,12 @@
 /**
  * Account Deletion Service
- * 
+ *
  * Required by Apple App Store and Google Play Store policies.
  * Handles complete deletion of user data from CRM/backend.
  * Local vault data can be optionally preserved or deleted.
  */
+
+import { apiBase } from '@/native/platform';
 
 export interface DeletionRequest {
   userId: string;
@@ -38,7 +40,7 @@ class AccountDeletionService {
   private apiBaseUrl: string;
 
   constructor() {
-    this.apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+    this.apiBaseUrl = import.meta.env.VITE_API_URL || `${apiBase()}/api`;
   }
 
   /**

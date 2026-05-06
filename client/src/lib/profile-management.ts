@@ -1,10 +1,12 @@
 /**
  * Profile Management API
- * 
+ *
  * This module handles profile updates and syncs with the CRM backend
  */
 
-const API_URL = import.meta.env.VITE_BACKEND_API_URL || '';
+import { apiBase } from '@/native/platform';
+
+const API_URL = import.meta.env.VITE_BACKEND_API_URL || apiBase();
 
 export interface ProfileData {
   email: string;

@@ -2,6 +2,8 @@
 // End-to-end encryption for support tickets with AES-256-GCM
 // No plaintext ever stored - only ciphertext
 
+import { apiBase } from '@/native/platform';
+
 export interface SupportTicket {
   id: string;
   title: string;
@@ -194,8 +196,8 @@ export class EncryptedSupportTickets {
           // still keep the encrypted local ticket above so the user
           // doesn't lose their submission.
         } else {
-          const apiUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_API_URL) || '';
-          const endpoint = apiUrl ? `${apiUrl}/api/crm/tickets` : '/api/crm/tickets';
+          const apiUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BACKEND_API_URL) || apiBase();
+          const endpoint = `${apiUrl}/api/crm/tickets`;
           await fetch(endpoint, {
             method: 'POST',
             headers: {
