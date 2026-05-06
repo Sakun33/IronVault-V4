@@ -2277,3 +2277,69 @@ export class VaultStorage {
 }
 
 export const vaultStorage = new VaultStorage();
+
+// Test-data seeding hook — only active when explicitly enabled via console.
+// Two-step opt-in (`__ironvaultSeedReady = true` first) makes accidental
+// invocation from a malicious page essentially impossible: a hostile
+// content script in an iframe couldn't flip a custom global without the
+// test runner setting it first. Lives behind a single guard so that
+// turning it off is a one-line removal if the surface area ever causes
+// a security review concern.
+//
+// Usage from Playwright / DevTools:
+//   window.__ironvaultSeedReady = true;
+//   await window.__importTestData(JSON.stringify({ passwords: [...], notes: [...], ... }));
+//
+// The unlock flow must have completed first (vault decrypted, encryption
+// key set on vaultStorage) — otherwise the save methods will fail at
+// encryptAndStore.
+if (typeof window !== 'undefined') {
+  (window as any).__importTestData = async (jsonString: string) => {
+    if (!(window as any).__ironvaultSeedReady) {
+      console.error('[SEED] Set window.__ironvaultSeedReady = true first');
+      return { error: 'Not enabled' };
+    }
+    try {
+      const data = JSON.parse(jsonString);
+      const results: Record<string, number> = {};
+
+      if (Array.isArray(data.passwords) && data.passwords.length) {
+        for (const p of data.passwords) {
+          await vaultStorage.savePassword(p);
+        }
+        results.passwords = data.passwords.length;
+      }
+      if (Array.isArray(data.subscriptions) && data.subscriptions.length) {
+        for (const s of data.subscriptions) {
+          await vaultStorage.saveSubscription(s);
+        }
+        results.subscriptions = data.subscriptions.length;
+      }
+      if (Array.isArray(data.notes) && data.notes.length) {
+        for (const n of data.notes) {
+          await vaultStorage.saveNote(n);
+        }
+        results.notes = data.notes.length;
+      }
+      if (Array.isArray(data.expenses) && data.expenses.length) {
+        for (const e of data.expenses) {
+          await vaultStorage.saveExpense(e);
+        }
+        results.expenses = data.expenses.length;
+      }
+      if (Array.isArray(data.reminders) && data.reminders.length) {
+        for (const r of data.reminders) {
+          await vaultStorage.saveReminder(r);
+        }
+        results.reminders = data.reminders.length;
+      }
+
+      console.log('[SEED] Import complete:', results);
+      return { success: true, results };
+    } catch (err: any) {
+      console.error('[SEED] Import failed:', err);
+      return { error: err?.message || String(err) };
+    }
+  };
+}
+
