@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { AppLogo } from '@/components/app-logo';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { apiBase } from '@/native/platform';
 
 export default function VerifyEmailPage() {
   const params = new URLSearchParams(window.location.search);
@@ -19,7 +20,7 @@ export default function VerifyEmailPage() {
       return;
     }
 
-    fetch('/api/auth/verify-email', {
+    fetch(`${apiBase()}/api/auth/verify-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, token }),

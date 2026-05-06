@@ -25,6 +25,7 @@ import { ViewToggle } from '@/components/view-toggle';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
+import { apiBase } from '@/native/platform';
 
 export default function Passwords() {
   const { passwords, deletePassword, bulkDeletePasswords, isLoading } = useVault();
@@ -113,7 +114,7 @@ export default function Passwords() {
       const cloudToken = localStorage.getItem('iv_cloud_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (cloudToken) headers['Authorization'] = `Bearer ${cloudToken}`;
-      const res = await fetch('/api/share/create', {
+      const res = await fetch(`${apiBase()}/api/share/create`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

@@ -14,6 +14,7 @@ import { AppLogo } from '@/components/app-logo';
 import { useToast } from '@/hooks/use-toast';
 import { sha256 } from '@/lib/account-auth';
 import { PLANS, planPriceLabel } from '@/lib/plans';
+import { apiBase } from '@/native/platform';
 
 const COUNTRIES = [
   { code: 'IN', name: 'India', phoneCode: '+91' },
@@ -108,7 +109,7 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       const passwordHash = await sha256(accountPassword);
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(`${apiBase()}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -154,7 +155,7 @@ export default function SignupPage() {
   const handleResend = async () => {
     setResendLoading(true);
     try {
-      await fetch('/api/auth/resend-verification', {
+      await fetch(`${apiBase()}/api/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.toLowerCase().trim() }),

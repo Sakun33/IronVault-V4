@@ -89,6 +89,7 @@ import {
 import { useCurrency } from '@/contexts/currency-context';
 import { autoLockService } from '@/native/auto-lock';
 import { useVault } from '@/contexts/vault-context';
+import { apiBase } from '@/native/platform';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useToast } from '@/hooks/use-toast';
 import { format, addDays, addMonths, addYears, isValid } from 'date-fns';
@@ -208,7 +209,7 @@ export default function Profile() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/2fa/status', {
+        const res = await fetch(`${apiBase()}/api/auth/2fa/status`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -413,7 +414,7 @@ export default function Profile() {
     if (!inviteEmail.trim()) return;
     setInviteLoading(true);
     try {
-      const res = await fetch('/api/crm/family-invites', {
+      const res = await fetch(`${apiBase()}/api/crm/family-invites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ownerEmail: userProfile.email, inviteeEmail: inviteEmail.trim() }),
@@ -855,7 +856,7 @@ export default function Profile() {
       // and uses the token's email server-side, so we don't send body.email.
       const cloudToken = localStorage.getItem('iv_cloud_token');
       if (!cloudToken) throw new Error('Not signed in');
-      const response = await fetch('/api/crm/tickets', {
+      const response = await fetch(`${apiBase()}/api/crm/tickets`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1100,7 +1101,7 @@ export default function Profile() {
     try {
       const token = localStorage.getItem('iv_cloud_token');
       if (!token) { setSessions([]); setSessionsError('Sign in to cloud sync to see active sessions.'); return; }
-      const res = await fetch('/api/auth/sessions', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${apiBase()}/api/auth/sessions`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         if (res.status === 401) setSessionsError('Session expired — please sign in again.');
         else setSessionsError('Could not load sessions.');
@@ -1138,7 +1139,7 @@ export default function Profile() {
     if (!token) return;
     if (!window.confirm('Sign out of every other device? Your current session is preserved.')) return;
     try {
-      const res = await fetch('/api/auth/sessions/revoke-all', {
+      const res = await fetch(`${apiBase()}/api/auth/sessions/revoke-all`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1219,7 +1220,7 @@ export default function Profile() {
     }
     const token = getCloudToken();
     try {
-      const res = await fetch('/api/auth/account', {
+      const res = await fetch(`${apiBase()}/api/auth/account`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -2368,7 +2369,7 @@ export default function Profile() {
                 return null;
               }
               try {
-                const res = await fetch('/api/auth/2fa/setup', {
+                const res = await fetch(`${apiBase()}/api/auth/2fa/setup`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 });
@@ -2404,7 +2405,7 @@ export default function Profile() {
                 return null;
               }
               try {
-                const res = await fetch('/api/auth/2fa/verify', {
+                const res = await fetch(`${apiBase()}/api/auth/2fa/verify`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                   body: JSON.stringify({ code }),
@@ -2425,7 +2426,7 @@ export default function Profile() {
                 // Re-confirm with the server so a stale 2fa state from
                 // another tab can't mask a successful enable.
                 try {
-                  const statusRes = await fetch('/api/auth/2fa/status', {
+                  const statusRes = await fetch(`${apiBase()}/api/auth/2fa/status`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                   });
                   if (statusRes.ok) {
@@ -2445,7 +2446,7 @@ export default function Profile() {
             onDisable={async (code) => {
               const token = getCloudToken();
               if (!token) return false;
-              const res = await fetch('/api/auth/2fa/disable', {
+              const res = await fetch(`${apiBase()}/api/auth/2fa/disable`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ code }),
@@ -2458,7 +2459,7 @@ export default function Profile() {
             onRegenerateBackupCodes={async (code) => {
               const token = getCloudToken();
               if (!token) return null;
-              const res = await fetch('/api/auth/2fa/backup-codes', {
+              const res = await fetch(`${apiBase()}/api/auth/2fa/backup-codes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ code }),

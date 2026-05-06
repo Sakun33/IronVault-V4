@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
 import { motionPresets } from '@/lib/design-system';
+import { apiBase } from '@/native/platform';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -115,7 +116,7 @@ export default function Login() {
   const handleResend = async () => {
     setResendLoading(true);
     try {
-      await fetch('/api/auth/resend-verification', {
+      await fetch(`${apiBase()}/api/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

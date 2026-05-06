@@ -6,6 +6,7 @@ import { useLicense } from '@/contexts/license-context';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { PLANS, planPriceLabel, type PlanId } from '@/lib/plans';
+import { apiBase } from '@/native/platform';
 
 declare global {
   interface Window { Razorpay: any; }
@@ -64,7 +65,7 @@ export default function PricingPage() {
     if (id !== 'free' && razorpayPlan) {
       try {
         await loadRazorpay();
-        const res = await fetch('/api/payments/create-order', {
+        const res = await fetch(`${apiBase()}/api/payments/create-order`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ plan: razorpayPlan, email: accountEmail }),
@@ -81,7 +82,7 @@ export default function PricingPage() {
           description: `IronVault ${planName} Plan`,
           order_id: orderId,
           handler: async (response: any) => {
-            const verifyRes = await fetch('/api/payments/verify', {
+            const verifyRes = await fetch(`${apiBase()}/api/payments/verify`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...response, plan: razorpayPlan, email: accountEmail }),

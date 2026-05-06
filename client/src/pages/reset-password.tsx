@@ -7,6 +7,7 @@ import { Eye, EyeOff, KeyRound, ArrowLeft, CheckCircle, AlertCircle } from 'luci
 import { AppLogo } from '@/components/app-logo';
 import { useToast } from '@/hooks/use-toast';
 import { sha256 } from '@/lib/account-auth';
+import { apiBase } from '@/native/platform';
 
 export default function ResetPasswordPage() {
   const [, setLocation] = useLocation();
@@ -47,7 +48,7 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
     try {
       const hash = await sha256(newPassword);
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(`${apiBase()}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, token, newPasswordHash: hash }),

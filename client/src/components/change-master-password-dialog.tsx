@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { Eye, EyeOff, Shield, Mail, KeyRound, CheckCircle2, Loader2 } from 'lucide-react';
+import { apiBase } from '@/native/platform';
 
 type Step = 'current' | 'new' | 'code' | 'rotating' | 'done';
 
@@ -74,7 +75,7 @@ export function ChangeMasterPasswordDialog({ open, onOpenChange, accountEmail }:
     }
     setBusy(true);
     try {
-      const res = await fetch('/api/auth/send-verification-code', {
+      const res = await fetch(`${apiBase()}/api/auth/send-verification-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: accountEmail, purpose: 'master_password_change' }),
@@ -103,7 +104,7 @@ export function ChangeMasterPasswordDialog({ open, onOpenChange, accountEmail }:
     if (!accountEmail) { setError('Account email missing'); return; }
     setBusy(true);
     try {
-      const res = await fetch('/api/auth/verify-code', {
+      const res = await fetch(`${apiBase()}/api/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: accountEmail, code: trimmed, purpose: 'master_password_change' }),

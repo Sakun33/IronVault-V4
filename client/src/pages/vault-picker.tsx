@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
-import { isNativeApp } from '@/native/platform';
+import { isNativeApp, apiBase } from '@/native/platform';
 import { listCloudVaults, listCloudVaultsWithStatus, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { useLicense } from '@/contexts/license-context';
@@ -107,7 +107,7 @@ export default function VaultPickerPage() {
       // we hand anything to Razorpay.
       let orderResp: Response;
       try {
-        orderResp = await fetch('/api/payments/create-order', {
+        orderResp = await fetch(`${apiBase()}/api/payments/create-order`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ plan: planKey, email }),
@@ -141,7 +141,7 @@ export default function VaultPickerPage() {
           order_id: orderId,
           handler: async (response: any) => {
             try {
-              const verify = await fetch('/api/payments/verify', {
+              const verify = await fetch(`${apiBase()}/api/payments/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...response, plan: planKey, email }),
@@ -432,7 +432,7 @@ export default function VaultPickerPage() {
       const clean = window.location.pathname;
       window.history.replaceState({}, '', clean);
     }
-    fetch(`/api/crm/family-invites/${encodeURIComponent(inviteId)}`, {
+    fetch(`${apiBase()}/api/crm/family-invites/${encodeURIComponent(inviteId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'accepted', inviteeEmail: (inviteEmail || accountEmail).toLowerCase() }),

@@ -1,9 +1,11 @@
 /**
  * Customer Registration API
- * 
+ *
  * This module handles customer registration with the backend CRM system.
  * It's called when users create a new vault to capture customer information.
  */
+
+import { apiBase } from '@/native/platform';
 
 export interface CustomerRegistrationData {
   email: string;
@@ -37,7 +39,7 @@ export async function registerCustomer(data: CustomerRegistrationData): Promise<
     
     // Use production backend API or fallback to local proxy
     const apiUrl = import.meta.env.VITE_BACKEND_API_URL || '';
-    const endpoint = apiUrl ? `${apiUrl}/api/crm/register` : '/api/crm/register';
+    const endpoint = apiUrl ? `${apiUrl}/api/crm/register` : `${apiBase()}/api/crm/register`;
     
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -156,14 +158,14 @@ export async function getEntitlementStatus(): Promise<CustomerRegistrationRespon
 
   try {
     // Always use the main Vercel API for entitlement lookup (customers table).
-    const endpoint = `/api/crm/entitlement/${lookupId}`;
+    const endpoint = `${apiBase()}/api/crm/entitlement/${lookupId}`;
     const response = await fetch(endpoint, {
       headers: { 'Authorization': `Bearer ${cloudToken}` },
     });
     if (!response.ok) {
       // If we got 403 and haven't tried the JWT userId yet, retry with it
       if (response.status === 403 && jwtUserId && jwtUserId !== lookupId) {
-        const retryResponse = await fetch(`/api/crm/entitlement/${jwtUserId}`, {
+        const retryResponse = await fetch(`${apiBase()}/api/crm/entitlement/${jwtUserId}`, {
           headers: { 'Authorization': `Bearer ${cloudToken}` },
         });
         if (retryResponse.ok) {

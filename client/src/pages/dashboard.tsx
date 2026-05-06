@@ -17,6 +17,7 @@ import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { PasswordGenerator } from "@/lib/password-generator";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
+import { apiBase } from "@/native/platform";
 
 // Small motion-driven counter for stat tiles. Eases from 0 → value with a
 // short delay so the number lands after the card slides in.
@@ -317,7 +318,7 @@ export default function Dashboard() {
     const cloudToken = localStorage.getItem('iv_cloud_token');
     if (!cloudToken) return;
     let cancelled = false;
-    fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${cloudToken}` } })
+    fetch(`${apiBase()}/api/auth/me`, { headers: { 'Authorization': `Bearer ${cloudToken}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled) return;

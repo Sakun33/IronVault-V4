@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Chrome, Shield, Check, Copy, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { apiBase } from '@/native/platform';
 
 interface ExtensionPairingModalProps {
   open: boolean;
@@ -34,10 +35,10 @@ export function ExtensionPairingModal({ open, onOpenChange }: ExtensionPairingMo
       setPairingCode(code);
       
       // Store the code temporarily on the server for verification
-      const response = await fetch('/api/extension/generate-pairing-code', {
+      const response = await fetch(`${apiBase()}/api/extension/generate-pairing-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           code,
           expiresIn: 300 // 5 minutes
         })
@@ -80,7 +81,7 @@ export function ExtensionPairingModal({ open, onOpenChange }: ExtensionPairingMo
   // Load paired extensions
   const loadPairedExtensions = async () => {
     try {
-      const response = await fetch('/api/extension/paired-devices');
+      const response = await fetch(`${apiBase()}/api/extension/paired-devices`);
       if (response.ok) {
         const data = await response.json();
         setPairedExtensions(data.devices || []);
@@ -93,7 +94,7 @@ export function ExtensionPairingModal({ open, onOpenChange }: ExtensionPairingMo
   // Revoke extension pairing
   const revokeExtension = async (extensionId: string) => {
     try {
-      const response = await fetch('/api/extension/revoke-pairing', {
+      const response = await fetch(`${apiBase()}/api/extension/revoke-pairing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ extensionId })

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Mail, KeyRound, ArrowLeft, CheckCircle } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
+import { apiBase } from '@/native/platform';
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<'email' | 'sent' | 'devcode'>('email');
@@ -24,7 +25,7 @@ export default function ForgotPasswordPage() {
     }
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(`${apiBase()}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

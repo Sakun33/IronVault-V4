@@ -35,3 +35,13 @@ export function getDeviceInfo() {
     isWeb: isWeb(),
   };
 }
+
+/**
+ * API base URL. On the web, relative URLs (/api/...) resolve to the same
+ * origin (ironvault.app). On Capacitor native apps, the WebView runs on
+ * capacitor://localhost — relative URLs go nowhere. This helper returns
+ * the absolute production origin for native, empty string for web.
+ */
+export function apiBase(): string {
+  return isNativeApp() ? 'https://www.ironvault.app' : '';
+}

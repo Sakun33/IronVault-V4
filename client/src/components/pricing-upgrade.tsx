@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Crown, Shield, RotateCcw, AlertCircle, RefreshCcw, Check, Infinity as InfinityIcon, Zap } from 'lucide-react';
 import { useBillingPackages, usePurchase } from '@/billing/useBilling';
 import { isNativePlatform, getStoreName, getPlatform } from '@/billing/platform';
+import { apiBase } from '@/native/platform';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
@@ -58,7 +59,7 @@ function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
     setLoading(planId);
     try {
       await loadRazorpay();
-      const res = await fetch('/api/payments/create-order', {
+      const res = await fetch(`${apiBase()}/api/payments/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planId, email }),
@@ -74,7 +75,7 @@ function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
         description: `IronVault ${label} Plan`,
         order_id: orderId,
         handler: async (response: any) => {
-          const verifyRes = await fetch('/api/payments/verify', {
+          const verifyRes = await fetch(`${apiBase()}/api/payments/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...response, plan: planId, email }),

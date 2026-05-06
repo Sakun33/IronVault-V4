@@ -17,6 +17,7 @@ import { acquireCloudToken, clearCloudToken, storeCloudToken, getCloudToken } fr
 import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 import { markLoginComplete } from '@/lib/auth-fetch-interceptor';
+import { apiBase } from '@/native/platform';
 
 // Server returns `{ requires2FA: true, tempToken }` when password auth succeeds
 // but the user has 2FA enabled. We surface this to the login page via
@@ -147,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Trust-on-first-use: if server has no hash yet it stores it; if it does, it verifies.
           const storedHash = getAccountPasswordHash();
           if (storedHash) {
-            fetch('/api/auth/token', {
+            fetch(`${apiBase()}/api/auth/token`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, accountPasswordHash: storedHash }),
@@ -254,7 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Server is the primary source of truth for cross-device auth.
     // Trust-on-first-use: if no hash stored server-side yet, it stores and accepts.
     try {
-      const res = await fetch('/api/auth/token', {
+      const res = await fetch(`${apiBase()}/api/auth/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: normalizedEmail, accountPasswordHash: passwordHash }),
@@ -322,7 +323,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const pending = pendingTwoFactor;
     if (!pending) return false;
     try {
-      const res = await fetch('/api/auth/2fa/validate', {
+      const res = await fetch(`${apiBase()}/api/auth/2fa/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempToken: pending.tempToken, code: code.trim() }),

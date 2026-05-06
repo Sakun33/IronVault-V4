@@ -11,7 +11,7 @@ import { vaultStorage } from '@/lib/storage';
 import { vaultManager } from '@/lib/vault-manager';
 import { pushCloudVault, queueOfflineSync, markVaultAsCloudSynced } from '@/lib/cloud-vault-sync';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
-import { isNativeApp } from '@/native/platform';
+import { isNativeApp, apiBase } from '@/native/platform';
 
 export default function CreateVaultPage() {
   const [, setLocation] = useLocation();
@@ -44,7 +44,7 @@ export default function CreateVaultPage() {
         });
       }
       const email = accountEmail || localStorage.getItem('iv_account_email') || '';
-      const res = await fetch('/api/payments/create-order', {
+      const res = await fetch(`${apiBase()}/api/payments/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: 'pro_monthly', email }),
@@ -58,7 +58,7 @@ export default function CreateVaultPage() {
         description: 'IronVault Pro Monthly',
         order_id: orderId,
         handler: async (response: any) => {
-          const verify = await fetch('/api/payments/verify', {
+          const verify = await fetch(`${apiBase()}/api/payments/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...response, plan: 'pro_monthly', email }),
