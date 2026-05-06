@@ -3,7 +3,7 @@ import { unlockVault, spaNavigate, expectNoHorizontalOverflow } from './helpers'
 
 test.describe('expenses page', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await unlockVault(page);
     await spaNavigate(page, '/expenses');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
@@ -11,9 +11,12 @@ test.describe('expenses page', () => {
 
   test('balance summary cards render', async ({ page }) => {
     await expect(page.locator('main, [role="main"]').first()).toBeVisible({ timeout: 20_000 });
-    // Splitwise-style summary — at least one of the labels should be on screen.
-    const card = page.getByText(/you owe|you're owed|net|total/i).first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    // Splitwise-style summary cards each carry a `summary-{label-slug}` testid
+    // (see client/src/pages/expenses.tsx:355). Empty-state pages skip rendering
+    // them entirely — accept either summary cards OR the empty-state CTA.
+    const summary = page.locator('[data-testid^="summary-"]').first();
+    const emptyCta = page.locator('[data-testid="button-add-first-expense"]').first();
+    await expect(summary.or(emptyCta)).toBeVisible({ timeout: 20_000 });
   });
 
   test('tabs (All / Groups / People / Activity / Reports) visible', async ({ page }) => {

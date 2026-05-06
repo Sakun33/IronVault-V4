@@ -3,7 +3,7 @@ import { unlockVault, spaNavigate, expectNoHorizontalOverflow } from './helpers'
 
 test.describe('passwords page', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await unlockVault(page);
     await spaNavigate(page, '/passwords');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});

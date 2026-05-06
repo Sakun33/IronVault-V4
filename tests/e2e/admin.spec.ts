@@ -28,7 +28,7 @@ test.describe('admin console — public', () => {
 
 test.describe('admin console — authenticated', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await page.goto(`${ADMIN_BASE}/login`, { waitUntil: 'domcontentloaded' });
     const userInput = page.locator(
       'input[name="username"], input[name="email"], input[type="email"]',

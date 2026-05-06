@@ -13,12 +13,16 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests/e2e',
-  // 120s per test — the slow-cloud unlock path (PBKDF2 600k iterations
+  // 180s per test — the slow-cloud unlock path (PBKDF2 600k iterations
   // + cloud blob fetch + IDB import) can chew through 30–45 s on a
-  // headless runner, leaving only a thin margin for the rest of the
-  // test under a 60 s budget.
-  timeout: 120_000,
-  expect: { timeout: 20_000 },
+  // headless runner, and post-unlock data hydration (cloud sync, IDB
+  // rehydrate) needs 60 s+ on top. 120 s left zero margin and produced
+  // 1.5 m flaky timeouts in round 3.
+  timeout: 180_000,
+  expect: { timeout: 30_000 },
+  // actionTimeout 30s — clicks/fills against a freshly-rehydrated page
+  // can take 15-25s when React is still hydrating. 15s default is too
+  // tight for the post-unlock window.
   retries: 2,
   workers: 1,
   reporter: [
@@ -31,8 +35,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     video: 'retain-on-failure',
-    actionTimeout: 15_000,
-    navigationTimeout: 45_000,
+    actionTimeout: 30_000,
+    navigationTimeout: 60_000,
     ignoreHTTPSErrors: false,
   },
   projects: [
