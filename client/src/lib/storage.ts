@@ -2294,12 +2294,24 @@ export const vaultStorage = new VaultStorage();
 // key set on vaultStorage) — otherwise the save methods will fail at
 // encryptAndStore.
 if (typeof window !== 'undefined') {
-  (window as any).__importTestData = async (jsonString: string) => {
+  (window as any).__importTestData = async (jsonString: string, masterPassword?: string) => {
     if (!(window as any).__ironvaultSeedReady) {
       console.error('[SEED] Set window.__ironvaultSeedReady = true first');
       return { error: 'Not enabled' };
     }
     try {
+      // The vaultStorage singleton's `db` and `encryptionKey` get cleared
+      // by background flows (cloud sync, vault switching, idle locks),
+      // so even though the test runner just unlocked the vault via the
+      // UI, the singleton may have lost its key by the time the hook runs.
+      // Re-unlock here if a master password was passed — idempotent and
+      // cheap on a warm IDB.
+      if (masterPassword) {
+        const ok = await vaultStorage.unlockVault(masterPassword);
+        if (!ok) {
+          return { error: 'Re-unlock with provided master password failed' };
+        }
+      }
       const data = JSON.parse(jsonString);
       const results: Record<string, number> = {};
 

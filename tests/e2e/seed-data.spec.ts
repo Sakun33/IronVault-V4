@@ -41,14 +41,16 @@ test.describe('seed test data (via __importTestData hook)', () => {
     // pull + IDB rehydrate can still be in flight for a few seconds.
     await page.waitForTimeout(3_000);
 
-    const result = await page.evaluate(async (jsonStr) => {
+    const result = await page.evaluate(async ({ jsonStr, masterPw }) => {
       (window as any).__ironvaultSeedReady = true;
       const fn = (window as any).__importTestData;
       if (typeof fn !== 'function') {
         return { error: '__importTestData not found on window' };
       }
-      return await fn(jsonStr);
-    }, testData);
+      // Pass master password so the hook can re-unlock — singleton's
+      // encryptionKey may have been cleared by a background sync.
+      return await fn(jsonStr, masterPw);
+    }, { jsonStr: testData, masterPw: '12121212' });
 
     // eslint-disable-next-line no-console
     console.log('Seed result:', JSON.stringify(result));
