@@ -545,6 +545,7 @@ export class VaultStorage {
     // one expected collection before we touch local data. If decrypt throws
     // (wrong password / tampered ciphertext), the catch re-throws and local
     // state is preserved.
+    let blobItemCounts: Record<string, number> = {};
     if (parsed.version && parsed.salt && parsed.iv && parsed.data) {
       try {
         const salt = CryptoService.base64ToUint8Array(parsed.salt);
@@ -559,21 +560,57 @@ export class VaultStorage {
         // Sanity check: at least ONE known collection field must be present.
         // A blob with none of these is almost certainly malformed and we
         // don't want to wipe local for it.
-        const hasAnyCollection = [
+        const collectionKeys = [
           'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
           'bankStatements', 'bankTransactions', 'investments', 'investmentGoals',
-        ].some(k => Array.isArray((payload as any)[k]));
+          'apiKeys',
+        ];
+        const hasAnyCollection = collectionKeys.some(k => Array.isArray((payload as any)[k]));
         if (!hasAnyCollection) {
           throw new Error('Cloud blob has no known collections — refusing to replace local data');
+        }
+        for (const k of collectionKeys) {
+          blobItemCounts[k] = Array.isArray((payload as any)[k]) ? (payload as any)[k].length : 0;
         }
       } catch (e: any) {
         throw new Error(`Cloud blob decrypt/validate failed — local data preserved: ${e?.message || e}`);
       }
     }
 
-    // Step 3: only NOW that we know the blob is valid + decryptable, wipe
-    // local and re-import. importVault re-runs the same decrypt internally;
-    // we accept that small duplicated work for the safety guarantee.
+    // Step 2.5: ANTI-WIPE GUARD — refuse to replace local with a blob that
+    // would lose >50% of any non-empty store. This catches the data-loss
+    // vector where a sparse blob (e.g. only Notes populated) gets pulled and
+    // wipes everything else. Compares per-store counts: blob vs local IDB.
+    // Pulling a blob with apiKeys=0 over a local with apiKeys=12 is a wipe.
+    if (Object.keys(blobItemCounts).length > 0) {
+      const localCounts = await this.getPerStoreItemCounts();
+      const losses: string[] = [];
+      for (const [store, blobCount] of Object.entries(blobItemCounts)) {
+        const localCount = localCounts[store] ?? 0;
+        // Only flag if local has meaningful data (>2 items) and blob would
+        // wipe more than half. Tiny stores (0/1/2) are normal during
+        // first-sync and don't trigger the guard.
+        if (localCount > 2 && blobCount < localCount * 0.5) {
+          losses.push(`${store}: local=${localCount} → cloud=${blobCount}`);
+        }
+      }
+      if (losses.length > 0) {
+        const msg = `Anti-wipe guard: cloud blob would lose data — ${losses.join(', ')}. Pull refused; local data preserved.`;
+        console.error('[ANTI-WIPE]', msg);
+        // Surface to UI so the user knows sync is paused and can resolve.
+        try {
+          window.dispatchEvent(new CustomEvent('vault:cloud:anti-wipe', {
+            detail: { losses, blobItemCounts, localCounts },
+          }));
+        } catch { /* SSR / no window */ }
+        throw new Error(msg);
+      }
+    }
+
+    // Step 3: only NOW that we know the blob is valid + decryptable + safe,
+    // wipe local and re-import. importVault re-runs the same decrypt
+    // internally; we accept that small duplicated work for the safety
+    // guarantee.
     await this.clearEncryptedItems();
     await this.importVault(encryptedBlob, masterPassword);
     // Recreate the verification entry so unlockVault() can verify on session restore.
@@ -587,9 +624,17 @@ export class VaultStorage {
   // safeguards: a sudden drop in this number means the in-memory state has
   // been wiped and pushing it would destroy cloud data.
   async getTotalItemCount(): Promise<number> {
+    const counts = await this.getPerStoreItemCounts();
+    return Object.values(counts).reduce((a, b) => a + b, 0);
+  }
+
+  // Per-store item counts. Used by the anti-wipe guard in
+  // replaceVaultFromBlob to compare cloud blob counts vs local counts and
+  // refuse pulls that would destructively shrink any store.
+  async getPerStoreItemCounts(): Promise<Record<string, number>> {
     const [
       passwords, subscriptions, notes, expenses, reminders,
-      bankStatements, bankTransactions, investments, investmentGoals,
+      bankStatements, bankTransactions, investments, investmentGoals, apiKeys,
     ] = await Promise.all([
       this.getAllPasswords(),
       this.getAllSubscriptions(),
@@ -600,10 +645,20 @@ export class VaultStorage {
       this.getAllBankTransactions(),
       this.getAllInvestments(),
       this.getAllInvestmentGoals(),
+      this.getAllApiKeys(),
     ]);
-    return passwords.length + subscriptions.length + notes.length + expenses.length
-      + reminders.length + bankStatements.length + bankTransactions.length
-      + investments.length + investmentGoals.length;
+    return {
+      passwords: passwords.length,
+      subscriptions: subscriptions.length,
+      notes: notes.length,
+      expenses: expenses.length,
+      reminders: reminders.length,
+      bankStatements: bankStatements.length,
+      bankTransactions: bankTransactions.length,
+      investments: investments.length,
+      investmentGoals: investmentGoals.length,
+      apiKeys: apiKeys.length,
+    };
   }
 
   // Decrypt a remote vault blob and count items WITHOUT touching local DB.
@@ -623,7 +678,7 @@ export class VaultStorage {
       const lengths = [
         payload.passwords, payload.subscriptions, payload.notes, payload.expenses,
         payload.reminders, payload.bankStatements, payload.bankTransactions,
-        payload.investments, payload.investmentGoals,
+        payload.investments, payload.investmentGoals, payload.apiKeys,
       ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
       return lengths.reduce((a, b) => a + b, 0);
     } catch {
@@ -1005,18 +1060,37 @@ export class VaultStorage {
   }
 
   // Export vault data
+  // CRITICAL: every store must be read in parallel and the entire export must
+  // fail if ANY store read throws. A silently-empty array for a store would
+  // produce a sparse blob that, when pushed to cloud and pulled by another
+  // device, would wipe that store's local data via replaceVaultFromBlob.
+  // This caused the "all sections except Notes wiped" data-loss incident.
   async exportVault(exportPassword: string): Promise<string> {
-    
-    const passwords = await this.getAllPasswords();
-    const subscriptions = await this.getAllSubscriptions();
-    const notes = await this.getAllNotes();
-    const expenses = await this.getAllExpenses();
-    const reminders = await this.getAllReminders();
-    const bankStatements = await this.getAllBankStatements();
-    const bankTransactions = await this.getAllBankTransactions();
-    const investments = await this.getAllInvestments();
-    const investmentGoals = await this.getAllInvestmentGoals();
-    const metadata = await this.getMetadata();
+    const [
+      passwords,
+      subscriptions,
+      notes,
+      expenses,
+      reminders,
+      bankStatements,
+      bankTransactions,
+      investments,
+      investmentGoals,
+      apiKeys,
+      metadata,
+    ] = await Promise.all([
+      this.getAllPasswords(),
+      this.getAllSubscriptions(),
+      this.getAllNotes(),
+      this.getAllExpenses(),
+      this.getAllReminders(),
+      this.getAllBankStatements(),
+      this.getAllBankTransactions(),
+      this.getAllInvestments(),
+      this.getAllInvestmentGoals(),
+      this.getAllApiKeys(),
+      this.getMetadata(),
+    ]);
 
     const exportData = {
       passwords,
@@ -1028,9 +1102,10 @@ export class VaultStorage {
       bankTransactions,
       investments,
       investmentGoals,
+      apiKeys,
       metadata,
       exportedAt: new Date(),
-      version: 2, // Updated version for new data types
+      version: 3, // v3: includes apiKeys round-trip
     };
 
     const salt = CryptoService.generateSalt();
@@ -1170,6 +1245,9 @@ export class VaultStorage {
 
       // Parallel import: crypto work runs concurrently, IDB writes are serialized by browser.
       // allSettled so a single bad record never aborts the rest of the import.
+      // CRITICAL: every store that exportVault writes must have a matching
+      // importer here. Otherwise a clear→import cycle (replaceVaultFromBlob)
+      // permanently loses that store's data.
       const results = await Promise.allSettled([
         ...(importData.passwords ?? []).map((p: any) => this.savePassword(p)),
         ...(importData.subscriptions ?? []).map((s: any) => this.saveSubscription(s)),
@@ -1180,6 +1258,7 @@ export class VaultStorage {
         ...(importData.investmentGoals ?? []).map((g: any) => this.saveInvestmentGoal(g)),
         ...(importData.bankStatements ?? []).map((s: any) => this.saveBankStatement(s)),
         ...(importData.bankTransactions ?? []).map((t: any) => this.saveBankTransaction(t)),
+        ...(importData.apiKeys ?? []).map((k: any) => this.saveApiKey(k)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);

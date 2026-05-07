@@ -251,11 +251,30 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         });
       }
     };
+    // Anti-wipe guard tripped: cloud blob would have wiped local data.
+    // This is the LAST line of defense against the "all sections except
+    // Notes wiped" data-loss bug. Surface it loudly so the user knows
+    // sync is paused and can investigate (likely another device pushed a
+    // sparse/corrupt blob).
+    const handleAntiWipe = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const losses = Array.isArray(detail.losses) ? detail.losses.join('; ') : 'unknown';
+      console.error('[ANTI-WIPE] toast', detail);
+      setCloudSyncStatus('failed');
+      setLastSyncError(`Cloud sync paused — would have lost data (${losses})`);
+      toastRef.current({
+        title: 'Cloud sync paused — local data preserved',
+        description: `A pull from cloud would have wiped some of your data. Local copy is safe. Details: ${losses}`,
+        variant: 'destructive',
+      });
+    };
+
     window.addEventListener('vault:cloud:replaced', handleCloudReplace);
     window.addEventListener('vault:cloud:syncing', handleCloudSyncing);
     window.addEventListener('vault:cloud:push:start', handlePushStart);
     window.addEventListener('vault:cloud:push:done', handlePushDone);
     window.addEventListener('vault:cloud:push:failed', handlePushFailed);
+    window.addEventListener('vault:cloud:anti-wipe', handleAntiWipe);
     return () => {
       clearSafety();
       if (syncedClearTimer) clearTimeout(syncedClearTimer);
@@ -264,6 +283,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('vault:cloud:push:start', handlePushStart);
       window.removeEventListener('vault:cloud:push:done', handlePushDone);
       window.removeEventListener('vault:cloud:push:failed', handlePushFailed);
+      window.removeEventListener('vault:cloud:anti-wipe', handleAntiWipe);
     };
   }, [isUnlocked]);
 

@@ -56,7 +56,17 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     }
     hasSyncedFromServer.current = false;
     clearPlanCache();
-    loadLicense().then(() => syncFromServer());
+    // Loading-state ownership: loadLicense no longer flips isLoading=false on
+    // its own. syncFromServer's finally is the single point that drops the
+    // loading gate, so the UI waits until both IDB read AND server/cache
+    // resolution have completed before deciding free-vs-paid. The catch
+    // ensures even a rejected promise can't leave isLoading stuck true.
+    loadLicense()
+      .then(() => syncFromServer())
+      .catch((e) => {
+        console.error('[LICENSE] load+sync chain failed:', e);
+        setIsLoading(false);
+      });
   }, [isUnlocked]);
 
   useEffect(() => {
@@ -128,13 +138,20 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       console.error('Failed to load license:', error);
       // Don't overwrite stored license on error - just set state to default
       setLicense(PricingService.getDefaultLicense());
-    } finally {
-      setIsLoading(false);
     }
+    // NOTE: do NOT setIsLoading(false) here. The IDB read is fast but only
+    // gives us the LAST persisted tier. A Lifetime user on a freshly-cleared
+    // browser would have storedLicense=null at this point and we'd flash the
+    // "Upgrade to Pro" gate before syncFromServer arrives. Let syncFromServer
+    // be the one that flips isLoading off — that way the UI waits for the
+    // CRM/cache resolution before deciding free vs paid.
   };
 
   const syncFromServer = async () => {
-    if (hasSyncedFromServer.current) return;
+    if (hasSyncedFromServer.current) {
+      setIsLoading(false);
+      return;
+    }
     hasSyncedFromServer.current = true;
 
     try {
@@ -175,6 +192,11 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       // Silently fail — offline or no CRM registration is OK
+    } finally {
+      // Loading complete: even if the server call failed, we've done the
+      // best we can — let the UI render its decision instead of getting
+      // stuck on a loading spinner forever.
+      setIsLoading(false);
     }
   };
 

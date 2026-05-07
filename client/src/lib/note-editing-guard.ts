@@ -40,7 +40,14 @@ export function setNoteEditing(v: boolean): void {
       console.warn('[NOTE-GUARD] 30-min safety reset — flag was stuck true');
       editing = false;
       safetyTimer = null;
+      try { window.dispatchEvent(new CustomEvent('vault:note-editing:end')); } catch {}
     }, SAFETY_TIMEOUT_MS);
+  } else {
+    // Editing finished — let listeners (cloud-sync queue) flush any push that
+    // was deferred while the editor was open. Without this, a save that
+    // landed mid-edit would have returned null from the exporter and the
+    // pending push would never re-fire.
+    try { window.dispatchEvent(new CustomEvent('vault:note-editing:end')); } catch {}
   }
 }
 

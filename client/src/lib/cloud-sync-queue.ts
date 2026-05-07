@@ -190,8 +190,14 @@ async function runPush(): Promise<void> {
   }
 
   if (!blob) {
+    // Exporter chose to skip (e.g. note editor in progress, vault switched
+    // mid-flight). NOT a failure — drop the in-flight state silently and
+    // wait for the next enqueuePush. The note-editing-end event also
+    // re-triggers a push when the editor closes.
     inFlight = false;
-    return failJob('Vault exporter returned no data', /* permanent */ true);
+    setStatus('idle');
+    console.info('[SYNC-QUEUE] exporter returned null — skip (will retry on next save)');
+    return;
   }
 
   try {

@@ -54,9 +54,20 @@ export function useCloudAutoSync(
       }
       const meta = vaultManager.getExistingVaults().find((v: any) => v.id === vaultId);
       const vaultName = meta?.name ?? 'My Vault';
+      // Defer the export+push until the editor commits. The exporter runs
+      // ~500ms after enqueue (queue coalesce window); if the user is still
+      // mid-edit at that point, the queue's exporter aborts (see queue
+      // logic), and the next save event re-enqueues.
       enqueuePush(vaultId, vaultName, async () => {
         if (vaultStorage.getCurrentVaultId() !== vaultId) {
           console.error('[SYNC] vault changed before exporter ran — aborting');
+          return null;
+        }
+        if (isNoteEditing()) {
+          // Block push while a note is being edited — exporting now would
+          // read stale IDB (the in-progress edit hasn't flushed yet) and
+          // overwrite cloud with a blob missing the user's typing.
+          console.warn('[SYNC] note editing in progress — deferring export');
           return null;
         }
         return await vaultStorage.exportVault(masterPassword);
@@ -66,10 +77,13 @@ export function useCloudAutoSync(
     window.addEventListener('vault:item:saved', enqueueIfEligible);
     window.addEventListener('vault:import:complete', enqueueIfEligible);
     window.addEventListener('vault:force-cloud-push', enqueueIfEligible);
+    // When the note editor finishes, flush any push that was deferred mid-edit.
+    window.addEventListener('vault:note-editing:end', enqueueIfEligible);
     return () => {
       window.removeEventListener('vault:item:saved', enqueueIfEligible);
       window.removeEventListener('vault:import:complete', enqueueIfEligible);
       window.removeEventListener('vault:force-cloud-push', enqueueIfEligible);
+      window.removeEventListener('vault:note-editing:end', enqueueIfEligible);
     };
   }, [vaultId, masterPassword]);
 
