@@ -184,13 +184,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // succeed. Pulled out so accountLogin (no-2FA path), verifyTwoFactor, and the
   // offline fallback can share the same identity-handover logic.
   const finalizeAccountLogin = async (email: string, password: string, normalizedEmail: string, passwordHash: string) => {
-    // P0 FIX (round 2): clearCloudToken used to fire UNCONDITIONALLY here,
-    // which wiped the freshly-stored token that accountLogin/verifyTwoFactor
-    // had just written from the login response (line ~268, ~324). On flaky
-    // new devices the fallback acquireCloudToken below could then fail and
-    // leave the user with no token at all → empty cloud-vault list, plan
-    // collapses to "free". Gate it: only wipe on USER CHANGE so a fresh
-    // token survives this hand-off untouched.
+    // P0 FIX (round 3): clearCloudToken used to wipe even the FRESH token
+    // accountLogin/verifyTwoFactor had just stored from the login response.
+    // Round 2 gated it behind userChanged, but the cross-user case still
+    // wiped a fresh token and forced a redundant /api/auth/token round-trip
+    // through acquireCloudToken — which 2FA-gates a second time for 2FA
+    // accounts and returns null, leaving the user stuck on "Cloud sign-in
+    // incomplete". Now we decode the in-localStorage JWT payload and only
+    // clear the token if its `email` claim does NOT match the user we are
+    // finalizing for. A token that already belongs to the new user (i.e.
+    // accountLogin/verifyTwoFactor stored it just now) survives untouched.
     const previousEmail = (() => {
       try {
         const raw = localStorage.getItem('iv_account');
@@ -198,16 +201,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch { return null; }
     })();
     const userChanged = previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+    const tokenBelongsToNewUser = (() => {
+      const t = getCloudToken();
+      if (!t) return false;
+      try {
+        // Base64-URL decode the JWT payload (no signature verification needed —
+        // the server already vouched for it; we just want to know whose token
+        // it is so we don't wipe a token that's already correct).
+        const part = t.split('.')[1];
+        if (!part) return false;
+        const padded = part.replace(/-/g, '+').replace(/_/g, '/');
+        const padding = '='.repeat((4 - (padded.length % 4)) % 4);
+        const payload = JSON.parse(atob(padded + padding));
+        return typeof payload?.email === 'string'
+          && payload.email.toLowerCase().trim() === normalizedEmail;
+      } catch { return false; }
+    })();
     console.error('[AUTH-DEBUG] finalizeAccountLogin', {
       normalizedEmail,
       previousEmail,
       userChanged,
       tokenPresentBefore: !!getCloudToken(),
+      tokenBelongsToNewUser,
     });
     if (userChanged) {
       // Different user logging in on a shared device — wipe the previous
-      // user's cloud token AND vault data so we don't leak.
-      clearCloudToken();
+      // user's vault data so we don't leak.
+      // P0 FIX (round 3): only wipe the cloud token if it's NOT already the
+      // new user's freshly-acquired token. Without this guard, the cross-user
+      // case wipes a perfectly valid fresh token and falls back to
+      // acquireCloudToken, which 2FA-gates for 2FA users and silently fails.
+      if (!tokenBelongsToNewUser) {
+        clearCloudToken();
+      }
       vaultStorage.setEncryptionKey(null as any);
       sessionStorage.removeItem(SESSION_KEY);
       await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
