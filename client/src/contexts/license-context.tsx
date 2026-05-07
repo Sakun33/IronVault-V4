@@ -33,14 +33,17 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   // Centralized helper to persist license while always preserving trialUsed flag.
   // Also pushes the resolved tier into planService so every consumer (including
   // non-React modules) sees the same answer.
-  const persistLicense = async (newLicense: LicenseInfo): Promise<void> => {
+  const persistLicense = async (newLicense: LicenseInfo, opts: { authoritative?: boolean } = {}): Promise<void> => {
     const storedLicense = await vaultStorage.getPersistentData('license');
     const trialUsed = storedLicense?.trialUsed || newLicense.trialUsed || false;
     const licenseToSave = { ...newLicense, trialUsed };
     await vaultStorage.savePersistentData('license', licenseToSave);
     setLicense(licenseToSave);
     // Single source of truth — the planService is the authoritative tier owner.
-    planService.setTier(newLicense.tier);
+    // Default callers (loadLicense fresh-install, etc.) are non-authoritative
+    // and cannot demote a paid user. Server-sync and explicit user actions
+    // (upgradeLicense / changePlan) opt-in to authoritative.
+    planService.setTier(newLicense.tier, opts);
   };
 
   const hasSyncedFromServer = useRef(false);
@@ -119,11 +122,13 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         // Check if trial has expired
         if (parsedLicense.status === 'trial' && parsedLicense.trialEndsAt) {
           if (new Date() > parsedLicense.trialEndsAt) {
-            // Trial expired - revert to free license but preserve trialUsed flag
+            // Trial expired - revert to free license but preserve trialUsed flag.
+            // Authoritative: this is a deterministic, time-based expiry — not
+            // stale cache — so demoting to free is correct.
             const freeLicense = PricingService.getDefaultLicense();
             freeLicense.trialActive = false;
             freeLicense.trialUsed = true; // Explicitly mark trial as used
-            await persistLicense(freeLicense);
+            await persistLicense(freeLicense, { authoritative: true });
             return;
           }
         }
@@ -134,6 +139,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
           trialUsed: storedLicense?.trialUsed || parsedLicense.trialUsed || false,
         };
         setLicense(licenseWithTrialUsed);
+        // Non-authoritative: IDB is a floor. If a previous user (free) was
+        // logged in here, do not demote a currently-paid planService back to
+        // free until syncFromServer confirms.
         planService.setTier(licenseWithTrialUsed.tier);
       } else {
         // First time - no stored license, use default (trialUsed=false is ok for fresh install)
@@ -191,8 +199,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
 
       // Push to planService immediately — the React state below is async but the
       // plan-service is sync and observable, so any UI mounted before changePlan
-      // commits will already see the right tier.
-      planService.setTier(resolvedPlan);
+      // commits will already see the right tier. This call IS authoritative
+      // (server response or saved iv_plan_cache), so it is allowed to demote.
+      planService.setTier(resolvedPlan, { authoritative: true });
 
       // Read current stored license to compare
       const storedLicense = await vaultStorage.getPersistentData('license');
@@ -223,9 +232,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       
       const trialLicense = PricingService.getTrialLicense();
       trialLicense.trialUsed = true; // Mark trial as used
-      
-      // Use persistLicense to save (will preserve trialUsed)
-      await persistLicense(trialLicense);
+
+      // Use persistLicense to save (will preserve trialUsed). Authoritative —
+      // user explicitly clicked "Start trial".
+      await persistLicense(trialLicense, { authoritative: true });
       
       const { NotificationService } = await import('@/lib/notifications');
       if (NotificationService.createTrialStarted) {
@@ -274,9 +284,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         trialActive: false,
       };
 
-      // persistLicense automatically preserves trialUsed flag
-      await persistLicense(newLicense);
-      
+      // persistLicense automatically preserves trialUsed flag. Authoritative —
+      // user explicitly upgraded.
+      await persistLicense(newLicense, { authoritative: true });
+
       // Create notification for successful upgrade
       const { NotificationService } = await import('@/lib/notifications');
       await NotificationService.createPlanUpgrade('current-user', tier);
@@ -294,8 +305,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
 
       if (tier === 'free') {
+        // Authoritative downgrade — this code path is only hit by syncFromServer
+        // when the server returns 'free', or by an admin/CRM-driven plan change.
         const freeLicense = PricingService.getDefaultLicense();
-        await persistLicense(freeLicense);
+        await persistLicense(freeLicense, { authoritative: true });
         return;
       }
 
@@ -322,7 +335,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         trialActive: false,
       };
 
-      await persistLicense(newLicense);
+      // Authoritative — explicit changePlan call (server-resolved entitlement
+      // or admin/CRM-driven update).
+      await persistLicense(newLicense, { authoritative: true });
     } catch (error) {
       console.error('Failed to change plan:', error);
       throw error;
@@ -417,9 +432,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         newLicense.lastVerifiedAt = new Date().toISOString();
       }
       
-      // persistLicense automatically preserves trialUsed flag
-      await persistLicense(newLicense);
-      
+      // persistLicense automatically preserves trialUsed flag. Authoritative —
+      // this is RevenueCat / store-confirmed entitlement state.
+      await persistLicense(newLicense, { authoritative: true });
+
     } catch (error) {
       console.error('Failed to sync entitlements:', error);
     } finally {

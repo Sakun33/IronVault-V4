@@ -320,6 +320,34 @@ export class BiometricKeystore {
   getAccountBiometricEmail(): string | null {
     return localStorage.getItem(ACCOUNT_BIO_EMAIL);
   }
+
+  /**
+   * Authoritative probe: returns true if encrypted account credentials exist
+   * in Capacitor Preferences, regardless of the localStorage flag. Used to
+   * recover the "enrolled" state when localStorage was cleared (webview
+   * cache wipe, app reinstall on some platforms) but the secure-storage
+   * blob survived. Re-syncs the localStorage flag as a side-effect so the
+   * sync `isAccountBiometricEnabled()` is correct on subsequent calls.
+   */
+  async hasAccountBiometricCredentials(): Promise<boolean> {
+    if (!isNativeApp()) return false;
+    try {
+      const { value } = await Preferences.get({ key: ACCOUNT_CRED_PREF });
+      const exists = !!value;
+      const flag = localStorage.getItem(ACCOUNT_BIO_FLAG) === 'true';
+      if (exists && !flag) {
+        // Recover the localStorage flag — the synchronous getter is now consistent.
+        localStorage.setItem(ACCOUNT_BIO_FLAG, 'true');
+      } else if (!exists && flag) {
+        // Stale flag pointing at non-existent creds — clear it.
+        localStorage.removeItem(ACCOUNT_BIO_FLAG);
+        localStorage.removeItem(ACCOUNT_BIO_EMAIL);
+      }
+      return exists;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const biometricKeystore = BiometricKeystore.getInstance();

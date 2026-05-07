@@ -15,6 +15,7 @@ import {
   checkBiometricCapabilities,
   signInWithBiometric,
   isAccountBiometricEnabled,
+  hasAccountBiometricCredentials,
   getAccountBiometricEmail,
   disableAccountBiometric,
 } from '@/native/biometrics';
@@ -59,7 +60,15 @@ export default function Login() {
             : 'Fingerprint';
         setBioLabel(label);
         setBioIcon(caps.biometryType === 'faceId' || caps.biometryType === 'face' ? 'face' : 'finger');
-        const enrolled = isAccountBiometricEnabled();
+        // Authoritative probe — checks Capacitor Preferences so a user
+        // whose localStorage flag was wiped (webview cache clear, etc.)
+        // still gets the "Use Face ID" path instead of being told to set
+        // it up again. The probe also self-heals the localStorage flag.
+        let enrolled = isAccountBiometricEnabled();
+        if (!enrolled) {
+          try { enrolled = await hasAccountBiometricCredentials(); } catch { /* ignore */ }
+        }
+        if (cancelled) return;
         setBioEnrolled(enrolled);
         setBioEmail(enrolled ? getAccountBiometricEmail() : null);
         // P0: show the button on every biometric-capable native device, even

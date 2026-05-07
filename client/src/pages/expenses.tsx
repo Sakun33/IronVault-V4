@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useCurrency } from '@/contexts/currency-context';
 import { useSharedExpenses } from '@/hooks/use-shared-expenses';
@@ -36,7 +37,8 @@ const TabKeys = ['all', 'groups', 'people', 'activity', 'reports'] as const;
 type TabKey = typeof TabKeys[number];
 
 export default function ExpensesPage() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const { currency } = useCurrency();
   const { toast } = useToast();
   const sx = useSharedExpenses();
@@ -74,7 +76,10 @@ export default function ExpensesPage() {
     [openGroupId, sx.groups],
   );
 
-  if (!licenseLoading && !isFeatureAvailable('expenses')) {
+  // Single source of truth: planService. Don't gate on the legacy
+  // useSubscription helper, which can briefly disagree during cross-user
+  // re-login while the entitlement sync is in flight.
+  if (!licenseLoading && !plan.isPaid) {
     return <UpgradeGate feature="Expense Tracking" />;
   }
 

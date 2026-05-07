@@ -86,9 +86,19 @@ class PlanService {
     return Math.max(0, this.getLimit(resource) - current);
   }
 
-  /** Authoritative setter — call from license-context after server response. */
-  setTier(tier: unknown): void {
+  /** Authoritative setter — call from license-context after server response.
+   *  Pass `{ authoritative: true }` only when the source is the server or an
+   *  explicit user upgrade/downgrade. Stale IDB reads must use the default
+   *  (non-authoritative) so a Lifetime user can't be silently demoted to free
+   *  when their device was previously logged into a free account. The cache
+   *  is a floor, not a ceiling. */
+  setTier(tier: unknown, opts: { authoritative?: boolean } = {}): void {
     const normalized = normalizeTier(tier);
+    const isDemotion = this._tier !== 'free' && normalized === 'free';
+    if (isDemotion && !opts.authoritative) {
+      // Refuse to demote paid → free without an authoritative source.
+      return;
+    }
     const changed = normalized !== this._tier || !this._initialized;
     this._tier = normalized;
     this._initialized = true;

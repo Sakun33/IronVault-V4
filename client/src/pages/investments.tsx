@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,7 +53,8 @@ import { EditInvestmentModal } from '@/components/edit-investment-modal';
 import { ListSkeleton } from '@/components/list-skeleton';
 
 export default function Investments() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
 
   const [, setLocation] = useLocation();
   const vaultContext = useVault();
@@ -485,7 +487,7 @@ export default function Investments() {
     };
 
 
-    if (!licenseLoading && !isFeatureAvailable('investments')) return <UpgradeGate feature="Investments" />;
+    if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="Investments" />;
 
     return (
       <div className="space-y-6">

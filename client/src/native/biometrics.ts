@@ -215,6 +215,14 @@ export function isAccountBiometricEnabled(): boolean {
   return biometricKeystore.isAccountBiometricEnabled();
 }
 
+/** Async probe — checks Capacitor Preferences directly so users whose
+ *  localStorage flag was lost (webview cache wipe, etc.) still have their
+ *  enrolled credentials honoured. Recovers the localStorage flag as a
+ *  side-effect, so the sync getter agrees on subsequent calls. */
+export async function hasAccountBiometricCredentials(): Promise<boolean> {
+  return biometricKeystore.hasAccountBiometricCredentials();
+}
+
 export function getAccountBiometricEmail(): string | null {
   return biometricKeystore.getAccountBiometricEmail();
 }

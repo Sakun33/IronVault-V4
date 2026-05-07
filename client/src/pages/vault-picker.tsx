@@ -215,6 +215,10 @@ export default function VaultPickerPage() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricVaultId, setBiometricVaultId] = useState<string | null>(null);
   const [biometricCapable, setBiometricCapable] = useState(false);
+  // Per-cloud-vault biometric enrollment map. A Lifetime user with only a
+  // cloud vault wouldn't otherwise see any biometric option because the
+  // default-vault path bails when there's no local default.
+  const [bioCloudEnrolled, setBioCloudEnrolled] = useState<Record<string, boolean>>({});
   const [unlockSuccess, setUnlockSuccess] = useState<string | null>(null);
 
   // Brief celebratory overlay before navigating to the dashboard. Resolves
@@ -389,6 +393,18 @@ export default function VaultPickerPage() {
         });
         if (cancelled) return;
         setCloudVaults(result.vaults);
+        // Probe biometric enrollment for each cloud vault so the per-vault
+        // unlock row can render the Fingerprint/Face ID inline button.
+        if (isNativeApp() && result.vaults?.length) {
+          (async () => {
+            const map: Record<string, boolean> = {};
+            for (const cv of result.vaults!) {
+              try { map[cv.vaultId] = await isBiometricUnlockEnabled(cv.vaultId); }
+              catch { map[cv.vaultId] = false; }
+            }
+            if (!cancelled) setBioCloudEnrolled(prev => ({ ...prev, ...map }));
+          })();
+        }
         // Only flag failure when ok=false AND we're not already redirecting
         // for a 401 (the global interceptor handles that). For any other
         // failure path the user sees a soft amber banner and the page
@@ -622,8 +638,51 @@ export default function VaultPickerPage() {
     }
   };
 
-  const handleCloudUnlock = async (cloudVault: CloudVaultMeta) => {
-    const pw = cloudPasswordInput[cloudVault.vaultId] || '';
+  const handleCloudBiometricUnlock = async (cv: CloudVaultMeta) => {
+    if (!biometricCapable) return;
+    setCloudErrors(e => ({ ...e, [cv.vaultId]: '' }));
+    try {
+      const enrolled = bioCloudEnrolled[cv.vaultId] === true
+        || await isBiometricUnlockEnabled(cv.vaultId);
+      if (!enrolled) {
+        // First-time setup: confirm device biometric, then ask for the
+        // master password once. Once the user types it and unlocks, the
+        // cloud unlock flow will enrol biometric for future taps.
+        const auth = await authenticateWithBiometric('Set up biometric unlock');
+        if (!auth.success) {
+          toast({ title: 'Biometric cancelled', description: auth.error || 'Try again.', variant: 'destructive' });
+          return;
+        }
+        const pw = cloudPasswordInput[cv.vaultId] || '';
+        if (!pw) {
+          toast({
+            title: 'Enter master password once',
+            description: 'Type your password and tap Unlock — biometric will be ready next time.',
+          });
+          return;
+        }
+        // Use the typed password for unlock; we'll enrol after success below.
+        try { await enableBiometricUnlock(pw, cv.vaultId); } catch { /* best effort */ }
+        setBioCloudEnrolled(prev => ({ ...prev, [cv.vaultId]: true }));
+        await handleCloudUnlock(cv, pw);
+        return;
+      }
+      const result = await unlockWithBiometric(cv.vaultId);
+      if (!result.success || !result.vaultUnlockKey) {
+        toast({ title: 'Biometric failed', description: result.error || 'Please enter your master password.', variant: 'destructive' });
+        return;
+      }
+      await handleCloudUnlock(cv, result.vaultUnlockKey);
+    } catch (err) {
+      toast({ title: 'Biometric error', description: 'Please enter your master password.', variant: 'destructive' });
+    }
+  };
+
+  const handleCloudUnlock = async (cloudVault: CloudVaultMeta, overridePw?: string) => {
+    // overridePw is supplied by the biometric flow which has the password
+    // in-hand from the secure keystore; bypass React state to avoid the
+    // setState-then-read race.
+    const pw = overridePw ?? (cloudPasswordInput[cloudVault.vaultId] || '');
     if (!pw) {
       setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: 'Please enter your master password.' }));
       return;
@@ -1531,9 +1590,23 @@ UA: ${typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '(n
                             }, 350);
                           }
                         }}
-                        className="pl-10 pr-11"
+                        className={biometricCapable ? 'pl-10 pr-20' : 'pl-10 pr-11'}
                         autoComplete="current-password"
                       />
+                      {biometricCapable && (
+                        <button
+                          type="button"
+                          data-testid="button-biometric-unlock-cloud-inline"
+                          onClick={() => handleCloudBiometricUnlock(cv)}
+                          disabled={cloudDownloading === cv.vaultId}
+                          className="absolute right-10 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors z-10 disabled:opacity-50"
+                          tabIndex={-1}
+                          aria-label={bioCloudEnrolled[cv.vaultId] ? 'Unlock with biometric' : 'Set up biometric unlock'}
+                          title={bioCloudEnrolled[cv.vaultId] ? 'Unlock with biometric' : 'Set up biometric unlock'}
+                        >
+                          <Fingerprint className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setCloudShowPw(s => ({ ...s, [cv.vaultId]: !s[cv.vaultId] }))}

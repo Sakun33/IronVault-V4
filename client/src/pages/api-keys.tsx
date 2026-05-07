@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useVault } from '@/contexts/vault-context';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,8 @@ const blankForm = () => ({
 });
 
 export default function APIKeys() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const { apiKeys, addApiKey, updateApiKey, deleteApiKey, bulkDeleteApiKeys, isLoading } = useVault();
   const { toast } = useToast();
 
@@ -325,7 +327,7 @@ export default function APIKeys() {
     );
   }
 
-  if (!licenseLoading && !isFeatureAvailable('apiKeys')) return <UpgradeGate feature="API Key Manager" />;
+  if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="API Key Manager" />;
 
   const counts = {
     all: apiKeys.length,

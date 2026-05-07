@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -171,7 +172,8 @@ const GOAL_TEMPLATES = [
 ];
 
 export default function Goals() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
 
   const [, setLocation] = useLocation();
   
@@ -767,7 +769,7 @@ export default function Goals() {
     return 'bg-red-500';
   };
 
-  if (!licenseLoading && !isFeatureAvailable('investments')) return <UpgradeGate feature="Goals & Investments" />;
+  if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="Goals & Investments" />;
 
   return (
     <div className="space-y-6 overflow-x-hidden">

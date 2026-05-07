@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { ListSkeleton } from '@/components/list-skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,7 +44,8 @@ import {
 } from '@shared/schema';
 
 export default function BankStatements() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
 
   const { bankStatements, bankTransactions, addBankStatement, addBankTransaction, deleteBankStatement, deleteBankTransaction, importBankStatementsFromCSV, bulkDeleteBankStatements, isLoading } = useVault();
   const { formatCurrency, currency } = useCurrency();
@@ -278,7 +280,7 @@ export default function BankStatements() {
     return colors[category] || colors['Other'];
   };
 
-  if (!licenseLoading && !isFeatureAvailable('bankStatements')) return <UpgradeGate feature="Bank Statements" />;
+  if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="Bank Statements" />;
 
   return (
     <div className="p-4 space-y-6 overflow-x-hidden">
