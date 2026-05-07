@@ -103,6 +103,18 @@ export function isCloudSyncEligible(vaultId: string | null | undefined): boolean
   try {
     if (localStorage.getItem(`${LOCAL_ONLY_PREFIX}${vaultId}`) === '1') return false;
   } catch { /* localStorage disabled — assume eligible */ }
+  // Local vault gate: if there's no cloud token AND this vault has never
+  // been cloud-synced (i.e. not in `iv_cloud_synced_vaults`), it's a
+  // local-only vault. Skip sync entirely so the failure banner doesn't
+  // flash on every save. Paid users mid-token-refresh still pass — their
+  // vault is already in the registry from a prior session.
+  if (!getCloudToken()) {
+    try {
+      const raw = localStorage.getItem('iv_cloud_synced_vaults');
+      const ids: string[] = raw ? JSON.parse(raw) : [];
+      if (!ids.includes(vaultId)) return false;
+    } catch { /* localStorage disabled — fall through and assume eligible */ }
+  }
   return true;
 }
 

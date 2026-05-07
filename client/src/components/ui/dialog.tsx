@@ -110,6 +110,9 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border/50 px-5 py-4 bg-background",
+      // Clear the iOS home indicator on the bottom-sheet variant. No-op on
+      // sm+ where the dialog is centered and floats above the safe area.
+      "pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-4",
       className
     )}
     {...props}

@@ -4,6 +4,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accessibility: user-controlled font scale. The Settings → Accessibility
+   panel writes `--iv-font-scale` (a multiplier, default 1.0). Scaling the
+   root font-size means every rem-based size in the app — body text,
+   buttons, dialogs, sidebars — grows or shrinks together. Inputs are
+   pinned to 16px below to keep the iOS double-tap-to-zoom workaround
+   intact regardless of the user's chosen scale. */
+:root {
+  --iv-font-scale: 1;
+}
+html {
+  font-size: calc(16px * var(--iv-font-scale, 1));
+}
+
 /* Hide native browser reveal/credentials icons on password inputs — we render our own toggle */
 input::-ms-reveal,
 input::-ms-clear,

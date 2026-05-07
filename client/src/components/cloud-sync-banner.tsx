@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, RefreshCw, AlertTriangle } from 'lucide-react';
+import { isCloudSyncEligible } from '@/lib/cloud-sync-queue';
 
 type Status = 'idle' | 'syncing' | 'synced' | 'failed';
 
@@ -12,6 +13,10 @@ interface Props {
   lastSyncError: string | null;
   /** Manually retry the last push. */
   onRetry: () => void;
+  /** Active vault id — used to suppress the banner for local-only vaults
+   *  (vaults that have explicitly opted out, or have no cloud token and
+   *  have never been cloud-synced). */
+  vaultId?: string | null;
 }
 
 /**
@@ -24,7 +29,7 @@ interface Props {
  *  - synced:  emerald, check icon (auto-hides after a few seconds)
  *  - failed:  amber, retry button with the actual error message
  */
-export function CloudSyncBanner({ isCloudSyncing, cloudSyncStatus, lastSyncError, onRetry }: Props) {
+export function CloudSyncBanner({ isCloudSyncing, cloudSyncStatus, lastSyncError, onRetry, vaultId }: Props) {
   // Render nothing on `idle`. We track a brief "just-succeeded" animation
   // ourselves so the banner can fade out instead of disappearing instantly.
   const [visible, setVisible] = useState<Status | 'pulling' | 'idle'>('idle');
@@ -38,6 +43,11 @@ export function CloudSyncBanner({ isCloudSyncing, cloudSyncStatus, lastSyncError
   }, [isCloudSyncing, cloudSyncStatus]);
 
   if (visible === 'idle') return null;
+
+  // Hard suppress for local-only vaults: never show sync state for a vault
+  // that isn't eligible for cloud sync. Stale state from a prior cloud
+  // vault's session must not bleed through.
+  if (vaultId && !isCloudSyncEligible(vaultId)) return null;
 
   if (visible === 'pulling' || visible === 'syncing') {
     return (

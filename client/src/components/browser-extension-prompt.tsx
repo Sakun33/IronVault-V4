@@ -1,16 +1,33 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck, X, Download, Check } from 'lucide-react';
+import { isNativeApp } from '@/native/platform';
 
 const DISMISSED_KEY = 'ironvault.extensionPromptDismissedAt';
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SHOW_DELAY_MS = 4000;
 const ZIP_HREF = '/chrome-extension.zip';
+const DESKTOP_MIN_WIDTH = 1024;
 
 function isExtensionInstalled(): boolean {
   // The extension content script sets a marker on every page it runs on
   // (window.__ironvaultInjected). If we see it, no need to nudge.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return Boolean((window as any).__ironvaultInjected);
+}
+
+function isMobileUserAgent(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /android|iphone|ipad|ipod|mobile|tablet/i.test(navigator.userAgent);
+}
+
+function isDesktopBrowser(): boolean {
+  // Only desktop browsers can install a Chrome extension. Native Capacitor
+  // apps and mobile/tablet web browsers must not see the banner.
+  if (isNativeApp()) return false;
+  if (typeof window === 'undefined') return false;
+  if (window.innerWidth < DESKTOP_MIN_WIDTH) return false;
+  if (isMobileUserAgent()) return false;
+  return true;
 }
 
 function isDismissed(): boolean {
@@ -30,6 +47,7 @@ export function BrowserExtensionPrompt() {
   const [step, setStep] = useState<'idle' | 'downloaded'>('idle');
 
   useEffect(() => {
+    if (!isDesktopBrowser()) return;
     if (isDismissed() || isExtensionInstalled()) return;
     const id = window.setTimeout(() => setVisible(true), SHOW_DELAY_MS);
     return () => window.clearTimeout(id);
@@ -71,10 +89,10 @@ export function BrowserExtensionPrompt() {
               type="button"
               aria-label="Dismiss"
               onClick={handleDismiss}
-              className="-mr-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+              className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               data-testid="button-dismiss-extension-prompt"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
@@ -150,10 +168,10 @@ export function BrowserExtensionPrompt() {
           type="button"
           aria-label="Dismiss"
           onClick={handleDismiss}
-          className="ml-1 -mr-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+          className="ml-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           data-testid="button-dismiss-extension-prompt"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>

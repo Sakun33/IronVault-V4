@@ -32,8 +32,10 @@ import {
   Palette,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Type,
 } from 'lucide-react';
+import { FontSizeSettings } from '@/components/font-size-settings';
 import SupportTicketSubmission from '@/components/support-ticket-submission';
 import { useAnalytics } from '@/components/analytics-integration';
 import { vaultBackupService } from '@/lib/vault-backup';
@@ -339,6 +341,22 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Accessibility — font size / app size */}
+      <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-accessibility">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Type className="w-5 h-5" />
+            Accessibility
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-4">
+            Adjust the app's text size to suit your reading comfort. Changes apply instantly across IronVault.
+          </p>
+          <FontSizeSettings />
         </CardContent>
       </Card>
 

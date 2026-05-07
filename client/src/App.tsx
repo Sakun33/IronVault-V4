@@ -332,8 +332,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top)]">
-        <div className="flex items-center justify-between h-14">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top,0px)]">
+        <div className="flex items-center justify-between h-12">
           {/* Left: hamburger + logo */}
           <div className="flex items-center gap-2">
             <Tooltip>
@@ -395,11 +395,18 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <NotificationBell userId={notificationUserId} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" title="More" aria-label="More options">
-                  <MoreVertical className="w-4 h-4" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-xl touch-manipulation relative z-[51]"
+                  title="More"
+                  aria-label="More options"
+                  data-testid="mobile-more-menu-trigger"
+                >
+                  <MoreVertical className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[200px]">
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-[220px] z-[100]">
                 <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
                   {accountEmail || 'Signed in'}
                 </div>
@@ -423,8 +430,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      {/* Spacer for fixed header + safe area */}
-      <div className="lg:hidden h-[calc(env(safe-area-inset-top)+56px)]" />
+      {/* Spacer for fixed header + safe area. Height must match the header
+          (h-12 = 48px) plus its top safe-area padding. The 0px fallback
+          keeps the spacer flush on devices/browsers without a notch. */}
+      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+48px)]" />
 
       {/* Desktop Header - Glassmorphism */}
       <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
@@ -831,6 +840,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             cloudSyncStatus={cloudSyncStatus}
             lastSyncError={lastSyncError}
             onRetry={retryCloudSync}
+            vaultId={activeVault?.id}
           />
           <div className="px-6 pb-6 pt-3 flex-1 min-w-0">
             <AnalyticsIntegration>
@@ -859,7 +869,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           lastSyncError={lastSyncError}
           onRetry={retryCloudSync}
         />
-        <div className="w-full min-w-0 px-4 pt-2 pb-[calc(96px+env(safe-area-inset-bottom))] flex-1 overflow-x-hidden">
+        <div className="w-full min-w-0 px-4 pb-[calc(96px+env(safe-area-inset-bottom,0px))] flex-1 overflow-x-hidden">
           <AnalyticsIntegration>
             <ErrorBoundary level="page" resetKey={location}>
               <AnimatePresence mode="wait" initial={false}>

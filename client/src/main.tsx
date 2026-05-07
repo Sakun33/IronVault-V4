@@ -8,6 +8,10 @@ import "./lib/pwa";
 // any module that may issue authenticated fetches at import time.
 import { installAuthFetchInterceptor } from "./lib/auth-fetch-interceptor";
 installAuthFetchInterceptor();
+// Apply persisted accessibility font scale before first render so there's
+// no flash of unscaled text on boot.
+import { initFontScale } from "./lib/font-scale";
+initFontScale();
 
 // CRASH REPORTER — shows actual error on white screen instead of blank page
 function showCrash(label: string, msg: string, stack?: string) {
