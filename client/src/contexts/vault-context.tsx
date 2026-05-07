@@ -8,6 +8,7 @@ import { useLogging } from './logging-context';
 import type { ParserConfig } from '@/lib/csv-parsers';
 import { isNoteEditing } from '@/lib/note-editing-guard';
 import { useSearch } from './search-context';
+import { planService } from '@/lib/plan-service';
 
 // Date fields that need hydration from JSON strings back to Date objects after decryption
 const DATE_FIELDS = ['createdAt', 'updatedAt', 'lastUsed', 'date', 'nextBillingDate', 'expiryDate', 'dueDate', 'completedAt', 'nextReminderDate', 'nextDueDate', 'purchaseDate', 'maturityDate', 'importDate', 'achievedDate', 'targetDate'];
@@ -994,6 +995,92 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   const importVault = async (data: string, password?: string): Promise<void> => {
+    // Pre-flight free-plan limit enforcement. We trim the import payload to fit
+    // the user's remaining headroom for each resource (rather than rejecting the
+    // whole import) so people upgrading from a competitor don't lose all their
+    // data — they just see a clear toast about which categories were truncated.
+    if (!planService.isPaid) {
+      try {
+        let parsed: any;
+        let cleanData = data.trim();
+        if (cleanData.charCodeAt(0) === 0xFEFF) cleanData = cleanData.slice(1);
+        const start = cleanData.search(/[\[{]/);
+        if (start > 0) cleanData = cleanData.slice(start);
+        const outer = JSON.parse(cleanData);
+
+        if (outer && outer.version && outer.salt && outer.iv && outer.data && password) {
+          const { CryptoService } = await import('@/lib/crypto');
+          const salt = CryptoService.base64ToUint8Array(outer.salt);
+          const iv = CryptoService.base64ToUint8Array(outer.iv);
+          const enc = new Uint8Array(CryptoService.base64ToArrayBuffer(outer.data));
+          const key = await CryptoService.deriveKey(password, salt);
+          const dec = await CryptoService.decrypt(enc, key, iv);
+          parsed = JSON.parse(new TextDecoder().decode(dec));
+        } else if (outer && !outer.salt) {
+          parsed = outer;
+        }
+
+        if (parsed && typeof parsed === 'object') {
+          const trimReport: string[] = [];
+          const trim = (key: string, resource: string, current: number) => {
+            if (!Array.isArray(parsed[key])) return;
+            const headroom = planService.getHeadroom(resource, current);
+            if (parsed[key].length > headroom) {
+              const dropped = parsed[key].length - headroom;
+              parsed[key] = parsed[key].slice(0, headroom);
+              trimReport.push(`${dropped} ${resource}`);
+            }
+          };
+          trim('passwords', 'passwords', passwords.length);
+          trim('notes', 'notes', notes.length);
+          trim('subscriptions', 'subscriptions', subscriptions.length);
+          trim('reminders', 'reminders', reminders.length);
+          // Whole-feature paywalls — Free plan can't import these at all.
+          if (Array.isArray(parsed.expenses) && parsed.expenses.length > 0) {
+            trimReport.push(`${parsed.expenses.length} expenses`);
+            parsed.expenses = [];
+          }
+          if (Array.isArray(parsed.investments) && parsed.investments.length > 0) {
+            trimReport.push(`${parsed.investments.length} investments`);
+            parsed.investments = [];
+          }
+          if (Array.isArray(parsed.bankStatements) && parsed.bankStatements.length > 0) {
+            trimReport.push(`${parsed.bankStatements.length} bank statements`);
+            parsed.bankStatements = [];
+            parsed.bankTransactions = [];
+          }
+          if (Array.isArray(parsed.apiKeys) && parsed.apiKeys.length > 0) {
+            trimReport.push(`${parsed.apiKeys.length} API keys`);
+            parsed.apiKeys = [];
+          }
+          if (Array.isArray(parsed.documents)) {
+            const headroom = planService.getHeadroom('documents', 0);
+            if (parsed.documents.length > headroom) {
+              trimReport.push(`${parsed.documents.length - headroom} documents`);
+              parsed.documents = parsed.documents.slice(0, headroom);
+            }
+          }
+
+          if (trimReport.length > 0) {
+            toast({
+              title: 'Free plan limits applied',
+              description: `Skipped: ${trimReport.join(', ')}. Upgrade to Pro for unlimited imports.`,
+              variant: 'destructive',
+              duration: 12000,
+            });
+            // Replace the input data with the trimmed plaintext payload. We pass
+            // an undefined password so storage.importVault treats it as plaintext.
+            data = JSON.stringify(parsed);
+            password = undefined;
+          }
+        }
+      } catch {
+        // If pre-flight fails for any reason (malformed JSON, unknown format),
+        // fall through to the existing importer — it has its own validation
+        // and error reporting.
+      }
+    }
+
     await vaultStorage.importVault(data, password);
     addLog('Import Vault', 'system', `Imported complete vault data${password ? ' with password protection' : ' (plaintext)'}`);
     await refreshData();
@@ -1049,6 +1136,22 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   };
 
   const importPasswordsFromCSV = async (csvContent: string, parserId: string): Promise<{ imported: number; skipped: number }> => {
+    // Free-plan password cap enforcement before storage layer touches anything.
+    // The storage importer doesn't know about plan limits, so this is the only
+    // place to gate it for the legacy CSV-direct flow.
+    if (!planService.isPaid) {
+      const headroom = planService.getHeadroom('passwords', passwords.length);
+      if (headroom <= 0) {
+        toast({
+          title: 'Free plan limit reached',
+          description: `You've already saved ${passwords.length} of ${planService.getLimit('passwords')} passwords. Upgrade to Pro to import more.`,
+          variant: 'destructive',
+          duration: 10000,
+        });
+        return { imported: 0, skipped: 0 };
+      }
+    }
+
     const result = await vaultStorage.importPasswordsFromCSV(csvContent, parserId);
 
     // Log the import activity
@@ -1078,6 +1181,33 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   }> => {
     if (!entries.length) {
       return { imported: 0, skipped: 0, duplicates: 0, cloudSync: 'skipped' };
+    }
+
+    // Belt-and-braces free-plan cap. The import-passwords UI already trims, but
+    // any other caller should never be able to exceed the limit through this
+    // path — defence-in-depth.
+    if (!planService.isPaid) {
+      const existingCount = (await vaultStorage.getAllPasswords()).length;
+      const headroom = planService.getHeadroom('passwords', existingCount);
+      if (entries.length > headroom) {
+        const dropped = entries.length - headroom;
+        if (headroom <= 0) {
+          toast({
+            title: 'Free plan limit reached',
+            description: `Already at ${existingCount}/${planService.getLimit('passwords')} passwords. Upgrade to Pro to import more.`,
+            variant: 'destructive',
+            duration: 10000,
+          });
+          return { imported: 0, skipped: entries.length, duplicates: 0, cloudSync: 'skipped' };
+        }
+        toast({
+          title: `Free plan limit (${planService.getLimit('passwords')} passwords)`,
+          description: `Importing first ${headroom}, skipped ${dropped}. Upgrade to Pro for unlimited.`,
+          variant: 'destructive',
+          duration: 10000,
+        });
+        entries = entries.slice(0, headroom);
+      }
     }
 
     const existing = await vaultStorage.getAllPasswords();

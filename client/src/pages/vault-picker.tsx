@@ -1330,9 +1330,23 @@ export default function VaultPickerPage() {
                               }, 350);
                             }
                           }}
-                          className="pl-10 pr-11"
+                          className={biometricCapable && vault.isDefault ? 'pl-10 pr-20' : 'pl-10 pr-11'}
                           autoComplete="current-password"
                         />
+                        {biometricCapable && vault.isDefault && (
+                          <button
+                            type="button"
+                            data-testid="button-biometric-unlock-inline"
+                            onClick={handleBiometricUnlock}
+                            disabled={loading === 'biometric'}
+                            className="absolute right-10 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors z-10 disabled:opacity-50"
+                            tabIndex={-1}
+                            aria-label={biometricAvailable ? 'Unlock with biometric' : 'Set up biometric unlock'}
+                            title={biometricAvailable ? 'Unlock with biometric' : 'Set up biometric unlock'}
+                          >
+                            <Fingerprint className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setShowPw(s => ({ ...s, [vault.id]: !s[vault.id] }))}

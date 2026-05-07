@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useVault } from '@/contexts/vault-context';
-import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import {
   parseCsvText,
   decodeBuffer,
@@ -60,7 +60,9 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 export default function ImportPasswords() {
   const { toast } = useToast();
   const { bulkImportPasswords, passwords } = useVault();
-  const { getLimit, isPro } = useSubscription();
+  const plan = usePlan();
+  const isPro = plan.isPaid;
+  const getLimit = (resource: string) => plan.getLimit(resource);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);

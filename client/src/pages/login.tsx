@@ -464,8 +464,8 @@ export default function Login() {
           </form>
 
           {bioReady && (
-            <div className="mt-6">
-              <div className="relative my-4">
+            <div className="mt-4">
+              <div className="relative my-3">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border/60" />
                 </div>
@@ -473,33 +473,30 @@ export default function Login() {
                   <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
                 </div>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 data-testid="button-biometric-signin"
                 onClick={handleBiometricSignIn}
                 disabled={bioLoading}
                 aria-label={bioEnrolled ? `Sign in with ${bioLabel}` : `Set up ${bioLabel}`}
-                className="w-full flex flex-col items-center gap-2 py-4 rounded-2xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition disabled:opacity-50"
+                className="w-full h-11 gap-2 font-medium"
               >
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500/15 to-teal-500/15 flex items-center justify-center">
-                  {bioIcon === 'face'
-                    ? <ScanFace className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
-                    : <Fingerprint className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />}
-                </div>
-                <span className="text-sm font-medium">
-                  {bioLoading
-                    ? 'Authenticating…'
-                    : bioEnrolled
-                      ? `Sign in with ${bioLabel}`
-                      : `Set up ${bioLabel}`}
-                </span>
-                {bioEnrolled && bioEmail && !bioLoading && (
-                  <span className="text-[11px] text-muted-foreground">{bioEmail}</span>
-                )}
-                {!bioEnrolled && !bioLoading && (
-                  <span className="text-[11px] text-muted-foreground">Sign in with password first to enable</span>
-                )}
-              </button>
+                {bioIcon === 'face'
+                  ? <ScanFace className="w-4 h-4" />
+                  : <Fingerprint className="w-4 h-4" />}
+                {bioLoading
+                  ? 'Authenticating…'
+                  : bioEnrolled
+                    ? `Use ${bioLabel}`
+                    : `Set up ${bioLabel}`}
+              </Button>
+              {bioEnrolled && bioEmail && !bioLoading && (
+                <p className="text-center text-[11px] text-muted-foreground mt-2">{bioEmail}</p>
+              )}
+              {!bioEnrolled && !bioLoading && (
+                <p className="text-center text-[11px] text-muted-foreground mt-2">Sign in once with your password to enable</p>
+              )}
             </div>
           )}
 

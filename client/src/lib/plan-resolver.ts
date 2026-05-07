@@ -1,54 +1,33 @@
 /**
- * Centralised, race-free plan resolution.
+ * Plan-resolver — thin compatibility layer over `planService`.
  *
- * The license object in license-context is hydrated from a chain of async
- * sources (localStorage → CRM /entitlement → server-side license blob).
- * Until that chain settles, `license.tier` can read 'free' for users who
- * are actually on a paid plan — and any UI gate that reads `license.tier`
- * directly will flicker an "Upgrade to Pro" button at a Lifetime user.
+ * Existing call sites pass `license.tier` to isPaidTier / isLifetimeTier.
+ * Those call sites still work, but the answer is now derived from the
+ * single-source-of-truth `planService` so different consumers can never
+ * disagree on whether the user is paid.
  *
- * usePlanFeatures() writes the authoritative plan into localStorage under
- * `iv_plan_cache` the moment it lands. Treat that cache as a fallback:
- * if the license blob still says 'free' but the cache says 'lifetime',
- * the user is on Lifetime — never demote on the cache, only upgrade.
+ * Always upgrade-only: if the caller's license.tier disagrees with planService,
+ * we resolve to whichever side reports a paid tier. We never demote based on
+ * stale caches.
  */
+import { planService } from './plan-service';
+
 export type ResolvedTier = 'free' | 'pro' | 'family' | 'lifetime' | 'pro_family_member';
 
 export function readPlanCacheTier(): ResolvedTier | null {
-  try {
-    const raw = localStorage.getItem('iv_plan_cache');
-    if (!raw) return null;
-    const cache = JSON.parse(raw) as { planId?: string };
-    const id = cache?.planId;
-    if (
-      id === 'free' || id === 'pro' || id === 'family' ||
-      id === 'lifetime' || id === 'pro_family_member'
-    ) {
-      return id;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  // Kept for back-compat; prefer planService.tier directly in new code.
+  const t = planService.tier;
+  return t === 'free' ? null : t;
 }
 
-/** Returns true if the resolved tier grants paid-tier (Pro or higher) features.
- *  Pass the current license.tier; this function cross-checks the plan cache
- *  so a Lifetime user with a stale license blob still resolves to paid. */
+const PAID = new Set(['pro', 'family', 'lifetime', 'pro_family_member', 'monthly', 'yearly']);
+
 export function isPaidTier(licenseTier: string): boolean {
-  const paid = (t: string | null) =>
-    t === 'pro' || t === 'family' || t === 'lifetime' || t === 'pro_family_member' ||
-    t === 'monthly' || t === 'yearly';
-  if (paid(licenseTier)) return true;
-  const cached = readPlanCacheTier();
-  if (cached && paid(cached)) return true;
-  return false;
+  if (PAID.has(licenseTier)) return true;
+  return planService.isPaid;
 }
 
-/** Same as above but specifically detects Lifetime — used by UI that
- *  shows a "Lifetime Unlocked" badge or hides upgrade CTAs entirely. */
 export function isLifetimeTier(licenseTier: string): boolean {
   if (licenseTier === 'lifetime') return true;
-  const cached = readPlanCacheTier();
-  return cached === 'lifetime';
+  return planService.isLifetime;
 }

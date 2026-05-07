@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useFormDefaults } from '@/hooks/use-form-defaults';
-import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { useVault } from '@/contexts/vault-context';
 import { useAuth } from '@/contexts/auth-context';
 import { NoteEntry } from '@shared/schema';
@@ -261,7 +261,9 @@ const NOTE_TEMPLATES: Array<{ id: string; name: string; description: string; ico
 export default function Notes() {
   const { notes, addNote, updateNote, deleteNote, bulkDeleteNotes, isLoading } = useVault();
   const { toast } = useToast();
-  const { getLimit, isPro } = useSubscription();
+  const plan = usePlan();
+  const isPro = plan.isPaid;
+  const getLimit = (resource: string) => plan.getLimit(resource);
   const { lastNotebook, saveNotebook } = useFormDefaults();
   const { accountEmail } = useAuth();
   const tier = useViewportTier();

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getPlan, PLANS, type Plan, type PlanId } from '@/lib/plans';
 import { getAccountSessionEmail } from '@/lib/account-auth';
 import { apiBase } from '@/native/platform';
+import { planService } from '@/lib/plan-service';
 
 const PLAN_CACHE_KEY = 'iv_plan_cache';
 const PLAN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -32,10 +33,17 @@ export function savePlanCache(email: string, planId: PlanId): void {
     fetchedAt: Date.now(),
   };
   localStorage.setItem(PLAN_CACHE_KEY, JSON.stringify(cache));
+  // Mirror into the central plan service so non-React consumers see the tier
+  // the moment the CRM endpoint resolves — even before license-context runs
+  // syncFromServer.
+  planService.setTier(planId);
 }
 
 export function clearPlanCache(): void {
   localStorage.removeItem(PLAN_CACHE_KEY);
+  // Don't reset planService here — license-context's loadLicense will set the
+  // authoritative tier from IDB right after this. Resetting would briefly flash
+  // free even for paid users.
 }
 
 export interface PlanFeatures {
@@ -116,8 +124,26 @@ function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refres
  *   const { vaultLimit, cloudSyncEnabled, isPaid } = usePlanFeatures();
  */
 export function usePlanFeatures(): PlanFeatures {
-  const [planId, setPlanId] = useState<PlanId>('free');
+  // Initialize from planService so the very first render is correct even before
+  // the network fetch completes — this is what eliminates the "free flash" for
+  // paid users on app reload.
+  const [planId, setPlanId] = useState<PlanId>(() => {
+    const tier = planService.tier;
+    return (['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(tier)
+      ? tier as PlanId
+      : 'free');
+  });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Re-render when planService changes from any other code path (license-context
+  // sync, logout, server response).
+  useEffect(() => planService.subscribe(() => {
+    const tier = planService.tier;
+    const next: PlanId = (['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(tier)
+      ? tier as PlanId
+      : 'free');
+    setPlanId(next);
+  }), []);
 
   const fetchPlan = useCallback(async () => {
     const email = getAccountSessionEmail();
@@ -130,6 +156,7 @@ export function usePlanFeatures(): PlanFeatures {
     const cached = getCachedPlan(email);
     if (cached) {
       setPlanId(cached);
+      planService.setTier(cached);
       setIsLoading(false);
       return;
     }
@@ -156,6 +183,7 @@ export function usePlanFeatures(): PlanFeatures {
           : 'free';
         setPlanId(validPlan);
         savePlanCache(email, validPlan);
+        planService.setTier(validPlan);
       }
     } catch {
       // Network error — fall back to cache or free

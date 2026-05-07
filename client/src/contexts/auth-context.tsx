@@ -386,6 +386,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAccountSession();
     clearPlanCache();
     clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
+    // Reset the centralized plan service so the next account starts as 'free'
+    // until its entitlement resolves. Without this, a Pro user signing out and
+    // a Free user signing in on the same device would briefly inherit Pro UI.
+    import('@/lib/plan-service').then(m => m.planService.reset()).catch(() => {});
     // SECURITY: also clear stored biometric credentials. Stage-1 biometric
     // sign-in is bound to the active account; on logout it must require a
     // fresh password so a different user on the same device can't biometric

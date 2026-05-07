@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { SwipeableRow } from '@/components/swipeable-row';
-import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,7 +30,9 @@ import { apiBase } from '@/native/platform';
 export default function Passwords() {
   const { passwords, deletePassword, bulkDeletePasswords, isLoading } = useVault();
   const { toast } = useToast();
-  const { getLimit, isPro } = useSubscription();
+  const plan = usePlan();
+  const isPro = plan.isPaid;
+  const getLimit = (resource: string) => plan.getLimit(resource);
 
   // Local search — independent of the global header search so typing in one
   // doesn't propagate to the other.

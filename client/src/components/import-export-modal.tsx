@@ -19,6 +19,9 @@ interface ImportExportModalProps {
 }
 
 export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps) {
+  // Plan-limit enforcement happens inside vault-context.importVault — it has
+  // access to the live counts from refreshData and trims the parsed JSON before
+  // calling vaultStorage.importVault. Don't duplicate the check here.
   const { exportVault, importVault, importPasswordsFromCSV, getAvailableCSVParsers, importBankStatementsFromCSV, refreshData } = useVault();
   const { toast } = useToast();
   

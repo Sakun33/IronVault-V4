@@ -7,6 +7,7 @@ import { ENTITLEMENT_IDS } from '@/billing/billing-types';
 import { getEntitlementStatus } from '@/lib/customer-registration';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 import { useAuth } from '@/contexts/auth-context';
+import { planService } from '@/lib/plan-service';
 
 interface LicenseContextType {
   license: LicenseInfo;
@@ -29,13 +30,17 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   const [license, setLicense] = useState<LicenseInfo>(PricingService.getDefaultLicense());
   const [isLoading, setIsLoading] = useState(true);
 
-  // Centralized helper to persist license while always preserving trialUsed flag
+  // Centralized helper to persist license while always preserving trialUsed flag.
+  // Also pushes the resolved tier into planService so every consumer (including
+  // non-React modules) sees the same answer.
   const persistLicense = async (newLicense: LicenseInfo): Promise<void> => {
     const storedLicense = await vaultStorage.getPersistentData('license');
     const trialUsed = storedLicense?.trialUsed || newLicense.trialUsed || false;
     const licenseToSave = { ...newLicense, trialUsed };
     await vaultStorage.savePersistentData('license', licenseToSave);
     setLicense(licenseToSave);
+    // Single source of truth — the planService is the authoritative tier owner.
+    planService.setTier(newLicense.tier);
   };
 
   const hasSyncedFromServer = useRef(false);
@@ -129,6 +134,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
           trialUsed: storedLicense?.trialUsed || parsedLicense.trialUsed || false,
         };
         setLicense(licenseWithTrialUsed);
+        planService.setTier(licenseWithTrialUsed.tier);
       } else {
         // First time - no stored license, use default (trialUsed=false is ok for fresh install)
         const defaultLicense = PricingService.getDefaultLicense();
@@ -182,6 +188,11 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!resolvedPlan) return;
+
+      // Push to planService immediately — the React state below is async but the
+      // plan-service is sync and observable, so any UI mounted before changePlan
+      // commits will already see the right tier.
+      planService.setTier(resolvedPlan);
 
       // Read current stored license to compare
       const storedLicense = await vaultStorage.getPersistentData('license');
