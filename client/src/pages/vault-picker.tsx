@@ -26,6 +26,7 @@ import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabl
 import { isNativeApp, apiBase } from '@/native/platform';
 import { listCloudVaults, listCloudVaultsWithStatus, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
+import { isPaidTier } from '@/lib/plan-resolver';
 import { useLicense } from '@/contexts/license-context';
 import { usePlanFeatures, clearPlanCache } from '@/hooks/use-plan-features';
 
@@ -1544,7 +1545,7 @@ UA: ${typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '(n
             ) : (
               <div className="rounded-xl border border-dashed border-border/50 bg-muted/30 p-5 text-center mb-4">
                 <Cloud className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                {isNativeApp() && license.tier === 'free' ? (
+                {isNativeApp() && !isPaidTier(license.tier) ? (
                   <>
                     <p className="text-sm font-medium text-muted-foreground">Cloud Sync — Pro feature</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Upgrade to Pro to sync your vault across devices.</p>

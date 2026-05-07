@@ -330,7 +330,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
+    <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
         <div className="flex items-center justify-between h-12 gap-1 overflow-visible">
@@ -834,7 +834,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             content scroll independently of the fixed sidebar. min-h-0 is
             critical: in a column flex layout, children with flex-1 default to
             min-content sizing which prevents overflow:auto from kicking in. */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col">
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden gradient-mesh flex flex-col" style={{overscrollBehavior: 'none'}}>
           <CloudSyncBanner
             isCloudSyncing={isCloudSyncing}
             cloudSyncStatus={cloudSyncStatus}
@@ -862,7 +862,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Main Content — no footer on mobile (BottomTabs replace it) */}
-      <main className="lg:hidden flex-1 min-h-0 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden">
+      <main className="lg:hidden flex-1 min-h-0 w-full max-w-full gradient-mesh flex flex-col overflow-y-auto overflow-x-hidden" style={{overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch'}}>
         <CloudSyncBanner
           isCloudSyncing={isCloudSyncing}
           cloudSyncStatus={cloudSyncStatus}

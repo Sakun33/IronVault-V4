@@ -235,7 +235,9 @@ input:-webkit-autofill:active {
     @apply bg-background text-foreground font-sans antialiased;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
     overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     height: 100%;
     overflow-x: hidden;
@@ -1003,7 +1005,16 @@ html, body {
    easily reintroduce horizontal scroll. Belt-and-suspenders rule below
    guards against accidental clipping outside scrollable surfaces. */
 @media (max-width: 480px) {
-  html, body { overflow-x: hidden; }
+  html, body { overflow-x: hidden; overscroll-behavior: none; }
+}
+
+/* ---------- iOS bounce / overscroll lock ---------- */
+/* Prevent the entire page from rubber-band scrolling on iOS — only inner
+   scrollable surfaces (cards, lists, main content) should respond to
+   touch overscroll. The fixed header + bottom nav must stay anchored.   */
+html, body, #root {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
 
 /* ---------- Rich-text editor + viewer (note-editor.tsx) ---------- */

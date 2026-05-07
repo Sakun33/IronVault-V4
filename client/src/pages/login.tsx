@@ -37,6 +37,7 @@ export default function Login() {
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   const [bioReady, setBioReady] = useState(false);
+  const [bioEnrolled, setBioEnrolled] = useState(false);
   const [bioLabel, setBioLabel] = useState<'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric'>('Biometric');
   const [bioIcon, setBioIcon] = useState<'face' | 'finger'>('finger');
   const [bioLoading, setBioLoading] = useState(false);
@@ -49,7 +50,6 @@ export default function Login() {
     let cancelled = false;
     (async () => {
       try {
-        if (!isAccountBiometricEnabled()) return;
         const caps = await checkBiometricCapabilities();
         if (cancelled || !caps.isAvailable) return;
         const label = caps.biometryType === 'faceId' || caps.biometryType === 'face'
@@ -59,7 +59,12 @@ export default function Login() {
             : 'Fingerprint';
         setBioLabel(label);
         setBioIcon(caps.biometryType === 'faceId' || caps.biometryType === 'face' ? 'face' : 'finger');
-        setBioEmail(getAccountBiometricEmail());
+        const enrolled = isAccountBiometricEnabled();
+        setBioEnrolled(enrolled);
+        setBioEmail(enrolled ? getAccountBiometricEmail() : null);
+        // P0: show the button on every biometric-capable native device, even
+        // before enrollment. Tapping pre-enrollment surfaces a friendly
+        // toast explaining the one-time password sign-in needed to seed it.
         setBioReady(true);
       } catch {
         // ignore — fall back to password login
@@ -70,6 +75,15 @@ export default function Login() {
 
   const handleBiometricSignIn = useCallback(async () => {
     if (bioLoading) return;
+    if (!bioEnrolled) {
+      // Device is biometric-capable but the user hasn't enrolled an
+      // account yet. Walk them through the one-time password sign-in.
+      toast({
+        title: `Set up ${bioLabel}`,
+        description: `Sign in once with your password — we'll offer to enable ${bioLabel} for next time.`,
+      });
+      return;
+    }
     setBioLoading(true);
     setError('');
     try {
@@ -109,7 +123,7 @@ export default function Login() {
     } finally {
       setBioLoading(false);
     }
-  }, [bioLoading, accountLogin, pendingTwoFactor, setLocation, toast]);
+  }, [bioLoading, bioEnrolled, bioLabel, accountLogin, pendingTwoFactor, setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -464,7 +478,7 @@ export default function Login() {
                 data-testid="button-biometric-signin"
                 onClick={handleBiometricSignIn}
                 disabled={bioLoading}
-                aria-label={`Sign in with ${bioLabel}`}
+                aria-label={bioEnrolled ? `Sign in with ${bioLabel}` : `Set up ${bioLabel}`}
                 className="w-full flex flex-col items-center gap-2 py-4 rounded-2xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition disabled:opacity-50"
               >
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500/15 to-teal-500/15 flex items-center justify-center">
@@ -473,10 +487,17 @@ export default function Login() {
                     : <Fingerprint className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />}
                 </div>
                 <span className="text-sm font-medium">
-                  {bioLoading ? 'Authenticating…' : `Sign in with ${bioLabel}`}
+                  {bioLoading
+                    ? 'Authenticating…'
+                    : bioEnrolled
+                      ? `Sign in with ${bioLabel}`
+                      : `Set up ${bioLabel}`}
                 </span>
-                {bioEmail && !bioLoading && (
+                {bioEnrolled && bioEmail && !bioLoading && (
                   <span className="text-[11px] text-muted-foreground">{bioEmail}</span>
+                )}
+                {!bioEnrolled && !bioLoading && (
+                  <span className="text-[11px] text-muted-foreground">Sign in with password first to enable</span>
                 )}
               </button>
             </div>

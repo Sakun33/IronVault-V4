@@ -38,7 +38,11 @@ const config: CapacitorConfig = {
       style: 'dark',
     },
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
+      // Use the app's launcher icon as the notification small-icon by default.
+      // The previous reference to `ic_stat_icon_config_sample` pointed at a
+      // resource that does not exist in this project, which can crash the
+      // notification subsystem on first dispatch. Falling back to the default
+      // `ic_launcher` is supported by Android 26+ and is the safe default.
       iconColor: '#4F46E5',
     },
     Preferences: {

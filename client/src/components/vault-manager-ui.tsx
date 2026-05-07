@@ -17,6 +17,7 @@ import {
 } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
 import { vaultStorage } from '@/lib/storage';
+import { isPaidTier } from '@/lib/plan-resolver';
 import { Button } from '@/components/ui/button';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -318,7 +319,10 @@ export function VaultManagerUI() {
   const [disableCloudVaultId, setDisableCloudVaultId] = useState<string | null>(null);
   const [isDisablingCloud, setIsDisablingCloud] = useState(false);
 
-  const isPaidUser = license.tier === 'pro' || license.tier === 'lifetime' || license.status === 'trial';
+  // Cross-check the plan cache so Lifetime/Pro users with a stale license
+  // blob (common immediately after login on native) don't see free-tier
+  // gating until the CRM round-trip lands.
+  const isPaidUser = isPaidTier(license.tier) || license.status === 'trial';
   const myDeviceId = getOrCreateDeviceId();
 
   // Load cloud vault list on mount and when account changes

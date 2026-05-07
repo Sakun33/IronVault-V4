@@ -989,20 +989,45 @@ export class VaultManager {
   }
 
   /**
-   * Check if user has a paid subscription
+   * Check if user has a paid subscription.
+   * Reads three sources in priority order:
+   *   1. customerProfile (legacy)
+   *   2. iv_plan_cache (written by usePlanFeatures from /entitlement)
+   *   3. ironvault_license tier (written by license-context)
+   * Any source reporting paid status wins — we never demote to free
+   * just because one source is stale.
    */
   isPaidUser(): boolean {
+    const isPaidString = (s: string | null) =>
+      s === 'lifetime' || s === 'pro' || s === 'pro_monthly' ||
+      s === 'pro_yearly' || s === 'premium' || s === 'family' ||
+      s === 'pro_family_member' || s === 'monthly' || s === 'yearly';
     try {
       const profile = localStorage.getItem('customerProfile');
       if (profile) {
         const { subscription } = JSON.parse(profile);
-        return subscription === 'lifetime' || 
-               subscription === 'pro_monthly' || 
-               subscription === 'pro_yearly' ||
-               subscription === 'premium';
+        if (isPaidString(subscription)) return true;
       }
     } catch (error) {
-      console.error('Error checking paid status:', error);
+      console.error('Error checking paid status (profile):', error);
+    }
+    try {
+      const planCache = localStorage.getItem('iv_plan_cache');
+      if (planCache) {
+        const { planId } = JSON.parse(planCache);
+        if (isPaidString(planId)) return true;
+      }
+    } catch (error) {
+      console.error('Error checking paid status (plan cache):', error);
+    }
+    try {
+      const licenseRaw = localStorage.getItem('ironvault_license');
+      if (licenseRaw) {
+        const lic = JSON.parse(licenseRaw);
+        if (isPaidString(lic?.tier)) return true;
+      }
+    } catch (error) {
+      console.error('Error checking paid status (license):', error);
     }
     return false;
   }
