@@ -13,3 +13,8 @@ build
 admin-console/node_modules
 admin-console/backend/node_modules
 admin-console/frontend/node_modules
+
+# build artifacts and test outputs (defense-in-depth even though above patterns cover most)
+android/app/build
+test-results
+playwright-report

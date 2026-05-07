@@ -54,6 +54,23 @@ function normalizeTier(input: unknown): PlanTier {
   return 'free';
 }
 
+// Tier rank for demotion-detection. Any decrease in rank is a demotion and
+// requires an authoritative source (server entitlement or explicit user action).
+// Lifetime is the highest; pro_family_member is below pro because it's a derivative
+// access tier rather than a paid subscription.
+const TIER_RANK: Record<PlanTier, number> = {
+  free: 0,
+  pro_family_member: 1,
+  pro: 2,
+  family: 3,
+  lifetime: 4,
+};
+
+export interface SetTierOpts {
+  authoritative?: boolean;
+  reason?: string;
+}
+
 class PlanService {
   private _tier: PlanTier = 'free';
   private _initialized = false;
@@ -87,18 +104,48 @@ class PlanService {
   }
 
   /** Authoritative setter — call from license-context after server response.
-   *  Pass `{ authoritative: true }` only when the source is the server or an
-   *  explicit user upgrade/downgrade. Stale IDB reads must use the default
-   *  (non-authoritative) so a Lifetime user can't be silently demoted to free
-   *  when their device was previously logged into a free account. The cache
-   *  is a floor, not a ceiling. */
-  setTier(tier: unknown, opts: { authoritative?: boolean } = {}): void {
+   *  Pass `{ authoritative: true }` only when the source is the server entitlement
+   *  endpoint or an explicit user upgrade/downgrade. Stale IDB reads, RC absence,
+   *  and local-cache reads must use the default (non-authoritative) so a Lifetime
+   *  user can't be silently demoted when their device was previously logged into
+   *  a free account, or when RevenueCat has no record of a Razorpay-purchased
+   *  Lifetime. The cache is a floor, not a ceiling.
+   *
+   *  Rank-based guard: any decrease in tier rank without `authoritative: true`
+   *  is rejected — protects lifetime/family/pro from drifting down via stale data.
+   *  Logout must call `reset()`, not setTier('free'), to clear paid state. */
+  setTier(tier: unknown, opts: SetTierOpts = {}): void {
     const normalized = normalizeTier(tier);
-    const isDemotion = this._tier !== 'free' && normalized === 'free';
+    const currentRank = TIER_RANK[this._tier];
+    const nextRank = TIER_RANK[normalized];
+    const isDemotion = currentRank > nextRank;
+    const reason = opts.reason || 'unspecified';
+
     if (isDemotion && !opts.authoritative) {
-      // Refuse to demote paid → free without an authoritative source.
+      // Refuse rank-decrease without an authoritative source. Trace so we can
+      // see where the bad call came from in the wild (stale cache write, RC
+      // absence, etc.). This is the guard that keeps Lifetime users from
+      // suddenly seeing paywalls 1–2 minutes after sign-in.
+      try {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[planService] BLOCKED non-authoritative demotion ${this._tier} → ${normalized} (reason=${reason})`,
+        );
+        // eslint-disable-next-line no-console
+        if (typeof console.trace === 'function') console.trace('[planService] demotion stack');
+      } catch { /* ignore */ }
       return;
     }
+
+    if (isDemotion) {
+      try {
+        // eslint-disable-next-line no-console
+        console.info(
+          `[planService] AUTHORITATIVE demotion ${this._tier} → ${normalized} (reason=${reason})`,
+        );
+      } catch { /* ignore */ }
+    }
+
     const changed = normalized !== this._tier || !this._initialized;
     this._tier = normalized;
     this._initialized = true;

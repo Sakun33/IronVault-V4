@@ -27,6 +27,19 @@ function getCachedPlan(email: string): PlanId | null {
 }
 
 export function savePlanCache(email: string, planId: PlanId): void {
+  // Don't poison the cache with 'free' if planService already knows the user is
+  // paid — that cache would be re-read on next mount and try to demote (blocked
+  // by planService guard, but it'd still flap state). Cache writes are NOT
+  // authoritative: they're a CRM-fetch result that may be stale or wrong.
+  if (planId === 'free' && planService.isPaid) {
+    try {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[savePlanCache] Refusing to cache 'free' over current paid tier '${planService.tier}' for ${email}`,
+      );
+    } catch { /* ignore */ }
+    return;
+  }
   const cache: PlanCache = {
     email: email.toLowerCase().trim(),
     planId,
@@ -35,8 +48,8 @@ export function savePlanCache(email: string, planId: PlanId): void {
   localStorage.setItem(PLAN_CACHE_KEY, JSON.stringify(cache));
   // Mirror into the central plan service so non-React consumers see the tier
   // the moment the CRM endpoint resolves — even before license-context runs
-  // syncFromServer.
-  planService.setTier(planId);
+  // syncFromServer. Non-authoritative — guard rejects rank decreases.
+  planService.setTier(planId, { reason: 'save-plan-cache' });
 }
 
 export function clearPlanCache(): void {
@@ -126,7 +139,10 @@ function buildFeatures(planId: PlanId): Omit<PlanFeatures, 'isLoading' | 'refres
 export function usePlanFeatures(): PlanFeatures {
   // Initialize from planService so the very first render is correct even before
   // the network fetch completes — this is what eliminates the "free flash" for
-  // paid users on app reload.
+  // paid users on app reload. We NEVER set planId from network/cache results
+  // directly; the only source of truth is planService.tier, mirrored via the
+  // subscription below. That way the planService demotion-guard becomes the
+  // single point that decides whether a tier change reaches the UI.
   const [planId, setPlanId] = useState<PlanId>(() => {
     const tier = planService.tier;
     return (['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(tier)
@@ -136,7 +152,8 @@ export function usePlanFeatures(): PlanFeatures {
   const [isLoading, setIsLoading] = useState(true);
 
   // Re-render when planService changes from any other code path (license-context
-  // sync, logout, server response).
+  // sync, logout, server response). This is the ONLY place planId gets updated
+  // from inside the hook — fetchPlan never calls setPlanId directly.
   useEffect(() => planService.subscribe(() => {
     const tier = planService.tier;
     const next: PlanId = (['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(tier)
@@ -152,11 +169,12 @@ export function usePlanFeatures(): PlanFeatures {
       return;
     }
 
-    // Use cache if fresh
+    // Use cache if fresh. Push through planService so the demotion guard
+    // applies — a stale cache row saying 'free' for a known-paid user is
+    // rejected (cache is non-authoritative).
     const cached = getCachedPlan(email);
     if (cached) {
-      setPlanId(cached);
-      planService.setTier(cached);
+      planService.setTier(cached, { reason: 'plan-cache-fresh' });
       setIsLoading(false);
       return;
     }
@@ -181,9 +199,10 @@ export function usePlanFeatures(): PlanFeatures {
         const validPlan: PlanId = ['free', 'pro', 'family', 'lifetime', 'pro_family_member'].includes(serverPlan)
           ? serverPlan as PlanId
           : 'free';
-        setPlanId(validPlan);
         savePlanCache(email, validPlan);
-        planService.setTier(validPlan);
+        // Server entitlement IS authoritative — this endpoint is the explicit
+        // source of truth the user described. Allowed to demote.
+        planService.setTier(validPlan, { authoritative: true, reason: 'server-entitlement-fetch' });
       }
     } catch {
       // Network error — fall back to cache or free

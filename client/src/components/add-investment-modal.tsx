@@ -17,13 +17,13 @@ interface AddInvestmentModalProps {
 
 export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProps) {
   const { addInvestment } = useVault();
-  const { formatCurrency } = useCurrency();
+  const { currency: appCurrency, currencies, getCurrencySymbol } = useCurrency();
   const { addLog } = useLogging();
   const { toast } = useToast();
-  
+
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     type: '',
@@ -33,6 +33,7 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
     purchasePrice: '',
     quantity: '',
     currentPrice: '',
+    currency: appCurrency || 'USD',
     notes: ''
   });
 
@@ -67,7 +68,7 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
                 purchasePrice: formData.purchasePrice ? parseFloat(formData.purchasePrice) : 0,
                 quantity: formData.quantity ? parseFloat(formData.quantity) : 1,
                 currentPrice: formData.currentPrice ? parseFloat(formData.currentPrice) : 0,
-                currency: 'USD',
+                currency: formData.currency || appCurrency || 'USD',
                 isActive: true,
                 tags: [],
                 fees: 0,
@@ -93,6 +94,7 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
         purchasePrice: '',
         quantity: '',
         currentPrice: '',
+        currency: appCurrency || 'USD',
         notes: ''
       });
       
@@ -193,6 +195,23 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
                     placeholder="e.g., AAPL, TSLA, BTC"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={formData.currency} onValueChange={(v) => handleInputChange('currency', v)}>
+                    <SelectTrigger id="currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((c: { code: string; name: string; symbol: string; flag?: string }) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.flag ? `${c.flag} ` : ''}{c.symbol} {c.code} — {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Defaults to your selected app currency.</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -231,7 +250,9 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
                 <div className="space-y-2">
                   <Label htmlFor="purchasePrice">Purchase Price per Unit</Label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                      {getCurrencySymbol(formData.currency)}
+                    </span>
                     <Input
                       id="purchasePrice"
                       type="number"
@@ -259,7 +280,9 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
                 <div className="space-y-2">
                   <Label htmlFor="currentPrice">Current Price per Unit</Label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                      {getCurrencySymbol(formData.currency)}
+                    </span>
                     <Input
                       id="currentPrice"
                       type="number"

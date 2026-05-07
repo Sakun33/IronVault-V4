@@ -79,7 +79,7 @@ export default function Investments() {
     }
 
     const { investments, investmentGoals, addInvestment, addInvestmentGoal, deleteInvestment, deleteInvestmentGoal, updateInvestment, updateInvestmentGoal, bulkDeleteInvestments, isLoading } = vaultContext;
-    const { formatCurrency } = currencyContext;
+    const { formatCurrency, currency: appCurrency } = currencyContext;
     const { addLog } = loggingContext;
     const { toast } = toastContext;
     
@@ -88,6 +88,7 @@ export default function Investments() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editModalMode, setEditModalMode] = useState<'view' | 'edit'>('view');
     const [showAddGoalModal, setShowAddGoalModal] = useState(false);
     const [editingGoal, setEditingGoal] = useState<InvestmentGoal | null>(null);
     const [activeTab, setActiveTab] = useState('overview');
@@ -183,6 +184,13 @@ export default function Investments() {
 
     const handleEditInvestment = (investment: Investment) => {
       setEditingInvestment(investment);
+      setEditModalMode('edit');
+      setIsEditModalOpen(true);
+    };
+
+    const handleViewInvestment = (investment: Investment) => {
+      setEditingInvestment(investment);
+      setEditModalMode('view');
       setIsEditModalOpen(true);
     };
 
@@ -228,7 +236,7 @@ export default function Investments() {
         quantity: 10,
         currentPrice: 175.00,
         currentValue: 1750.00,
-        currency: 'USD',
+        currency: appCurrency,
         notes: 'Tech stock investment',
         tags: ['tech', 'growth'],
         isActive: true,
@@ -243,7 +251,7 @@ export default function Investments() {
         quantity: 100,
         currentPrice: 108.00,
         currentValue: 10800.00,
-        currency: 'USD',
+        currency: appCurrency,
         notes: 'Diversified index fund',
         tags: ['index', 'diversified'],
         isActive: true,
@@ -259,7 +267,7 @@ export default function Investments() {
         quantity: 0.05,
         currentPrice: 50000.00,
         currentValue: 2500.00,
-        currency: 'USD',
+        currency: appCurrency,
         notes: 'Cryptocurrency investment',
         tags: ['crypto', 'volatile'],
         isActive: true,
@@ -518,7 +526,7 @@ export default function Investments() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Invested</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(portfolioAnalytics.totalInvested, 'USD')}
+                  {formatCurrency(portfolioAnalytics.totalInvested)}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-primary/70" />
@@ -529,7 +537,7 @@ export default function Investments() {
               <div>
                 <p className="text-sm text-muted-foreground">Current Value</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(portfolioAnalytics.totalCurrentValue, 'USD')}
+                  {formatCurrency(portfolioAnalytics.totalCurrentValue)}
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-green-500/70" />
@@ -540,7 +548,7 @@ export default function Investments() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Gain/Loss</p>
                 <p className={`text-2xl font-bold ${portfolioAnalytics.totalGainLoss >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                  {portfolioAnalytics.totalGainLoss >= 0 ? '+' : ''}{formatCurrency(portfolioAnalytics.totalGainLoss, 'USD')}
+                  {portfolioAnalytics.totalGainLoss >= 0 ? '+' : ''}{formatCurrency(portfolioAnalytics.totalGainLoss)}
                 </p>
               </div>
               {portfolioAnalytics.totalGainLoss >= 0 ? (
@@ -643,7 +651,7 @@ export default function Investments() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Target</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(goalAnalytics.totalTargetAmount, 'USD')}
+                  {formatCurrency(goalAnalytics.totalTargetAmount)}
                 </p>
               </div>
               <Award className="w-8 h-8 text-primary/70" />
@@ -686,7 +694,7 @@ export default function Investments() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold">{formatCurrency(data.value, 'USD')}</p>
+                          <p className="font-semibold">{formatCurrency(data.value)}</p>
                           <p className="text-xs text-muted-foreground">
                             {((data.value / portfolioAnalytics.totalCurrentValue) * 100).toFixed(1)}%
                           </p>
@@ -771,7 +779,7 @@ export default function Investments() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>{formatCurrency(goal.currentAmount, 'USD')} / {formatCurrency(goal.targetAmount, 'USD')}</span>
+                            <span>{formatCurrency(goal.currentAmount, goal.currency)} / {formatCurrency(goal.targetAmount, goal.currency)}</span>
                             <span>{calculateGoalProgress(goal).toFixed(1)}%</span>
                           </div>
                           <Progress value={calculateGoalProgress(goal)} className="h-2" />
@@ -840,7 +848,19 @@ export default function Investments() {
                       const returnPct = (gainLoss / invested) * 100;
 
                       return (
-                        <div key={investment.id} className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}>
+                        <div
+                          key={investment.id}
+                          className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors cursor-pointer${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleViewInvestment(investment)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleViewInvestment(investment);
+                            }
+                          }}
+                        >
                           <div className="flex flex-col gap-3">
                             {/* Top row: Info and Value */}
                             <div className="flex items-start justify-between gap-2">
@@ -859,7 +879,7 @@ export default function Investments() {
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <p className="font-semibold">
-                                  {formatCurrency(currentValue, 'USD')}
+                                  {formatCurrency(currentValue, investment.currency)}
                                 </p>
                                 <p className={`text-xs ${gainLoss >= 0 ? 'text-primary' : 'text-destructive'}`}>
                                   {gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
@@ -873,21 +893,32 @@ export default function Investments() {
                               </Badge>
                               <div className="flex items-center gap-1">
                                 <span className="text-xs text-muted-foreground mr-2">
-                                  Inv: {formatCurrency(invested, 'USD')}
+                                  Inv: {formatCurrency(invested, investment.currency)}
                                 </span>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleEditInvestment(investment)}
+                                  onClick={(e) => { e.stopPropagation(); handleViewInvestment(investment); }}
                                   className="h-7 w-7 p-0"
+                                  title="View"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => { e.stopPropagation(); handleEditInvestment(investment); }}
+                                  className="h-7 w-7 p-0"
+                                  title="Edit"
                                 >
                                   <Edit className="w-3 h-3" />
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleDeleteInvestment(investment.id, investment.name)}
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteInvestment(investment.id, investment.name); }}
                                   className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                  title="Delete"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </Button>
@@ -975,7 +1006,7 @@ export default function Investments() {
                           </div>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span>{formatCurrency(goal.currentAmount, 'USD')} / {formatCurrency(goal.targetAmount, 'USD')}</span>
+                              <span>{formatCurrency(goal.currentAmount, goal.currency)} / {formatCurrency(goal.targetAmount, goal.currency)}</span>
                               <span>{calculateGoalProgress(goal).toFixed(1)}%</span>
                             </div>
                             <Progress value={calculateGoalProgress(goal)} className="h-2" />
@@ -1039,7 +1070,7 @@ export default function Investments() {
                     <div className="flex justify-between">
                       <span>Total Gain/Loss</span>
                       <span className={`font-semibold ${portfolioAnalytics.totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {portfolioAnalytics.totalGainLoss >= 0 ? '+' : ''}{formatCurrency(portfolioAnalytics.totalGainLoss, 'USD')}
+                        {portfolioAnalytics.totalGainLoss >= 0 ? '+' : ''}{formatCurrency(portfolioAnalytics.totalGainLoss)}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1129,7 +1160,7 @@ export default function Investments() {
                 const targetDateInput = document.getElementById('targetDate') as HTMLInputElement;
                 const prioritySelect = document.querySelector('#priority') as HTMLSelectElement;
                 if (goalNameInput?.value && targetAmountInput?.value && targetDateInput?.value) {
-                  const goalData = { name: goalNameInput.value, category: goalCategorySelect?.value || 'other', description: goalDescriptionTextarea?.value || '', targetAmount: parseFloat(targetAmountInput.value), currentAmount: parseFloat(currentAmountInput?.value || '0'), targetDate: new Date(targetDateInput.value), priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high', currency: 'USD', investmentIds: [], isAchieved: false };
+                  const goalData = { name: goalNameInput.value, category: goalCategorySelect?.value || 'other', description: goalDescriptionTextarea?.value || '', targetAmount: parseFloat(targetAmountInput.value), currentAmount: parseFloat(currentAmountInput?.value || '0'), targetDate: new Date(targetDateInput.value), priority: (prioritySelect?.value || 'medium') as 'low' | 'medium' | 'high', currency: currencyContext.currency || 'USD', investmentIds: [], isAchieved: false };
                   handleAddGoal(goalData);
                 } else {
                   toast({ title: "Error", description: "Please fill in all required fields (Name, Target Amount, Target Date).", variant: "destructive" });
@@ -1240,6 +1271,7 @@ export default function Investments() {
           isOpen={isEditModalOpen}
           onClose={handleCloseEditModal}
           onInvestmentUpdated={handleInvestmentUpdated}
+          initialMode={editModalMode}
         />
 
         <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
