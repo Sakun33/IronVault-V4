@@ -327,10 +327,32 @@ export default function VaultPickerPage() {
     };
     checkBiometric();
 
-    // Load cloud vaults — only possible once we know the account email
+    // Load cloud vaults — only possible once we know the account email.
+    // P0 FIX (Android freeze): cloudVaultsLoading starts as `true`, so EVERY
+    // exit path (early-return, success, error) MUST clear it. Previously the
+    // `if (!accountEmail) return` early-return left the spinner up forever
+    // on a fresh native app where accountEmail hadn't been hydrated yet.
+    // We also wrap the whole flow in a 15s safety timer so a hung network
+    // request on Android WebView can't strand the UI behind "Loading…".
+    let cancelled = false;
+    let safetyTimer: ReturnType<typeof setTimeout> | null = null;
     const loadCloudVaults = async () => {
-      if (!accountEmail) return;
+      if (!accountEmail) {
+        // No email = nothing to load. Clear the spinner so the picker
+        // can render the local-vault create button immediately.
+        setCloudVaultsLoading(false);
+        return;
+      }
       setCloudVaultsLoading(true);
+      // Last-resort safety net: even if every internal timeout fails, never
+      // leave the spinner up for more than 15 seconds. The user can always
+      // retry via the banner that appears on cloudListFailed.
+      safetyTimer = setTimeout(() => {
+        if (cancelled) return;
+        console.error('[VAULT-DEBUG] cloud load safety timeout fired (15s)');
+        setCloudVaultsLoading(false);
+        setCloudListFailed(true);
+      }, 15_000);
       console.error('[VAULT-DEBUG] loadCloudVaults entered', {
         accountEmail,
         tokenPresent: !!getCloudToken(),
@@ -349,11 +371,14 @@ export default function VaultPickerPage() {
         // collapsing into "you have no cloud vaults". The retry banner
         // (rendered below) lets the user re-acquire a token without a
         // full sign-out → sign-in dance.
-        setCloudTokenMissing(true);
-        setCloudVaultsLoading(false);
+        if (!cancelled) {
+          setCloudTokenMissing(true);
+          setCloudVaultsLoading(false);
+        }
+        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
         return;
       }
-      setCloudTokenMissing(false);
+      if (!cancelled) setCloudTokenMissing(false);
       try {
         const result = await listCloudVaultsWithStatus();
         console.error('[VAULT-DEBUG] listCloudVaults result', {
@@ -361,6 +386,7 @@ export default function VaultPickerPage() {
           status: result.status,
           vaultCount: result.vaults?.length || 0,
         });
+        if (cancelled) return;
         setCloudVaults(result.vaults);
         // Only flag failure when ok=false AND we're not already redirecting
         // for a 401 (the global interceptor handles that). For any other
@@ -369,9 +395,10 @@ export default function VaultPickerPage() {
         setCloudListFailed(!result.ok);
       } catch (e) {
         console.error('[vault-picker] listCloudVaults failed:', e);
-        setCloudListFailed(true);
+        if (!cancelled) setCloudListFailed(true);
       } finally {
-        setCloudVaultsLoading(false);
+        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+        if (!cancelled) setCloudVaultsLoading(false);
       }
     };
     loadCloudVaults();
@@ -380,7 +407,11 @@ export default function VaultPickerPage() {
     // be acquired.
     const onMissing = () => setCloudTokenMissing(true);
     window.addEventListener('vault:cloud:token-missing', onMissing);
-    return () => window.removeEventListener('vault:cloud:token-missing', onMissing);
+    return () => {
+      cancelled = true;
+      if (safetyTimer) clearTimeout(safetyTimer);
+      window.removeEventListener('vault:cloud:token-missing', onMissing);
+    };
   }, [accountEmail]); // re-run when email is set (e.g. after initializeAuth completes)
 
   // Manual retry — re-acquire the cloud token + re-list cloud vaults.

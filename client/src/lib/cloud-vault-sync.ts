@@ -43,18 +43,31 @@ export function clearCloudToken(): void {
 }
 
 // ── Auth: exchange email+accountPasswordHash for JWT ──────────────────────────
+// Android WebView can hang indefinitely on TLS handshakes when the network
+// is flaky — wrap fetches in AbortController so a stuck request can never
+// freeze the vault picker behind a "loading…" spinner.
+function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = 10_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(input, { ...init, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 export async function acquireCloudToken(email: string, accountPasswordHash: string): Promise<string | null> {
   try {
-    const res = await fetch(`${CLOUD_API}/api/auth/token`, {
+    const res = await fetchWithTimeout(`${CLOUD_API}/api/auth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-iv-client': 'web' },
       body: JSON.stringify({ email, accountPasswordHash }),
-    });
+    }, 10_000);
     if (!res.ok) return null;
     const { token } = await res.json();
     if (token) { storeCloudToken(token); return token; }
     return null;
-  } catch { return null; }
+  } catch (err) {
+    console.error('[acquireCloudToken] failed:', err);
+    return null;
+  }
 }
 
 function authHeaders(): Record<string, string> {
@@ -92,8 +105,18 @@ export interface ListCloudVaultsResult {
 export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult> {
   const tokenLen = (getCloudToken() || '').length;
   console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus call', { tokenPresent: tokenLen > 0, tokenLen });
+  // Skip the network round-trip entirely if there's no token — the request
+  // would 401 anyway and on Android WebView a hung TLS handshake to a 401
+  // endpoint is the same freeze symptom as a real network hang.
+  if (tokenLen === 0) {
+    return { ok: false, vaults: [], status: 401 };
+  }
   try {
-    const res = await fetch(`${CLOUD_API}/api/vaults/cloud`, { headers: authHeaders() });
+    const res = await fetchWithTimeout(
+      `${CLOUD_API}/api/vaults/cloud`,
+      { headers: authHeaders() },
+      10_000,
+    );
     console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus response', { status: res.status, ok: res.ok });
     if (!res.ok) {
       console.error('[listCloudVaults] non-OK response:', res.status, res.statusText);
