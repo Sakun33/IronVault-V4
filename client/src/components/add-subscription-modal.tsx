@@ -322,7 +322,7 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
                     <SelectItem key={curr.code} value={curr.code}>
                       <div className="flex items-center gap-2">
                         <span>{curr.flag}</span>
-                        <span>{curr.code} ({curr.symbol})</span>
+                        <span>{curr.symbol === curr.code ? curr.code : `${curr.code} (${curr.symbol})`}</span>
                       </div>
                     </SelectItem>
                   ))}

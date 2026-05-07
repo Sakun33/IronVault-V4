@@ -415,7 +415,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" data-testid="import-export-modal">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-hidden flex flex-col" data-testid="import-export-modal">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
@@ -431,7 +431,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
             <TabsTrigger value="templates" data-testid="tab-templates">Templates</TabsTrigger>
           </TabsList>
           
-          <DialogBody>
+          <DialogBody className="overflow-y-auto flex-1 min-h-0">
             <TabsContent value="export" className="space-y-4">
             <div className="rounded-lg bg-muted p-4">
               <div className="flex items-center gap-2 mb-2">

@@ -159,7 +159,7 @@ export default function PricingPage() {
               <SelectContent>
                 {currencies.map((curr) => (
                   <SelectItem key={curr.code} value={curr.code}>
-                    {curr.code} ({curr.symbol})
+                    {curr.symbol === curr.code ? curr.code : `${curr.code} (${curr.symbol})`}
                   </SelectItem>
                 ))}
               </SelectContent>

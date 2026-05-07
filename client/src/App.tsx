@@ -1106,6 +1106,15 @@ function Router() {
           <Dashboard />
         </MainLayout>
       )} />
+      {/* Bug 11: alias /dashboard so deep links / shortcuts that target the
+          dashboard explicitly don't fall back to the catch-all and don't get
+          confused with the Tier-1 LandingPage at "/". Renders the same
+          component — no auth re-evaluation. */}
+      <Route path="/dashboard" component={() => (
+        <MainLayout>
+          <Dashboard />
+        </MainLayout>
+      )} />
       <Route path="/passwords" component={() => (
         <MainLayout>
           <Passwords />

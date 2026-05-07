@@ -581,7 +581,9 @@ export default function Dashboard() {
               </SelectTrigger>
               <SelectContent>
                 {currencies.map(curr => (
-                  <SelectItem key={curr.code} value={curr.code}>{curr.symbol} {curr.code}</SelectItem>
+                  <SelectItem key={curr.code} value={curr.code}>
+                    {curr.symbol === curr.code ? curr.code : `${curr.symbol} ${curr.code}`}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

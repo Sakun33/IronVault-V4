@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,18 +27,35 @@ export function SubscriptionReminderComponent({
     setReminders(newReminders);
   }, [subscriptions]);
 
-  const activeReminders = reminderService.getActiveReminders();
-  const upcomingReminders = reminderService.getUpcomingReminders();
+  // Bug 7: previously the badge counts and rendered list pulled from two
+  // separate calls into the service singleton, which could go out of sync
+  // (e.g. badge said "Soon (3)" while the list rendered nothing). Derive
+  // both from the same reactive `reminders` state via useMemo so the count
+  // and the items are always consistent.
+  const activeReminders = useMemo(() => {
+    const now = new Date();
+    return reminders.filter(r => !r.isDismissed && new Date(r.dueDate) <= now);
+  }, [reminders]);
+
+  const upcomingReminders = useMemo(() => {
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
+    return reminders.filter(r => {
+      if (r.isDismissed) return false;
+      const due = new Date(r.dueDate);
+      return due > now && due <= nextWeek;
+    });
+  }, [reminders]);
 
   const handleDismiss = (reminderId: string) => {
     reminderService.dismissReminder(reminderId);
-    setReminders([...reminderService.getActiveReminders(), ...reminderService.getUpcomingReminders()]);
+    setReminders(prev => prev.map(r => r.id === reminderId ? { ...r, isDismissed: true } : r));
     onReminderAction?.(reminders.find(r => r.id === reminderId)!, 'dismiss');
   };
 
   const handleMarkAsRead = (reminderId: string) => {
     reminderService.markAsRead(reminderId);
-    setReminders([...reminderService.getActiveReminders(), ...reminderService.getUpcomingReminders()]);
+    setReminders(prev => prev.map(r => r.id === reminderId ? { ...r, isRead: true } : r));
     onReminderAction?.(reminders.find(r => r.id === reminderId)!, 'read');
   };
 

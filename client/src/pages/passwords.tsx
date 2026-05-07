@@ -332,9 +332,9 @@ export default function Passwords() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 text-sm h-9">
+              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 min-w-[140px] text-sm h-9 [&>span]:truncate">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
@@ -345,7 +345,7 @@ export default function Passwords() {
               </SelectContent>
             </Select>
             <Select value={strengthFilter} onValueChange={setStrengthFilter}>
-              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 text-sm h-9">
+              <SelectTrigger className="rounded-xl border-input bg-muted flex-1 min-w-[140px] text-sm h-9 [&>span]:truncate">
                 <SelectValue placeholder="All Strength" />
               </SelectTrigger>
               <SelectContent>
@@ -589,32 +589,27 @@ export default function Passwords() {
                 </div>
 
                 {/* URL */}
-                {pw.url && (
-                  <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Website</div>
-                      <div className="text-[14px] text-foreground truncate">{pw.url}</div>
+                {pw.url && (() => {
+                  const raw = (pw.url || '').trim();
+                  const safeHref = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                  return (
+                    <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Website</div>
+                        <div className="text-[14px] text-foreground truncate">{pw.url}</div>
+                      </div>
+                      <a
+                        href={safeHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        aria-label={`Open ${pw.name} website in new tab`}
+                      >
+                        <Globe size={15} className="text-muted-foreground" />
+                      </a>
                     </div>
-                    <button
-                      onClick={() => {
-                        // A URL like "google.com" (no scheme) makes
-                        // window.open treat it as a relative path —
-                        // navigating the SPA to /google.com and tearing
-                        // down the auth state. Force https:// when no
-                        // scheme is present.
-                        const raw = (pw.url || '').trim();
-                        if (!raw) return;
-                        const safe = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-                        window.open(safe, '_blank', 'noopener,noreferrer');
-                      }}
-                      className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
-                      aria-label={`Open ${pw.name} website in new tab`}
-                      type="button"
-                    >
-                      <Globe size={15} className="text-muted-foreground" />
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Notes */}
                 {pw.notes && (

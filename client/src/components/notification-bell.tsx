@@ -109,7 +109,23 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         </Button>
       </PopoverTrigger>
       
-      <PopoverContent className="w-80 p-0" align="end">
+      <PopoverContent
+        className="w-80 p-0"
+        align="end"
+        sideOffset={8}
+        collisionPadding={12}
+        onEscapeKeyDown={() => setIsOpen(false)}
+        onKeyDown={(e) => {
+          // Belt-and-braces: even if focus is on a child element that
+          // doesn't bubble Escape to Radix's outer handler, this guarantees
+          // the panel closes on Escape.
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+          }
+        }}
+      >
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-foreground">

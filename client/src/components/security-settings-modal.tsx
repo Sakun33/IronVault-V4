@@ -47,6 +47,14 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [applyProgress, setApplyProgress] = useState(0);
+  // Bug 2 / 13: hoisted these so the open/close cleanup effect below can
+  // reference the setters without tripping the TDZ for block-scoped consts.
+  const [testPassword, setTestPassword] = useState('');
+  const [recommendation, setRecommendation] = useState<{
+    preset: string;
+    reason: string;
+    config: KDFConfig;
+  } | null>(null);
   const { toast } = useToast();
   const { getKDFConfig, updateKDFConfig } = useVault();
 
@@ -54,6 +62,13 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
   useEffect(() => {
     if (open) {
       loadCurrentKDFConfig();
+    } else {
+      // Clear local-only state on close so the strength-tester input
+      // doesn't bleed back into a fresh open or get picked up by browser
+      // autofill against unrelated fields elsewhere in the app.
+      setTestPassword('');
+      setRecommendation(null);
+      setMasterPassword('');
     }
   }, [open]);
 
@@ -235,13 +250,7 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
     }
   };
 
-  // Test password strength recommendation
-  const [testPassword, setTestPassword] = useState('');
-  const [recommendation, setRecommendation] = useState<{
-    preset: string;
-    reason: string;
-    config: KDFConfig;
-  } | null>(null);
+  // Test password strength recommendation (state hoisted to top of component)
 
   useEffect(() => {
     const updateRecommendation = async () => {
@@ -414,21 +423,39 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
           {/* Password Strength Recommendation */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="test-password" className="text-sm font-medium">
+              <Label htmlFor="security-test-password" className="text-sm font-medium">
                 Password Strength Analyzer
               </Label>
               <input
-                id="test-password"
+                id="security-test-password"
+                name="security-test-password"
                 type="password"
                 placeholder="Enter a test password..."
                 value={testPassword}
                 onChange={(e) => setTestPassword(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm bg-background text-foreground placeholder:text-muted-foreground"
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
+                onInput={(e) => e.stopPropagation()}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
+                className="w-full mt-1 px-3 py-2 border rounded-md text-sm bg-background text-foreground placeholder:text-muted-foreground"
                 data-testid="input-test-password"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Test password strength to get security level recommendations
-              </p>
+              {testPassword.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1.5">
+                  <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  <span>Type a password above to see device-tuned security level recommendations.</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Analyzing strength… recommendation appears below.
+                </p>
+              )}
             </div>
 
             {recommendation && (

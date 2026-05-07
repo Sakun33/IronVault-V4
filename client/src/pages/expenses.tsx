@@ -347,18 +347,24 @@ function TabButton({ active, value, onClick, children }: { active: boolean; valu
   );
 }
 
-function SummaryCard({ label, amount, tone, currency, showSign }: { label: string; amount: number; tone: 'positive' | 'negative' | 'neutral'; currency: string; showSign?: boolean }) {
+function SummaryCard({ label, amount, tone, currency, showSign, asInteger }: { label: string; amount: number; tone: 'positive' | 'negative' | 'neutral'; currency: string; showSign?: boolean; asInteger?: boolean }) {
   const toneClass = tone === 'positive'
     ? 'text-emerald-500'
     : tone === 'negative'
       ? 'text-rose-500'
       : 'text-foreground';
   const sign = showSign && amount > 0 ? '+' : '';
+  // Bug 4: stat counts (e.g. "Count: 600") shouldn't be currency-formatted —
+  // rendering them via Intl.NumberFormat with style:'currency' produced
+  // "$600.00" for an integer count.
+  const display = asInteger
+    ? Math.round(Math.abs(amount)).toLocaleString()
+    : formatAmount(Math.abs(amount), currency);
   return (
     <div className="rounded-2xl border border-border/50 bg-card p-3 sm:p-4">
       <p className="text-xs text-muted-foreground truncate">{label}</p>
       <p className={`text-lg sm:text-xl font-bold mt-1 ${toneClass}`} data-testid={`summary-${label.toLowerCase().replace(/[^a-z]/g, '-')}`}>
-        {sign}{formatAmount(Math.abs(amount), currency)}
+        {sign}{display}
       </p>
     </div>
   );
@@ -499,6 +505,18 @@ function ExpenseRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  // Bug 3: Normalize every row to the user's selected display currency so the
+  // list doesn't mix $ and ₹. We still keep the original `expense.currency` as
+  // the source of truth in storage; we just convert at display time.
+  const { currency: selectedCurrency, convertCurrency } = useCurrency();
+  const fmt = (amount: number) => {
+    const fromCur = expense.currency || 'USD';
+    const converted = fromCur === selectedCurrency
+      ? amount
+      : convertCurrency(amount, fromCur, selectedCurrency);
+    return formatAmount(converted, selectedCurrency);
+  };
+
   const group = expense.groupId ? groups.find(g => g.id === expense.groupId) : null;
   const youPaid = expense.paidBy === 'self';
   const otherCount = expense.splits.filter(s => s.contactId !== 'self').length;
@@ -526,7 +544,7 @@ function ExpenseRow({
   const ownShare = expense.splits.find(s => s.contactId === 'self')?.amount ?? 0;
   const splitSummary = expense.splits.length > 1
     ? expense.splits
-        .map(s => `${s.contactId === 'self' ? 'You' : contactNameOf(s.contactId, contacts).split(' ')[0]} ${formatAmount(s.amount, expense.currency)}`)
+        .map(s => `${s.contactId === 'self' ? 'You' : contactNameOf(s.contactId, contacts).split(' ')[0]} ${fmt(s.amount)}`)
         .join(' · ')
     : null;
 
@@ -561,12 +579,12 @@ function ExpenseRow({
       </div>
       <div className="flex flex-col items-end flex-shrink-0 min-w-[72px]">
         <span className="text-[15px] font-semibold tabular-nums" data-testid={`expense-amount-${expense.id}`}>
-          {formatAmount(expense.amount, expense.currency)}
+          {fmt(expense.amount)}
         </span>
         <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
         {expense.splits.length > 1 && ownShare > 0 && (
           <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-            your share {formatAmount(ownShare, expense.currency)}
+            your share {fmt(ownShare)}
           </span>
         )}
       </div>
@@ -801,7 +819,7 @@ function ReportsTab({ expenses, displayCurrency }: { expenses: SharedExpense[]; 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <SummaryCard label="Total" amount={totalAll} tone="neutral" currency={displayCurrency} />
         <SummaryCard label="Average" amount={avg} tone="neutral" currency={displayCurrency} />
-        <SummaryCard label="Count" amount={expenses.length} tone="neutral" currency="USD" />
+        <SummaryCard label="Count" amount={expenses.length} tone="neutral" currency={displayCurrency} asInteger />
       </div>
 
       {/* Monthly bar chart */}

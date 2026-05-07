@@ -384,10 +384,10 @@ export default function APIKeys() {
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by name, service, or tag…"
+              placeholder="Search keys…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-10 rounded-xl"
+              className="pl-10 pr-3 h-10 rounded-xl truncate"
               data-testid="input-search-api-keys"
             />
           </div>
