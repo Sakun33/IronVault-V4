@@ -188,3 +188,33 @@ export async function getVaultsWithBiometricEnabled(): Promise<string[]> {
 export function getBiometricKeystore() {
   return biometricKeystore;
 }
+
+// ── Account-level biometric (Stage-1 login bypass) ─────────────────────────
+
+export async function enableAccountBiometric(email: string, accountPassword: string): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  const result = await biometricKeystore.storeAccountCredentials(email, accountPassword);
+  return result.success;
+}
+
+export async function signInWithBiometric(): Promise<{
+  success: boolean;
+  email?: string;
+  password?: string;
+  error?: string;
+}> {
+  if (!isNativeApp()) return { success: false, error: 'Biometric sign-in requires native app' };
+  return biometricKeystore.retrieveAccountCredentials();
+}
+
+export async function disableAccountBiometric(): Promise<void> {
+  await biometricKeystore.deleteAccountCredentials();
+}
+
+export function isAccountBiometricEnabled(): boolean {
+  return biometricKeystore.isAccountBiometricEnabled();
+}
+
+export function getAccountBiometricEmail(): string | null {
+  return biometricKeystore.getAccountBiometricEmail();
+}

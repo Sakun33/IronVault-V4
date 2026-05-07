@@ -3,9 +3,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Fingerprint } from 'lucide-react';
 import { isNativeApp } from '@/native/platform';
-import { checkBiometricCapabilities, enableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore } from '@/native/biometrics';
+import {
+  checkBiometricCapabilities,
+  enableBiometricUnlock,
+  isBiometricUnlockEnabled,
+  getBiometricKeystore,
+  enableAccountBiometric,
+  isAccountBiometricEnabled,
+} from '@/native/biometrics';
 import { CryptoService } from '@/lib/crypto';
 import { useToast } from '@/hooks/use-toast';
+import { getAccountEmail } from '@/lib/account-auth';
 
 interface BiometricSetupPromptProps {
   masterPassword: string | null;
@@ -73,6 +81,23 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
           `ironvault_biometric_salt_${vaultId}`,
           btoa(Array.from(salt).map(b => String.fromCharCode(b)).join(''))
         );
+
+        // Also enrol account-level biometric if we have the password from the
+        // most recent login. Both passwords belong to the same biometric
+        // gesture from the user's POV — one prompt unlocks the entire app.
+        try {
+          if (!isAccountBiometricEnabled()) {
+            const pw = sessionStorage.getItem('iv_pending_bio_account_pw');
+            const email = getAccountEmail();
+            if (pw && email) {
+              await enableAccountBiometric(email, pw);
+            }
+          }
+          sessionStorage.removeItem('iv_pending_bio_account_pw');
+        } catch {
+          // Account-level enrollment is best-effort; vault-level success is what matters here
+        }
+
         toast({ title: `${biometricLabel} Enabled`, description: `Unlock faster with ${biometricLabel}.` });
       } else {
         toast({ title: 'Could not enable', description: 'Make sure biometrics are enrolled on your device.', variant: 'destructive' });

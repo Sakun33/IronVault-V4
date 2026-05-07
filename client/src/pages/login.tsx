@@ -1,16 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield } from 'lucide-react';
+import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield, Fingerprint, ScanFace } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
 import { motionPresets } from '@/lib/design-system';
-import { apiBase } from '@/native/platform';
+import { apiBase, isNativeApp } from '@/native/platform';
+import {
+  checkBiometricCapabilities,
+  signInWithBiometric,
+  isAccountBiometricEnabled,
+  getAccountBiometricEmail,
+  disableAccountBiometric,
+} from '@/native/biometrics';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -29,7 +36,80 @@ export default function Login() {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
+  const [bioReady, setBioReady] = useState(false);
+  const [bioLabel, setBioLabel] = useState<'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric'>('Biometric');
+  const [bioIcon, setBioIcon] = useState<'face' | 'finger'>('finger');
+  const [bioLoading, setBioLoading] = useState(false);
+  const [bioEmail, setBioEmail] = useState<string | null>(null);
+
   const hasCredentials = hasAccountCredentials();
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isAccountBiometricEnabled()) return;
+        const caps = await checkBiometricCapabilities();
+        if (cancelled || !caps.isAvailable) return;
+        const label = caps.biometryType === 'faceId' || caps.biometryType === 'face'
+          ? 'Face ID'
+          : caps.biometryType === 'touchId'
+            ? 'Touch ID'
+            : 'Fingerprint';
+        setBioLabel(label);
+        setBioIcon(caps.biometryType === 'faceId' || caps.biometryType === 'face' ? 'face' : 'finger');
+        setBioEmail(getAccountBiometricEmail());
+        setBioReady(true);
+      } catch {
+        // ignore — fall back to password login
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleBiometricSignIn = useCallback(async () => {
+    if (bioLoading) return;
+    setBioLoading(true);
+    setError('');
+    try {
+      const creds = await signInWithBiometric();
+      if (!creds.success || !creds.email || !creds.password) {
+        toast({
+          title: 'Biometric sign-in failed',
+          description: creds.error || 'Try entering your password instead.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      const ok = await accountLogin(creds.email, creds.password);
+      if (ok) {
+        setLocation('/');
+      } else if (!pendingTwoFactor) {
+        // Stored password is stale — disable biometric so user falls back to password
+        await disableAccountBiometric();
+        setBioReady(false);
+        setEmail(creds.email);
+        toast({
+          title: 'Stored credentials no longer valid',
+          description: 'Please sign in with your password.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true);
+      } else {
+        toast({
+          title: 'Sign in failed',
+          description: 'Unable to sign in with biometric. Try password instead.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setBioLoading(false);
+    }
+  }, [bioLoading, accountLogin, pendingTwoFactor, setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +129,11 @@ export default function Login() {
     try {
       const success = await accountLogin(trimmedEmail, password);
       if (success) {
+        // Stash the just-validated password for the post-unlock enrollment
+        // prompt to consume. Cleared by BiometricSetupPrompt or on logout.
+        if (isNativeApp()) {
+          try { sessionStorage.setItem('iv_pending_bio_account_pw', password); } catch {}
+        }
         setLocation('/');
       } else if (!pendingTwoFactor) {
         // pendingTwoFactor is set synchronously inside accountLogin before it
@@ -363,6 +448,39 @@ export default function Login() {
               {isLoading ? 'Signing in…' : 'Sign In'}
             </Button>
           </form>
+
+          {bioReady && (
+            <div className="mt-6">
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border/60" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid="button-biometric-signin"
+                onClick={handleBiometricSignIn}
+                disabled={bioLoading}
+                aria-label={`Sign in with ${bioLabel}`}
+                className="w-full flex flex-col items-center gap-2 py-4 rounded-2xl border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition disabled:opacity-50"
+              >
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500/15 to-teal-500/15 flex items-center justify-center">
+                  {bioIcon === 'face'
+                    ? <ScanFace className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                    : <Fingerprint className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />}
+                </div>
+                <span className="text-sm font-medium">
+                  {bioLoading ? 'Authenticating…' : `Sign in with ${bioLabel}`}
+                </span>
+                {bioEmail && !bioLoading && (
+                  <span className="text-[11px] text-muted-foreground">{bioEmail}</span>
+                )}
+              </button>
+            </div>
+          )}
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             New to IronVault?{' '}

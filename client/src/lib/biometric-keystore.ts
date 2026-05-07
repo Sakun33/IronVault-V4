@@ -28,6 +28,9 @@ import { CryptoService } from './crypto';
 const DEVICE_KEY_PREF = 'iv_dk';          // base64 raw 32-byte AES key
 const VAULT_KEY_PREFIX = 'iv_bkey_';      // iv_bkey_<vaultId> → base64 JSON {iv, ct}
 const VAULT_REGISTRY_KEY = 'ironvault_registry';
+const ACCOUNT_CRED_PREF = 'iv_account_bio';     // encrypted blob {iv, ct} of {email,password}
+const ACCOUNT_BIO_FLAG = 'iv_account_bio_enabled';
+const ACCOUNT_BIO_EMAIL = 'iv_account_bio_email';
 
 export interface BiometricKeyEntry {
   vaultId: string;
@@ -248,6 +251,74 @@ export class BiometricKeystore {
   async importVaultUnlockKey(base64Key: string): Promise<CryptoKey> {
     const keyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
     return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  }
+
+  // ── Account-level biometric credentials ───────────────────────────────────
+  // Stores account email + account password (the Stage-1 login secret) so a
+  // single biometric prompt can sign the user in without a password.
+
+  async storeAccountCredentials(email: string, accountPassword: string): Promise<StoreBiometricResult> {
+    if (!isNativeApp()) return { success: false, error: 'Account biometric requires native app' };
+    try {
+      const dk = await this.getDeviceKey();
+      const payload = JSON.stringify({ email: email.toLowerCase().trim(), password: accountPassword });
+      const { encrypted, iv } = await CryptoService.encrypt(payload, dk);
+      const blob = JSON.stringify({
+        iv: CryptoService.uint8ArrayToBase64(iv),
+        ct: CryptoService.uint8ArrayToBase64(encrypted),
+      });
+      await Preferences.set({ key: ACCOUNT_CRED_PREF, value: blob });
+      localStorage.setItem(ACCOUNT_BIO_FLAG, 'true');
+      localStorage.setItem(ACCOUNT_BIO_EMAIL, email.toLowerCase().trim());
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to store account credentials',
+      };
+    }
+  }
+
+  async retrieveAccountCredentials(): Promise<{ success: boolean; email?: string; password?: string; error?: string }> {
+    if (!isNativeApp()) return { success: false, error: 'Account biometric requires native app' };
+    try {
+      await BiometricAuth.authenticate({
+        reason: 'Sign in to IronVault',
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: false,
+      });
+      const { value: blob } = await Preferences.get({ key: ACCOUNT_CRED_PREF });
+      if (!blob) return { success: false, error: 'No biometric credentials found' };
+
+      const { iv: ivB64, ct: ctB64 } = JSON.parse(blob);
+      const iv = CryptoService.base64ToUint8Array(ivB64);
+      const ct = CryptoService.base64ToUint8Array(ctB64);
+      const dk = await this.getDeviceKey();
+      const decrypted = await CryptoService.decrypt(ct, dk, iv);
+      const { email, password } = JSON.parse(new TextDecoder().decode(decrypted));
+      return { success: true, email, password };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Biometric authentication failed',
+      };
+    }
+  }
+
+  async deleteAccountCredentials(): Promise<void> {
+    try {
+      await Preferences.remove({ key: ACCOUNT_CRED_PREF });
+    } catch {}
+    localStorage.removeItem(ACCOUNT_BIO_FLAG);
+    localStorage.removeItem(ACCOUNT_BIO_EMAIL);
+  }
+
+  isAccountBiometricEnabled(): boolean {
+    return localStorage.getItem(ACCOUNT_BIO_FLAG) === 'true';
+  }
+
+  getAccountBiometricEmail(): string | null {
+    return localStorage.getItem(ACCOUNT_BIO_EMAIL);
   }
 }
 

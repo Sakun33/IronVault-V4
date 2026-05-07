@@ -103,7 +103,8 @@ const safeFormat = (date: Date | null | undefined, fmt: string, fallback = '—'
 };
 import { PricingService, PricingTier, LicenseInfo } from '@/lib/pricing';
 import { PricingUpgrade } from '@/components/pricing-upgrade';
-import { checkBiometricCapabilities, enableBiometricUnlock, disableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore } from '@/native/biometrics';
+import { checkBiometricCapabilities, enableBiometricUnlock, disableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore, enableAccountBiometric, disableAccountBiometric, isAccountBiometricEnabled } from '@/native/biometrics';
+import { getAccountEmail } from '@/lib/account-auth';
 import { useAuth } from '@/contexts/auth-context';
 import { useLicense } from '@/contexts/license-context';
 import { useLocation } from 'wouter';
@@ -469,11 +470,24 @@ export default function Profile() {
         const vaultId = defaultVault?.id || 'default';
         
         const success = await enableBiometricUnlock(vaultUnlockKey, vaultId);
-        
+
         if (success) {
           // Store the salt in vault metadata (non-secret) for key re-derivation
           localStorage.setItem(`ironvault_biometric_salt_${vaultId}`, btoa(Array.from(salt).map(b => String.fromCharCode(b)).join('')));
-          
+
+          // Also pick up the pending account password (set by login.tsx after a
+          // successful sign-in) so a single biometric gesture handles both
+          // login and vault unlock from now on.
+          try {
+            if (!isAccountBiometricEnabled()) {
+              const pw = sessionStorage.getItem('iv_pending_bio_account_pw');
+              const email = getAccountEmail();
+              if (pw && email) {
+                await enableAccountBiometric(email, pw);
+              }
+            }
+          } catch { /* best-effort */ }
+
           setBiometricEnabled(true);
           toast({
             title: "Biometric Enabled",
@@ -492,10 +506,14 @@ export default function Profile() {
         const vaultId = defaultVault?.id || 'default';
         
         await disableBiometricUnlock(vaultId);
-        
+
         // Clean up the salt
         localStorage.removeItem(`ironvault_biometric_salt_${vaultId}`);
-        
+
+        // Also clear stored account credentials — Stage-1 biometric sign-in
+        // is paired with vault biometric, so disabling one disables both.
+        try { await disableAccountBiometric(); } catch { /* noop */ }
+
         setBiometricEnabled(false);
         toast({
           title: "Biometric Disabled",

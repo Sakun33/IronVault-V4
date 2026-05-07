@@ -360,6 +360,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAccountSession();
     clearPlanCache();
     clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
+    // SECURITY: also clear stored biometric credentials. Stage-1 biometric
+    // sign-in is bound to the active account; on logout it must require a
+    // fresh password so a different user on the same device can't biometric
+    // their way into the previous account.
+    try {
+      sessionStorage.removeItem('iv_pending_bio_account_pw');
+      // Best-effort — we don't await this because logout should be synchronous
+      // for UI purposes. The Preferences delete is non-blocking.
+      import('@/native/biometrics').then(m => m.disableAccountBiometric()).catch(() => {});
+    } catch { /* noop */ }
     // BUG-04: drop unscoped legacy registry/active-vault pointers and the
     // cached cloud-synced list so the next account login starts clean.
     // Per-account scoped registries are kept (so re-login is fast).
