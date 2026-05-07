@@ -1511,9 +1511,35 @@ export default function Profile() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5 text-orange-500" />
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm text-muted-foreground">Vault Size</div>
-                    <div className="text-lg font-semibold">{userProfile.stats?.vaultSize ?? 0} MB</div>
+                    {(() => {
+                      const used = userProfile.stats?.vaultSize ?? 0;
+                      // Pro/Lifetime get a 512 MB hard cap; Free is uncapped
+                      // here (the per-section item limits gate them earlier).
+                      const cap = 512;
+                      const pct = Math.min(100, Math.round((used / cap) * 100));
+                      const warn = pct >= 80;
+                      const at = pct >= 100;
+                      return (
+                        <>
+                          <div className={`text-lg font-semibold ${at ? 'text-destructive' : warn ? 'text-amber-500' : ''}`}>
+                            {used} / {cap} MB
+                          </div>
+                          <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full ${at ? 'bg-destructive' : warn ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          {warn && (
+                            <p className={`text-[11px] mt-1 ${at ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'}`}>
+                              {at ? 'Storage limit reached.' : 'Approaching 512 MB limit.'}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </CardContent>

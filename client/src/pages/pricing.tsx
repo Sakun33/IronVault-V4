@@ -65,9 +65,16 @@ export default function PricingPage() {
     if (id !== 'free' && razorpayPlan) {
       try {
         await loadRazorpay();
+        // /api/payments/create-order requires Bearer auth (cloud JWT). Without
+        // it the server 401s and the user sees a generic checkout failure.
+        const cloudToken = localStorage.getItem('iv_cloud_token');
+        if (!cloudToken) {
+          toast({ title: 'Sign in again', description: 'Please sign out and back in to upgrade.', variant: 'destructive' });
+          return;
+        }
         const res = await fetch(`${apiBase()}/api/payments/create-order`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
           body: JSON.stringify({ plan: razorpayPlan, email: accountEmail }),
         });
         if (!res.ok) throw new Error('Failed to create order');
@@ -84,7 +91,7 @@ export default function PricingPage() {
           handler: async (response: any) => {
             const verifyRes = await fetch(`${apiBase()}/api/payments/verify`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
               body: JSON.stringify({ ...response, plan: razorpayPlan, email: accountEmail }),
             });
             const result = await verifyRes.json();

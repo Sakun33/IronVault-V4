@@ -37,7 +37,14 @@ export function CloudSyncBanner({ isCloudSyncing, cloudSyncStatus, lastSyncError
   useEffect(() => {
     if (isCloudSyncing) { setVisible('pulling'); return; }
     if (cloudSyncStatus === 'syncing') { setVisible('syncing'); return; }
-    if (cloudSyncStatus === 'synced')  { setVisible('synced');  return; }
+    if (cloudSyncStatus === 'synced')  {
+      setVisible('synced');
+      // Auto-hide the green "Synced to cloud" banner after 3s. Keeps the
+      // chrome quiet during normal CRUD; the banner only persists when
+      // there's something the user must act on (failed state).
+      const t = setTimeout(() => setVisible('idle'), 3000);
+      return () => clearTimeout(t);
+    }
     if (cloudSyncStatus === 'failed')  { setVisible('failed');  return; }
     setVisible('idle');
   }, [isCloudSyncing, cloudSyncStatus]);

@@ -328,7 +328,10 @@ export default function Dashboard() {
           // If so, treat it as not set and let the client fall back to email humanization
           const emailLocal = accountEmail.split('@')[0];
           if (name.toLowerCase() === emailLocal.toLowerCase()) {
-            // Name is email prefix, don't use it
+            // Name is email prefix — clear any stale cached value so the
+            // greeting falls through to the namifyEmail humanization.
+            try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
+            setServerName('');
             return;
           }
           // Use the first word only — same convention the namifyEmail

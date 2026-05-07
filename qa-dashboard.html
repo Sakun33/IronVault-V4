@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IronVault QA Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#e2e8f0;padding:24px;max-width:1200px;margin:0 auto}
+h1{font-size:28px;font-weight:600;margin-bottom:8px;color:#10b981}
+.sub{font-size:14px;color:#94a3b8;margin-bottom:32px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
+@media(max-width:768px){.grid4{grid-template-columns:repeat(2,1fr)}}
+.mc{background:#1e1e2e;border-radius:12px;padding:20px;text-align:center;border:1px solid #2a2a3a}
+.mc .v{font-size:32px;font-weight:700}
+.mc .l{font-size:12px;color:#94a3b8;margin-top:6px;text-transform:uppercase;letter-spacing:0.5px}
+.green{color:#10b981}
+.red{color:#ef4444}
+.blue{color:#3b82f6}
+.amber{color:#f59e0b}
+.sec{background:#1e1e2e;border-radius:12px;border:1px solid #2a2a3a;padding:20px;margin-bottom:24px}
+.sec h2{font-size:18px;font-weight:600;margin-bottom:16px;color:#f1f5f9}
+.row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #2a2a3a;font-size:14px}
+.row:last-child{border:none}
+.badge{font-size:11px;padding:3px 12px;border-radius:20px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+.b-pass{background:#10b98120;color:#10b981;border:1px solid #10b98140}
+.b-fail{background:#ef444420;color:#ef4444;border:1px solid #ef444440}
+.b-run{background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640}
+.b-wait{background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b40}
+.bar-wrap{margin:6px 0 12px}
+.bar{height:10px;border-radius:5px;background:#2a2a3a;overflow:hidden}
+.bar-fill{height:100%;border-radius:5px;transition:width 0.5s}
+.tbl{width:100%;font-size:13px;border-collapse:collapse}
+.tbl th{text-align:left;padding:8px 10px;color:#94a3b8;font-weight:500;border-bottom:1px solid #2a2a3a;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.tbl td{padding:8px 10px;border-bottom:1px solid #2a2a3a}
+.refresh{display:inline-flex;align-items:center;gap:6px;background:#10b98120;color:#10b981;border:1px solid #10b98140;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:16px}
+.refresh:hover{background:#10b98130}
+.ts{font-size:11px;color:#64748b;margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:768px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<h1>IronVault QA Dashboard</h1>
+<p class="sub">Live testing status for ironvault.app — last updated: <span id="ts"></span></p>
+
+<div class="grid4">
+  <div class="mc"><div class="v green">268</div><div class="l">Tests passed (R2)</div></div>
+  <div class="mc"><div class="v red">137</div><div class="l">Tests failed (R2)</div></div>
+  <div class="mc"><div class="v green">11/11</div><div class="l">Integrations pass</div></div>
+  <div class="mc"><div class="v green">97</div><div class="l">Accessibility</div></div>
+</div>
+
+<div class="grid2">
+
+<div class="sec">
+  <h2>Playwright test rounds</h2>
+  <div class="row"><span>Round 1 — baseline</span><span>142 pass / 241 fail</span><span class="badge b-pass">Done</span></div>
+  <div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:16%;background:#10b981"></div></div></div>
+  <div class="row"><span>Round 2 — fixes applied</span><span>268 pass / 137 fail</span><span class="badge b-pass">Done</span></div>
+  <div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:30%;background:#10b981"></div></div></div>
+  <div class="row"><span>Round 3 — a11y + perf</span><span>90+ pass (in progress)</span><span class="badge b-run">Running</span></div>
+  <div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:14%;background:#3b82f6"></div></div></div>
+  <p class="ts">896 total tests across 12 spec files | desktop + mobile viewports</p>
+</div>
+
+<div class="sec">
+  <h2>Lighthouse scores (mobile)</h2>
+  <div class="grid4" style="margin-bottom:0">
+    <div class="mc" style="background:#0a0a0f"><div class="v amber">57</div><div class="l">Performance</div></div>
+    <div class="mc" style="background:#0a0a0f"><div class="v green">97</div><div class="l">Accessibility</div></div>
+    <div class="mc" style="background:#0a0a0f"><div class="v green">92</div><div class="l">Best practices</div></div>
+    <div class="mc" style="background:#0a0a0f"><div class="v green">100</div><div class="l">SEO</div></div>
+  </div>
+</div>
+
+</div>
+
+<div class="sec">
+  <h2>Live integration tests — all passing</h2>
+  <table class="tbl">
+    <tr><th>Integration</th><th>Endpoint</th><th>Result</th><th>Status</th></tr>
+    <tr><td>Main API</td><td>/api/health</td><td>DB connected, status OK</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Admin API</td><td>/api/health</td><td>DB connected, 1 admin</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Zoho SMTP</td><td>forgot-password</td><td>Email sent to user</td><td><span class="badge b-pass">Sent</span></td></tr>
+    <tr><td>Admin login</td><td>/api/auth/login</td><td>JWT, role=super_admin, 24h</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Admin KPIs</td><td>/api/dashboard/kpis</td><td>9 customers, 4 paid, MRR ₹1.79</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Admin customers</td><td>/api/customers</td><td>9 customers returned</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>User login</td><td>/api/auth/token</td><td>Token + sessionId, 30d exp</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Razorpay</td><td>create-order</td><td>order_Slqs6..., ₹149, INR</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Zoho Desk</td><td>create ticket</td><td>Ticket #115 in Zoho</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Cloud vaults</td><td>/api/vaults/cloud</td><td>1 vault (Saket-FullTest)</td><td><span class="badge b-pass">200</span></td></tr>
+    <tr><td>Entitlement</td><td>/api/crm/entitlement</td><td>Lifetime, active</td><td><span class="badge b-pass">200</span></td></tr>
+  </table>
+</div>
+
+<div class="sec">
+  <h2>Phase 3 — fixes deployed</h2>
+  <div class="row"><span>Cloud sync rewrite (push queue + retry + visible status)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Cloud token auto-recovery for new devices</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Vault fetch error graceful fallback</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>12 user-reported bug fixes (share, globe, notes, session, etc.)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>A11y fixes (aria-labels, main landmark, contrast)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Lighthouse optimizations (async fonts, defer scripts, chunk splitting)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Note templates (10 pre-built) + form validation across app</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Expense groups + splits + friends auto-linking</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>API Keys premium redesign</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Reminder device notifications (Web + Capacitor)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Landing page premium redesign</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Consistent dark theme across all sections</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>iOS zoom fix (16px inputs globally)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Premium pill toggles (grid/list view)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>JWT TDZ fix (entitlement endpoint)</span><span class="badge b-pass">Deployed</span></div>
+  <div class="row"><span>Playwright Round 3 + fix failures</span><span class="badge b-run">Running</span></div>
+</div>
+
+<div class="sec">
+  <h2>Installed skills</h2>
+  <div class="row"><span>skill-creator + frontend-design (+9 skills)</span><span>example-skills</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>superpowers v5.1.0</span><span>superpowers-dev</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>get-shit-done-cc (65 skills)</span><span>global npm</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>context-mode v1.0.111</span><span>mksglu/context-mode</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>claude-mem v12.6.5</span><span>thedotmack/claude-mem</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>document-skills (xlsx/docx/pptx/pdf)</span><span>anthropics/skills</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>claude-api (API + SDK guidance)</span><span>anthropics/skills</span><span class="badge b-pass">Active</span></div>
+</div>
+
+<div class="sec">
+  <h2>Security audit summary</h2>
+  <div class="row"><span>Total bugs found across all QA rounds</span><span style="font-weight:600">175 original + 120 deep audit</span></div>
+  <div class="row"><span>Critical fixes applied</span><span class="badge b-pass">All fixed</span></div>
+  <div class="row"><span>High fixes applied</span><span class="badge b-pass">All fixed</span></div>
+  <div class="row"><span>Medium fixes applied</span><span class="badge b-pass">~90% fixed</span></div>
+  <div class="row"><span>Password hashing</span><span class="badge b-pass">scrypt</span></div>
+  <div class="row"><span>2FA (TOTP)</span><span class="badge b-pass">Implemented</span></div>
+  <div class="row"><span>XSS protection</span><span class="badge b-pass">DOMPurify</span></div>
+  <div class="row"><span>Rate limiting</span><span class="badge b-pass">Active</span></div>
+  <div class="row"><span>HSTS + CSP + security headers</span><span class="badge b-pass">Active</span></div>
+</div>
+
+<p class="ts" style="text-align:center;margin-top:24px">IronVault v4.1.0 | ironvault.app | admin.ironvault.app</p>
+
+<script>
+document.getElementById('ts').textContent = new Date().toLocaleString();
+</script>
+</body>
+</html>

@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
-import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
+import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled, enableBiometricUnlock, authenticateWithBiometric } from '@/native/biometrics';
 import { isNativeApp, apiBase } from '@/native/platform';
 import { listCloudVaults, listCloudVaultsWithStatus, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
@@ -104,12 +104,16 @@ export default function VaultPickerPage() {
 
       // Step 2: Create order — server may return non-JSON HTML (e.g. 502),
       // so explicitly verify both HTTP status and the parsed payload before
-      // we hand anything to Razorpay.
+      // we hand anything to Razorpay. The endpoint requires Bearer auth
+      // (cloud JWT); without it the server 401s and the user sees a generic
+      // "Failed to create order" — surface a clearer message + send the token.
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      if (!cloudToken) throw new Error('Sign in again to upgrade.');
       let orderResp: Response;
       try {
         orderResp = await fetch(`${apiBase()}/api/payments/create-order`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
           body: JSON.stringify({ plan: planKey, email }),
         });
       } catch {
@@ -143,7 +147,7 @@ export default function VaultPickerPage() {
             try {
               const verify = await fetch(`${apiBase()}/api/payments/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
                 body: JSON.stringify({ ...response, plan: planKey, email }),
               });
               const verifyData = await verify.json().catch(() => ({}));
@@ -209,6 +213,7 @@ export default function VaultPickerPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricVaultId, setBiometricVaultId] = useState<string | null>(null);
+  const [biometricCapable, setBiometricCapable] = useState(false);
   const [unlockSuccess, setUnlockSuccess] = useState<string | null>(null);
 
   // Brief celebratory overlay before navigating to the dashboard. Resolves
@@ -306,11 +311,14 @@ export default function VaultPickerPage() {
       try {
         const caps = await checkBiometricCapabilities();
         if (!caps.isAvailable) return;
+        setBiometricCapable(true);
         const defaultVault = vaultManager.getDefaultVault();
         if (!defaultVault) return;
         const enabled = await isBiometricUnlockEnabled(defaultVault.id);
         if (enabled) {
           setBiometricAvailable(true);
+          setBiometricVaultId(defaultVault.id);
+        } else {
           setBiometricVaultId(defaultVault.id);
         }
       } catch {
@@ -467,6 +475,18 @@ export default function VaultPickerPage() {
       if (success) {
         await vaultManager.resetFailedAttempts();
         resetViewportZoom();
+        // Auto-enroll biometric on native after first successful password
+        // unlock — silent, no extra prompt. Subsequent visits to vault
+        // picker will surface the "Unlock with biometric" button.
+        if (isNativeApp()) {
+          try {
+            const caps = await checkBiometricCapabilities();
+            const alreadyEnabled = await isBiometricUnlockEnabled(vaultId);
+            if (caps.isAvailable && caps.isEnrolled && !alreadyEnabled) {
+              await enableBiometricUnlock(pw, vaultId);
+            }
+          } catch { /* biometric enrolment is best-effort */ }
+        }
         toast({ title: 'Vault Unlocked', description: `Welcome back! Opened "${vaultName}"` });
         await playUnlockAnimation(vaultName);
         setLocation('/');
@@ -501,6 +521,39 @@ export default function VaultPickerPage() {
       vaultManager.setActiveVaultId(vault.id);
       await vaultStorage.switchToVault(vault.id);
 
+      const enrolled = await isBiometricUnlockEnabled(vault.id);
+      if (!enrolled) {
+        // First-time setup: prompt biometric to confirm device, then ask
+        // the user to type their master password once. We store the
+        // master password under the keystore so subsequent taps unlock
+        // without typing.
+        const auth = await authenticateWithBiometric('Set up biometric unlock for IronVault');
+        if (!auth.success) {
+          toast({ title: 'Biometric cancelled', description: auth.error || 'Try again.', variant: 'destructive' });
+          return;
+        }
+        const pw = passwords[vault.id] || '';
+        if (!pw) {
+          toast({
+            title: 'Enter master password once',
+            description: 'Type your master password and tap Unlock — biometric will be enabled for next time.',
+          });
+          return;
+        }
+        const success = await login(pw);
+        if (success) {
+          await enableBiometricUnlock(pw, vault.id);
+          setBiometricAvailable(true);
+          resetViewportZoom();
+          toast({ title: 'Biometric enabled', description: `Opened "${vault.name}" — biometric ready next time.` });
+          await playUnlockAnimation(vault.name);
+          setLocation('/');
+          return;
+        }
+        setErrors(e => ({ ...e, [vault.id]: 'Incorrect master password.' }));
+        return;
+      }
+
       const storedKey = vaultManager.getBiometricKey(vault.id);
       if (storedKey) {
         // Try master password stored for biometric
@@ -517,7 +570,10 @@ export default function VaultPickerPage() {
       // Fall back to native biometric key unlock
       const result = await unlockWithBiometric(vault.id);
       if (result.success && result.vaultUnlockKey) {
-        const success = await loginWithKey(result.vaultUnlockKey);
+        // The keystore stores the master password (pw) under biometric
+        // protection — so we use loginWithKey OR login(pw). Try both.
+        let success = await login(result.vaultUnlockKey);
+        if (!success) success = await loginWithKey(result.vaultUnlockKey);
         if (success) {
           resetViewportZoom();
           toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
@@ -963,7 +1019,7 @@ export default function VaultPickerPage() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-start justify-center px-4 py-10">
+      <main className={`flex-1 flex items-start justify-center px-4 py-10 ${isNativeApp() ? 'pb-[400px]' : ''}`}>
         {/* Web upgrade gate gets a wider container so three plan cards fit
             comfortably side-by-side on tablet/desktop without squishing. */}
         <div className={`w-full ${!isNativeApp() && !isPaid && !planLoading && !paywallBypassed ? 'max-w-5xl' : 'max-w-md'}`}>
@@ -1164,8 +1220,13 @@ export default function VaultPickerPage() {
             );
           })()}
 
-          {/* Biometric shortcut (native only) */}
-          {isNativeApp() && biometricAvailable && biometricVaultId && (
+          {/* Biometric shortcut (native only). Shown when:
+              (a) biometric is enrolled for the default vault, or
+              (b) device is biometric-capable but not yet enrolled — tap
+                  prompts a one-time biometric verification, after which
+                  the user types the master password once to seed the
+                  encrypted keystore. */}
+          {isNativeApp() && biometricCapable && biometricVaultId && (
             <Button
               variant="outline"
               className="w-full mb-6 gap-2 h-12"
@@ -1174,7 +1235,11 @@ export default function VaultPickerPage() {
               data-testid="button-biometric-unlock"
             >
               <Fingerprint className="w-5 h-5 text-primary" />
-              {loading === 'biometric' ? 'Unlocking…' : 'Unlock with biometric'}
+              {loading === 'biometric'
+                ? 'Unlocking…'
+                : biometricAvailable
+                  ? 'Unlock with biometric'
+                  : 'Set up biometric unlock'}
             </Button>
           )}
 
@@ -1226,6 +1291,13 @@ export default function VaultPickerPage() {
                           value={passwords[vault.id] || ''}
                           onChange={e => setPasswords(p => ({ ...p, [vault.id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && handleUnlock(vault.id, vault.name)}
+                          onFocus={e => {
+                            if (isNativeApp()) {
+                              setTimeout(() => {
+                                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 350);
+                            }
+                          }}
                           className="pl-10 pr-11"
                           autoComplete="current-password"
                         />
@@ -1406,6 +1478,13 @@ UA: ${typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 120) : '(n
                         value={cloudPasswordInput[cv.vaultId] || ''}
                         onChange={e => setCloudPasswordInput(p => ({ ...p, [cv.vaultId]: e.target.value }))}
                         onKeyDown={e => e.key === 'Enter' && handleCloudUnlock(cv)}
+                        onFocus={e => {
+                          if (isNativeApp()) {
+                            setTimeout(() => {
+                              e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 350);
+                          }
+                        }}
                         className="pl-10 pr-11"
                         autoComplete="current-password"
                       />

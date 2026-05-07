@@ -44,9 +44,11 @@ export default function CreateVaultPage() {
         });
       }
       const email = accountEmail || localStorage.getItem('iv_account_email') || '';
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      if (!cloudToken) throw new Error('Sign in again to upgrade.');
       const res = await fetch(`${apiBase()}/api/payments/create-order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
         body: JSON.stringify({ plan: 'pro_monthly', email }),
       });
       const { orderId, amount, currency, keyId } = await res.json();
@@ -60,7 +62,7 @@ export default function CreateVaultPage() {
         handler: async (response: any) => {
           const verify = await fetch(`${apiBase()}/api/payments/verify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
             body: JSON.stringify({ ...response, plan: 'pro_monthly', email }),
           });
           if ((await verify.json()).success) {

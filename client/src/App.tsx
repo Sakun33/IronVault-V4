@@ -332,21 +332,21 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw'}}>
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-3 pt-[env(safe-area-inset-top,0px)]">
-        <div className="flex items-center justify-between h-12">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
+        <div className="flex items-center justify-between h-12 gap-1 overflow-visible">
           {/* Left: hamburger + logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 min-w-0 flex-shrink overflow-hidden">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl" title="Menu" aria-label="Menu">
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Menu" aria-label="Menu">
                   <Menu className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Menu</TooltipContent>
             </Tooltip>
-            <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+            <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity flex-shrink min-w-0">
               <AppLogo size={26} />
-              <span className="text-sm font-bold tracking-tight text-foreground">IronVault</span>
+              <span className="text-sm font-bold tracking-tight text-foreground hidden sm:inline truncate">IronVault</span>
             </button>
             {/* Vault chip — only when multiple vaults */}
             {vaults.length > 1 && (
@@ -375,10 +375,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Right: Search | Quick Add | Overflow ⋮ */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 flex-shrink-0 overflow-visible">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl" title="Search" aria-label="Search">
+                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Search" aria-label="Search">
                   <Search className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -386,7 +386,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl" title="Quick Add" aria-label="Quick Add">
+                <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Quick Add" aria-label="Quick Add">
                   <Plus className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -398,7 +398,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-xl touch-manipulation relative z-[51]"
+                  className="h-10 w-10 rounded-xl touch-manipulation relative z-[51] flex-shrink-0"
                   title="More"
                   aria-label="More options"
                   data-testid="mobile-more-menu-trigger"

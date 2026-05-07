@@ -554,6 +554,28 @@ export function NoteEditor({
   // The mobile fullscreen overlay also reserves the iOS safe-area inset at
   // the top so the back button + title aren't tucked behind the notch.
   const Wrapper = embedded ? 'div' : motion.div;
+
+  // Swipe-back-to-list gesture (iOS-style edge pan). Only fires for swipes
+  // that start within the first 36px from the left edge so we don't fight
+  // the editor's own horizontal scroll inside code blocks. A 70px-or-more
+  // horizontal travel with predominantly horizontal motion triggers close.
+  const swipeRef = useRef<{ x: number; y: number; tracking: boolean } | null>(null);
+  const handleSwipeStart = (e: React.TouchEvent) => {
+    if (embedded) return;
+    const t = e.touches[0];
+    if (!t) return;
+    swipeRef.current = { x: t.clientX, y: t.clientY, tracking: t.clientX < 36 };
+  };
+  const handleSwipeEnd = (e: React.TouchEvent) => {
+    if (embedded || !swipeRef.current?.tracking) { swipeRef.current = null; return; }
+    const t = e.changedTouches[0];
+    if (!t) { swipeRef.current = null; return; }
+    const dx = t.clientX - swipeRef.current.x;
+    const dy = Math.abs(t.clientY - swipeRef.current.y);
+    swipeRef.current = null;
+    if (dx > 70 && dy < 60) onClose();
+  };
+
   const wrapperProps = embedded
     ? { className: 'flex flex-col h-full bg-background' }
     : ({
@@ -566,6 +588,8 @@ export function NoteEditor({
         role: 'dialog' as const,
         'aria-modal': 'true' as const,
         'aria-label': note ? `Editing ${note.title}` : 'New note',
+        onTouchStart: handleSwipeStart,
+        onTouchEnd: handleSwipeEnd,
       } as any);
 
   const editorBody = (

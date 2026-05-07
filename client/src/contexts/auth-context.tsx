@@ -217,6 +217,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveAccountSession(normalizedEmail);
     vaultManager.setAccountEmail(normalizedEmail);
     clearPlanCache();
+    // Wipe the cached greeting name so the dashboard refetches the
+    // canonical full_name from /api/auth/me. Otherwise an old user's
+    // first name (or a stale email-prefix value from a prior fix) sticks.
+    try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
     addLog('Account Login', 'security', `Signed in as ${normalizedEmail}`);
     // Stamp the grace-period timestamp BEFORE acquiring the new token, so any
     // background calls that race the token swap with a stale Bearer header
