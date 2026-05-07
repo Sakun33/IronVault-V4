@@ -997,7 +997,7 @@ export default function VaultPickerPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+      <header className="flex items-center justify-between px-6 pt-[calc(env(safe-area-inset-top,0px)+16px)] pb-4 border-b border-border/50">
         <div className="flex items-center gap-2">
           <AppLogo size={28} />
           <span className="font-bold text-lg">IronVault</span>

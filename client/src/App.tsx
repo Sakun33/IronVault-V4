@@ -398,12 +398,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-xl touch-manipulation relative z-[51] flex-shrink-0"
+                  className="h-9 w-9 rounded-xl touch-manipulation relative z-[51] flex-shrink-0"
                   title="More"
                   aria-label="More options"
                   data-testid="mobile-more-menu-trigger"
                 >
-                  <MoreVertical className="w-5 h-5" />
+                  <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-[220px] z-[100]">

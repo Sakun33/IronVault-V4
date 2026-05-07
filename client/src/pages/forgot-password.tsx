@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+      <header className="flex items-center justify-between px-6 pt-[calc(env(safe-area-inset-top,0px)+16px)] pb-4 border-b border-border/50">
         <Link href="/">
           <a className="flex items-center gap-2">
             <AppLogo size={28} />

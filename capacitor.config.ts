@@ -7,7 +7,11 @@ const config: CapacitorConfig = {
   appName: 'IronVault',
   webDir: 'dist/public',
   ios: {
-    contentInset: 'automatic',
+    // 'never' tells WKWebView NOT to auto-adjust content insets so the
+    // page is fully edge-to-edge. We control top/bottom spacing with
+    // CSS `env(safe-area-inset-*)` values for predictable layout on
+    // notch / Dynamic Island devices.
+    contentInset: 'never',
     allowsLinkPreview: false,
     scrollEnabled: true,
     limitsNavigationsToAppBoundDomains: false,
