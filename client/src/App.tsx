@@ -333,7 +333,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
-        <div className="flex items-center justify-between h-10 gap-1 overflow-visible">
+        <div className="flex items-center justify-between h-9 gap-1 overflow-visible">
           {/* Left: hamburger + logo */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
             <Tooltip>
@@ -431,9 +431,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {/* Spacer for fixed header + safe area. Height must match the header
-          (h-10 = 40px) plus its top safe-area padding. The 0px fallback
+          (h-9 = 36px) plus its top safe-area padding. The 0px fallback
           keeps the spacer flush on devices/browsers without a notch. */}
-      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+40px)]" />
+      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+36px)]" />
 
       {/* Desktop Header - Glassmorphism */}
       <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
@@ -1098,111 +1098,44 @@ function Router() {
     );
   }
 
+  // CRITICAL: pass JSX children to <Route>, NOT inline arrow functions to
+  // the `component` prop. Inline arrow functions create a fresh component
+  // reference on every parent re-render, which makes wouter unmount and
+  // remount the entire page tree on each App re-render. That was the root
+  // cause of "note editor closes mid-typing": every autosave triggered a
+  // vault-context state change, which cascaded a re-render up to App,
+  // which created new Route component refs, which unmounted /notes,
+  // which destroyed the editor's local `editorOpen` state. Children-style
+  // routes pass stable JSX trees so React reconciles in place.
   return (
     <React.Suspense fallback={<RouteSuspenseFallback />}>
     <Switch>
-      <Route path="/" component={() => (
-        <MainLayout>
-          <Dashboard />
-        </MainLayout>
-      )} />
+      <Route path="/"><MainLayout><Dashboard /></MainLayout></Route>
       {/* Bug 11: alias /dashboard so deep links / shortcuts that target the
           dashboard explicitly don't fall back to the catch-all and don't get
           confused with the Tier-1 LandingPage at "/". Renders the same
           component — no auth re-evaluation. */}
-      <Route path="/dashboard" component={() => (
-        <MainLayout>
-          <Dashboard />
-        </MainLayout>
-      )} />
-      <Route path="/passwords" component={() => (
-        <MainLayout>
-          <Passwords />
-        </MainLayout>
-      )} />
-      <Route path="/subscriptions" component={() => (
-        <MainLayout>
-          <Subscriptions />
-        </MainLayout>
-      )} />
-      <Route path="/notes" component={() => (
-        <MainLayout>
-          <Notes />
-        </MainLayout>
-      )} />
-      <Route path="/expenses" component={() => (
-        <MainLayout>
-          <Expenses />
-        </MainLayout>
-      )} />
-      <Route path="/reminders" component={() => (
-        <MainLayout>
-          <Reminders />
-        </MainLayout>
-      )} />
-      <Route path="/bank-statements" component={() => (
-        <MainLayout>
-          <BankStatements />
-        </MainLayout>
-      )} />
-      <Route path="/investments" component={() => (
-        <MainLayout>
-          <Investments />
-        </MainLayout>
-      )} />
-      <Route path="/goals" component={() => (
-        <MainLayout>
-          <Goals />
-        </MainLayout>
-      )} />
-      <Route path="/profile" component={() => (
-        <MainLayout>
-          <Profile />
-        </MainLayout>
-      )} />
-      <Route path="/documents" component={() => (
-        <MainLayout>
-          <Documents />
-        </MainLayout>
-      )} />
-      <Route path="/api-keys" component={() => (
-        <MainLayout>
-          <APIKeys />
-        </MainLayout>
-      )} />
-      <Route path="/logging" component={() => (
-        <MainLayout>
-          <Logging />
-        </MainLayout>
-      )} />
-      <Route path="/settings" component={() => (
-        <MainLayout>
-          <Settings />
-        </MainLayout>
-      )} />
-      <Route path="/import-passwords" component={() => (
-        <MainLayout>
-          <ImportPasswords />
-        </MainLayout>
-      )} />
-      <Route path="/qa" component={() => (
-        <MainLayout>
-          <QAPage />
-        </MainLayout>
-      )} />
-      <Route path="/vaults" component={() => (
-        <MainLayout>
-          <VaultsPage />
-        </MainLayout>
-      )} />
-      
+      <Route path="/dashboard"><MainLayout><Dashboard /></MainLayout></Route>
+      <Route path="/passwords"><MainLayout><Passwords /></MainLayout></Route>
+      <Route path="/subscriptions"><MainLayout><Subscriptions /></MainLayout></Route>
+      <Route path="/notes"><MainLayout><Notes /></MainLayout></Route>
+      <Route path="/expenses"><MainLayout><Expenses /></MainLayout></Route>
+      <Route path="/reminders"><MainLayout><Reminders /></MainLayout></Route>
+      <Route path="/bank-statements"><MainLayout><BankStatements /></MainLayout></Route>
+      <Route path="/investments"><MainLayout><Investments /></MainLayout></Route>
+      <Route path="/goals"><MainLayout><Goals /></MainLayout></Route>
+      <Route path="/profile"><MainLayout><Profile /></MainLayout></Route>
+      <Route path="/documents"><MainLayout><Documents /></MainLayout></Route>
+      <Route path="/api-keys"><MainLayout><APIKeys /></MainLayout></Route>
+      <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
+      <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
+      <Route path="/import-passwords"><MainLayout><ImportPasswords /></MainLayout></Route>
+      <Route path="/qa"><MainLayout><QAPage /></MainLayout></Route>
+      <Route path="/vaults"><MainLayout><VaultsPage /></MainLayout></Route>
+
       {/* Public Information Pages */}
       {PUBLIC_INFO_ROUTES}
-      <Route path="/upgrade" component={() => (
-        <MainLayout>
-          <UpgradePage />
-        </MainLayout>
-      )} />
+      <Route path="/upgrade"><MainLayout><UpgradePage /></MainLayout></Route>
       <Route component={NotFound} />
     </Switch>
     </React.Suspense>

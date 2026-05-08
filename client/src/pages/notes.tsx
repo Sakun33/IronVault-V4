@@ -404,8 +404,7 @@ export default function Notes() {
     setStarterNotebook(undefined);
     setEditorOpen(true);
   };
-  const closeEditor = (reason: string = 'user') => {
-    console.info('[NOTE-EDITOR] CLOSING — reason:', reason);
+  const closeEditor = (_reason: string = 'user') => {
     setEditorOpen(false);
     setTimeout(() => {
       setEditingNote(null);

@@ -279,25 +279,12 @@ export function NoteEditor({
   );
   const dirty = currentSnapshot !== lastSnapshotRef.current;
 
-  // 3-second debounced autosave
-  useEffect(() => {
-    if (!open || !dirty) return;
-    if (!title.trim() && !htmlToText(contentHtml).trim()) return;
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => { void runSave(); }, 3000);
-    return () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSnapshot, dirty, open]);
-
-  // Flush on close/unmount
-  useEffect(() => {
-    if (!open) return;
-    return () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-      if (dirty && (title.trim() || htmlToText(contentHtml).trim())) void runSave();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Autosave removed by request — save now only fires on Done button,
+  // Back button, swipe-back, or Cmd/Ctrl+S. The "Unsaved" → "Saving"
+  // flicker during typing was distracting and could race with closing.
+  // saveTimerRef is kept so any in-flight timer from a stale render is
+  // still cleared safely (and to make this comment block resilient to
+  // future reintroduction).
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -602,7 +589,17 @@ export function NoteEditor({
     const dx = t.clientX - swipeRef.current.x;
     const dy = Math.abs(t.clientY - swipeRef.current.y);
     swipeRef.current = null;
-    if (dx > 70 && dy < 60) onClose();
+    if (dx > 70 && dy < 60) {
+      void saveAndClose();
+    }
+  };
+
+  // Save (if dirty + has content) then close. Used by Back button and swipe-back.
+  const saveAndClose = async () => {
+    if (dirty && (title.trim() || htmlToText(contentHtml).trim())) {
+      try { await runSave(); } catch {}
+    }
+    onClose();
   };
 
   const wrapperProps = embedded
@@ -629,7 +626,7 @@ export function NoteEditor({
           {!embedded && (
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { void saveAndClose(); }}
               aria-label="Back to notes"
               data-testid="button-editor-back"
               className="h-10 px-2.5 rounded-xl flex items-center gap-1 text-foreground hover:bg-white/[0.06] transition-colors font-medium"
