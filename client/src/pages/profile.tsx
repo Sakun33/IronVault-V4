@@ -103,12 +103,10 @@ const safeFormat = (date: Date | null | undefined, fmt: string, fallback = '—'
 };
 import { PricingService, PricingTier, LicenseInfo } from '@/lib/pricing';
 import { PricingUpgrade } from '@/components/pricing-upgrade';
-import { checkBiometricCapabilities, enableBiometricUnlock, disableBiometricUnlock, isBiometricUnlockEnabled, getBiometricKeystore, enableAccountBiometric, disableAccountBiometric, isAccountBiometricEnabled } from '@/native/biometrics';
 import { getAccountEmail } from '@/lib/account-auth';
 import { useAuth } from '@/contexts/auth-context';
 import { useLicense } from '@/contexts/license-context';
 import { useLocation } from 'wouter';
-import { CryptoService } from '@/lib/crypto';
 import { VaultManagementSection } from '@/components/vault-management-section';
 import { vaultManager } from '@/lib/vault-manager';
 import { TwoFactorAuth } from '@/components/two-factor-auth';
@@ -182,9 +180,6 @@ export default function Profile() {
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricType, setBiometricType] = useState<string>('fingerprint');
   // Session-timeout toggle — wired to autoLockService. Reads the persisted
   // setting on first paint so the Switch reflects the actual state instead
   // of just `defaultChecked`.
@@ -377,23 +372,6 @@ export default function Profile() {
     return () => { cancelled = true; };
   }, []);
 
-  // Check biometric availability on mount
-  useEffect(() => {
-    const checkBiometrics = async () => {
-      try {
-        const capabilities = await checkBiometricCapabilities();
-        setBiometricAvailable(capabilities.isAvailable);
-        setBiometricType(capabilities.biometryType);
-        
-        const isEnabled = await isBiometricUnlockEnabled();
-        setBiometricEnabled(isEnabled);
-      } catch (error) {
-        console.error('Error checking biometrics:', error);
-      }
-    };
-    checkBiometrics();
-  }, []);
-
   // Load family invites (outgoing for owner + incoming for this email)
   const loadFamilyInvites = useCallback(async () => {
     if (!userProfile.email) return;
@@ -445,89 +423,6 @@ export default function Profile() {
         loadFamilyInvites();
       }
     } catch { /* ignore */ }
-  };
-
-  const handleBiometricToggle = async (enabled: boolean) => {
-    try {
-      if (enabled) {
-        if (!masterPassword) {
-          toast({
-            title: "Error",
-            description: "Master password not available. Please re-login.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // SECURITY: Derive a vault unlock key from the master password
-        // We store the derived key in Keychain/Keystore, NOT the password
-        const salt = CryptoService.generateSalt();
-        const biometricKeystore = getBiometricKeystore();
-        const vaultUnlockKey = await biometricKeystore.deriveVaultUnlockKey(masterPassword, salt);
-        
-        // Get the default vault ID from vault manager
-        const defaultVault = vaultManager.getDefaultVault();
-        const vaultId = defaultVault?.id || 'default';
-        
-        const success = await enableBiometricUnlock(vaultUnlockKey, vaultId);
-
-        if (success) {
-          // Store the salt in vault metadata (non-secret) for key re-derivation
-          localStorage.setItem(`ironvault_biometric_salt_${vaultId}`, btoa(Array.from(salt).map(b => String.fromCharCode(b)).join('')));
-
-          // Also pick up the pending account password (set by login.tsx after a
-          // successful sign-in) so a single biometric gesture handles both
-          // login and vault unlock from now on.
-          try {
-            if (!isAccountBiometricEnabled()) {
-              const pw = sessionStorage.getItem('iv_pending_bio_account_pw');
-              const email = getAccountEmail();
-              if (pw && email) {
-                await enableAccountBiometric(email, pw);
-              }
-            }
-          } catch { /* best-effort */ }
-
-          setBiometricEnabled(true);
-          toast({
-            title: "Biometric Enabled",
-            description: `You can now unlock with ${biometricType === 'faceId' ? 'Face ID' : 'Touch ID'}`,
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to enable biometric unlock. Make sure biometrics are set up on your device.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        // Get the default vault ID from vault manager
-        const defaultVault = vaultManager.getDefaultVault();
-        const vaultId = defaultVault?.id || 'default';
-        
-        await disableBiometricUnlock(vaultId);
-
-        // Clean up the salt
-        localStorage.removeItem(`ironvault_biometric_salt_${vaultId}`);
-
-        // Also clear stored account credentials — Stage-1 biometric sign-in
-        // is paired with vault biometric, so disabling one disables both.
-        try { await disableAccountBiometric(); } catch { /* noop */ }
-
-        setBiometricEnabled(false);
-        toast({
-          title: "Biometric Disabled",
-          description: "Biometric unlock has been disabled",
-        });
-      }
-    } catch (error) {
-      console.error('Error toggling biometric:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update biometric settings",
-        variant: "destructive",
-      });
-    }
   };
 
   // Export data handlers
@@ -2537,20 +2432,9 @@ export default function Profile() {
                 />
               </div>
               
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium">Biometric Authentication</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {biometricAvailable 
-                      ? `Use ${biometricType === 'faceId' ? 'Face ID' : biometricType === 'touchId' ? 'Touch ID' : 'fingerprint'} to unlock`
-                      : 'Not available on this device'}
-                  </p>
-                </div>
-                <Switch 
-                  checked={biometricEnabled}
-                  onCheckedChange={handleBiometricToggle}
-                  disabled={!biometricAvailable}
-                />
+              <div className="text-xs text-muted-foreground">
+                Biometric unlock is configured per vault — open <strong>Profile → Vaults</strong> and tap the
+                fingerprint icon next to the vault you want to enable it for.
               </div>
             </CardContent>
           </Card>

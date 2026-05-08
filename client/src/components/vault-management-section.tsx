@@ -26,7 +26,12 @@ import {
   getCloudToken, acquireCloudToken,
 } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
-import { isBiometricUnlockEnabled, enableBiometricUnlock, disableBiometricUnlock } from '@/native/biometrics';
+import {
+  isBiometricEnrolledForVault,
+  enrollBiometric,
+  disableBiometric,
+  checkBiometricCapabilities,
+} from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 
@@ -91,7 +96,7 @@ export function VaultManagementSection() {
     const rows: VaultRow[] = await Promise.all(
       list.map(async v => ({
         ...v,
-        biometricEnabled: await isBiometricUnlockEnabled(v.id),
+        biometricEnabled: isBiometricEnrolledForVault(v.id),
         isCloudSynced: cloudIds.has(v.id) || isVaultCloudSynced(v.id),
         itemCount: v.id === active ? await getActiveVaultItemCount() : undefined,
       })),
@@ -267,24 +272,58 @@ export function VaultManagementSection() {
   const handleToggleBiometric = async (vault: VaultRow) => {
     try {
       if (vault.biometricEnabled) {
-        await disableBiometricUnlock(vault.id);
+        await disableBiometric(vault.id);
         toast({ title: 'Biometric disabled', description: `Disabled for "${vault.name}"` });
+        await loadVaults();
+        return;
+      }
+
+      // Enabling: this vault must be the active, unlocked one (we need its
+      // master password) and the user must have logged in this session (we
+      // need their account password from the post-login session stash).
+      if (vault.id !== activeVaultId || !masterPassword) {
+        toast({
+          title: 'Unlock vault first',
+          description: 'Switch to and unlock this vault before enabling biometric unlock.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      const accountPassword = sessionStorage.getItem('iv_pending_bio_account_pw');
+      if (!accountEmail || !accountPassword) {
+        toast({
+          title: 'Sign out and back in',
+          description: 'Biometric needs your account password — sign in again to enable it.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const caps = await checkBiometricCapabilities();
+      if (!caps.isAvailable) {
+        toast({
+          title: 'Biometric unavailable',
+          description: 'Your device does not have biometric unlock enrolled.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const ok = await enrollBiometric({
+        email: accountEmail,
+        accountPassword,
+        masterPassword,
+        vaultId: vault.id,
+        vaultName: vault.name,
+      });
+      if (ok) {
+        toast({
+          title: `${caps.biometricLabel} enabled`,
+          description: `${caps.biometricLabel} now signs you in and unlocks "${vault.name}".`,
+        });
       } else {
-        if (vault.id !== activeVaultId || !masterPassword) {
-          toast({
-            title: 'Unlock vault first',
-            description: 'Switch to and unlock this vault before enabling biometric unlock.',
-            variant: 'destructive',
-          });
-          return;
-        }
-        const ok = await enableBiometricUnlock(masterPassword, vault.id);
-        if (ok) {
-          toast({ title: 'Biometric enabled', description: `Enabled for "${vault.name}"` });
-        } else {
-          toast({ title: 'Biometric failed', description: 'Could not enable biometric unlock', variant: 'destructive' });
-          return;
-        }
+        toast({ title: 'Biometric failed', description: 'Could not enable biometric unlock', variant: 'destructive' });
+        return;
       }
       await loadVaults();
     } catch {

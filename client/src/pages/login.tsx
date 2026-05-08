@@ -17,7 +17,7 @@ import {
   isAccountBiometricEnabled,
   hasAccountBiometricCredentials,
   getAccountBiometricEmail,
-  disableAccountBiometric,
+  disableAllBiometric,
 } from '@/native/biometrics';
 
 export default function Login() {
@@ -107,11 +107,16 @@ export default function Login() {
       }
       const ok = await accountLogin(creds.email, creds.password);
       if (ok) {
+        // Re-stash the password so a vault-management toggle can pick it up
+        // for adding more biometric-enrolled vaults this session.
+        try { sessionStorage.setItem('iv_pending_bio_account_pw', creds.password); } catch {}
         setLocation('/');
       } else if (!pendingTwoFactor) {
-        // Stored password is stale — disable biometric so user falls back to password
-        await disableAccountBiometric();
+        // Stored password is stale — disable all biometric entries so the
+        // user falls back to password and can re-enrol after a real login.
+        await disableAllBiometric();
         setBioReady(false);
+        setBioEnrolled(false);
         setEmail(creds.email);
         toast({
           title: 'Stored credentials no longer valid',

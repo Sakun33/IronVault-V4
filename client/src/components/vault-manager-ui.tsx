@@ -19,7 +19,6 @@ import { getAccountPasswordHash } from '@/lib/account-auth';
 import { vaultStorage } from '@/lib/storage';
 import { isPaidTier } from '@/lib/plan-resolver';
 import { Button } from '@/components/ui/button';
-import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,7 +80,6 @@ interface VaultCardProps {
   onSwitch: () => void;
   onOpen: () => void;
   onSetDefault: () => void;
-  onToggleBiometric: (enabled: boolean) => void;
   onRename: (name: string) => void;
   onDelete: () => void;
   onEnableCloud: () => void;
@@ -91,7 +89,7 @@ interface VaultCardProps {
 
 function VaultCard({
   vault, isActive, isCloudSynced, isSourceDevice, isPaidUser,
-  onSwitch, onOpen, onSetDefault, onToggleBiometric, onRename,
+  onSwitch, onOpen, onSetDefault, onRename,
   onDelete, onEnableCloud, onDisableCloud, canDelete,
 }: VaultCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -240,22 +238,6 @@ function VaultCard({
       </CardHeader>
 
       <CardContent className="pt-0 space-y-3">
-        {/* Biometric toggle */}
-        <div
-          className="flex items-center justify-between"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Fingerprint className="w-4 h-4" />
-            <span>Biometric Unlock</span>
-          </div>
-          <Switch
-            checked={vault.biometricEnabled}
-            onCheckedChange={onToggleBiometric}
-            data-testid={`switch-biometric-${vault.id}`}
-          />
-        </div>
-
         {/* Cloud sync toggle */}
         <div
           className="flex items-center justify-between"
@@ -296,7 +278,6 @@ export function VaultManagerUI() {
     updateVault,
     deleteVault,
     setDefaultVault,
-    toggleBiometric
   } = useVaultSelection();
   const { license } = useLicense();
   const { accountEmail } = useAuth();
@@ -307,8 +288,6 @@ export function VaultManagerUI() {
   const [newVaultName, setNewVaultName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [deleteVaultId, setDeleteVaultId] = useState<string | null>(null);
-  const [pendingBiometricVaultId, setPendingBiometricVaultId] = useState<string | null>(null);
-  const [showVerifyModal, setShowVerifyModal] = useState(false);
 
   // Cloud sync state
   const [cloudVaultMap, setCloudVaultMap] = useState<Map<string, CloudVaultMeta>>(new Map());
@@ -383,32 +362,6 @@ export function VaultManagerUI() {
       toast({ title: 'Vault Renamed', description: `Vault has been renamed to "${name}".` });
     } catch (error) {
       toast({ title: 'Failed to Rename Vault', description: error instanceof Error ? error.message : 'An error occurred', variant: 'destructive' });
-    }
-  };
-
-  const handleToggleBiometric = async (vaultId: string, enabled: boolean) => {
-    if (enabled) {
-      setPendingBiometricVaultId(vaultId);
-      setShowVerifyModal(true);
-    } else {
-      try {
-        await toggleBiometric(vaultId, false);
-        toast({ title: 'Biometric Disabled', description: 'Biometric unlock has been disabled for this vault.' });
-      } catch (error) {
-        toast({ title: 'Failed to Update Settings', description: error instanceof Error ? error.message : 'An error occurred', variant: 'destructive' });
-      }
-    }
-  };
-
-  const handleVerifiedBiometricEnable = async () => {
-    if (!pendingBiometricVaultId) return;
-    try {
-      await toggleBiometric(pendingBiometricVaultId, true);
-      toast({ title: 'Biometric Enabled', description: 'You can now unlock this vault with your fingerprint or face.' });
-    } catch (error) {
-      toast({ title: 'Failed to Update Settings', description: error instanceof Error ? error.message : 'An error occurred', variant: 'destructive' });
-    } finally {
-      setPendingBiometricVaultId(null);
     }
   };
 
@@ -566,7 +519,6 @@ export function VaultManagerUI() {
               onSwitch={() => requestVaultSwitch(vault.id)}
               onOpen={() => requestVaultSwitch(vault.id)}
               onSetDefault={() => setDefaultVault(vault.id)}
-              onToggleBiometric={(enabled) => handleToggleBiometric(vault.id, enabled)}
               onRename={(name) => handleRename(vault.id, name)}
               onDelete={() => setDeleteVaultId(vault.id)}
               onEnableCloud={() => { setSyncDialogVaultId(vault.id); setSyncPassword(''); setSyncShowPw(false); }}
@@ -623,18 +575,6 @@ export function VaultManagerUI() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Verification modal for enabling biometric */}
-      <VerifyAccessModal
-        open={showVerifyModal}
-        onOpenChange={(open) => {
-          setShowVerifyModal(open);
-          if (!open) setPendingBiometricVaultId(null);
-        }}
-        onVerified={handleVerifiedBiometricEnable}
-        title="Verify Identity"
-        description="Please verify your identity to enable biometric unlock for this vault."
-      />
 
       {/* Enable cloud sync dialog — requires master password to export */}
       <Dialog open={!!syncDialogVaultId} onOpenChange={(open) => { if (!open) { setSyncDialogVaultId(null); setSyncPassword(''); } }}>

@@ -1,9 +1,9 @@
 /**
- * Biometrics Module - Secure Per-Vault Biometric Authentication
+ * Biometrics Module — Public Native API
  *
- * Uses @aparajita/capacitor-biometric-auth (Capacitor 7 compatible) for
- * availability checks and auth prompts.  Credential storage is handled by
- * BiometricKeystore via @capacitor/preferences + AES-GCM.
+ * Thin facade over BiometricKeystore. Stores email + account password +
+ * master password together so a single biometric gesture handles BOTH the
+ * Stage-1 account login and the Stage-2 vault unlock.
  */
 
 import { BiometricAuth, BiometryType } from '@aparajita/capacitor-biometric-auth';
@@ -11,11 +11,10 @@ import { isNativeApp, isIOS } from './platform';
 import { biometricAuthService, BiometricAuthResult } from '../lib/biometric-auth';
 import { biometricKeystore } from '../lib/biometric-keystore';
 
-const DEFAULT_VAULT_ID = 'default';
-
 export interface BiometricCapabilities {
   isAvailable: boolean;
   biometryType: 'touchId' | 'faceId' | 'fingerprint' | 'face' | 'iris' | 'none';
+  biometricLabel: 'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric';
   isEnrolled: boolean;
   strongBiometryIsAvailable: boolean;
 }
@@ -27,72 +26,67 @@ export async function checkBiometricCapabilities(): Promise<BiometricCapabilitie
       const available = result.isAvailable;
 
       let biometryType: BiometricCapabilities['biometryType'] = 'none';
+      let label: BiometricCapabilities['biometricLabel'] = 'Biometric';
       if (result.biometryType === BiometryType.faceId) {
-        biometryType = 'faceId';
+        biometryType = 'faceId'; label = 'Face ID';
       } else if (result.biometryType === BiometryType.touchId) {
-        biometryType = 'touchId';
+        biometryType = 'touchId'; label = 'Touch ID';
       } else if (result.biometryType === BiometryType.fingerprintAuthentication) {
-        biometryType = 'fingerprint';
+        biometryType = 'fingerprint'; label = 'Fingerprint';
       } else if (result.biometryType === BiometryType.faceAuthentication) {
-        biometryType = 'face';
+        biometryType = 'face'; label = 'Face ID';
       } else if (result.biometryType === BiometryType.irisAuthentication) {
-        biometryType = 'iris';
+        biometryType = 'iris'; label = 'Biometric';
       }
 
       return {
         isAvailable: available,
         biometryType,
+        biometricLabel: label,
         isEnrolled: available,
         strongBiometryIsAvailable: available,
       };
     } catch (error) {
-      // Previously this returned a synthetic { isAvailable: true, biometryType: 'faceId' }
-      // on iOS to mask plugin init quirks. That hid real failures (no enrolment,
-      // hardware locked, missing usage description) and made the unlock UI claim
-      // Face ID was ready when the prompt would error. Always report unavailable
-      // on error and surface the underlying message so the caller can show a
-      // useful message instead of a silent failure.
       console.error('BiometricCheck: error checking capabilities:', error, isIOS() ? '(iOS)' : '');
-      return { isAvailable: false, biometryType: 'none', isEnrolled: false, strongBiometryIsAvailable: false };
+      return {
+        isAvailable: false,
+        biometryType: 'none',
+        biometricLabel: 'Biometric',
+        isEnrolled: false,
+        strongBiometryIsAvailable: false,
+      };
     }
   }
 
-  // Web — use WebAuthn fallback
+  // Web — WebAuthn fallback (used by document protection, NOT vault unlock).
   const available = await biometricAuthService.isBiometricAvailable();
   const bioType = await biometricAuthService.getBiometricType();
   return {
     isAvailable: available,
     biometryType: bioType === 'fingerprint' ? 'fingerprint' : bioType === 'face' ? 'face' : 'none',
+    biometricLabel: bioType === 'face' ? 'Face ID' : bioType === 'fingerprint' ? 'Fingerprint' : 'Biometric',
     isEnrolled: available,
     strongBiometryIsAvailable: available,
   };
 }
 
+/** Standalone biometric prompt (no credential retrieval). */
 export async function authenticateWithBiometric(reason?: string): Promise<BiometricAuthResult> {
   try {
-    const capabilities = await checkBiometricCapabilities();
-    if (!capabilities.isAvailable || !capabilities.isEnrolled) {
+    const caps = await checkBiometricCapabilities();
+    if (!caps.isAvailable || !caps.isEnrolled) {
       return { success: false, error: 'Biometric authentication not available or not enrolled' };
     }
 
     if (isNativeApp()) {
-      try {
-        await BiometricAuth.authenticate({
-          reason: reason || 'Unlock your vault',
-          cancelTitle: 'Cancel',
-          allowDeviceCredential: false,
-        });
+      const result = await biometricKeystore.promptOnly(reason || 'Verify your identity');
+      if (result.ok) {
         return {
           success: true,
-          method: capabilities.biometryType === 'fingerprint' || capabilities.biometryType === 'touchId'
-            ? 'fingerprint' : 'face',
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Biometric verification cancelled or failed',
+          method: caps.biometryType === 'fingerprint' || caps.biometryType === 'touchId' ? 'fingerprint' : 'face',
         };
       }
+      return { success: false, error: result.error };
     }
 
     // Web WebAuthn fallback
@@ -100,7 +94,7 @@ export async function authenticateWithBiometric(reason?: string): Promise<Biomet
     if (result.success) {
       return {
         success: true,
-        method: capabilities.biometryType === 'fingerprint' ? 'fingerprint' : 'face',
+        method: caps.biometryType === 'fingerprint' ? 'fingerprint' : 'face',
       };
     }
     return result;
@@ -112,117 +106,171 @@ export async function authenticateWithBiometric(reason?: string): Promise<Biomet
   }
 }
 
-export async function isBiometricUnlockEnabled(vaultId: string = DEFAULT_VAULT_ID): Promise<boolean> {
-  try {
-    return biometricKeystore.isBiometricEnabledForVault(vaultId);
-  } catch {
-    return false;
-  }
+// ── Unified enrol / disable / status ────────────────────────────────────────
+
+export interface BiometricEnrolParams {
+  email: string;
+  accountPassword: string;
+  masterPassword: string;
+  vaultId: string;
+  vaultName: string;
 }
 
-export async function enableBiometricUnlock(vaultUnlockKey: string, vaultId: string = DEFAULT_VAULT_ID): Promise<boolean> {
-  try {
-    const result = await biometricKeystore.storeVaultKey(vaultId, vaultUnlockKey);
-    return result.success;
-  } catch {
-    return false;
-  }
-}
-
-export async function disableBiometricUnlock(vaultId: string = DEFAULT_VAULT_ID): Promise<void> {
-  await biometricKeystore.deleteVaultKey(vaultId);
-}
-
-/** @deprecated Use unlockWithBiometric() */
-export async function getDeviceKey(vaultId: string = DEFAULT_VAULT_ID): Promise<string | null> {
-  const result = await biometricKeystore.retrieveVaultKey(vaultId);
-  return result.success ? result.vaultUnlockKey || null : null;
-}
-
-export function generateDeviceKey(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-}
-
-export async function unlockWithBiometric(vaultId: string = DEFAULT_VAULT_ID): Promise<{
-  success: boolean;
-  vaultUnlockKey?: string;
-  vaultId?: string;
-  error?: string;
-  deviceKey?: string; // legacy alias
-}> {
-  try {
-    const isEnabled = await isBiometricUnlockEnabled(vaultId);
-    if (!isEnabled) {
-      return { success: false, error: 'Biometric unlock is not enabled for this vault' };
-    }
-
-    const result = await biometricKeystore.retrieveVaultKey(vaultId);
-    if (!result.success || !result.vaultUnlockKey) {
-      return { success: false, error: result.error || 'Failed to retrieve vault key' };
-    }
-
-    return {
-      success: true,
-      vaultUnlockKey: result.vaultUnlockKey,
-      deviceKey: result.vaultUnlockKey,
-      vaultId,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unlock failed',
-    };
-  }
-}
-
-export async function getVaultsWithBiometricEnabled(): Promise<string[]> {
-  try {
-    return biometricKeystore.getVaultsWithBiometricEnabled();
-  } catch {
-    return [];
-  }
-}
-
-export function getBiometricKeystore() {
-  return biometricKeystore;
-}
-
-// ── Account-level biometric (Stage-1 login bypass) ─────────────────────────
-
-export async function enableAccountBiometric(email: string, accountPassword: string): Promise<boolean> {
+/**
+ * Enable biometric for a vault. Stores all three credentials together so
+ * one biometric prompt handles login + vault unlock.
+ */
+export async function enrollBiometric(params: BiometricEnrolParams): Promise<boolean> {
   if (!isNativeApp()) return false;
-  const result = await biometricKeystore.storeAccountCredentials(email, accountPassword);
+  const result = await biometricKeystore.enroll(params);
   return result.success;
 }
 
+/** Disable biometric for a single vault. */
+export async function disableBiometric(vaultId: string): Promise<void> {
+  await biometricKeystore.disable(vaultId);
+}
+
+/** Disable biometric for ALL vaults — used on logout / account reset. */
+export async function disableAllBiometric(): Promise<void> {
+  await biometricKeystore.disableAll();
+}
+
+/** Sync hint — fast check from localStorage. */
+export function isBiometricEnrolledForVault(vaultId: string): boolean {
+  return biometricKeystore.isEnrolled(vaultId);
+}
+
+/** Async authoritative probe — checks Capacitor Preferences directly. */
+export async function hasBiometricEntryForVault(vaultId: string): Promise<boolean> {
+  return biometricKeystore.hasEntry(vaultId);
+}
+
+/** All vaults that currently have biometric enrolled. */
+export async function getEnrolledBiometricVaults(): Promise<string[]> {
+  return biometricKeystore.getEnrolledVaultIds();
+}
+
+/**
+ * Account-level sign-in via biometric. Returns the email + plaintext account
+ * password from any enrolled vault, suitable for auto-filling the login form.
+ */
 export async function signInWithBiometric(): Promise<{
   success: boolean;
   email?: string;
   password?: string;
   error?: string;
 }> {
-  if (!isNativeApp()) return { success: false, error: 'Biometric sign-in requires native app' };
-  return biometricKeystore.retrieveAccountCredentials();
+  if (!isNativeApp()) return { success: false, error: 'Biometric requires native app' };
+  const result = await biometricKeystore.signInWithBiometric();
+  return {
+    success: result.success,
+    email: result.email,
+    password: result.accountPassword,
+    error: result.error,
+  };
 }
 
-export async function disableAccountBiometric(): Promise<void> {
-  await biometricKeystore.deleteAccountCredentials();
+/**
+ * Vault-specific unlock. Prompts biometric, returns the master password.
+ */
+export async function unlockVaultWithBiometric(vaultId: string): Promise<{
+  success: boolean;
+  masterPassword?: string;
+  error?: string;
+}> {
+  if (!isNativeApp()) return { success: false, error: 'Biometric requires native app' };
+  return biometricKeystore.unlockVaultWithBiometric(vaultId);
 }
 
+/** Sync — is ANY vault biometric-enrolled? */
 export function isAccountBiometricEnabled(): boolean {
-  return biometricKeystore.isAccountBiometricEnabled();
+  return !!biometricKeystore.getAccountEmail();
 }
 
-/** Async probe — checks Capacitor Preferences directly so users whose
- *  localStorage flag was lost (webview cache wipe, etc.) still have their
- *  enrolled credentials honoured. Recovers the localStorage flag as a
- *  side-effect, so the sync getter agrees on subsequent calls. */
+/** Async authoritative probe — does the account have any enrolment in storage? */
 export async function hasAccountBiometricCredentials(): Promise<boolean> {
-  return biometricKeystore.hasAccountBiometricCredentials();
+  if (!isNativeApp()) return false;
+  const ids = await biometricKeystore.getEnrolledVaultIds();
+  return ids.length > 0;
 }
 
+/** Last-enrolled email — for login UI hint. */
 export function getAccountBiometricEmail(): string | null {
-  return biometricKeystore.getAccountBiometricEmail();
+  return biometricKeystore.getAccountEmail();
+}
+
+// ── Compatibility aliases (deprecated) ──────────────────────────────────────
+// These keep older call sites compiling while we migrate. They route to the
+// new unified storage but cannot enrol the account password — full enrolment
+// must go through enrollBiometric().
+
+/** @deprecated — use enrollBiometric() with all three credentials. */
+export async function enableBiometricUnlock(_masterPassword: string, _vaultId: string): Promise<boolean> {
+  console.warn(
+    'enableBiometricUnlock() is deprecated. Use enrollBiometric() to store account+vault credentials together.',
+  );
+  return false;
+}
+
+/** @deprecated — use disableBiometric(). */
+export async function disableBiometricUnlock(vaultId: string): Promise<void> {
+  await biometricKeystore.disable(vaultId);
+}
+
+/** @deprecated — use isBiometricEnrolledForVault(). */
+export async function isBiometricUnlockEnabled(vaultId: string = 'default'): Promise<boolean> {
+  // Async to match the old signature; the keystore lookup is sync.
+  return biometricKeystore.isEnrolled(vaultId);
+}
+
+/** @deprecated — use unlockVaultWithBiometric(). */
+export async function unlockWithBiometric(vaultId: string = 'default'): Promise<{
+  success: boolean;
+  vaultUnlockKey?: string;
+  vaultId?: string;
+  error?: string;
+  deviceKey?: string;
+}> {
+  const result = await biometricKeystore.unlockVaultWithBiometric(vaultId);
+  return {
+    success: result.success,
+    vaultUnlockKey: result.masterPassword,
+    deviceKey: result.masterPassword,
+    vaultId,
+    error: result.error,
+  };
+}
+
+/** @deprecated — use getEnrolledBiometricVaults(). */
+export async function getVaultsWithBiometricEnabled(): Promise<string[]> {
+  return biometricKeystore.getEnrolledVaultIds();
+}
+
+/** @deprecated — use enrollBiometric() with full creds. */
+export async function enableAccountBiometric(_email: string, _accountPassword: string): Promise<boolean> {
+  console.warn('enableAccountBiometric() is deprecated. Use enrollBiometric() with all three credentials.');
+  return false;
+}
+
+/** @deprecated — use disableAllBiometric(). */
+export async function disableAccountBiometric(): Promise<void> {
+  await biometricKeystore.disableAll();
+}
+
+/** @deprecated — kept for compatibility. */
+export function getBiometricKeystore() {
+  return biometricKeystore;
+}
+
+/** Generate a 32-byte random device key (legacy helper, no longer used). */
+export function generateDeviceKey(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** @deprecated — never returned a usable value, kept as no-op. */
+export async function getDeviceKey(_vaultId?: string): Promise<string | null> {
+  return null;
 }

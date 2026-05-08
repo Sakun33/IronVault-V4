@@ -1,29 +1,33 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, ScanFace } from 'lucide-react';
 import { isNativeApp } from '@/native/platform';
 import {
   checkBiometricCapabilities,
-  enableBiometricUnlock,
-  isBiometricUnlockEnabled,
-  getBiometricKeystore,
-  enableAccountBiometric,
-  isAccountBiometricEnabled,
+  enrollBiometric,
+  hasBiometricEntryForVault,
 } from '@/native/biometrics';
-import { CryptoService } from '@/lib/crypto';
 import { useToast } from '@/hooks/use-toast';
 import { getAccountEmail } from '@/lib/account-auth';
+import { vaultManager } from '@/lib/vault-manager';
 
 interface BiometricSetupPromptProps {
   masterPassword: string | null;
   vaultId: string | null;
 }
 
+/**
+ * One-shot post-unlock dialog. Asks the user to enable biometric for the
+ * vault they just unlocked. Stores email + accountPassword + masterPassword
+ * together so the next launch can sign them in with a single biometric
+ * gesture (no typed password anywhere).
+ */
 export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetupPromptProps) {
   const { toast } = useToast();
   const [show, setShow] = useState(false);
-  const [biometricLabel, setBiometricLabel] = useState('Biometric');
+  const [biometricLabel, setBiometricLabel] = useState<'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric'>('Biometric');
+  const [iconType, setIconType] = useState<'face' | 'finger'>('finger');
   const [isEnabling, setIsEnabling] = useState(false);
 
   useEffect(() => {
@@ -36,20 +40,23 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
 
     const check = async () => {
       try {
+        // We need both the device biometric capability AND the just-validated
+        // account password (stashed by login.tsx). Without the account password
+        // we can't enrol a complete entry, so skip the prompt entirely.
+        const accountPassword = sessionStorage.getItem('iv_pending_bio_account_pw');
+        if (!accountPassword) return;
+
         const [capabilities, alreadyEnabled] = await Promise.all([
           checkBiometricCapabilities(),
-          isBiometricUnlockEnabled(vaultId),
+          hasBiometricEntryForVault(vaultId),
         ]);
 
         if (cancelled) return;
         if (!capabilities.isAvailable || alreadyEnabled) return;
 
-        const label =
-          capabilities.biometryType === 'faceId' ? 'Face ID' :
-          capabilities.biometryType === 'touchId' ? 'Touch ID' :
-          'Biometric';
+        setBiometricLabel(capabilities.biometricLabel);
+        setIconType(capabilities.biometryType === 'faceId' || capabilities.biometryType === 'face' ? 'face' : 'finger');
 
-        setBiometricLabel(label);
         // Small delay so the UI settles after unlock before showing prompt
         setTimeout(() => { if (!cancelled) setShow(true); }, 800);
       } catch {
@@ -68,42 +75,52 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
 
   const enable = async () => {
     if (!masterPassword || !vaultId) return;
+    const email = getAccountEmail();
+    const accountPassword = sessionStorage.getItem('iv_pending_bio_account_pw');
+    if (!email || !accountPassword) {
+      toast({
+        title: 'Could not enable',
+        description: 'Sign in with your password again to enable biometric.',
+        variant: 'destructive',
+      });
+      dismiss();
+      return;
+    }
+
     setIsEnabling(true);
     try {
-      const salt = CryptoService.generateSalt();
-      const keystore = getBiometricKeystore();
-      const vaultUnlockKey = await keystore.deriveVaultUnlockKey(masterPassword, salt);
-      const success = await enableBiometricUnlock(vaultUnlockKey, vaultId);
+      const vault = vaultManager.getExistingVaults().find(v => v.id === vaultId);
+      const vaultName = vault?.name || 'Vault';
+
+      const success = await enrollBiometric({
+        email,
+        accountPassword,
+        masterPassword,
+        vaultId,
+        vaultName,
+      });
 
       if (success) {
-        // Store salt for future key re-derivation
-        localStorage.setItem(
-          `ironvault_biometric_salt_${vaultId}`,
-          btoa(Array.from(salt).map(b => String.fromCharCode(b)).join(''))
-        );
-
-        // Also enrol account-level biometric if we have the password from the
-        // most recent login. Both passwords belong to the same biometric
-        // gesture from the user's POV — one prompt unlocks the entire app.
-        try {
-          if (!isAccountBiometricEnabled()) {
-            const pw = sessionStorage.getItem('iv_pending_bio_account_pw');
-            const email = getAccountEmail();
-            if (pw && email) {
-              await enableAccountBiometric(email, pw);
-            }
-          }
-          sessionStorage.removeItem('iv_pending_bio_account_pw');
-        } catch {
-          // Account-level enrollment is best-effort; vault-level success is what matters here
-        }
-
-        toast({ title: `${biometricLabel} Enabled`, description: `Unlock faster with ${biometricLabel}.` });
+        // Once enrolled, biometric reveals the password — no need to keep it
+        // in sessionStorage.
+        sessionStorage.removeItem('iv_pending_bio_account_pw');
+        toast({
+          title: `${biometricLabel} Enabled`,
+          description: `Sign in and unlock with ${biometricLabel} next time.`,
+        });
       } else {
-        toast({ title: 'Could not enable', description: 'Make sure biometrics are enrolled on your device.', variant: 'destructive' });
+        toast({
+          title: 'Could not enable',
+          description: 'Make sure biometrics are enrolled on your device.',
+          variant: 'destructive',
+        });
       }
     } catch {
-      toast({ title: 'Error', description: 'Failed to enable biometric unlock.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Failed to enable biometric unlock.',
+        variant: 'destructive',
+      });
     } finally {
       setIsEnabling(false);
       dismiss();
@@ -117,11 +134,13 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
       <DialogContent className="max-w-xs text-center">
         <DialogHeader className="items-center">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-            <Fingerprint className="w-7 h-7 text-primary" />
+            {iconType === 'face'
+              ? <ScanFace className="w-7 h-7 text-primary" />
+              : <Fingerprint className="w-7 h-7 text-primary" />}
           </div>
           <DialogTitle>Enable {biometricLabel}?</DialogTitle>
           <DialogDescription className="text-center">
-            Unlock your vault faster with {biometricLabel} instead of typing your master password every time.
+            One {biometricLabel} gesture will sign you in and unlock this vault — no typed passwords needed.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">

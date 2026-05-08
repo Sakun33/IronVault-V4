@@ -1,59 +1,63 @@
 /**
- * Biometric Keystore Service
+ * Biometric Keystore — Unified Credential Storage
  *
- * SECURITY ARCHITECTURE:
- * - Uses @aparajita/capacitor-biometric-auth for the biometric prompt
- * - Stores encrypted vault unlock keys in @capacitor/preferences (software-backed)
- * - The vault unlock key is AES-GCM encrypted with a per-device random key
- * - Biometric authentication is the gate before the device key is used
+ * One entry per vault. Each entry stores the email, account password, and
+ * master password together so a single biometric prompt unlocks BOTH the
+ * Stage-1 account login and the Stage-2 vault unlock.
  *
- * THREAT MODEL:
- * - Attacker who steals the device must pass biometric to unlock the vault
- * - Master password is NEVER stored — only a derived unlock secret
- * - Per-vault isolation: each vault has its own preference entry
+ * SECURITY:
+ * - Entries are AES-256-GCM encrypted with a per-install device key held in
+ *   Capacitor Preferences. A biometric prompt gates every read.
+ * - localStorage flags are advisory hints for sync UI checks; the encrypted
+ *   blob in Preferences is the source of truth.
  *
- * TRADE-OFF vs old plugin:
- * - The old capacitor-native-biometric plugin stored credentials in the OS keychain
- *   (hardware-backed on most devices). The new plugin only provides auth prompts.
- * - We compensate by AES-256-GCM encrypting the vault key before storing it in
- *   Preferences, using a per-install device key also stored in Preferences.
- * - The biometric auth prompt is enforced at the app layer before decryption.
+ * STORAGE KEYS:
+ * - Capacitor Preferences:
+ *   - `iv_dk` — device key (raw 32-byte AES key, base64)
+ *   - `iv_bio_v3_{vaultId}` — encrypted blob {iv, ct} of BiometricEntry JSON
+ * - localStorage:
+ *   - `iv_bio_enrolled_{vaultId}` = '1'  (sync hint)
+ *   - `iv_bio_account_email`     = lastEnrolledEmail (for login UI)
  */
 
-import { BiometricAuth, CheckBiometryResult } from '@aparajita/capacitor-biometric-auth';
+import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
 import { isNativeApp } from '@/native/platform';
 import { CryptoService } from './crypto';
 
-const DEVICE_KEY_PREF = 'iv_dk';          // base64 raw 32-byte AES key
-const VAULT_KEY_PREFIX = 'iv_bkey_';      // iv_bkey_<vaultId> → base64 JSON {iv, ct}
-const VAULT_REGISTRY_KEY = 'ironvault_registry';
-const ACCOUNT_CRED_PREF = 'iv_account_bio';     // encrypted blob {iv, ct} of {email,password}
-const ACCOUNT_BIO_FLAG = 'iv_account_bio_enabled';
-const ACCOUNT_BIO_EMAIL = 'iv_account_bio_email';
+const DEVICE_KEY_PREF = 'iv_dk';
+const ENTRY_PREFIX = 'iv_bio_v3_';
+const ACCOUNT_EMAIL_FLAG = 'iv_bio_account_email';
+const ENROLLED_FLAG_PREFIX = 'iv_bio_enrolled_';
 
-export interface BiometricKeyEntry {
-  vaultId: string;
-  isEnabled: boolean;
+// Legacy keys we purge on first run of the v3 keystore.
+const LEGACY_KEYS_TO_PURGE = [
+  'iv_bkey_',
+  'iv_account_bio',
+  'iv_account_bio_enabled',
+  'iv_account_bio_email',
+  'ironvault_biometric_enabled_',
+  'ironvault_biometric_salt_',
+];
+const LEGACY_PURGE_FLAG = 'iv_bio_v3_migrated';
+
+export interface BiometricEntry {
+  email: string;
+  accountPassword: string;
+  masterPassword: string;
+  vaultName: string;
+  enrolledAt: string;
 }
 
-export interface StoreBiometricResult {
+export interface StoreResult {
   success: boolean;
   error?: string;
 }
 
-export interface RetrieveBiometricResult {
-  success: boolean;
-  vaultUnlockKey?: string;
-  error?: string;
-}
-
-/**
- * BiometricKeystore — Secure per-vault biometric credential storage
- */
-export class BiometricKeystore {
+class BiometricKeystore {
   private static instance: BiometricKeystore;
   private deviceKey: CryptoKey | null = null;
+  private migrated = false;
 
   private constructor() {}
 
@@ -64,7 +68,8 @@ export class BiometricKeystore {
     return BiometricKeystore.instance;
   }
 
-  /** Get or create the per-install device key (AES-256-GCM). */
+  // ── Internals ────────────────────────────────────────────────────────────
+
   private async getDeviceKey(): Promise<CryptoKey> {
     if (this.deviceKey) return this.deviceKey;
 
@@ -72,12 +77,12 @@ export class BiometricKeystore {
     if (value) {
       const rawBytes = CryptoService.base64ToUint8Array(value);
       this.deviceKey = await crypto.subtle.importKey(
-        'raw', rawBytes.buffer as ArrayBuffer, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']
+        'raw', rawBytes.buffer as ArrayBuffer,
+        { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'],
       );
     } else {
-      // First run — generate and persist the device key
       this.deviceKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'],
       );
       const rawBytes = await crypto.subtle.exportKey('raw', this.deviceKey);
       await Preferences.set({
@@ -88,266 +93,299 @@ export class BiometricKeystore {
     return this.deviceKey;
   }
 
-  /**
-   * Store a vault unlock key in Preferences, encrypted with the device key.
-   */
-  async storeVaultKey(vaultId: string, vaultUnlockKey: string): Promise<StoreBiometricResult> {
-    if (!isNativeApp()) {
-      return { success: false, error: 'Biometric storage not available on web' };
-    }
+  /** Purge legacy biometric data from previous schema versions. Runs once. */
+  private async migrateOnce(): Promise<void> {
+    if (this.migrated) return;
+    this.migrated = true;
+
+    if (localStorage.getItem(LEGACY_PURGE_FLAG) === '1') return;
+
     try {
-      const dk = await this.getDeviceKey();
-      const { encrypted, iv } = await CryptoService.encrypt(vaultUnlockKey, dk);
-      const blob = JSON.stringify({
-        iv: CryptoService.uint8ArrayToBase64(iv),
-        ct: CryptoService.uint8ArrayToBase64(encrypted),
-      });
-      await Preferences.set({ key: `${VAULT_KEY_PREFIX}${vaultId}`, value: blob });
-      this.updateVaultBiometricFlag(vaultId, true);
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to store biometric credentials',
-      };
-    }
-  }
-
-  /**
-   * Prompt biometric auth, then decrypt and return the stored vault key.
-   */
-  async retrieveVaultKey(vaultId: string): Promise<RetrieveBiometricResult> {
-    if (!isNativeApp()) {
-      return { success: false, error: 'Biometric storage not available on web' };
-    }
-    try {
-      // Trigger the biometric prompt
-      await BiometricAuth.authenticate({
-        reason: 'Unlock your IronVault',
-        cancelTitle: 'Cancel',
-        allowDeviceCredential: false,
-      });
-
-      // Auth passed — decrypt the stored key
-      const { value: blob } = await Preferences.get({ key: `${VAULT_KEY_PREFIX}${vaultId}` });
-      if (!blob) return { success: false, error: 'No credentials found for this vault' };
-
-      const { iv: ivB64, ct: ctB64 } = JSON.parse(blob);
-      const iv = CryptoService.base64ToUint8Array(ivB64);
-      const ct = CryptoService.base64ToUint8Array(ctB64);
-
-      const dk = await this.getDeviceKey();
-      const decrypted = await CryptoService.decrypt(ct, dk, iv);
-      const vaultUnlockKey = new TextDecoder().decode(decrypted);
-
-      return { success: true, vaultUnlockKey };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Biometric authentication failed',
-      };
-    }
-  }
-
-  /**
-   * Remove the stored vault key from Preferences.
-   */
-  async deleteVaultKey(vaultId: string): Promise<boolean> {
-    localStorage.removeItem(`ironvault_biometric_enabled_${vaultId}`);
-    localStorage.removeItem(`ironvault_biometric_salt_${vaultId}`);
-    try {
-      await Preferences.remove({ key: `${VAULT_KEY_PREFIX}${vaultId}` });
-      this.updateVaultBiometricFlag(vaultId, false);
-      return true;
-    } catch {
-      this.updateVaultBiometricFlag(vaultId, false);
-      return false;
-    }
-  }
-
-  isBiometricEnabledForVault(vaultId: string): boolean {
-    try {
-      const directFlag = localStorage.getItem(`ironvault_biometric_enabled_${vaultId}`);
-      if (directFlag === 'true') return true;
-      if (directFlag === 'false') return false;
-      const registry = this.getVaultRegistry();
-      const vault = registry.find((v: any) => v.id === vaultId);
-      return vault?.biometricEnabled === true;
-    } catch {
-      return false;
-    }
-  }
-
-  getVaultsWithBiometricEnabled(): string[] {
-    try {
-      const enabledVaults: string[] = [];
-      const registry = this.getVaultRegistry();
-      for (const vault of registry) {
-        if (vault.id) {
-          const directFlag = localStorage.getItem(`ironvault_biometric_enabled_${vault.id}`);
-          if (directFlag === 'true' || (vault.biometricEnabled === true && directFlag !== 'false')) {
-            enabledVaults.push(vault.id);
+      // Wipe localStorage flags from previous schemas.
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        for (const prefix of LEGACY_KEYS_TO_PURGE) {
+          if (key === prefix || key.startsWith(prefix)) {
+            toRemove.push(key);
+            break;
           }
         }
       }
-      const defaultFlag = localStorage.getItem('ironvault_biometric_enabled_default');
-      if (defaultFlag === 'true' && !enabledVaults.includes('default')) {
-        enabledVaults.push('default');
+      toRemove.forEach(k => localStorage.removeItem(k));
+
+      // Wipe legacy Capacitor Preferences entries.
+      if (isNativeApp()) {
+        try {
+          const { keys } = await Preferences.keys();
+          for (const k of keys) {
+            if (k.startsWith('iv_bkey_') || k === 'iv_account_bio') {
+              await Preferences.remove({ key: k });
+            }
+          }
+        } catch { /* noop */ }
       }
-      return enabledVaults;
+
+      localStorage.setItem(LEGACY_PURGE_FLAG, '1');
     } catch {
-      return [];
+      // best-effort migration
     }
   }
 
-  private updateVaultBiometricFlag(vaultId: string, enabled: boolean): void {
+  private async authenticate(reason: string): Promise<{ ok: boolean; error?: string }> {
     try {
-      const registry = this.getVaultRegistry();
-      const idx = registry.findIndex((v: any) => v.id === vaultId);
-      if (idx !== -1) {
-        registry[idx].biometricEnabled = enabled;
-        localStorage.setItem(VAULT_REGISTRY_KEY, JSON.stringify(registry));
-      } else if (enabled) {
-        registry.push({
-          id: vaultId,
-          biometricEnabled: true,
-          name: 'Vault',
-          createdAt: new Date().toISOString(),
-          lastAccessedAt: new Date().toISOString(),
-          isDefault: registry.length === 0,
-          iconColor: '#6366f1',
-        });
-        localStorage.setItem(VAULT_REGISTRY_KEY, JSON.stringify(registry));
-      }
-      localStorage.setItem(`ironvault_biometric_enabled_${vaultId}`, enabled ? 'true' : 'false');
+      await BiometricAuth.authenticate({
+        reason,
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: false,
+      });
+      return { ok: true };
     } catch (error) {
-      console.error('BiometricKeystore: Failed to update vault registry:', error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Biometric authentication cancelled',
+      };
     }
   }
 
-  private getVaultRegistry(): any[] {
-    try {
-      const data = localStorage.getItem(VAULT_REGISTRY_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
+  private async writeEntry(vaultId: string, entry: BiometricEntry): Promise<void> {
+    const dk = await this.getDeviceKey();
+    const { encrypted, iv } = await CryptoService.encrypt(JSON.stringify(entry), dk);
+    const blob = JSON.stringify({
+      iv: CryptoService.uint8ArrayToBase64(iv),
+      ct: CryptoService.uint8ArrayToBase64(encrypted),
+    });
+    await Preferences.set({ key: ENTRY_PREFIX + vaultId, value: blob });
+    localStorage.setItem(ENROLLED_FLAG_PREFIX + vaultId, '1');
+    localStorage.setItem(ACCOUNT_EMAIL_FLAG, entry.email.toLowerCase().trim());
   }
+
+  private async readEntry(vaultId: string): Promise<BiometricEntry | null> {
+    const { value } = await Preferences.get({ key: ENTRY_PREFIX + vaultId });
+    if (!value) return null;
+
+    const { iv: ivB64, ct: ctB64 } = JSON.parse(value);
+    const iv = CryptoService.base64ToUint8Array(ivB64);
+    const ct = CryptoService.base64ToUint8Array(ctB64);
+    const dk = await this.getDeviceKey();
+    const decrypted = await CryptoService.decrypt(ct, dk, iv);
+    return JSON.parse(new TextDecoder().decode(decrypted)) as BiometricEntry;
+  }
+
+  // ── Public API ───────────────────────────────────────────────────────────
 
   /**
-   * Derive a vault unlock key from master password (extractable, base64-encoded).
+   * Enroll biometric for a vault. Stores email + accountPassword + masterPassword
+   * together so one biometric prompt unlocks both Stage-1 and Stage-2.
    */
-  async deriveVaultUnlockKey(masterPassword: string, salt: Uint8Array): Promise<string> {
-    const derivedKey = await CryptoService.deriveKeyWithConfig(
-      masterPassword,
-      salt,
-      CryptoService.KDF_PRESETS.standard,
-      true
-    );
-    const exportedKey = await crypto.subtle.exportKey('raw', derivedKey);
-    return btoa(Array.from(new Uint8Array(exportedKey)).map(b => String.fromCharCode(b)).join(''));
-  }
+  async enroll(params: {
+    email: string;
+    accountPassword: string;
+    masterPassword: string;
+    vaultId: string;
+    vaultName: string;
+  }): Promise<StoreResult> {
+    if (!isNativeApp()) {
+      return { success: false, error: 'Biometric storage requires native app' };
+    }
+    await this.migrateOnce();
 
-  async importVaultUnlockKey(base64Key: string): Promise<CryptoKey> {
-    const keyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
-    return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-  }
-
-  // ── Account-level biometric credentials ───────────────────────────────────
-  // Stores account email + account password (the Stage-1 login secret) so a
-  // single biometric prompt can sign the user in without a password.
-
-  async storeAccountCredentials(email: string, accountPassword: string): Promise<StoreBiometricResult> {
-    if (!isNativeApp()) return { success: false, error: 'Account biometric requires native app' };
     try {
-      const dk = await this.getDeviceKey();
-      const payload = JSON.stringify({ email: email.toLowerCase().trim(), password: accountPassword });
-      const { encrypted, iv } = await CryptoService.encrypt(payload, dk);
-      const blob = JSON.stringify({
-        iv: CryptoService.uint8ArrayToBase64(iv),
-        ct: CryptoService.uint8ArrayToBase64(encrypted),
-      });
-      await Preferences.set({ key: ACCOUNT_CRED_PREF, value: blob });
-      localStorage.setItem(ACCOUNT_BIO_FLAG, 'true');
-      localStorage.setItem(ACCOUNT_BIO_EMAIL, email.toLowerCase().trim());
+      const entry: BiometricEntry = {
+        email: params.email.toLowerCase().trim(),
+        accountPassword: params.accountPassword,
+        masterPassword: params.masterPassword,
+        vaultName: params.vaultName,
+        enrolledAt: new Date().toISOString(),
+      };
+      await this.writeEntry(params.vaultId, entry);
       return { success: true };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to store account credentials',
+        error: error instanceof Error ? error.message : 'Failed to enrol biometric',
       };
     }
-  }
-
-  async retrieveAccountCredentials(): Promise<{ success: boolean; email?: string; password?: string; error?: string }> {
-    if (!isNativeApp()) return { success: false, error: 'Account biometric requires native app' };
-    try {
-      await BiometricAuth.authenticate({
-        reason: 'Sign in to IronVault',
-        cancelTitle: 'Cancel',
-        allowDeviceCredential: false,
-      });
-      const { value: blob } = await Preferences.get({ key: ACCOUNT_CRED_PREF });
-      if (!blob) return { success: false, error: 'No biometric credentials found' };
-
-      const { iv: ivB64, ct: ctB64 } = JSON.parse(blob);
-      const iv = CryptoService.base64ToUint8Array(ivB64);
-      const ct = CryptoService.base64ToUint8Array(ctB64);
-      const dk = await this.getDeviceKey();
-      const decrypted = await CryptoService.decrypt(ct, dk, iv);
-      const { email, password } = JSON.parse(new TextDecoder().decode(decrypted));
-      return { success: true, email, password };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Biometric authentication failed',
-      };
-    }
-  }
-
-  async deleteAccountCredentials(): Promise<void> {
-    try {
-      await Preferences.remove({ key: ACCOUNT_CRED_PREF });
-    } catch {}
-    localStorage.removeItem(ACCOUNT_BIO_FLAG);
-    localStorage.removeItem(ACCOUNT_BIO_EMAIL);
-  }
-
-  isAccountBiometricEnabled(): boolean {
-    return localStorage.getItem(ACCOUNT_BIO_FLAG) === 'true';
-  }
-
-  getAccountBiometricEmail(): string | null {
-    return localStorage.getItem(ACCOUNT_BIO_EMAIL);
   }
 
   /**
-   * Authoritative probe: returns true if encrypted account credentials exist
-   * in Capacitor Preferences, regardless of the localStorage flag. Used to
-   * recover the "enrolled" state when localStorage was cleared (webview
-   * cache wipe, app reinstall on some platforms) but the secure-storage
-   * blob survived. Re-syncs the localStorage flag as a side-effect so the
-   * sync `isAccountBiometricEnabled()` is correct on subsequent calls.
+   * Disable biometric for a vault. Cleans up the encrypted entry and flags.
+   * If no enrolments remain, also clears the cached account email.
    */
-  async hasAccountBiometricCredentials(): Promise<boolean> {
+  async disable(vaultId: string): Promise<void> {
+    try {
+      await Preferences.remove({ key: ENTRY_PREFIX + vaultId });
+    } catch { /* noop */ }
+    localStorage.removeItem(ENROLLED_FLAG_PREFIX + vaultId);
+
+    // If nothing left enrolled, drop the account email hint.
+    const remaining = await this.getEnrolledVaultIds();
+    if (remaining.length === 0) {
+      localStorage.removeItem(ACCOUNT_EMAIL_FLAG);
+    }
+  }
+
+  /** Disable biometric for ALL vaults — used on account logout. */
+  async disableAll(): Promise<void> {
+    const ids = await this.getEnrolledVaultIds();
+    await Promise.all(ids.map(id => this.disable(id)));
+    localStorage.removeItem(ACCOUNT_EMAIL_FLAG);
+  }
+
+  /** Sync hint — does this vault have biometric enrolled? */
+  isEnrolled(vaultId: string): boolean {
+    return localStorage.getItem(ENROLLED_FLAG_PREFIX + vaultId) === '1';
+  }
+
+  /**
+   * Authoritative async probe of Capacitor Preferences. Self-heals the
+   * localStorage flag if it was lost (webview cache wipe).
+   */
+  async hasEntry(vaultId: string): Promise<boolean> {
     if (!isNativeApp()) return false;
     try {
-      const { value } = await Preferences.get({ key: ACCOUNT_CRED_PREF });
+      const { value } = await Preferences.get({ key: ENTRY_PREFIX + vaultId });
       const exists = !!value;
-      const flag = localStorage.getItem(ACCOUNT_BIO_FLAG) === 'true';
+      const flag = this.isEnrolled(vaultId);
       if (exists && !flag) {
-        // Recover the localStorage flag — the synchronous getter is now consistent.
-        localStorage.setItem(ACCOUNT_BIO_FLAG, 'true');
+        localStorage.setItem(ENROLLED_FLAG_PREFIX + vaultId, '1');
       } else if (!exists && flag) {
-        // Stale flag pointing at non-existent creds — clear it.
-        localStorage.removeItem(ACCOUNT_BIO_FLAG);
-        localStorage.removeItem(ACCOUNT_BIO_EMAIL);
+        localStorage.removeItem(ENROLLED_FLAG_PREFIX + vaultId);
       }
       return exists;
     } catch {
       return false;
     }
   }
+
+  /** Vaults that currently have biometric enrolled. */
+  async getEnrolledVaultIds(): Promise<string[]> {
+    if (!isNativeApp()) return [];
+    await this.migrateOnce();
+    try {
+      const { keys } = await Preferences.keys();
+      const enrolled: string[] = [];
+      for (const k of keys) {
+        if (k.startsWith(ENTRY_PREFIX)) {
+          const vaultId = k.slice(ENTRY_PREFIX.length);
+          enrolled.push(vaultId);
+          // Heal the localStorage flag while we're here.
+          if (!this.isEnrolled(vaultId)) {
+            localStorage.setItem(ENROLLED_FLAG_PREFIX + vaultId, '1');
+          }
+        }
+      }
+      return enrolled;
+    } catch {
+      return [];
+    }
+  }
+
+  /** Account email of the most recently enrolled vault — for login UI hint. */
+  getAccountEmail(): string | null {
+    return localStorage.getItem(ACCOUNT_EMAIL_FLAG);
+  }
+
+  /**
+   * Account-level sign in. Prompts biometric, returns email + accountPassword
+   * from the first enrolled vault entry. Both passwords decrypt with the same
+   * gesture, so this implicitly authorises the vault unlock that follows.
+   */
+  async signInWithBiometric(): Promise<{
+    success: boolean;
+    email?: string;
+    accountPassword?: string;
+    masterPassword?: string;
+    vaultId?: string;
+    error?: string;
+  }> {
+    if (!isNativeApp()) {
+      return { success: false, error: 'Biometric requires native app' };
+    }
+    await this.migrateOnce();
+
+    const enrolled = await this.getEnrolledVaultIds();
+    if (enrolled.length === 0) {
+      return { success: false, error: 'No biometric credentials enrolled' };
+    }
+
+    const auth = await this.authenticate('Sign in to IronVault');
+    if (!auth.ok) {
+      return { success: false, error: auth.error };
+    }
+
+    try {
+      // Use the first enrolled vault for the account creds. Multiple vaults
+      // share the same email/accountPassword, so any will do.
+      const entry = await this.readEntry(enrolled[0]);
+      if (!entry) return { success: false, error: 'Stored credentials missing' };
+      return {
+        success: true,
+        email: entry.email,
+        accountPassword: entry.accountPassword,
+        masterPassword: entry.masterPassword,
+        vaultId: enrolled[0],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read credentials',
+      };
+    }
+  }
+
+  /**
+   * Vault-specific unlock. Prompts biometric and returns the master password
+   * for that vault.
+   */
+  async unlockVaultWithBiometric(vaultId: string): Promise<{
+    success: boolean;
+    masterPassword?: string;
+    email?: string;
+    accountPassword?: string;
+    error?: string;
+  }> {
+    if (!isNativeApp()) {
+      return { success: false, error: 'Biometric requires native app' };
+    }
+    await this.migrateOnce();
+
+    if (!(await this.hasEntry(vaultId))) {
+      return { success: false, error: 'Biometric not enabled for this vault' };
+    }
+
+    const auth = await this.authenticate('Unlock your vault');
+    if (!auth.ok) {
+      return { success: false, error: auth.error };
+    }
+
+    try {
+      const entry = await this.readEntry(vaultId);
+      if (!entry) return { success: false, error: 'Stored credentials missing' };
+      return {
+        success: true,
+        masterPassword: entry.masterPassword,
+        email: entry.email,
+        accountPassword: entry.accountPassword,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read credentials',
+      };
+    }
+  }
+
+  /**
+   * Standalone biometric prompt with no credential retrieval. Used for
+   * confirming device identity before a sensitive action (e.g. enabling
+   * biometric for the first time, before we have anything to store).
+   */
+  async promptOnly(reason: string): Promise<{ ok: boolean; error?: string }> {
+    return this.authenticate(reason);
+  }
 }
 
 export const biometricKeystore = BiometricKeystore.getInstance();
+export { BiometricKeystore };

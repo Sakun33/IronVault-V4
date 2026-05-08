@@ -22,7 +22,12 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { vaultStorage } from '@/lib/storage';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
-import { checkBiometricCapabilities, unlockWithBiometric, isBiometricUnlockEnabled, enableBiometricUnlock, authenticateWithBiometric } from '@/native/biometrics';
+import {
+  checkBiometricCapabilities,
+  unlockVaultWithBiometric,
+  isBiometricEnrolledForVault,
+  hasBiometricEntryForVault,
+} from '@/native/biometrics';
 import { isNativeApp, apiBase } from '@/native/platform';
 import { listCloudVaults, listCloudVaultsWithStatus, downloadCloudVault, pushCloudVault, deleteCloudVault, markVaultAsNotCloudSynced, getCloudToken, acquireCloudToken, markVaultAsCloudSynced, type CloudVaultMeta } from '@/lib/cloud-vault-sync';
 import { getAccountPasswordHash } from '@/lib/account-auth';
@@ -319,13 +324,12 @@ export default function VaultPickerPage() {
         setBiometricCapable(true);
         const defaultVault = vaultManager.getDefaultVault();
         if (!defaultVault) return;
-        const enabled = await isBiometricUnlockEnabled(defaultVault.id);
-        if (enabled) {
-          setBiometricAvailable(true);
-          setBiometricVaultId(defaultVault.id);
-        } else {
-          setBiometricVaultId(defaultVault.id);
-        }
+        // Authoritative probe — checks Capacitor Preferences directly so a
+        // user whose localStorage flag was cleared still gets the biometric
+        // shortcut (the probe heals the flag as a side effect).
+        const enrolled = await hasBiometricEntryForVault(defaultVault.id);
+        setBiometricVaultId(defaultVault.id);
+        setBiometricAvailable(enrolled);
       } catch {
         // Biometric check failed silently
       }
@@ -399,7 +403,7 @@ export default function VaultPickerPage() {
           (async () => {
             const map: Record<string, boolean> = {};
             for (const cv of result.vaults!) {
-              try { map[cv.vaultId] = await isBiometricUnlockEnabled(cv.vaultId); }
+              try { map[cv.vaultId] = await hasBiometricEntryForVault(cv.vaultId); }
               catch { map[cv.vaultId] = false; }
             }
             if (!cancelled) setBioCloudEnrolled(prev => ({ ...prev, ...map }));
@@ -523,18 +527,9 @@ export default function VaultPickerPage() {
       if (success) {
         await vaultManager.resetFailedAttempts();
         resetViewportZoom();
-        // Auto-enroll biometric on native after first successful password
-        // unlock — silent, no extra prompt. Subsequent visits to vault
-        // picker will surface the "Unlock with biometric" button.
-        if (isNativeApp()) {
-          try {
-            const caps = await checkBiometricCapabilities();
-            const alreadyEnabled = await isBiometricUnlockEnabled(vaultId);
-            if (caps.isAvailable && caps.isEnrolled && !alreadyEnabled) {
-              await enableBiometricUnlock(pw, vaultId);
-            }
-          } catch { /* biometric enrolment is best-effort */ }
-        }
+        // Biometric enrolment is handled by BiometricSetupPrompt — it appears
+        // post-unlock and stores email + accountPassword + masterPassword
+        // together so a single biometric gesture handles the next sign-in.
         toast({ title: 'Vault Unlocked', description: `Welcome back! Opened "${vaultName}"` });
         await playUnlockAnimation(vaultName);
         setLocation('/');
@@ -566,71 +561,43 @@ export default function VaultPickerPage() {
     try {
       const vault = vaultManager.getDefaultVault();
       if (!vault) return;
-      vaultManager.setActiveVaultId(vault.id);
-      await vaultStorage.switchToVault(vault.id);
 
-      const enrolled = await isBiometricUnlockEnabled(vault.id);
+      const enrolled = await hasBiometricEntryForVault(vault.id);
       if (!enrolled) {
-        // First-time setup: prompt biometric to confirm device, then ask
-        // the user to type their master password once. We store the
-        // master password under the keystore so subsequent taps unlock
-        // without typing.
-        const auth = await authenticateWithBiometric('Set up biometric unlock for IronVault');
-        if (!auth.success) {
-          toast({ title: 'Biometric cancelled', description: auth.error || 'Try again.', variant: 'destructive' });
-          return;
-        }
-        const pw = passwords[vault.id] || '';
-        if (!pw) {
-          toast({
-            title: 'Enter master password once',
-            description: 'Type your master password and tap Unlock — biometric will be enabled for next time.',
-          });
-          return;
-        }
-        const success = await login(pw);
-        if (success) {
-          await enableBiometricUnlock(pw, vault.id);
-          setBiometricAvailable(true);
-          resetViewportZoom();
-          toast({ title: 'Biometric enabled', description: `Opened "${vault.name}" — biometric ready next time.` });
-          await playUnlockAnimation(vault.name);
-          setLocation('/');
-          return;
-        }
-        setErrors(e => ({ ...e, [vault.id]: 'Incorrect master password.' }));
+        toast({
+          title: `${`Set up biometric`}`,
+          description: 'Unlock this vault with your master password once — biometric will be offered after.',
+        });
         return;
       }
 
-      const storedKey = vaultManager.getBiometricKey(vault.id);
-      if (storedKey) {
-        // Try master password stored for biometric
-        const success = await login(storedKey);
-        if (success) {
-          resetViewportZoom();
-          toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
-          await playUnlockAnimation(vault.name);
-          setLocation('/');
-          return;
-        }
+      vaultManager.setActiveVaultId(vault.id);
+      await vaultStorage.switchToVault(vault.id);
+
+      const result = await unlockVaultWithBiometric(vault.id);
+      if (!result.success || !result.masterPassword) {
+        toast({ title: 'Biometric failed', description: result.error || 'Please enter your master password.', variant: 'destructive' });
+        return;
       }
 
-      // Fall back to native biometric key unlock
-      const result = await unlockWithBiometric(vault.id);
-      if (result.success && result.vaultUnlockKey) {
-        // The keystore stores the master password (pw) under biometric
-        // protection — so we use loginWithKey OR login(pw). Try both.
-        let success = await login(result.vaultUnlockKey);
-        if (!success) success = await loginWithKey(result.vaultUnlockKey);
-        if (success) {
-          resetViewportZoom();
-          toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
-          await playUnlockAnimation(vault.name);
-          setLocation('/');
-          return;
-        }
+      const success = await login(result.masterPassword);
+      if (success) {
+        await vaultManager.resetFailedAttempts();
+        resetViewportZoom();
+        toast({ title: 'Vault Unlocked', description: `Opened "${vault.name}" via biometric` });
+        await playUnlockAnimation(vault.name);
+        setLocation('/');
+        return;
       }
-      toast({ title: 'Biometric failed', description: 'Please enter your master password.', variant: 'destructive' });
+      // Stored password is stale (e.g. master password was changed elsewhere).
+      // Fall back to typed unlock and clear the bad biometric entry.
+      try { await import('@/native/biometrics').then(m => m.disableBiometric(vault.id)); } catch { /* noop */ }
+      setBiometricAvailable(false);
+      toast({
+        title: 'Biometric password stale',
+        description: 'Master password changed. Enter it once and re-enable biometric.',
+        variant: 'destructive',
+      });
     } catch {
       toast({ title: 'Biometric error', description: 'Please enter your master password.', variant: 'destructive' });
     } finally {
@@ -643,36 +610,20 @@ export default function VaultPickerPage() {
     setCloudErrors(e => ({ ...e, [cv.vaultId]: '' }));
     try {
       const enrolled = bioCloudEnrolled[cv.vaultId] === true
-        || await isBiometricUnlockEnabled(cv.vaultId);
+        || await hasBiometricEntryForVault(cv.vaultId);
       if (!enrolled) {
-        // First-time setup: confirm device biometric, then ask for the
-        // master password once. Once the user types it and unlocks, the
-        // cloud unlock flow will enrol biometric for future taps.
-        const auth = await authenticateWithBiometric('Set up biometric unlock');
-        if (!auth.success) {
-          toast({ title: 'Biometric cancelled', description: auth.error || 'Try again.', variant: 'destructive' });
-          return;
-        }
-        const pw = cloudPasswordInput[cv.vaultId] || '';
-        if (!pw) {
-          toast({
-            title: 'Enter master password once',
-            description: 'Type your password and tap Unlock — biometric will be ready next time.',
-          });
-          return;
-        }
-        // Use the typed password for unlock; we'll enrol after success below.
-        try { await enableBiometricUnlock(pw, cv.vaultId); } catch { /* best effort */ }
-        setBioCloudEnrolled(prev => ({ ...prev, [cv.vaultId]: true }));
-        await handleCloudUnlock(cv, pw);
+        toast({
+          title: 'Set up biometric',
+          description: 'Unlock this cloud vault with your master password once — biometric will be offered after.',
+        });
         return;
       }
-      const result = await unlockWithBiometric(cv.vaultId);
-      if (!result.success || !result.vaultUnlockKey) {
+      const result = await unlockVaultWithBiometric(cv.vaultId);
+      if (!result.success || !result.masterPassword) {
         toast({ title: 'Biometric failed', description: result.error || 'Please enter your master password.', variant: 'destructive' });
         return;
       }
-      await handleCloudUnlock(cv, result.vaultUnlockKey);
+      await handleCloudUnlock(cv, result.masterPassword);
     } catch (err) {
       toast({ title: 'Biometric error', description: 'Please enter your master password.', variant: 'destructive' });
     }
