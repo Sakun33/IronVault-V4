@@ -247,6 +247,9 @@ export function NoteEditor({
       ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
     });
     if (el.innerHTML !== html) el.innerHTML = html;
+    const isEmpty = (el.textContent || '').trim() === '';
+    if (isEmpty) el.setAttribute('data-empty', 'true');
+    else el.removeAttribute('data-empty');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, note?.id]);
 
@@ -428,7 +431,15 @@ export function NoteEditor({
 
   const handleEditorInput = () => {
     if (!editorRef.current) return;
-    setContentHtml(editorRef.current.innerHTML);
+    const el = editorRef.current;
+    setContentHtml(el.innerHTML);
+    // Drive the placeholder via a JS-set data attribute so it never lingers
+    // when the contentEditable produces structures the CSS :has() selector
+    // can't match (e.g. an empty <p><br/></p> sibling next to the typed
+    // content paragraph, which iOS WebKit can leave behind on paste).
+    const isEmpty = (el.textContent || '').trim() === '';
+    if (isEmpty) el.setAttribute('data-empty', 'true');
+    else el.removeAttribute('data-empty');
     detectSlashTrigger();
   };
 

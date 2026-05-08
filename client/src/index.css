@@ -1107,16 +1107,13 @@ html, body, #root {
   padding: 2px 0;
 }
 
-/* Placeholder — show data-placeholder when the editor is empty. The
-  contentEditable typically holds an empty <p><br/></p> when nothing is
-  written; the :has() selector matches that and renders the placeholder. */
+/* Placeholder — show data-placeholder when the editor is empty. We drive
+   data-empty from the input handler (textContent check) instead of relying
+   on the :has() selector, because iOS WebKit can leave residual empty
+   <p><br/></p> siblings around typed content that the CSS pattern wouldn't
+   match — leaving the placeholder visible alongside real text. */
 .iv-rich-editor:empty::before,
 .iv-rich-editor[data-empty="true"]::before {
-  content: attr(data-placeholder);
-  color: hsl(var(--muted-foreground) / 0.45);
-  pointer-events: none;
-}
-.iv-rich-editor:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
   color: hsl(var(--muted-foreground) / 0.45);
   pointer-events: none;

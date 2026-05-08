@@ -248,12 +248,12 @@ export default function Subscriptions() {
     <div className="overflow-x-hidden">
       <div className="space-y-6 overflow-x-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-2xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
               <Bell className="w-6 h-6 text-blue-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">Subscriptions</h1>
                 <Badge variant="secondary" className="rounded-full text-xs font-semibold">
@@ -263,7 +263,7 @@ export default function Subscriptions() {
               <p className="text-muted-foreground text-sm">Recurring payments &amp; services</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:flex-shrink-0">
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl hidden sm:flex">
               <LayoutTemplate className="w-4 h-4 mr-1.5" />Templates
             </Button>

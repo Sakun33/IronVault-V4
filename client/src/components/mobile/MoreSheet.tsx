@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'wouter';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ interface MoreSheetProps {
 export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheetProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [snapPoint, setSnapPoint] = useState<'partial' | 'full'>('partial');
+  const [, setLocation] = useLocation();
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number>(0);
   const dragCurrentY = useRef<number>(0);
@@ -151,14 +152,24 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
             <div className="space-y-1">
               {filteredSections.map((item) => {
                 const Icon = item.icon;
-                const inner = (
+                // Single button with imperative navigation. Earlier we wrapped
+                // a Button inside <Link>, which on iOS WebKit could swallow the
+                // Button's onClick (sheet stayed open) even though navigation
+                // worked. Driving navigation from the same handler that closes
+                // the sheet keeps both actions atomic.
+                return (
                   <Button
+                    key={item.id}
                     variant="ghost"
                     className="w-full justify-start gap-3 px-4 py-3 h-auto rounded-xl hover:bg-accent/60 transition-all duration-200"
                     onClick={() => {
                       onOpenChange(false);
-                      if (item.onClick) item.onClick();
-                      else window.scrollTo({ top: 0, behavior: 'instant' });
+                      if (item.onClick) {
+                        item.onClick();
+                      } else if (item.href) {
+                        setLocation(item.href);
+                        window.scrollTo({ top: 0, behavior: 'instant' });
+                      }
                     }}
                   >
                     <div className={cn('p-2 rounded-xl', item.color, 'bg-current/10')}>
@@ -176,9 +187,6 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
                     </div>
                   </Button>
                 );
-                return item.href
-                  ? <Link key={item.id} href={item.href}>{inner}</Link>
-                  : <div key={item.id}>{inner}</div>;
               })}
             </div>
           </div>

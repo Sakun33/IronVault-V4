@@ -1195,27 +1195,29 @@ export default function Profile() {
     <ErrorBoundary>
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold flex items-center gap-2 text-foreground">
-            <User className="w-6 h-6" />
+            <User className="w-6 h-6 shrink-0" />
             Profile & Settings
           </h1>
           <p className="text-muted-foreground">
             Manage your account, subscription, and preferences
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
+        <div className="flex gap-2 shrink-0">
+          <Button
             onClick={() => setLocation('/settings')}
             variant="outline"
+            className="flex-1 sm:flex-none"
           >
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </Button>
-          <Button 
+          <Button
             onClick={() => setShowPricingModal(true)}
             variant="outline"
+            className="flex-1 sm:flex-none"
           >
             <CreditCard className="w-4 h-4 mr-2" />
             Pricing

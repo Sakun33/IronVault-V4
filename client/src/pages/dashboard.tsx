@@ -685,8 +685,11 @@ export default function Dashboard() {
       {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <motion.div variants={fadeUp}>
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Quick Actions</p>
-        <div className="overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          <div className="flex gap-2.5" style={{ minWidth: 'max-content' }}>
+        <div
+          className="overflow-x-auto -mx-1 px-1"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}
+        >
+          <div className="flex gap-2.5 pr-3" style={{ minWidth: 'max-content' }}>
             {([
               { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'bg-indigo-500' },
               { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'bg-amber-500' },
@@ -697,7 +700,10 @@ export default function Dashboard() {
               { label: 'Generator', icon: Key, bg: 'bg-cyan-500', onClick: () => setShowGenerator(true) },
             ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
               const inner = (
-                <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+                <div
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+                  style={{ scrollSnapAlign: 'start' }}
+                >
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
                     <Icon className="w-[15px] h-[15px] text-white" />
                   </div>
