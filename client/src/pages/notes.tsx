@@ -438,9 +438,19 @@ export default function Notes() {
 
   const handleSave = async (payload: NoteFormPayload) => {
     if (editingNote) {
+      // Update vault silently. Do NOT update `editingNote` — the editor's
+      // local state is already the source of truth for the in-progress
+      // session, and bumping editingNote here causes the `note` prop
+      // reference to change, which fires the editor's note-prop sync
+      // effects mid-typing. On iOS that drops focus and dismisses the
+      // keyboard; the user sees it as "editor closes".
       await updateNote(editingNote.id, payload);
-      setEditingNote(prev => prev ? { ...prev, ...payload, updatedAt: new Date() } as NoteEntry : prev);
     } else {
+      // First save promotes a new note (null id → real id). We DO need
+      // setEditingNote so subsequent saves go through the existing-note
+      // branch, and so Delete/Duplicate buttons have a real id. The
+      // editor's reset effect handles the null→real transition without
+      // resetting in-memory state (see prevNoteIdRef in note-editor.tsx).
       const created = await addNote(payload);
       saveNotebook(payload.notebook);
       setEditingNote(created);

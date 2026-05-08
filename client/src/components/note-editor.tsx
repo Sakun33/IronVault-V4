@@ -210,16 +210,23 @@ export function NoteEditor({
     });
   }, [open, note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SYNCHRONOUS contentEditable population. Runs after every commit where
-  // a relevant prop changed, BEFORE the browser paints — so the user
-  // never sees a blank/half-populated body. Two important guards:
-  //   1) Skip when the user is currently typing (focus is on the editor)
-  //      so we never clobber an in-progress edit.
-  //   2) Trigger on note.id AND note.updatedAt so reopening the same id
-  //      after an external save (cloud pull, duplicate, undo) re-syncs.
-  // Without this, the previous rAF-based approach raced with motion.div's
-  // enter animation and sometimes left the body showing whatever short
-  // string the editor had been wiped to mid-session ("Shddh", etc.).
+  // SYNCHRONOUS contentEditable population. Runs only when the editor
+  // opens or the note id changes (i.e. switching to a different note).
+  //
+  // We deliberately do NOT depend on note?.updatedAt or note?.content.
+  // Those change every time autosave commits — the parent re-renders
+  // with `setEditingNote({...prev, ...payload, updatedAt: new Date()})`
+  // (or, after the linked notes.tsx fix, the note prop ref is stable
+  // across saves). Either way, re-running this effect on save is wrong:
+  // the editor's local state already matches what was just saved, and
+  // mutating el.innerHTML mid-edit drops focus on iOS, dismisses the
+  // keyboard, and looks to the user like the editor "closed".
+  //
+  // Cloud pull / duplicate / undo paths that change a note out from
+  // under the user are already gated by `isNoteEditing()` while the
+  // editor is open, so we don't need updatedAt to catch them — they
+  // can only land after the editor closes, and reopening it goes
+  // through the id-change path here.
   useLayoutEffect(() => {
     if (!open) return;
     const el = editorRef.current;
@@ -241,7 +248,7 @@ export function NoteEditor({
     });
     if (el.innerHTML !== html) el.innerHTML = html;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, note?.id, note?.updatedAt, note?.content]);
+  }, [open, note?.id]);
 
   // Combined notebook list (metadata + notes' strings)
   const notebookOptions = useMemo<NotebookMeta[]>(() => {
