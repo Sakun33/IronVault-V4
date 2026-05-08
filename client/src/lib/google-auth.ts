@@ -223,24 +223,50 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 }
 
 async function getGoogleIdTokenNative(): Promise<string> {
+  console.warn('[google-auth] native: getting plugin');
   const SocialLogin = await getSocialLoginPlugin();
-  const response: any = await withTimeout(
-    SocialLogin.login({
-      provider: 'google',
-      options: {
-        scopes: ['email', 'profile'],
-        forceRefreshToken: false,
-      },
-    }),
-    60_000,
-    'Google sign-in',
-  );
+  console.warn('[google-auth] native: plugin ready, calling login');
+  let response: any;
+  try {
+    response = await withTimeout(
+      SocialLogin.login({
+        provider: 'google',
+        options: {
+          scopes: ['email', 'profile'],
+          forceRefreshToken: false,
+        },
+      }),
+      60_000,
+      'Google sign-in',
+    );
+  } catch (err: any) {
+    // Surface the real native error to the JS console (visible via Safari
+    // Web Inspector when the device is attached) and re-wrap with a useful
+    // message so the user-facing toast says something specific instead of
+    // a bare timeout.
+    const detail = {
+      message: err?.message,
+      code: err?.code,
+      errorMessage: err?.errorMessage,
+      raw: (() => { try { return JSON.stringify(err); } catch { return String(err); } })(),
+    };
+    console.error('[google-auth] native login failed:', detail);
+    if (err?.message && /timed out/.test(err.message)) {
+      throw new Error('Google did not respond. Check internet, retry, or use email + password.');
+    }
+    throw err;
+  }
+  console.warn('[google-auth] native: login resolved', {
+    hasIdToken: Boolean(response?.result?.idToken),
+    hasAccessToken: Boolean(response?.result?.accessToken),
+    keys: response?.result ? Object.keys(response.result) : [],
+  });
   const idToken: string | undefined =
     response?.result?.idToken
     || response?.result?.authentication?.idToken
     || response?.idToken;
   if (!idToken) {
-    throw new Error('Google did not return an ID token');
+    throw new Error('Google did not return an ID token (check OAuth consent screen / iOSServerClientId)');
   }
   return idToken;
 }
