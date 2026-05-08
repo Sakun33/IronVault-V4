@@ -11,6 +11,7 @@ import {
   Sparkles, Crown, Infinity, Users, KeyRound, MailCheck, ChevronRight,
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
+import { GoogleSignInButton } from '@/components/google-sign-in-button';
 import { useToast } from '@/hooks/use-toast';
 import { sha256 } from '@/lib/account-auth';
 import { PLANS, planPriceLabel } from '@/lib/plans';
@@ -604,6 +605,30 @@ export default function SignupPage() {
             >
               {isLoading ? 'Creating account…' : 'Continue to Vault Setup →'}
             </Button>
+
+            {/* Google Sign-Up — alternative path that skips email verification.
+                Hidden in invite mode because the invite is bound to a specific
+                email + plan and Google could auth with a different identity. */}
+            {!inviteMode && (
+              <>
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border/60" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
+                  </div>
+                </div>
+                <GoogleSignInButton
+                  label="Sign up with Google"
+                  testId="signup-google"
+                  newUserRedirect="/"
+                />
+                <p className="text-center text-[11px] text-muted-foreground">
+                  No password needed for sign-in. You'll still set a master password to encrypt your vault.
+                </p>
+              </>
+            )}
 
             <p className="text-center text-xs text-muted-foreground">
               By signing up you agree to our{' '}

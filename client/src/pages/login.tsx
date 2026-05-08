@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield, Fingerprint, ScanFace } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
+import { GoogleSignInButton } from '@/components/google-sign-in-button';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
@@ -477,16 +478,21 @@ export default function Login() {
             </Button>
           </form>
 
-          {bioReady && (
-            <div className="mt-4">
-              <div className="relative my-3">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border/60" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
-                </div>
+          {/* Google Sign-In — always available, regardless of biometric state */}
+          <div className="mt-4">
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border/60" />
               </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
+              </div>
+            </div>
+            <GoogleSignInButton label="Continue with Google" />
+          </div>
+
+          {bioReady && (
+            <div className="mt-3">
               <Button
                 type="button"
                 variant="outline"

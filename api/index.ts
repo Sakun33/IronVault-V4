@@ -1082,6 +1082,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Backfill the auth_provider columns we need for Google Sign-In. Same
+  // memoized pattern as ensureTotpColumns — first call after deploy adds the
+  // columns, subsequent calls are a no-op. Called from /api/auth/google.
+  let _googleAuthColumnsEnsured = false;
+  async function ensureGoogleAuthColumns(): Promise<void> {
+    if (_googleAuthColumnsEnsured) return;
+    try {
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20)`);
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255)`);
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_crm_users_google_id ON crm_users(google_id)`);
+      _googleAuthColumnsEnsured = true;
+    } catch (e: any) {
+      console.error('[ensureGoogleAuthColumns]', e.message);
+    }
+  }
+
   // Adds UNIQUE constraints that enforce the data-shape invariants the app
   // relies on (one entitlements row per user, one cloud_vaults row per
   // (user, vault) pair). Pre-existing duplicates are coalesced first so the
@@ -1848,6 +1865,178 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('auth/token error:', err.message);
       return res.status(500).json({ error: 'Auth failed' });
+    }
+  }
+
+  // ── POST /api/auth/google ───────────────────────────────────────────────────
+  // Sign in / sign up with a Google ID token. The client (web GSI or
+  // Capacitor GoogleAuth plugin) hands us a JWT-shaped credential issued by
+  // Google. We verify it via the tokeninfo endpoint, validate the audience
+  // against our configured client IDs, then either create a new crm_users row
+  // or look up the existing one and issue our own cloud-token JWT.
+  if (path === '/api/auth/google' && req.method === 'POST') {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const { idToken, platform } = req.body || {};
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(400).json({ error: 'idToken required' });
+    }
+    try {
+      // Verify with Google. tokeninfo also re-validates the signature, so we
+      // don't need the heavier google-auth-library dependency.
+      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+      if (!verifyRes.ok) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid Google token' });
+      }
+      const googleUser: any = await verifyRes.json();
+
+      // Audience check — must match one of our configured OAuth client IDs.
+      const GOOGLE_CLIENT_IDS = [
+        process.env.GOOGLE_CLIENT_ID_WEB,
+        process.env.GOOGLE_CLIENT_ID_IOS,
+        process.env.GOOGLE_CLIENT_ID_ANDROID,
+      ].filter(Boolean) as string[];
+      if (GOOGLE_CLIENT_IDS.length === 0) {
+        console.error('[auth/google] no GOOGLE_CLIENT_ID_* env vars configured');
+        return res.status(500).json({ error: 'Google sign-in not configured' });
+      }
+      if (!googleUser.aud || !GOOGLE_CLIENT_IDS.includes(googleUser.aud)) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid token audience' });
+      }
+      // Issuer must be Google. tokeninfo wouldn't 200 otherwise but be defensive.
+      if (googleUser.iss !== 'https://accounts.google.com' && googleUser.iss !== 'accounts.google.com') {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid issuer' });
+      }
+      // Expiry: tokeninfo returns `exp` as a unix-seconds string.
+      const expSec = parseInt(String(googleUser.exp || '0'), 10);
+      if (!expSec || expSec * 1000 < Date.now()) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Token expired' });
+      }
+
+      const email = (googleUser.email || '').toLowerCase().trim();
+      const emailVerified = googleUser.email_verified === true || googleUser.email_verified === 'true';
+      if (!email || !emailVerified) {
+        return res.status(400).json({ error: 'Verified Google email required' });
+      }
+      const fullName = stripHtml(googleUser.name || email.split('@')[0]);
+      const profilePicture = googleUser.picture || null;
+      const googleId = googleUser.sub;
+
+      // Make sure the auth_provider columns exist before touching them. Cheap
+      // on subsequent calls (memoized flag inside ensureGoogleAuthColumns).
+      await ensureGoogleAuthColumns();
+
+      // Look up or create user.
+      const { rows } = await db.query(
+        `SELECT id, email, full_name, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+        [email]
+      );
+      let userId: string;
+      let isNewUser = false;
+      let resolvedFullName = fullName;
+
+      if (rows[0]) {
+        userId = rows[0].id;
+        // If the existing row is still pending verification (registered via
+        // password but never clicked the link), Google's email_verified=true
+        // is sufficient to flip it to active — Google has already proven
+        // ownership of the inbox.
+        if (rows[0].account_status === 'pending_verification') {
+          await db.query(
+            `UPDATE crm_users SET account_status = 'active' WHERE id = $1`,
+            [userId]
+          );
+        }
+        // Backfill auth_provider / google_id / profile_picture without
+        // overwriting an existing non-google provider record (e.g. password).
+        await db.query(
+          `UPDATE crm_users
+             SET google_id = COALESCE(google_id, $1),
+                 profile_picture = COALESCE($2, profile_picture),
+                 auth_provider = COALESCE(auth_provider, 'google'),
+                 last_active_at = NOW()
+           WHERE id = $3`,
+          [googleId, profilePicture, userId]
+        );
+        resolvedFullName = rows[0].full_name || fullName;
+      } else {
+        isNewUser = true;
+        const { rows: newRows } = await db.query(
+          `INSERT INTO crm_users
+             (email, full_name, auth_provider, google_id, profile_picture, account_status, marketing_consent, support_consent)
+           VALUES ($1, $2, 'google', $3, $4, 'active', true, true)
+           RETURNING id`,
+          [email, fullName, googleId, profilePicture]
+        );
+        userId = newRows[0].id;
+
+        // Mirror in customers + entitlements (non-blocking, same pattern as /api/auth/register).
+        db.query(
+          `INSERT INTO customers (email, full_name, platform, plan_type, status, marketing_consent)
+           VALUES ($1, $2, $3, 'free', 'active', true)
+           ON CONFLICT (email) DO NOTHING`,
+          [email, fullName, platform || 'web']
+        ).catch(() => {});
+        db.query(
+          `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+           VALUES ($1, 'free', 'active', false, false, false) ON CONFLICT DO NOTHING`,
+          [userId]
+        ).catch(() => {});
+
+        // Fire-and-forget CRM sync — same as register.
+        const nameParts = fullName.split(' ');
+        createCrmContact({
+          email,
+          firstName: nameParts[0] || fullName,
+          lastName: nameParts.slice(1).join(' ') || email,
+          source: 'Google Sign-In',
+          plan: 'free',
+        }).catch(() => {});
+      }
+
+      // Successful auth — wipe failure counter for this IP.
+      clearLoginFailures(clientIp);
+
+      const token = signCloudToken(userId, email);
+
+      // Register session in extension_sessions — same as /api/auth/token.
+      let sessionId: string | null = null;
+      try {
+        await ensureSessionAndActivityTables();
+        const ua = (req.headers['user-agent'] as string) || '';
+        const clientKind = (req.headers['x-iv-client'] as string) || 'web';
+        const { browser, os, deviceName } = parseUserAgent(ua);
+        const ip = getClientIp(req);
+        const tokenHash = hashJwtToken(token);
+        const { rows: sessRows } = await db.query(
+          `INSERT INTO extension_sessions (user_id, device_name, browser, os, ip_address, user_agent, client_kind, jwt_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [userId, deviceName, browser, os, ip, ua, clientKind, tokenHash]
+        );
+        sessionId = sessRows[0]?.id || null;
+      } catch (e: any) {
+        console.error('[auth/google] session register failed:', e.message);
+      }
+
+      return res.json({
+        success: true,
+        token,
+        userId,
+        email,
+        fullName: resolvedFullName,
+        isNewUser,
+        authProvider: 'google',
+        sessionId,
+      });
+    } catch (err: any) {
+      console.error('auth/google error:', err.message);
+      return res.status(500).json({ error: 'Google sign-in failed' });
     }
   }
 

@@ -48,6 +48,15 @@ const config: CapacitorConfig = {
     Preferences: {
       group: 'NativeStorage',
     },
+    // @capgo/capacitor-social-login is configured programmatically via
+    // SocialLogin.initialize() at runtime (see client/src/lib/google-auth.ts).
+    // Android additionally needs:
+    //   - SHA-1 fingerprint of the signing key registered against an
+    //     Android OAuth client in Google Cloud Console.
+    // iOS additionally needs:
+    //   - REVERSED_CLIENT_ID URL scheme added to Info.plist so Google can
+    //     redirect back into the app.
+    // No static block required here.
   },
 };
 

@@ -18,6 +18,7 @@ import { vaultManager } from '@/lib/vault-manager';
 import { clearPlanCache } from '@/hooks/use-plan-features';
 import { markLoginComplete } from '@/lib/auth-fetch-interceptor';
 import { apiBase } from '@/native/platform';
+import { signInWithGoogle, googleSignOut } from '@/lib/google-auth';
 
 // Server returns `{ requires2FA: true, tempToken }` when password auth succeeds
 // but the user has 2FA enabled. We surface this to the login page via
@@ -46,6 +47,7 @@ interface AuthContextType {
   createVault: (masterPassword: string) => Promise<void>;
   logout: () => void;
   accountLogin: (email: string, password: string) => Promise<boolean>;
+  googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false }>;
   verifyTwoFactor: (code: string) => Promise<boolean>;
   cancelTwoFactor: () => void;
   accountLogout: () => void;
@@ -349,6 +351,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
+  // Google Sign-In (Stage 1). Bypasses the email+password flow but produces
+  // the same end state: cloud token stored, account session saved, vault
+  // unlock pending. Google users have no IronVault account password, so we
+  // skip saveAccountCredentials and the local-hash offline-fallback path —
+  // they MUST be online to sign in. The vault master password is unrelated
+  // and still required to unlock data on every device.
+  const googleLogin = async (): Promise<{ ok: true; isNewUser: boolean } | { ok: false }> => {
+    const result = await signInWithGoogle();
+    if (!result || !result.token || !result.email) {
+      return { ok: false };
+    }
+    const normalizedEmail = result.email.toLowerCase().trim();
+
+    // Cross-account hygiene: if a different user was previously signed in on
+    // this device, wipe their vault data + cached display name before we set
+    // the new session — same logic finalizeAccountLogin runs for the
+    // password path.
+    const previousEmail = (() => {
+      try {
+        const raw = localStorage.getItem('iv_account');
+        return raw ? (JSON.parse(raw)?.email || null) : null;
+      } catch { return null; }
+    })();
+    const userChanged = previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+    if (userChanged) {
+      clearCloudToken();
+      vaultStorage.setEncryptionKey(null as any);
+      sessionStorage.removeItem(SESSION_KEY);
+      await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
+      // Drop the password-based local credential — the new user is on Google.
+      try { localStorage.removeItem('iv_account'); } catch { /* noop */ }
+    }
+
+    // Persist token + session.
+    storeCloudToken(result.token);
+    saveAccountSession(normalizedEmail);
+    vaultManager.setAccountEmail(normalizedEmail);
+    clearPlanCache();
+    // Refetch the canonical display name from /api/auth/me on next render.
+    try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
+    addLog('Account Login', 'security', `Signed in with Google as ${normalizedEmail}`);
+    markLoginComplete();
+    setIsAccountLoggedIn(true);
+    setAccountEmail(normalizedEmail);
+    return { ok: true, isNewUser: !!result.isNewUser };
+  };
+
   const verifyTwoFactor = async (code: string): Promise<boolean> => {
     const pending = pendingTwoFactor;
     if (!pending) return false;
@@ -386,6 +435,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAccountSession();
     clearPlanCache();
     clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
+    // Drop any cached Google session so the next sign-in shows the chooser
+    // (otherwise a different user on the same device gets auto-signed-in).
+    googleSignOut().catch(() => { /* noop */ });
     // Reset the centralized plan service so the next account starts as 'free'
     // until its entitlement resolves. Without this, a Pro user signing out and
     // a Free user signing in on the same device would briefly inherit Pro UI.
@@ -598,6 +650,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     createVault,
     logout,
     accountLogin,
+    googleLogin,
     verifyTwoFactor,
     cancelTwoFactor,
     accountLogout,
