@@ -1027,7 +1027,19 @@ html, body, #root {
   color: hsl(var(--foreground));
   white-space: pre-wrap;
   word-wrap: break-word;
-  outline: none;
+  outline: none !important;
+  border: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.note-content:focus,
+.note-content:focus-visible,
+.iv-rich-editor:focus,
+.iv-rich-editor:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 .iv-rich-editor {
   min-height: 300px;

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5</string>
+	<key>BUNDLE_ID</key>
+	<string>com.ironvault.app</string>
+	<key>PROJECT_ID</key>
+	<string>citric-bee-495700-v6</string>
+	<key>GCM_SENDER_ID</key>
+	<string>137773717238</string>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:137773717238:ios:ironvault</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<false/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+</dict>
+</plist>

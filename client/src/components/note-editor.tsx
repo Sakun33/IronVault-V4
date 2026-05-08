@@ -595,7 +595,7 @@ export function NoteEditor({
   const editorBody = (
     <>
       {/* Top bar */}
-      <header className="flex items-center justify-between gap-1 px-2 py-2 border-b border-border/40 bg-background relative">
+      <header className="flex items-center justify-between gap-1 px-2 py-2 bg-background relative">
         <div className="relative flex items-center gap-1">
           {!embedded && (
             <button
@@ -758,7 +758,7 @@ export function NoteEditor({
 
       {/* Formatting toolbar — fixed BELOW the header, never scrolls away.
           One row of buttons that horizontally scrolls if it overflows. */}
-      <div className="flex-shrink-0 border-b border-border/40 bg-background">
+      <div className="flex-shrink-0 bg-background">
         <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
           <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
@@ -790,7 +790,7 @@ export function NoteEditor({
             placeholder="Untitled"
             aria-label="Note title"
             aria-invalid={submitted && !title.trim()}
-            className={`w-full bg-transparent border-0 outline-none text-[26px] sm:text-[28px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3 rounded-md ${
+            className={`w-full bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-[26px] sm:text-[28px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3 rounded-md ${
               submitted && !title.trim() ? 'ring-1 ring-red-400/60 px-2 -mx-2' : ''
             }`}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus(); } }}
@@ -814,7 +814,7 @@ export function NoteEditor({
             onFocus={sampleActiveFormats}
             onClick={viewerMode ? handleViewerClick : undefined}
             spellCheck={!viewerMode}
-            className={`iv-rich-editor note-content ${viewerMode ? 'cursor-text' : ''}`}
+            className={`iv-rich-editor note-content outline-none border-none focus:outline-none focus-visible:outline-none ${viewerMode ? 'cursor-text' : ''}`}
             data-placeholder={viewerMode ? '' : 'Start writing…'}
             // Toolbar is now above the body, so we no longer need the
             // 96px ghost gutter at the bottom of the editable area —

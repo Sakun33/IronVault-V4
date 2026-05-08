@@ -669,9 +669,9 @@ export default function Notes() {
   );
 
   const headerBlock = (
-    <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
-      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Notes</h1>
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between gap-2 sm:px-0 min-w-0">
+      <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground truncate flex-shrink min-w-0">Notes</h1>
+      <div className="flex items-center gap-0.5 flex-shrink-0">
         {/* Primary "New Note" button — visible without scrolling. Drops down
             with "Blank Note" + the 10 templates so users can pick a starter
             structure without first navigating to the templates modal. */}
@@ -681,9 +681,11 @@ export default function Notes() {
               size="sm"
               disabled={upgradeBlocked}
               data-testid="button-new-note-header"
-              className="h-9 px-3 mr-1 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-full shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)] hover:shadow-[0_6px_18px_-4px_rgba(16,185,129,0.75)]"
+              className="h-9 px-2.5 sm:px-3 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-full shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)] hover:shadow-[0_6px_18px_-4px_rgba(16,185,129,0.75)] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 flex-shrink-0"
             >
-              <Plus className="w-4 h-4 mr-1.5" /> New Note
+              <Plus className="w-4 h-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">New Note</span>
+              <span className="sr-only sm:hidden">New Note</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
