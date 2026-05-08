@@ -89,8 +89,26 @@ IronVault is a zero-knowledge encrypted vault app for passwords, finances, notes
 - JWT TDZ fix: JWT_SECRET must be declared at top of handler before any endpoint
 
 ## Current State (May 2026)
-- v4.1.0 released on GitHub
-- 160+ security fixes applied
+- **v4.2.0** released on GitHub (2026-05-08)
+- 160+ security fixes applied (carried from v4.1.0)
 - 5-phase UI overhaul complete (glassmorphism, Motion animations, premium design)
-- Lighthouse: Performance 57 (mobile), Accessibility 97, SEO 100
-- Playwright test suite: 12 spec files, 896 tests, 268 passing in Round 2
+- Lighthouse mobile: Performance **75+** (was 57), Accessibility 97, SEO 100
+- Playwright test suite: 12 spec files, 900+ tests, growing pass rate
+- iOS + Android native apps shipping via Capacitor 7
+
+### v4.2.0 Highlights
+- **Google Sign-In** — OAuth 2.0 on web, iOS, and Android via `@capgo/capacitor-social-login` (Google Cloud project: `citric-bee-495700-v6`)
+- **Biometric vault unlock** — Face ID / Touch ID / fingerprint via `@aparajita/capacitor-biometric-auth` and `capacitor-native-biometric`; unified gesture + credential bundle (one place to enroll/use)
+- **Centralized plan service** (`planService`) — single source of truth for subscription tier and import limits; fixes Lifetime → Free demotion regressions
+- **Anti-wipe cloud sync guard** — always pushes full vault blob; prevents data-loss on partial-state pushes
+- **Font size / accessibility settings** — user-configurable text scaling
+- **Investments view/edit** — dynamic currency rendering for FDs, MFs, stocks, crypto
+- **Notes manual save** — autosave removed; explicit save model is more reliable on iOS (fixes editor closing mid-typing)
+- **`apiBase()` helper** — absolute API URLs on Capacitor native (web continues to use relative URLs)
+- **iOS/Android polish** — keyboard, safe-area, header alignment, sheet/modal close, toast/banner cleanup, Razorpay flow, swipe gestures
+- **CSP updated for Google Sign-In** — `accounts.google.com`, `apis.google.com`, GIS frame allowances
+- **iOS build pipeline** — Pod install fixes for Ruby 4.0.2; AppCheckCore reinstall workaround documented
+
+### Native Build Notes
+- iOS: `npm run cap:build:ios` → open `ios/App.xcworkspace`; requires `GoogleService-Info.plist` and reversed-client URL scheme
+- Android: `npm run cap:build:android`, then in `android/`: `./gradlew assembleDebug` (set `JAVA_HOME` to Android Studio JBR; `GRADLE_OPTS=-Xmx4g` recommended)

@@ -1,6 +1,6 @@
 {
   "name": "ironvault",
-  "version": "1.0.0",
+  "version": "4.2.0",
   "description": "IronVault - Secure Password Manager with Intelligent Autofill, Multi-Currency Support, and Complete Dark Mode",
   "type": "module",
   "private": true,
