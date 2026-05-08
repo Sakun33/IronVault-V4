@@ -365,46 +365,27 @@ export default function Notes() {
   const selection = useMultiSelect(sortedNotes);
 
   // Editor lifecycle ────────────────────────────────────────────────────────
-  // QA-R2 H5: hijack the browser back button so it closes the editor
-  // instead of navigating away from /notes entirely. We push a marker
-  // history entry when the editor opens and listen for popstate; if the
-  // marker is popped we close the editor instead of letting wouter route
-  // away. The closeEditor() helper below pops the marker if it's still on
-  // the stack, so an explicit Done/Back tap stays in sync with the URL.
-  const editorHashPushedRef = useRef(false);
-  const pushEditorHistoryMarker = () => {
-    if (typeof window === 'undefined' || editorHashPushedRef.current) return;
-    try {
-      window.history.pushState({ ivEditor: true }, '');
-      editorHashPushedRef.current = true;
-    } catch { /* noop */ }
-  };
-  const popEditorHistoryMarker = () => {
-    if (typeof window === 'undefined' || !editorHashPushedRef.current) return;
-    editorHashPushedRef.current = false;
-    try {
-      if (window.history.state?.ivEditor) window.history.back();
-    } catch { /* noop */ }
-  };
-  useEffect(() => {
-    const onPop = (e: PopStateEvent) => {
-      // The browser already popped the entry by the time popstate fires —
-      // clear the ref and just close the editor in React state.
-      if (editorHashPushedRef.current) {
-        console.warn('[NOTE-EDITOR] CLOSING via popstate', { state: e.state, stack: new Error().stack });
-        editorHashPushedRef.current = false;
-        setEditorOpen(false);
-        setTimeout(() => {
-          setEditingNote(null);
-          setStarterContent(undefined);
-          setStarterNotebook(undefined);
-        }, 240);
-      }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
-
+  //
+  // PREVIOUSLY: opening the editor pushed a `{ ivEditor: true }` history
+  // marker via `pushState`, and a `popstate` listener closed the editor
+  // when that marker was popped. The intent was to make the iOS/browser
+  // back button collapse the editor before leaving /notes.
+  //
+  // PROBLEM: under Capacitor's WKWebView, stray same-document
+  // pushState/popstate events can fire during the autosave path
+  // (verified via `xcrun simctl log stream` showing
+  // `didSameDocumentNavigationForFrameViaJS type=1` events seconds
+  // after a save). When that happened, the popstate close handler ran,
+  // flipped `editorOpen` to false, and the user saw the editor "close
+  // mid-typing". This was the second half of the regression that the
+  // earlier `prevNoteIdRef` fix didn't catch.
+  //
+  // FIX: drop the history-marker mechanism entirely. The editor is closed
+  // exclusively by user gesture — Back button (header), Done button,
+  // edge-swipe, Escape key, or explicit Delete confirm. No external event
+  // can flip `editorOpen` to false anymore. We accept the small UX
+  // tradeoff that the iOS/browser back-button no longer collapses the
+  // editor first; the in-editor Back button remains the canonical way out.
   const openNewNote = (template?: typeof NOTE_TEMPLATES[number]) => {
     if (!isPro && notes.length >= getLimit('notes')) {
       toast({ title: 'Limit reached', description: 'Upgrade to Pro for unlimited notes.', variant: 'destructive' });
@@ -416,18 +397,15 @@ export default function Notes() {
     setStarterNotebook(template?.notebook || lastNotebook || 'personal');
     setEditorOpen(true);
     setShowTemplatesModal(false);
-    pushEditorHistoryMarker();
   };
   const openExistingNote = (note: NoteEntry) => {
     setEditingNote(note);
     setStarterContent(undefined);
     setStarterNotebook(undefined);
     setEditorOpen(true);
-    pushEditorHistoryMarker();
   };
   const closeEditor = (reason: string = 'user') => {
     console.info('[NOTE-EDITOR] CLOSING — reason:', reason);
-    popEditorHistoryMarker();
     setEditorOpen(false);
     setTimeout(() => {
       setEditingNote(null);
