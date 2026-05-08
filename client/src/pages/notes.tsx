@@ -1207,7 +1207,7 @@ function NoteRow({ note, active, query, selected, selectionMode, onClick, onCont
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onTouchMove={onTouchMove}
-      className={`relative w-full flex items-start gap-3 py-3.5 pr-2 text-left border-b border-border/40 hover:bg-white/[0.03] active:bg-white/[0.05] transition-colors ${selected ? 'bg-emerald-500/[0.06]' : ''} ${active ? 'bg-emerald-500/[0.08]' : ''} ${accent ? 'pl-3' : 'pl-2'}`}
+      className={`relative w-full flex items-start gap-3 py-3.5 pr-2 text-left border-b border-border/40 hover:bg-white/[0.03] active:bg-white/[0.05] transition-colors outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 focus-visible:ring-inset ${selected ? 'bg-emerald-500/[0.06]' : ''} ${active ? 'bg-emerald-500/[0.08]' : ''} ${accent ? 'pl-3' : 'pl-2'}`}
     >
       {accent && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r" style={{ background: accent }} />}
       {selectionMode && (
@@ -1279,7 +1279,7 @@ function GridView({ notes, activeId, query, selection, onOpen, onContextMenu, on
               onTouchStart={(e) => onLongPressStart(note, e)}
               onTouchEnd={onLongPressCancel}
               onTouchMove={onLongPressCancel}
-              className={`relative text-left rounded-xl border bg-card hover:border-border hover:shadow-sm transition-all p-4 min-h-[140px] flex flex-col ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-border/50'}`}
+              className={`relative text-left rounded-xl border bg-card hover:border-border hover:shadow-sm transition-all p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-border/50'}`}
             >
               {accent && <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r" style={{ background: accent }} />}
               <div className="flex items-start gap-2 mb-1.5">

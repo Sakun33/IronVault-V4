@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield, Fingerprint, ScanFace } from 'lucide-react';
+import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { GoogleSignInButton } from '@/components/google-sign-in-button';
 import { useAuth } from '@/contexts/auth-context';
@@ -12,14 +12,6 @@ import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
 import { motionPresets } from '@/lib/design-system';
 import { apiBase, isNativeApp } from '@/native/platform';
-import {
-  checkBiometricCapabilities,
-  signInWithBiometric,
-  isAccountBiometricEnabled,
-  hasAccountBiometricCredentials,
-  getAccountBiometricEmail,
-  disableAllBiometric,
-} from '@/native/biometrics';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -38,107 +30,7 @@ export default function Login() {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
-  const [bioReady, setBioReady] = useState(false);
-  const [bioEnrolled, setBioEnrolled] = useState(false);
-  const [bioLabel, setBioLabel] = useState<'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric'>('Biometric');
-  const [bioIcon, setBioIcon] = useState<'face' | 'finger'>('finger');
-  const [bioLoading, setBioLoading] = useState(false);
-  const [bioEmail, setBioEmail] = useState<string | null>(null);
-
   const hasCredentials = hasAccountCredentials();
-
-  useEffect(() => {
-    if (!isNativeApp()) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const caps = await checkBiometricCapabilities();
-        if (cancelled || !caps.isAvailable) return;
-        const label = caps.biometryType === 'faceId' || caps.biometryType === 'face'
-          ? 'Face ID'
-          : caps.biometryType === 'touchId'
-            ? 'Touch ID'
-            : 'Fingerprint';
-        setBioLabel(label);
-        setBioIcon(caps.biometryType === 'faceId' || caps.biometryType === 'face' ? 'face' : 'finger');
-        // Authoritative probe — checks Capacitor Preferences so a user
-        // whose localStorage flag was wiped (webview cache clear, etc.)
-        // still gets the "Use Face ID" path instead of being told to set
-        // it up again. The probe also self-heals the localStorage flag.
-        let enrolled = isAccountBiometricEnabled();
-        if (!enrolled) {
-          try { enrolled = await hasAccountBiometricCredentials(); } catch { /* ignore */ }
-        }
-        if (cancelled) return;
-        setBioEnrolled(enrolled);
-        setBioEmail(enrolled ? getAccountBiometricEmail() : null);
-        // P0: show the button on every biometric-capable native device, even
-        // before enrollment. Tapping pre-enrollment surfaces a friendly
-        // toast explaining the one-time password sign-in needed to seed it.
-        setBioReady(true);
-      } catch {
-        // ignore — fall back to password login
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleBiometricSignIn = useCallback(async () => {
-    if (bioLoading) return;
-    if (!bioEnrolled) {
-      // Device is biometric-capable but the user hasn't enrolled an
-      // account yet. Walk them through the one-time password sign-in.
-      toast({
-        title: `Set up ${bioLabel}`,
-        description: `Sign in once with your password — we'll offer to enable ${bioLabel} for next time.`,
-      });
-      return;
-    }
-    setBioLoading(true);
-    setError('');
-    try {
-      const creds = await signInWithBiometric();
-      if (!creds.success || !creds.email || !creds.password) {
-        toast({
-          title: 'Biometric sign-in failed',
-          description: creds.error || 'Try entering your password instead.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const ok = await accountLogin(creds.email, creds.password);
-      if (ok) {
-        // Re-stash the password so a vault-management toggle can pick it up
-        // for adding more biometric-enrolled vaults this session.
-        try { sessionStorage.setItem('iv_pending_bio_account_pw', creds.password); } catch {}
-        setLocation('/');
-      } else if (!pendingTwoFactor) {
-        // Stored password is stale — disable all biometric entries so the
-        // user falls back to password and can re-enrol after a real login.
-        await disableAllBiometric();
-        setBioReady(false);
-        setBioEnrolled(false);
-        setEmail(creds.email);
-        toast({
-          title: 'Stored credentials no longer valid',
-          description: 'Please sign in with your password.',
-          variant: 'destructive',
-        });
-      }
-    } catch (err) {
-      if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
-        setEmailNotVerified(true);
-      } else {
-        toast({
-          title: 'Sign in failed',
-          description: 'Unable to sign in with biometric. Try password instead.',
-          variant: 'destructive',
-        });
-      }
-    } finally {
-      setBioLoading(false);
-    }
-  }, [bioLoading, bioEnrolled, bioLabel, accountLogin, pendingTwoFactor, setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -478,7 +370,9 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Google Sign-In — always available, regardless of biometric state */}
+          {/* Google Sign-In — biometric is intentionally NOT shown on the
+              account login page. Biometric only unlocks individual vaults
+              from the vault picker, not the account itself. */}
           <div className="mt-4">
             <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">
@@ -490,35 +384,6 @@ export default function Login() {
             </div>
             <GoogleSignInButton label="Continue with Google" />
           </div>
-
-          {bioReady && (
-            <div className="mt-3">
-              <Button
-                type="button"
-                variant="outline"
-                data-testid="button-biometric-signin"
-                onClick={handleBiometricSignIn}
-                disabled={bioLoading}
-                aria-label={bioEnrolled ? `Sign in with ${bioLabel}` : `Set up ${bioLabel}`}
-                className="w-full h-11 gap-2 font-medium"
-              >
-                {bioIcon === 'face'
-                  ? <ScanFace className="w-4 h-4" />
-                  : <Fingerprint className="w-4 h-4" />}
-                {bioLoading
-                  ? 'Authenticating…'
-                  : bioEnrolled
-                    ? `Use ${bioLabel}`
-                    : `Set up ${bioLabel}`}
-              </Button>
-              {bioEnrolled && bioEmail && !bioLoading && (
-                <p className="text-center text-[11px] text-muted-foreground mt-2">{bioEmail}</p>
-              )}
-              {!bioEnrolled && !bioLoading && (
-                <p className="text-center text-[11px] text-muted-foreground mt-2">Sign in once with your password to enable</p>
-              )}
-            </div>
-          )}
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             New to IronVault?{' '}

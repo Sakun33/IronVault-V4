@@ -169,6 +169,13 @@ async function getSocialLoginPlugin() {
         // without one. If unset, iOS sign-in will surface a configuration
         // error instead of silently failing.
         ...(IOS_CLIENT_ID ? { iOSClientId: IOS_CLIENT_ID } : {}),
+        // CRITICAL on iOS: without iOSServerClientId, GIDSignIn returns no
+        // idToken in the response — the JS Promise then either resolves with
+        // an undefined idToken (we throw "no ID token") or, in some plugin
+        // versions, never resolves at all (the visible "Signing in…" hang).
+        // Pinning this to the WEB client ID makes the iOS SDK request an
+        // idToken whose `aud` matches what our backend verifies.
+        iOSServerClientId: DEFAULT_WEB_CLIENT_ID,
         mode: 'online',
       },
     }).then(() => {
@@ -198,15 +205,36 @@ export async function initializeGoogleAuth(): Promise<void> {
   }
 }
 
+/**
+ * Wrap a promise in a hard timeout. If the underlying SDK hangs (the actual
+ * "Signing in…" forever bug we saw on iOS), we reject with a clear error so
+ * the user sees a toast instead of an infinite spinner.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s — try again or use email + password.`));
+    }, ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 async function getGoogleIdTokenNative(): Promise<string> {
   const SocialLogin = await getSocialLoginPlugin();
-  const response: any = await SocialLogin.login({
-    provider: 'google',
-    options: {
-      scopes: ['email', 'profile'],
-      forceRefreshToken: false,
-    },
-  });
+  const response: any = await withTimeout(
+    SocialLogin.login({
+      provider: 'google',
+      options: {
+        scopes: ['email', 'profile'],
+        forceRefreshToken: false,
+      },
+    }),
+    60_000,
+    'Google sign-in',
+  );
   const idToken: string | undefined =
     response?.result?.idToken
     || response?.result?.authentication?.idToken
