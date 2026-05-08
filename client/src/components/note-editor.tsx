@@ -120,6 +120,12 @@ export function NoteEditor({
   const titleRef = useRef<HTMLInputElement | null>(null);
   const lastSnapshotRef = useRef<string>('');
   const saveTimerRef = useRef<number | null>(null);
+  // Tracks the note?.id we last fully reset state for. Lets us detect the
+  // "new note just got promoted to a real id via autosave" transition
+  // (null → real) and skip the destructive state reset that would otherwise
+  // flip viewerMode from edit → view mid-typing — the user-facing
+  // "editor closes after a few seconds" bug.
+  const prevNoteIdRef = useRef<string | null | undefined>(undefined);
 
   // Lift the bottom toolbar above the soft keyboard on mobile (visualViewport)
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -160,7 +166,23 @@ export function NoteEditor({
   // after commit and is the actual fix for "body shows truncated content
   // on reopen".
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prevNoteIdRef.current = undefined;
+      return;
+    }
+    const prevId = prevNoteIdRef.current;
+    const currentId = note?.id ?? null;
+    // Save-promotion detection: prev id was null (new-note session) and we
+    // now have a real id from a successful autosave. The editor's in-memory
+    // state already matches what got saved (runSave just wrote it), so a
+    // reset here would flip viewerMode true mid-typing and destroy the
+    // user's session. Bump the savedAt indicator and bail.
+    if (prevId === null && currentId !== null) {
+      prevNoteIdRef.current = currentId;
+      if (note?.updatedAt) setSavedAt(new Date(note.updatedAt));
+      return;
+    }
+    prevNoteIdRef.current = currentId;
     setTitle(note?.title ?? '');
     setNotebook(note?.notebook ?? defaultNotebook);
     setTags(note?.tags ?? []);

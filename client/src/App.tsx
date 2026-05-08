@@ -333,7 +333,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
-        <div className="flex items-center justify-between h-11 gap-1 overflow-visible">
+        <div className="flex items-center justify-between h-10 gap-1 overflow-visible">
           {/* Left: hamburger + logo */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
             <Tooltip>
@@ -431,9 +431,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {/* Spacer for fixed header + safe area. Height must match the header
-          (h-11 = 44px) plus its top safe-area padding. The 0px fallback
+          (h-10 = 40px) plus its top safe-area padding. The 0px fallback
           keeps the spacer flush on devices/browsers without a notch. */}
-      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+44px)]" />
+      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+40px)]" />
 
       {/* Desktop Header - Glassmorphism */}
       <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
