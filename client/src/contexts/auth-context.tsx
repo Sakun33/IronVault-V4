@@ -47,7 +47,7 @@ interface AuthContextType {
   createVault: (masterPassword: string) => Promise<void>;
   logout: () => void;
   accountLogin: (email: string, password: string) => Promise<boolean>;
-  googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false }>;
+  googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
   verifyTwoFactor: (code: string) => Promise<boolean>;
   cancelTwoFactor: () => void;
   accountLogout: () => void;
@@ -357,10 +357,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // skip saveAccountCredentials and the local-hash offline-fallback path —
   // they MUST be online to sign in. The vault master password is unrelated
   // and still required to unlock data on every device.
-  const googleLogin = async (): Promise<{ ok: true; isNewUser: boolean } | { ok: false }> => {
-    const result = await signInWithGoogle();
+  const googleLogin = async (): Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }> => {
+    const outcome = await signInWithGoogle();
+    if (!outcome.ok) {
+      return { ok: false, error: outcome.error };
+    }
+    const result = outcome.result;
     if (!result || !result.token || !result.email) {
-      return { ok: false };
+      return { ok: false, error: 'Sign-in succeeded but the response was malformed' };
     }
     const normalizedEmail = result.email.toLowerCase().trim();
 

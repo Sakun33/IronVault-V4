@@ -13,6 +13,12 @@ installAuthFetchInterceptor();
 import { initFontScale } from "./lib/font-scale";
 initFontScale();
 
+// Warm up the native Google Sign-In plugin on Capacitor so the first click
+// doesn't pay the dynamic import + initialize cost. No-op on web. Errors
+// surface again on the actual sign-in attempt with a user-visible toast.
+import { initializeGoogleAuth } from "./lib/google-auth";
+void initializeGoogleAuth();
+
 // CRASH REPORTER — shows actual error on white screen instead of blank page
 function showCrash(label: string, msg: string, stack?: string) {
   document.body.innerHTML = `<pre style="color:#ff6b6b;background:#0a0a0f;padding:24px;font-size:13px;line-height:1.6;margin:0;min-height:100dvh;white-space:pre-wrap;word-break:break-word;">

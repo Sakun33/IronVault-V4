@@ -48,7 +48,9 @@ export function GoogleSignInButton({
       if (!result.ok) {
         toast({
           title: 'Google sign-in failed',
-          description: 'Could not complete Google sign-in. Please try again or use email + password.',
+          description: result.error
+            ? `${result.error}. Try again or use email + password.`
+            : 'Could not complete Google sign-in. Please try again or use email + password.',
           variant: 'destructive',
         });
         return;

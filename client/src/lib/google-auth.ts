@@ -37,6 +37,10 @@ export interface GoogleAuthResult {
   sessionId: string | null;
 }
 
+export type GoogleAuthOutcome =
+  | { ok: true; result: GoogleAuthResult }
+  | { ok: false; error: string };
+
 const GSI_SRC = 'https://accounts.google.com/gsi/client';
 
 // Web OAuth 2.0 Client ID for IronVault. Hardcoded as a build-time fallback
@@ -44,6 +48,12 @@ const GSI_SRC = 'https://accounts.google.com/gsi/client';
 // missing on a future build. Override locally via .env for staging/test
 // projects.
 const DEFAULT_WEB_CLIENT_ID = '137773717238-qae0862qk28785hq86sflge6sc856rvg.apps.googleusercontent.com';
+
+// Optional iOS-typed OAuth client. Required for the native iOS GoogleSignIn
+// SDK to launch — a web client ID alone is rejected. When set, the matching
+// REVERSED_CLIENT_ID must also appear as a CFBundleURLScheme in Info.plist.
+const IOS_CLIENT_ID =
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID_IOS as string | undefined) || undefined;
 
 function loadGsiScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -137,23 +147,52 @@ function getGoogleIdTokenWeb(): Promise<string> {
  * audience via Google's tokeninfo endpoint.
  */
 let _socialLoginInitialized = false;
+let _socialLoginInitPromise: Promise<any> | null = null;
+
 async function getSocialLoginPlugin() {
   const mod: any = await import('@capgo/capacitor-social-login');
   const SocialLogin = mod.SocialLogin || mod.default?.SocialLogin || mod;
-  if (!_socialLoginInitialized) {
-    await SocialLogin.initialize({
+  if (_socialLoginInitialized) {
+    return SocialLogin;
+  }
+  if (!_socialLoginInitPromise) {
+    _socialLoginInitPromise = SocialLogin.initialize({
       google: {
-        // Web client ID — used by Android to request an ID token whose
-        // `aud` claim matches GOOGLE_CLIENT_ID_WEB on the server. iOS uses
-        // the same value here as the iOS client ID's "server client ID"
-        // setting until we ship a separate iOS OAuth client.
+        // Web client ID is used as the audience that the backend verifies.
+        // On Android it doubles as the `serverClientId` for the credential
+        // request (Google returns an ID token whose `aud` matches this).
         webClientId: DEFAULT_WEB_CLIENT_ID,
+        // iOS-typed client ID. The native GoogleSignIn SDK refuses to launch
+        // without one. If unset, iOS sign-in will surface a configuration
+        // error instead of silently failing.
+        ...(IOS_CLIENT_ID ? { iOSClientId: IOS_CLIENT_ID } : {}),
         mode: 'online',
       },
+    }).then(() => {
+      _socialLoginInitialized = true;
+    }).catch((err: unknown) => {
+      _socialLoginInitPromise = null;
+      throw err;
     });
-    _socialLoginInitialized = true;
   }
+  await _socialLoginInitPromise;
   return SocialLogin;
+}
+
+/**
+ * Eager init for the native plugin. Safe to call from app boot — it's a
+ * no-op on web, and on native it warms up the plugin so the first sign-in
+ * click doesn't pay the import + initialize cost. Errors are logged, not
+ * thrown — failures surface again on the actual sign-in attempt with a
+ * user-visible toast.
+ */
+export async function initializeGoogleAuth(): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await getSocialLoginPlugin();
+  } catch (err) {
+    console.error('[google-auth] early init failed:', err);
+  }
 }
 
 async function getGoogleIdTokenNative(): Promise<string> {
@@ -175,17 +214,36 @@ async function getGoogleIdTokenNative(): Promise<string> {
   return idToken;
 }
 
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 /**
  * Trigger Google Sign-In and exchange the ID token for an IronVault cloud
- * token. Returns null on user cancellation or any failure — caller is
- * expected to surface a toast.
+ * token. Returns a discriminated outcome — `{ ok: false, error }` carries
+ * the real failure reason so the caller can surface it in a toast (handy
+ * on native where misconfiguration errors otherwise vanish into a console
+ * the user can't see).
  */
-export async function signInWithGoogle(): Promise<GoogleAuthResult | null> {
+export async function signInWithGoogle(): Promise<GoogleAuthOutcome> {
+  let idToken: string;
   try {
-    const idToken = isNativeApp()
+    idToken = isNativeApp()
       ? await getGoogleIdTokenNative()
       : await getGoogleIdTokenWeb();
+  } catch (err) {
+    const error = describeError(err);
+    console.error('[google-auth] sign-in failed:', err);
+    return { ok: false, error };
+  }
 
+  try {
     const res = await fetch(`${apiBase()}/api/auth/google`, {
       method: 'POST',
       headers: {
@@ -198,14 +256,17 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult | null> {
       }),
     });
     if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
+      const errBody: any = await res.json().catch(() => ({}));
+      const error = errBody?.error || errBody?.message || `Backend rejected token (HTTP ${res.status})`;
       console.error('[google-auth] backend rejected token:', res.status, errBody);
-      return null;
+      return { ok: false, error };
     }
-    return (await res.json()) as GoogleAuthResult;
+    const result = (await res.json()) as GoogleAuthResult;
+    return { ok: true, result };
   } catch (err) {
-    console.error('[google-auth] error:', err);
-    return null;
+    const error = describeError(err);
+    console.error('[google-auth] backend exchange error:', err);
+    return { ok: false, error };
   }
 }
 
