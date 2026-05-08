@@ -49,11 +49,14 @@ const GSI_SRC = 'https://accounts.google.com/gsi/client';
 // projects.
 const DEFAULT_WEB_CLIENT_ID = '137773717238-qae0862qk28785hq86sflge6sc856rvg.apps.googleusercontent.com';
 
-// Optional iOS-typed OAuth client. Required for the native iOS GoogleSignIn
-// SDK to launch — a web client ID alone is rejected. When set, the matching
-// REVERSED_CLIENT_ID must also appear as a CFBundleURLScheme in Info.plist.
+// iOS-typed OAuth client. Required for the native iOS GoogleSignIn SDK to
+// launch — a web client ID alone is rejected. The matching REVERSED_CLIENT_ID
+// (com.googleusercontent.apps.137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5)
+// is registered as a CFBundleURLScheme in ios/App/App/Info.plist. Override
+// via VITE_GOOGLE_CLIENT_ID_IOS for staging/test projects.
+const DEFAULT_IOS_CLIENT_ID = '137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5.apps.googleusercontent.com';
 const IOS_CLIENT_ID =
-  (import.meta.env.VITE_GOOGLE_CLIENT_ID_IOS as string | undefined) || undefined;
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID_IOS as string | undefined) || DEFAULT_IOS_CLIENT_ID;
 
 function loadGsiScript(): Promise<void> {
   return new Promise((resolve, reject) => {
