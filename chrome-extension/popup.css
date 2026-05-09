@@ -645,3 +645,65 @@ body {
   font-size: 10px;
   font-weight: 600;
 }
+
+/* Quick capture row */
+.iv-quick-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+.iv-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: var(--iv-surface-2);
+  border: 1px solid var(--iv-border);
+  border-radius: 8px;
+  color: var(--iv-text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.iv-quick-btn:hover {
+  background: var(--iv-surface);
+  border-color: var(--iv-primary);
+}
+.iv-quick-btn svg {
+  color: var(--iv-primary);
+}
+
+.iv-genpw-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.iv-genpw-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--iv-surface-2);
+  border: 1px solid var(--iv-border);
+  border-radius: 6px;
+  color: var(--iv-text);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  user-select: all;
+}
+.iv-qc-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.iv-qc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--iv-text-muted);
+  cursor: pointer;
+}

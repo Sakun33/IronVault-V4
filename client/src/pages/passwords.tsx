@@ -161,6 +161,37 @@ export default function Passwords() {
     setShowAddModal(true);
   };
 
+  // Deep-link prefill — used by the Chrome extension's Quick Capture flow
+  // (and any future "save this site" affordance). On mount, parse
+  // `?action=add&prefillUrl=…&prefillName=…&prefillUsername=…` and open the
+  // Add modal seeded with the supplied values. The params are stripped from
+  // the URL once consumed so a refresh doesn't re-pop the modal.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') !== 'add') return;
+    const prefill = {
+      name: params.get('prefillName') || '',
+      url: params.get('prefillUrl') || '',
+      username: params.get('prefillUsername') || '',
+      password: '',
+      category: '',
+      notes: '',
+    };
+    if (prefill.name || prefill.url) {
+      setEditingPassword(prefill);
+      setShowAddModal(true);
+    } else {
+      // Bare ?action=add — just open an empty add modal.
+      setShowAddModal(true);
+    }
+    // Strip the params so refresh doesn't re-trigger.
+    const cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, '', cleanUrl);
+    // We only want this to run on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filteredPasswords = useMemo(() => {
     return passwords.filter(password => {
       const q = searchQuery.toLowerCase();

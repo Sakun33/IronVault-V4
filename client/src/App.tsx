@@ -101,8 +101,10 @@ const CommandPalette = React.lazy(() => import("@/components/command-palette").t
 const BiometricSetupPrompt = React.lazy(() => import("@/components/biometric-setup-prompt").then(m => ({ default: m.BiometricSetupPrompt })));
 import { PWAOfflineIndicator } from "@/components/pwa-offline-indicator";
 import { SimpleThemeToggle, ThemeToggle } from "@/components/theme-toggle";
-import { NotificationBell } from "@/components/notification-bell";
+import { NotificationCenter } from "@/components/notification-center";
 import { NotificationService } from "@/lib/notifications";
+import { useNotificationEvents } from "@/hooks/use-notification-events";
+import { startSubscriptionReminderLoop } from "@/lib/reminder-notifications";
 import { SectionCard } from "@/components/StatCard";
 import { ToolsMenu } from "@/components/tools-menu";
 import { AnalyticsIntegration } from "@/components/analytics-integration";
@@ -120,6 +122,32 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
   useCloudAutoSync(activeVault?.id, masterPassword);
+
+  // Wire app-state changes (unlock / weak-passwords / sync / renewals) into
+  // the notification center.
+  useNotificationEvents({
+    userId: notificationUserId,
+    isUnlocked,
+    passwordCount: passwords.length,
+    weakPasswordCount: stats.weakPasswords,
+    subscriptions,
+    cloudSyncStatus,
+  });
+
+  // Hourly subscription-renewal scan — fires both notification-center entries
+  // and (when permission is granted) browser/native notifications at the
+  // 7/3/1-day thresholds. Closure captures the latest subscriptions via a
+  // ref so the loop sees fresh data without resubscribing each render.
+  const subsRef = React.useRef(subscriptions);
+  subsRef.current = subscriptions;
+  React.useEffect(() => {
+    if (!isUnlocked || notificationUserId === 'guest') return;
+    const stop = startSubscriptionReminderLoop(() => ({
+      userId: notificationUserId,
+      subscriptions: subsRef.current,
+    }));
+    return stop;
+  }, [isUnlocked, notificationUserId]);
 
   // Auto-recover the cloud token whenever it's missing AND we have the
   // cached account credentials (email + password hash from localStorage's
@@ -393,7 +421,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               </TooltipTrigger>
               <TooltipContent>Quick Add</TooltipContent>
             </Tooltip>
-            <NotificationBell userId={notificationUserId} />
+            <NotificationCenter userId={notificationUserId} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -557,7 +585,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span title="Notifications"><NotificationBell userId={notificationUserId} /></span>
+                <span title="Notifications"><NotificationCenter userId={notificationUserId} /></span>
               </TooltipTrigger>
               <TooltipContent>Notifications</TooltipContent>
             </Tooltip>

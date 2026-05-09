@@ -59,6 +59,28 @@ const ui = {
   syncBtn: $('iv-sync-btn'),
   logoutBtn: $('iv-logout-btn'),
 
+  // Quick capture
+  qcSavePage: $('iv-qc-save-page'),
+  qcQuickNote: $('iv-qc-quick-note'),
+  qcGen: $('iv-qc-gen'),
+  // Generate-password panel
+  qcGenPanel: $('iv-qc-genpanel'),
+  qcGenBack: $('iv-qc-gen-back'),
+  qcGenOutput: $('iv-qc-gen-output'),
+  qcGenRefresh: $('iv-qc-gen-refresh'),
+  qcGenLen: $('iv-qc-gen-len'),
+  qcGenLenValue: $('iv-qc-gen-len-value'),
+  qcGenUpper: $('iv-qc-gen-upper'),
+  qcGenLower: $('iv-qc-gen-lower'),
+  qcGenNum: $('iv-qc-gen-num'),
+  qcGenSym: $('iv-qc-gen-sym'),
+  qcGenCopy: $('iv-qc-gen-copy'),
+  // Quick note panel
+  qcNotePanel: $('iv-qc-notepanel'),
+  qcNoteBack: $('iv-qc-note-back'),
+  qcNoteText: $('iv-qc-note-text'),
+  qcNoteSave: $('iv-qc-note-save'),
+
   // Sync
   syncBack: $('iv-sync-back'),
   syncOpenTab: $('iv-sync-open-tab'),
@@ -105,7 +127,7 @@ function send(msg) {
 
 // ── Screen routing ──────────────────────────────────────────────────────────
 function showScreen(name) {
-  for (const key of ['connect', 'login', 'unlock', 'connected', 'sync']) {
+  for (const key of ['connect', 'login', 'unlock', 'connected', 'sync', 'qcGenPanel', 'qcNotePanel']) {
     ui[key].hidden = key !== name;
   }
   if (name !== 'connected') stopSessionTimer();
@@ -799,6 +821,150 @@ function formatRemaining(ms) {
   if (mins > 0) return `${mins}m`;
   return `${secs}s`;
 }
+
+// ── Quick capture ───────────────────────────────────────────────────────────
+//
+// Three lightweight actions surfaced from the connected screen:
+//   1) Save current page → opens IronVault /passwords?action=add with the
+//      active tab's URL/title prefilled. The web app's modal seeds itself
+//      from the query params (URL is stripped after consumption).
+//   2) Quick note → opens IronVault /notes?action=add with the typed body
+//      prefilled. Same prefill mechanism on the web side.
+//   3) Generate password → fully local crypto.getRandomValues() generator
+//      with a copy-to-clipboard button. No vault interaction.
+//
+// We keep heavy lifting (encrypt + push) on the web app rather than the
+// extension. The extension already knows the user's vault, so deep-linking
+// to a prefilled "add" modal is the safest path that doesn't duplicate
+// crypto code across surfaces.
+
+function pickActiveTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0] || null));
+  });
+}
+
+function buildIronVaultUrl(path, params) {
+  const url = new URL(path, IRONVAULT_URL);
+  for (const [k, v] of Object.entries(params)) {
+    if (v == null || v === '') continue;
+    url.searchParams.set(k, v);
+  }
+  return url.toString();
+}
+
+ui.qcSavePage.addEventListener('click', async () => {
+  const tab = await pickActiveTab();
+  if (!tab?.url) {
+    chrome.tabs.create({ url: buildIronVaultUrl('/passwords', { action: 'add' }) });
+    return;
+  }
+  // Skip non-web pages (chrome:// etc).
+  if (!/^https?:\/\//i.test(tab.url)) {
+    chrome.tabs.create({ url: buildIronVaultUrl('/passwords', { action: 'add' }) });
+    return;
+  }
+  let host = '';
+  try { host = new URL(tab.url).hostname.replace(/^www\./, ''); } catch {}
+  const suggestedName = (tab.title && tab.title.trim()) || host || 'New entry';
+  const target = buildIronVaultUrl('/passwords', {
+    action: 'add',
+    prefillName: suggestedName,
+    prefillUrl: tab.url,
+  });
+  chrome.tabs.create({ url: target });
+  window.close();
+});
+
+ui.qcQuickNote.addEventListener('click', () => {
+  ui.qcNoteText.value = '';
+  showScreen('qcNotePanel');
+  setTimeout(() => ui.qcNoteText.focus(), 50);
+});
+
+ui.qcNoteBack.addEventListener('click', () => {
+  showScreen('connected');
+});
+
+ui.qcNoteSave.addEventListener('click', () => {
+  const text = ui.qcNoteText.value.trim();
+  if (!text) {
+    ui.qcNoteText.focus();
+    return;
+  }
+  const target = buildIronVaultUrl('/notes', {
+    action: 'add',
+    prefillContent: text,
+  });
+  chrome.tabs.create({ url: target });
+  window.close();
+});
+
+// Local password generator — crypto.getRandomValues backed.
+const QC_GEN_CHARS = {
+  upper: 'ABCDEFGHJKLMNPQRSTUVWXYZ',
+  lower: 'abcdefghijkmnopqrstuvwxyz',
+  num: '23456789',
+  sym: '!@#$%^&*()-_=+[]{}<>?',
+};
+
+function qcGeneratePassword() {
+  const len = parseInt(ui.qcGenLen.value, 10) || 20;
+  let pool = '';
+  if (ui.qcGenUpper.checked) pool += QC_GEN_CHARS.upper;
+  if (ui.qcGenLower.checked) pool += QC_GEN_CHARS.lower;
+  if (ui.qcGenNum.checked) pool += QC_GEN_CHARS.num;
+  if (ui.qcGenSym.checked) pool += QC_GEN_CHARS.sym;
+  if (!pool) {
+    // All toggles off — fall back to lower so we still produce *something*.
+    pool = QC_GEN_CHARS.lower;
+  }
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  let out = '';
+  for (let i = 0; i < len; i++) {
+    out += pool[buf[i] % pool.length];
+  }
+  ui.qcGenOutput.value = out;
+}
+
+ui.qcGen.addEventListener('click', () => {
+  showScreen('qcGenPanel');
+  qcGeneratePassword();
+});
+
+ui.qcGenBack.addEventListener('click', () => {
+  showScreen('connected');
+});
+
+ui.qcGenLen.addEventListener('input', () => {
+  ui.qcGenLenValue.textContent = ui.qcGenLen.value;
+  qcGeneratePassword();
+});
+
+for (const el of [ui.qcGenUpper, ui.qcGenLower, ui.qcGenNum, ui.qcGenSym]) {
+  el.addEventListener('change', qcGeneratePassword);
+}
+
+ui.qcGenRefresh.addEventListener('click', qcGeneratePassword);
+
+ui.qcGenCopy.addEventListener('click', async () => {
+  const value = ui.qcGenOutput.value;
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    ui.qcGenCopy.textContent = 'Copied!';
+    setTimeout(() => {
+      ui.qcGenCopy.textContent = 'Copy & close';
+      window.close();
+    }, 600);
+  } catch {
+    // Fallback — select + execCommand for older Chromes
+    ui.qcGenOutput.select();
+    document.execCommand('copy');
+    setTimeout(() => window.close(), 600);
+  }
+});
 
 // ── Init ────────────────────────────────────────────────────────────────────
 window.addEventListener('beforeunload', () => {

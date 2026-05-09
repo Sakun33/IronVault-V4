@@ -404,6 +404,27 @@ export default function Notes() {
     setStarterNotebook(undefined);
     setEditorOpen(true);
   };
+
+  // Deep-link prefill — used by Chrome extension Quick Capture (and any
+  // future "save selection as note" flow). On mount, parse
+  // `?action=add&prefillContent=…&prefillNotebook=…` and open the editor
+  // seeded with the supplied values. Params are stripped after consumption
+  // so a refresh doesn't re-pop the editor.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') !== 'add') return;
+    const content = params.get('prefillContent');
+    const notebook = params.get('prefillNotebook');
+    setEditingNote(null);
+    setStarterContent(content || '');
+    setStarterNotebook(notebook || 'personal');
+    setEditorOpen(true);
+    const cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, '', cleanUrl);
+    // Mount-only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const closeEditor = (_reason: string = 'user') => {
     setEditorOpen(false);
     setTimeout(() => {

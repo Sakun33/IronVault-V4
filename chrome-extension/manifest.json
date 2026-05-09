@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IronVault — Secure Autofill",
   "short_name": "IronVault",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Zero-knowledge autofill from your IronVault. Master password required — vault stays end-to-end encrypted.",
   "minimum_chrome_version": "116",
   "incognito": "split",

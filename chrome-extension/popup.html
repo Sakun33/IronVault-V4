@@ -118,6 +118,21 @@
         <ul id="iv-cards" class="iv-cards"></ul>
       </div>
 
+      <div class="iv-quick-row">
+        <button id="iv-qc-save-page" class="iv-quick-btn" type="button" title="Save current page">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save site
+        </button>
+        <button id="iv-qc-quick-note" class="iv-quick-btn" type="button" title="Add quick note">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+          Quick note
+        </button>
+        <button id="iv-qc-gen" class="iv-quick-btn" type="button" title="Generate password">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/><path d="M9 9h6"/><path d="M9 13h4"/></svg>
+          Generate
+        </button>
+      </div>
+
       <footer class="iv-connected-footer">
         <button id="iv-sync-btn" class="iv-btn iv-btn-text iv-btn-sm" type="button" title="Sync passwords from Chrome">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -125,6 +140,55 @@
         </button>
         <button id="iv-logout-btn" class="iv-btn iv-btn-danger iv-btn-sm" type="button">Sync &amp; Logout</button>
       </footer>
+    </section>
+
+    <!-- Quick capture: generate password -->
+    <section id="iv-qc-genpanel" class="iv-screen" hidden>
+      <header class="iv-screen-header">
+        <button type="button" id="iv-qc-gen-back" class="iv-icon-btn" title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <h1 class="iv-screen-title">Generate password</h1>
+      </header>
+
+      <div class="iv-form">
+        <div class="iv-genpw-row">
+          <input id="iv-qc-gen-output" type="text" class="iv-genpw-input" readonly>
+          <button type="button" id="iv-qc-gen-refresh" class="iv-icon-btn" title="Regenerate" aria-label="Regenerate">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          </button>
+        </div>
+        <label class="iv-field">
+          <span>Length: <strong id="iv-qc-gen-len-value">20</strong></span>
+          <input id="iv-qc-gen-len" type="range" min="8" max="64" step="1" value="20">
+        </label>
+        <div class="iv-qc-toggles">
+          <label class="iv-qc-toggle"><input id="iv-qc-gen-upper" type="checkbox" checked> A-Z</label>
+          <label class="iv-qc-toggle"><input id="iv-qc-gen-lower" type="checkbox" checked> a-z</label>
+          <label class="iv-qc-toggle"><input id="iv-qc-gen-num" type="checkbox" checked> 0-9</label>
+          <label class="iv-qc-toggle"><input id="iv-qc-gen-sym" type="checkbox" checked> !@#</label>
+        </div>
+        <button type="button" id="iv-qc-gen-copy" class="iv-btn iv-btn-primary">Copy &amp; close</button>
+      </div>
+    </section>
+
+    <!-- Quick capture: quick note -->
+    <section id="iv-qc-notepanel" class="iv-screen" hidden>
+      <header class="iv-screen-header">
+        <button type="button" id="iv-qc-note-back" class="iv-icon-btn" title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <h1 class="iv-screen-title">Quick note</h1>
+      </header>
+
+      <div class="iv-form">
+        <label class="iv-field">
+          <span>Note</span>
+          <textarea id="iv-qc-note-text" rows="6" placeholder="Type a quick note…" autocomplete="off"></textarea>
+        </label>
+        <p class="iv-foot">Opens IronVault with your text ready to save. The note is stored encrypted in your vault.</p>
+        <button type="button" id="iv-qc-note-save" class="iv-btn iv-btn-primary">Save to vault</button>
+      </div>
     </section>
 
     <!-- Sync from Chrome — sub-panel of connected -->

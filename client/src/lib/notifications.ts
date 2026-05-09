@@ -2,7 +2,17 @@ import { apiBase } from '@/native/platform';
 
 export interface Notification {
   id: string;
-  type: 'info' | 'success' | 'warning' | 'error' | 'subscription' | 'payment' | 'security';
+  type:
+    | 'info'
+    | 'success'
+    | 'warning'
+    | 'error'
+    | 'subscription'
+    | 'payment'
+    | 'security'
+    | 'achievement'
+    | 'sync'
+    | 'welcome';
   title: string;
   message: string;
   timestamp: Date;
@@ -12,6 +22,12 @@ export interface Notification {
   userId: string;
   metadata?: Record<string, any>;
 }
+
+const STORAGE_KEY = 'iv_notifications';
+const LEGACY_STORAGE_KEY = 'securevault_notifications';
+const PREFS_KEY = 'iv_notification_preferences';
+const LEGACY_PREFS_KEY = 'securevault_notification_preferences';
+const MAX_NOTIFICATIONS = 50;
 
 export interface NotificationPreferences {
   userId: string;
@@ -37,11 +53,54 @@ export class NotificationService {
     };
 
     this.notifications.push(newNotification);
-    
+
+    // Cap aggressively at MAX_NOTIFICATIONS — keep newest, drop oldest first.
+    if (this.notifications.length > MAX_NOTIFICATIONS) {
+      this.notifications = this.notifications
+        .slice()
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, MAX_NOTIFICATIONS);
+    }
+
     // Store in localStorage for persistence
     this.saveNotifications();
-    
+
+    // Nudge listening UI (notification-center) to refresh without waiting on
+    // its 30s tick. No-op outside the browser.
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('iv:notifications-updated'));
+      }
+    } catch { /* non-fatal */ }
+
     return newNotification;
+  }
+
+  /**
+   * Dedupe-friendly variant of createNotification. If a notification with the
+   * same `userId + type + dedupeKey` already exists within the dedupe window
+   * (default 24h), no new notification is created and the existing one is
+   * returned. Useful for event-driven helpers (welcome, sync-success,
+   * security-score-changed) that fire on every login or every sync but
+   * shouldn't spam the panel.
+   */
+  static async createOrSkip(
+    notification: Omit<Notification, 'id' | 'timestamp' | 'read'>,
+    dedupeKey: string,
+    windowMs: number = 24 * 60 * 60 * 1000,
+  ): Promise<Notification | null> {
+    const now = Date.now();
+    const existing = this.notifications.find(n =>
+      n.userId === notification.userId &&
+      n.type === notification.type &&
+      n.metadata?.dedupeKey === dedupeKey &&
+      (now - new Date(n.timestamp).getTime()) < windowMs,
+    );
+    if (existing) return null;
+    return this.createNotification({
+      ...notification,
+      metadata: { ...(notification.metadata || {}), dedupeKey },
+    });
   }
 
   static async getNotifications(userId: string, limit?: number): Promise<Notification[]> {
@@ -142,7 +201,7 @@ export class NotificationService {
    * total store at `maxCount` (default 100, oldest first). Called on init so
    * the bell panel doesn't accumulate cruft over months of use.
    */
-  static cleanupOldNotifications(maxAgeDays: number = 7, maxCount: number = 100): number {
+  static cleanupOldNotifications(maxAgeDays: number = 7, maxCount: number = MAX_NOTIFICATIONS): number {
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
     const before = this.notifications.length;
 
@@ -225,6 +284,126 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Welcome on login. Includes a brief snapshot — password count + upcoming
+   * renewals — so the user gets value the moment they open the panel.
+   * Deduped per-day so it doesn't fire on every refresh.
+   */
+  static async createWelcomeBack(
+    userId: string,
+    passwordCount: number,
+    upcomingRenewals: number,
+  ): Promise<Notification | null> {
+    const todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const renewalLine = upcomingRenewals > 0
+      ? `${upcomingRenewals} upcoming renewal${upcomingRenewals !== 1 ? 's' : ''}`
+      : 'no upcoming renewals';
+    return this.createOrSkip(
+      {
+        type: 'welcome',
+        title: 'Welcome back!',
+        message: `${passwordCount} password${passwordCount !== 1 ? 's' : ''} stored, ${renewalLine}.`,
+        userId,
+        metadata: { passwordCount, upcomingRenewals },
+      },
+      `welcome:${todayKey}`,
+    );
+  }
+
+  /**
+   * Fired by the security-health page when weak passwords are detected.
+   * Deduped on `count` so the same total doesn't surface twice in 24h, but
+   * a worsening score will re-notify.
+   */
+  static async createWeakPasswordsAlert(
+    userId: string,
+    count: number,
+  ): Promise<Notification | null> {
+    if (count <= 0) return null;
+    return this.createOrSkip(
+      {
+        type: 'security',
+        title: 'Passwords need strengthening',
+        message: `${count} password${count !== 1 ? 's' : ''} are weak or reused. Tap to review.`,
+        userId,
+        actionUrl: '/security-health',
+        actionText: 'Review now',
+        metadata: { count },
+      },
+      `weak-passwords:${count}`,
+    );
+  }
+
+  /**
+   * Sync success — light-touch confirmation. Deduped per-hour so a chatty
+   * sync queue doesn't fill the panel.
+   */
+  static async createSyncSuccess(userId: string): Promise<Notification | null> {
+    const hourKey = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
+    return this.createOrSkip(
+      {
+        type: 'sync',
+        title: 'Vault synced',
+        message: 'Your vault is up to date across all devices.',
+        userId,
+      },
+      `sync:${hourKey}`,
+      60 * 60 * 1000,
+    );
+  }
+
+  /**
+   * Fired when the security score crosses a meaningful threshold (default
+   * +/-5). Deduped on `score` so the same value doesn't notify repeatedly.
+   */
+  static async createSecurityScoreChange(
+    userId: string,
+    score: number,
+    direction: 'improved' | 'declined',
+  ): Promise<Notification | null> {
+    return this.createOrSkip(
+      {
+        type: direction === 'improved' ? 'achievement' : 'warning',
+        title: direction === 'improved'
+          ? `Security score improved to ${score}!`
+          : `Security score dropped to ${score}`,
+        message: direction === 'improved'
+          ? 'Great work — your vault is more secure than before.'
+          : 'Tap to see what changed and how to recover.',
+        userId,
+        actionUrl: '/security-health',
+        actionText: direction === 'improved' ? 'See details' : 'Review',
+        metadata: { score, direction },
+      },
+      `security-score:${score}:${direction}`,
+    );
+  }
+
+  /**
+   * Achievement badge unlocked. The Security Health page already paints a
+   * row of badges — this surfaces the unlock event into the notification
+   * panel so it's discoverable later.
+   */
+  static async createAchievementUnlocked(
+    userId: string,
+    badgeId: string,
+    badgeName: string,
+    description: string,
+  ): Promise<Notification | null> {
+    return this.createOrSkip(
+      {
+        type: 'achievement',
+        title: `Badge unlocked: ${badgeName}`,
+        message: description,
+        userId,
+        metadata: { badgeId, badgeName },
+      },
+      `achievement:${badgeId}`,
+      // One badge unlock = lifetime dedupe (effectively).
+      365 * 24 * 60 * 60 * 1000,
+    );
+  }
+
   // Preferences management
   static async getPreferences(userId: string): Promise<NotificationPreferences | null> {
     return this.preferences.find(p => p.userId === userId) || null;
@@ -255,7 +434,7 @@ export class NotificationService {
   // Storage methods
   private static saveNotifications(): void {
     try {
-      localStorage.setItem('securevault_notifications', JSON.stringify(this.notifications));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.notifications));
     } catch (error) {
       console.error('Failed to save notifications:', error);
     }
@@ -263,7 +442,7 @@ export class NotificationService {
 
   private static savePreferences(): void {
     try {
-      localStorage.setItem('securevault_notification_preferences', JSON.stringify(this.preferences));
+      localStorage.setItem(PREFS_KEY, JSON.stringify(this.preferences));
     } catch (error) {
       console.error('Failed to save notification preferences:', error);
     }
@@ -271,12 +450,26 @@ export class NotificationService {
 
   private static loadNotifications(): void {
     try {
-      const stored = localStorage.getItem('securevault_notifications');
-      if (stored) {
-        this.notifications = JSON.parse(stored).map((n: any) => ({
+      // Prefer the new key. If only the legacy key is present, migrate
+      // exactly once and clear the old slot.
+      let raw = localStorage.getItem(STORAGE_KEY);
+      let migrated = false;
+      if (!raw) {
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy) {
+          raw = legacy;
+          migrated = true;
+        }
+      }
+      if (raw) {
+        this.notifications = JSON.parse(raw).map((n: any) => ({
           ...n,
           timestamp: new Date(n.timestamp),
         }));
+      }
+      if (migrated) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.notifications));
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
     } catch (error) {
       console.error('Failed to load notifications:', error);
@@ -285,9 +478,21 @@ export class NotificationService {
 
   private static loadPreferences(): void {
     try {
-      const stored = localStorage.getItem('securevault_notification_preferences');
-      if (stored) {
-        this.preferences = JSON.parse(stored);
+      let raw = localStorage.getItem(PREFS_KEY);
+      let migrated = false;
+      if (!raw) {
+        const legacy = localStorage.getItem(LEGACY_PREFS_KEY);
+        if (legacy) {
+          raw = legacy;
+          migrated = true;
+        }
+      }
+      if (raw) {
+        this.preferences = JSON.parse(raw);
+      }
+      if (migrated) {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(this.preferences));
+        localStorage.removeItem(LEGACY_PREFS_KEY);
       }
     } catch (error) {
       console.error('Failed to load notification preferences:', error);

@@ -18,10 +18,18 @@
  * gesture.
  */
 
-import type { ReminderEntry } from '@shared/schema';
+import type { ReminderEntry, SubscriptionEntry } from '@shared/schema';
+import { NotificationService } from '@/lib/notifications';
 
 const FIRED_KEY = 'iv_reminder_fired_ids_v1';
 const FIRE_WINDOW_MS = 90 * 1000; // ±90s tolerance around the alert moment
+
+// Persistent (cross-session) dedupe for subscription renewal alerts. Keyed
+// per (subscriptionId, threshold-day) so the same renewal doesn't fire on
+// every tab open. localStorage so it survives reloads — sessionStorage
+// would re-notify on each new tab.
+const SUB_FIRED_KEY = 'iv_subscription_fired_ids_v1';
+const SUB_RENEWAL_THRESHOLDS = [7, 3, 1] as const;
 
 function getFiredSet(): Set<string> {
   try {
@@ -181,6 +189,179 @@ export async function scheduleNativeReminder(reminder: ReminderEntry): Promise<v
   } catch (err) {
     console.warn('[reminders] native schedule failed:', err);
   }
+}
+
+// ── Subscription renewal reminders ──────────────────────────────────────────
+//
+// Fires both an in-app NotificationCenter entry AND (where granted) a
+// browser/native notification for each active subscription whose renewal
+// falls within the configured thresholds. Per-(sub, threshold) dedupe is
+// persistent across sessions so the same renewal doesn't re-fire on
+// reload. Thresholds: 7-day, 3-day, 1-day. Auto-prunes entries for
+// renewals more than 30 days in the past so the dedupe set doesn't grow
+// without bound.
+
+function loadSubFiredMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(SUB_FIRED_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSubFiredMap(map: Record<string, number>): void {
+  try {
+    localStorage.setItem(SUB_FIRED_KEY, JSON.stringify(map));
+  } catch {
+    /* quota / disabled — non-fatal */
+  }
+}
+
+function pruneSubFiredMap(map: Record<string, number>): Record<string, number> {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const next: Record<string, number> = {};
+  for (const [k, v] of Object.entries(map)) {
+    if (typeof v === 'number' && v > cutoff) next[k] = v;
+  }
+  return next;
+}
+
+function formatRenewalAmount(sub: SubscriptionEntry): string {
+  const currency = sub.currency || 'USD';
+  // Use the user's locale where possible; fall back to en-US.
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(sub.cost);
+  } catch {
+    // Unknown currency code — render plain.
+    return `${currency} ${sub.cost}`;
+  }
+}
+
+export interface CheckSubscriptionRenewalsOptions {
+  /** Used to scope notification-center entries to a user. */
+  userId: string;
+  /** Subscriptions to evaluate. Inactive entries are skipped. */
+  subscriptions: SubscriptionEntry[];
+  /**
+   * If true (default), also surfaces a browser/native notification when
+   * permission has been granted. Pass false to *only* write to the
+   * notification center (e.g. for background dashboard refreshes).
+   */
+  fireSystemNotification?: boolean;
+}
+
+/**
+ * Walk subscriptions and fire renewal reminders for each that's at the
+ * 7-day, 3-day, or 1-day mark (calendar-day-aligned). Idempotent across
+ * sessions — relies on `iv_subscription_fired_ids_v1` to dedupe.
+ *
+ * Returns the number of NEW alerts fired in this call.
+ */
+export async function checkAndFireSubscriptionRenewals(
+  opts: CheckSubscriptionRenewalsOptions,
+): Promise<number> {
+  const { userId, subscriptions, fireSystemNotification = true } = opts;
+  if (!subscriptions?.length) return 0;
+
+  const fired = pruneSubFiredMap(loadSubFiredMap());
+  const todayMidnight = new Date().setHours(0, 0, 0, 0);
+  const dayMs = 24 * 60 * 60 * 1000;
+  let newCount = 0;
+
+  for (const sub of subscriptions) {
+    if (!sub.isActive || !sub.nextBillingDate) continue;
+    const due = new Date(sub.nextBillingDate);
+    if (Number.isNaN(due.getTime())) continue;
+
+    const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+    const daysOut = Math.round((dueMidnight - todayMidnight) / dayMs);
+    if (daysOut < 0) continue;
+
+    // Match the closest threshold *equal to or below* daysOut so a 4-day-out
+    // renewal still hits the 3-day threshold. Each (sub, threshold) only
+    // fires once per renewal cycle.
+    const threshold = SUB_RENEWAL_THRESHOLDS.find(t => daysOut === t);
+    if (threshold === undefined) continue;
+
+    // Dedupe key includes the renewal date so a fresh cycle (next month)
+    // gets to fire again.
+    const renewalKey = `${sub.id}:${threshold}:${dueMidnight}`;
+    if (fired[renewalKey]) continue;
+
+    const amount = formatRenewalAmount(sub);
+    const dayLabel = threshold === 1 ? 'tomorrow' : `in ${threshold} days`;
+    const title = `${sub.name} renews ${dayLabel}`;
+    const message = `${amount} will be charged on ${due.toLocaleDateString()}.`;
+
+    // Notification-center entry (always).
+    try {
+      await NotificationService.createOrSkip(
+        {
+          type: 'subscription',
+          title,
+          message,
+          userId,
+          actionUrl: '/subscriptions',
+          actionText: 'View',
+          metadata: {
+            subscriptionId: sub.id,
+            subscriptionName: sub.name,
+            daysUntilRenewal: threshold,
+            amount: sub.cost,
+            currency: sub.currency || 'USD',
+            renewalDate: due.toISOString(),
+          },
+        },
+        renewalKey,
+        // Match our renewal-cycle window: 30 days is plenty.
+        30 * dayMs,
+      );
+    } catch { /* non-fatal */ }
+
+    // Browser/native notification (best-effort, gated by permission).
+    if (fireSystemNotification && browserSupportsNotifications() && Notification.permission === 'granted') {
+      try {
+        new Notification('IronVault', {
+          body: `${title} — ${amount}`,
+          icon: '/icons/icon-192x192.png',
+          tag: `iv-sub-${sub.id}-${threshold}`,
+          badge: '/icons/icon-192x192.png',
+        });
+      } catch (err) {
+        console.warn('[reminders] subscription notification failed:', err);
+      }
+    }
+
+    fired[renewalKey] = Date.now();
+    newCount++;
+  }
+
+  if (newCount > 0) saveSubFiredMap(fired);
+  return newCount;
+}
+
+/**
+ * Subscribe to a subscriptions array and tick once an hour, firing renewal
+ * reminders as they come due. Returns an unsubscribe function. Hourly is
+ * plenty — renewal alerts are calendar-day granular.
+ */
+export function startSubscriptionReminderLoop(
+  getOptions: () => CheckSubscriptionRenewalsOptions,
+): () => void {
+  // Fire once immediately so renewals that came due while the tab was closed
+  // surface as soon as the user returns.
+  checkAndFireSubscriptionRenewals(getOptions()).catch(() => {});
+  const id = window.setInterval(() => {
+    checkAndFireSubscriptionRenewals(getOptions()).catch(() => {});
+  }, 60 * 60 * 1000);
+  return () => window.clearInterval(id);
 }
 
 export async function cancelNativeReminder(reminderId: string): Promise<void> {
