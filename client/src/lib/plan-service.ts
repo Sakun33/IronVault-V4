@@ -19,7 +19,14 @@
 
 import { useEffect, useState } from 'react';
 
-export type PlanTier = 'free' | 'pro' | 'family' | 'lifetime' | 'pro_family_member';
+export type PlanTier =
+  | 'free'
+  | 'pro'
+  | 'family'
+  | 'lifetime'
+  | 'pro_family_member'
+  | 'team'
+  | 'business';
 
 const PLAN_TIER_KEY = 'iv_plan_tier';
 const LEGACY_CACHE_KEY = 'iv_plan_cache';
@@ -46,8 +53,15 @@ const FREE_LIMITS: Record<string, number> = {
 
 function normalizeTier(input: unknown): PlanTier {
   const raw = String(input ?? '').toLowerCase().trim();
-  if (raw === 'pro' || raw === 'lifetime' || raw === 'family' || raw === 'pro_family_member') {
-    return raw;
+  if (
+    raw === 'pro' ||
+    raw === 'lifetime' ||
+    raw === 'family' ||
+    raw === 'pro_family_member' ||
+    raw === 'team' ||
+    raw === 'business'
+  ) {
+    return raw as PlanTier;
   }
   // Map server aliases — "premium" historically meant "pro" in the CRM data.
   if (raw === 'premium' || raw === 'monthly' || raw === 'yearly') return 'pro';
@@ -63,7 +77,9 @@ const TIER_RANK: Record<PlanTier, number> = {
   pro_family_member: 1,
   pro: 2,
   family: 3,
-  lifetime: 4,
+  team: 4,
+  business: 5,
+  lifetime: 6,
 };
 
 export interface SetTierOpts {
@@ -82,6 +98,8 @@ class PlanService {
   get isPro(): boolean { return this._tier !== 'free'; }
   get isLifetime(): boolean { return this._tier === 'lifetime'; }
   get isFamily(): boolean { return this._tier === 'family'; }
+  get isTeam(): boolean { return this._tier === 'team' || this._tier === 'business'; }
+  get isBusiness(): boolean { return this._tier === 'business'; }
   get initialized(): boolean { return this._initialized; }
 
   /** Per-resource limit. Returns Infinity for paid plans. */

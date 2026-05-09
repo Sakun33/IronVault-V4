@@ -38,6 +38,7 @@ import {
   HeartHandshake,
 } from 'lucide-react';
 import { FontSizeSettings } from '@/components/font-size-settings';
+import TravelModeCard from '@/components/travel-mode-card';
 import SupportTicketSubmission from '@/components/support-ticket-submission';
 import { useAnalytics } from '@/components/analytics-integration';
 import { vaultBackupService } from '@/lib/vault-backup';
@@ -361,6 +362,9 @@ export default function SettingsPage() {
           <FontSizeSettings />
         </CardContent>
       </Card>
+
+      {/* Travel Mode — hide vaults at borders */}
+      <TravelModeCard />
 
       {/* Security — auto-lock & lock-on-background */}
       <Card className="rounded-2xl shadow-sm border-border/50">

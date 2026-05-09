@@ -11,7 +11,14 @@
  *   4. Lifetime     (single user, one-time)
  */
 
-export type PlanId = 'free' | 'pro' | 'family' | 'lifetime' | 'pro_family_member';
+export type PlanId =
+  | 'free'
+  | 'pro'
+  | 'family'
+  | 'lifetime'
+  | 'pro_family_member'
+  | 'team'
+  | 'business';
 
 export interface Plan {
   /** Machine-readable id — matches the license `tier` field */
@@ -159,6 +166,46 @@ export const PLANS: Plan[] = [
       'Expense tracking & analytics',
       'Biometric authentication',
       'Cloud sync',
+    ],
+  },
+  {
+    id: 'team',
+    name: 'Team',
+    description: 'For small businesses. Per-seat billing, min 3 seats.',
+    priceMonthly: 499,
+    priceYearly: 4999,
+    priceOneTime: null,
+    seats: 3,
+    vaultLimit: 10,
+    available: true,
+    badge: 'New',
+    features: [
+      'Everything in Pro',
+      'Shared team vaults',
+      'Member roles (Admin / Member / Viewer)',
+      'Activity log per team',
+      'Centralized billing',
+      'Priority support',
+    ],
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    description: 'Advanced controls and SSO for larger teams.',
+    priceMonthly: 999,
+    priceYearly: 9999,
+    priceOneTime: null,
+    seats: 5,
+    vaultLimit: -1,
+    available: true,
+    badge: null,
+    features: [
+      'Everything in Team',
+      'SSO (SAML / OIDC)',
+      'Audit logs',
+      'Admin console controls',
+      'Custom security policies',
+      'Dedicated support',
     ],
   },
 ];

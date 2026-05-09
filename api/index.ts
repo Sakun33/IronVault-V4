@@ -4076,5 +4076,238 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── Teams (business plan) ──────────────────────────────────────────────────
+  // Team-management endpoints. Schema is provisioned lazily on first call so
+  // older deploys without migrations don't 500. Roles: owner, admin, member,
+  // viewer. Owner is the user who created the team and is implicitly an admin.
+  async function ensureTeamsTables(): Promise<void> {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS teams (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          owner_user_id UUID NOT NULL,
+          plan TEXT NOT NULL DEFAULT 'team',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+          team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+          user_id UUID,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member',
+          status TEXT NOT NULL DEFAULT 'active',
+          invited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          accepted_at TIMESTAMPTZ,
+          PRIMARY KEY (team_id, email)
+        );
+        CREATE TABLE IF NOT EXISTS team_shared_vaults (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          created_by UUID NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members(email);
+        CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
+      `);
+    } catch (e: any) {
+      console.error('[teams] table provisioning failed:', e.message);
+    }
+  }
+
+  async function isTeamMember(teamId: string, userId: string, email: string): Promise<{ role: string } | null> {
+    const { rows } = await db.query(
+      `SELECT role FROM team_members
+       WHERE team_id = $1 AND (user_id = $2 OR LOWER(email) = LOWER($3))
+         AND status = 'active' LIMIT 1`,
+      [teamId, userId, email]
+    );
+    return rows[0] ? { role: rows[0].role } : null;
+  }
+
+  // POST /api/teams/create — { name }
+  if (path === '/api/teams/create' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureTeamsTables();
+    try {
+      const name = String((req.body?.name ?? '')).trim();
+      if (!name) return res.status(400).json({ error: 'name required' });
+      const { rows } = await db.query(
+        `INSERT INTO teams (name, owner_user_id) VALUES ($1, $2) RETURNING id, name, plan, created_at`,
+        [name, cloudUser.userId]
+      );
+      const team = rows[0];
+      // Owner is auto-added as an active admin so subsequent member-list/invite
+      // calls treat them as part of the team without an extra accept step.
+      await db.query(
+        `INSERT INTO team_members (team_id, user_id, email, role, status, accepted_at)
+         VALUES ($1, $2, $3, 'admin', 'active', NOW())
+         ON CONFLICT (team_id, email) DO NOTHING`,
+        [team.id, cloudUser.userId, cloudUser.email]
+      );
+      return res.json({ success: true, team });
+    } catch (err: any) {
+      console.error('[teams/create]', err.message);
+      return res.status(500).json({ error: 'Failed to create team' });
+    }
+  }
+
+  // GET /api/teams — list teams the user belongs to
+  if (path === '/api/teams' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureTeamsTables();
+    try {
+      const { rows } = await db.query(
+        `SELECT t.id, t.name, t.plan, t.owner_user_id, t.created_at, m.role
+         FROM teams t
+         JOIN team_members m ON m.team_id = t.id
+         WHERE (m.user_id = $1 OR LOWER(m.email) = LOWER($2)) AND m.status = 'active'
+         ORDER BY t.created_at DESC`,
+        [cloudUser.userId, cloudUser.email]
+      );
+      return res.json({ success: true, teams: rows });
+    } catch (err: any) {
+      console.error('[teams list]', err.message);
+      return res.status(500).json({ error: 'Failed to list teams' });
+    }
+  }
+
+  // /api/teams/:id/* — sub-routes
+  const teamsMatch = path.match(/^\/api\/teams\/([^/]+)\/(invite|remove|members|shared-vault)$/);
+  if (teamsMatch) {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureTeamsTables();
+    const teamId = teamsMatch[1];
+    const action = teamsMatch[2];
+
+    const membership = await isTeamMember(teamId, cloudUser.userId, cloudUser.email);
+    if (!membership) return res.status(403).json({ error: 'Not a member of this team' });
+
+    if (action === 'members' && req.method === 'GET') {
+      try {
+        const { rows } = await db.query(
+          `SELECT email, role, status, invited_at, accepted_at, user_id
+           FROM team_members WHERE team_id = $1 ORDER BY invited_at ASC`,
+          [teamId]
+        );
+        return res.json({ success: true, members: rows });
+      } catch (err: any) {
+        console.error('[teams/members]', err.message);
+        return res.status(500).json({ error: 'Failed to list members' });
+      }
+    }
+
+    if (action === 'invite' && req.method === 'POST') {
+      if (!['owner', 'admin'].includes(membership.role)) {
+        return res.status(403).json({ error: 'Admin role required' });
+      }
+      try {
+        const inviteEmail = String((req.body?.email ?? '')).trim().toLowerCase();
+        const role = String((req.body?.role ?? 'member')).toLowerCase();
+        if (!inviteEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
+          return res.status(400).json({ error: 'valid email required' });
+        }
+        if (!['admin', 'member', 'viewer'].includes(role)) {
+          return res.status(400).json({ error: 'invalid role' });
+        }
+        // Look up an existing user_id for the invitee so /api/teams works for
+        // them on first read without re-keying by email.
+        const userLookup = await db.query(
+          `SELECT id FROM crm_users WHERE LOWER(email) = $1 LIMIT 1`,
+          [inviteEmail]
+        );
+        const inviteeUserId = userLookup.rows[0]?.id ?? null;
+        await db.query(
+          `INSERT INTO team_members (team_id, user_id, email, role, status)
+           VALUES ($1, $2, $3, $4, 'pending')
+           ON CONFLICT (team_id, email)
+           DO UPDATE SET role = EXCLUDED.role, status = 'pending'`,
+          [teamId, inviteeUserId, inviteEmail, role]
+        );
+        // Best-effort invite email — don't fail the response if SMTP is down.
+        const teamRow = await db.query(`SELECT name FROM teams WHERE id = $1`, [teamId]);
+        const teamName = teamRow.rows[0]?.name ?? 'IronVault Team';
+        const subject = `${cloudUser.email} invited you to ${teamName} on IronVault`;
+        const safeName = _eHtml(teamName);
+        const safeOwner = _eHtml(cloudUser.email);
+        const link = `${_APP_URL}/teams`;
+        const html = _emailLayout(
+          `${_eh1(`Join ${safeName}`)}${_ep(`<strong>${safeOwner}</strong> invited you to collaborate on IronVault.`)}${_ebtn(link, 'Open IronVault')}`
+        );
+        sendEmail({ to: inviteEmail, subject, html }).catch(() => undefined);
+        return res.json({ success: true, invited: inviteEmail, role });
+      } catch (err: any) {
+        console.error('[teams/invite]', err.message);
+        return res.status(500).json({ error: 'Failed to invite' });
+      }
+    }
+
+    if (action === 'remove' && req.method === 'POST') {
+      if (!['owner', 'admin'].includes(membership.role)) {
+        return res.status(403).json({ error: 'Admin role required' });
+      }
+      try {
+        const removeEmail = String((req.body?.email ?? '')).trim().toLowerCase();
+        if (!removeEmail) return res.status(400).json({ error: 'email required' });
+        // Don't allow removing the team owner via this endpoint — that needs
+        // a deliberate transfer-or-delete flow.
+        const owner = await db.query(`SELECT owner_user_id FROM teams WHERE id = $1`, [teamId]);
+        const ownerId = owner.rows[0]?.owner_user_id;
+        const target = await db.query(
+          `SELECT user_id FROM team_members WHERE team_id = $1 AND LOWER(email) = $2 LIMIT 1`,
+          [teamId, removeEmail]
+        );
+        if (target.rows[0]?.user_id === ownerId) {
+          return res.status(400).json({ error: 'Cannot remove team owner' });
+        }
+        const { rowCount } = await db.query(
+          `DELETE FROM team_members WHERE team_id = $1 AND LOWER(email) = $2`,
+          [teamId, removeEmail]
+        );
+        if (!rowCount) return res.status(404).json({ error: 'Member not found' });
+        return res.json({ success: true, removed: removeEmail });
+      } catch (err: any) {
+        console.error('[teams/remove]', err.message);
+        return res.status(500).json({ error: 'Failed to remove' });
+      }
+    }
+
+    if (action === 'shared-vault' && req.method === 'POST') {
+      if (!['owner', 'admin'].includes(membership.role)) {
+        return res.status(403).json({ error: 'Admin role required' });
+      }
+      try {
+        const vaultName = String((req.body?.name ?? '')).trim();
+        if (!vaultName) return res.status(400).json({ error: 'name required' });
+        const { rows } = await db.query(
+          `INSERT INTO team_shared_vaults (team_id, name, created_by)
+           VALUES ($1, $2, $3) RETURNING id, name, created_at`,
+          [teamId, vaultName, cloudUser.userId]
+        );
+        return res.json({ success: true, sharedVault: rows[0] });
+      } catch (err: any) {
+        console.error('[teams/shared-vault]', err.message);
+        return res.status(500).json({ error: 'Failed to create shared vault' });
+      }
+    }
+
+    if (action === 'shared-vault' && req.method === 'GET') {
+      try {
+        const { rows } = await db.query(
+          `SELECT id, name, created_by, created_at FROM team_shared_vaults
+           WHERE team_id = $1 ORDER BY created_at DESC`,
+          [teamId]
+        );
+        return res.json({ success: true, sharedVaults: rows });
+      } catch (err: any) {
+        console.error('[teams/shared-vault list]', err.message);
+        return res.status(500).json({ error: 'Failed to list shared vaults' });
+      }
+    }
+  }
+
   return res.status(404).json({ error: "endpoint not found", path });
 }

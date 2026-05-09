@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { vaultManager, type VaultInfo } from '@/lib/vault-manager';
 import { vaultStorage } from '@/lib/storage';
 import { useLicense } from './license-context';
@@ -6,6 +6,7 @@ import { useAuth } from './auth-context';
 import { useVault } from './vault-context';
 import { deleteCloudVault } from '@/lib/cloud-vault-sync';
 import { getPlan } from '@/lib/plans';
+import { isTravelModeActive, isVaultHidden, subscribeTravelMode } from '@/lib/travel-mode';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,12 @@ import { Label } from '@/components/ui/label';
 import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 interface VaultSelectionContextType {
+  /** Vaults visible to the user. While travel mode is active, hidden vaults
+   *  are filtered out so they never appear in pickers, switchers, or lists. */
   vaults: VaultInfo[];
+  /** Unfiltered vault list — only Settings → Travel Mode should ever read this. */
+  allVaults: VaultInfo[];
+  travelModeActive: boolean;
   activeVault: VaultInfo | null;
   isLoading: boolean;
   canCreateVault: boolean;
@@ -42,6 +48,10 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
   const [activeVault, setActiveVault] = useState<VaultInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Travel-mode bump — re-renders when the localStorage flag flips so consumers
+  // see the filtered list immediately.
+  const [travelTick, setTravelTick] = useState(0);
+  useEffect(() => subscribeTravelMode(() => setTravelTick(n => n + 1)), []);
   const { license } = useLicense();
   const { accountEmail, login } = useAuth();
   const { refreshData } = useVault();
@@ -217,9 +227,19 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
 
   const pendingVault = pendingSwitchId ? vaults.find(v => v.id === pendingSwitchId) : null;
 
+  // Travel-mode-aware visible list. travelTick is read so the memo re-runs
+  // on enable/disable; the filter itself reads localStorage on every call.
+  const travelModeActive = useMemo(() => isTravelModeActive(), [travelTick]);
+  const visibleVaults = useMemo(() => {
+    if (!travelModeActive) return vaults;
+    return vaults.filter(v => !isVaultHidden(v.id));
+  }, [vaults, travelModeActive, travelTick]);
+
   return (
     <VaultSelectionContext.Provider value={{
-      vaults,
+      vaults: visibleVaults,
+      allVaults: vaults,
+      travelModeActive,
       activeVault,
       isLoading,
       canCreateVault,

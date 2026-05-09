@@ -18,6 +18,7 @@ import { useSubscription } from "@/hooks/use-subscription";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { CloudSyncPill } from "@/components/cloud-sync-pill";
+import { TravelModeBanner } from "@/components/travel-mode-banner";
 import { resetNoteEditing } from "@/lib/note-editing-guard";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault, acquireCloudToken, getCloudToken } from "@/lib/cloud-vault-sync";
 import { getAccountEmail, getAccountPasswordHash } from "@/lib/account-auth";
@@ -72,6 +73,7 @@ const UpgradePage = React.lazy(() => import("@/pages/pricing"));
 const CreateVaultPage = React.lazy(() => import("@/pages/create-vault"));
 const QAPage = React.lazy(() => import("@/pages/qa"));
 const VaultsPage = React.lazy(() => import("@/pages/vaults"));
+const TeamsPage = React.lazy(() => import("@/pages/teams"));
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -362,6 +364,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
+      {/* Travel-mode banner — visible app-wide while active. */}
+      <TravelModeBanner />
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
         <div className="flex items-center justify-between h-9 gap-1 overflow-visible">
@@ -1166,6 +1170,7 @@ function Router() {
       <Route path="/import-passwords"><MainLayout><ImportPasswords /></MainLayout></Route>
       <Route path="/qa"><MainLayout><QAPage /></MainLayout></Route>
       <Route path="/vaults"><MainLayout><VaultsPage /></MainLayout></Route>
+      <Route path="/teams"><MainLayout><TeamsPage /></MainLayout></Route>
 
       {/* Public Information Pages */}
       {PUBLIC_INFO_ROUTES}

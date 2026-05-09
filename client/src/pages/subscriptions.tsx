@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, DollarSign, BarChart3, Bookmark, Globe, Eye, EyeOff, LogIn, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon, CalendarPlus, Download } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { exportToCalendar, downloadICS, addToGoogleCalendar, addToAppleCalendar } from '@/lib/calendar-export';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -267,6 +269,40 @@ export default function Subscriptions() {
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesModal(true)} className="rounded-xl hidden sm:flex">
               <LayoutTemplate className="w-4 h-4 mr-1.5" />Templates
             </Button>
+            {subscriptions.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="rounded-xl" data-testid="export-calendar">
+                    <CalendarPlus className="w-4 h-4 mr-1.5" />
+                    <span className="hidden sm:inline">Calendar</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const ics = exportToCalendar(subscriptions);
+                      downloadICS('ironvault-subscriptions', ics);
+                      toast({ title: 'Calendar file downloaded', description: 'Open it to add events to any calendar app.' });
+                    }}
+                    data-testid="export-calendar-ics"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download .ics (all renewals)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      // Apple Calendar opens .ics files via the OS file handler.
+                      const ics = exportToCalendar(subscriptions);
+                      downloadICS('ironvault-subscriptions', ics);
+                    }}
+                    data-testid="export-calendar-apple"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Open in Apple Calendar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {filteredSubscriptions.length > 0 && !selection.isSelectionMode && (
               <Button
                 variant="outline"
