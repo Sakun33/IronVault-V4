@@ -8,6 +8,8 @@ import {
   Heading1, Heading2, Heading3, List as ListBullets, ListOrdered, CheckSquare,
   Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
   Share2, Highlighter, Quote, Search as SearchIcon, Plus, Sparkles,
+  RotateCcw, RotateCw, Indent, Outdent, RemoveFormatting,
+  Link2, Type,
 } from 'lucide-react';
 import { NoteEntry } from '@shared/schema';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
@@ -24,6 +26,17 @@ export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string 
   { id: 'amber',   name: 'Amber',   hex: '#f59e0b' },
   { id: 'rose',    name: 'Rose',    hex: '#f43f5e' },
   { id: 'slate',   name: 'Gray',    hex: '#64748b' },
+];
+
+const NOTE_TEXT_COLORS: Array<{ name: string; hex: string }> = [
+  { name: 'Default', hex: 'inherit' },
+  { name: 'Emerald', hex: '#10b981' },
+  { name: 'Sky',     hex: '#0ea5e9' },
+  { name: 'Violet',  hex: '#8b5cf6' },
+  { name: 'Amber',   hex: '#f59e0b' },
+  { name: 'Rose',    hex: '#f43f5e' },
+  { name: 'Red',     hex: '#ef4444' },
+  { name: 'Slate',   hex: '#94a3b8' },
 ];
 
 export type NoteFormPayload = Pick<NoteEntry, 'title' | 'content' | 'notebook' | 'tags' | 'isPinned' | 'color'>;
@@ -116,6 +129,10 @@ export function NoteEditor({
   const [newNotebookOpen, setNewNotebookOpen] = useState(false);
   const [newNotebookValue, setNewNotebookValue] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  // Selection range cached when opening the color picker — DOM popovers steal
+  // the selection on iOS Safari, so we restore it before applying the color.
+  const colorPickerRangeRef = useRef<Range | null>(null);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
@@ -243,8 +260,8 @@ export function NoteEditor({
     // are stable.
     const raw = initialHtml(note, starter);
     const html = DOMPurify.sanitize(raw, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span'],
-      ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style'],
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span', 'a', 'font'],
+      ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style', 'href', 'target', 'rel', 'color'],
       ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
     });
     if (el.innerHTML !== html) el.innerHTML = html;
@@ -297,6 +314,7 @@ export function NoteEditor({
       const mod = e.metaKey || e.ctrlKey;
       if (e.key === 'Escape') {
         if (slashMenu.open) { setSlashMenu({ open: false, pos: null, query: '' }); return; }
+        if (colorPickerOpen) { setColorPickerOpen(false); return; }
         if (moreMenuOpen) { setMoreMenuOpen(false); return; }
         if (searchOpen) { setSearchOpen(false); return; }
         if (tagInputOpen) { setTagInputOpen(false); return; }
@@ -308,6 +326,10 @@ export function NoteEditor({
       if (key === 'b') { e.preventDefault(); applyFormat('bold'); return; }
       if (key === 'i') { e.preventDefault(); applyFormat('italic'); return; }
       if (key === 'u') { e.preventDefault(); applyFormat('underline'); return; }
+      if (key === 'z' && e.shiftKey) { e.preventDefault(); applyFormat('redo'); return; }
+      if (key === 'y') { e.preventDefault(); applyFormat('redo'); return; }
+      if (key === 'z' && !e.shiftKey) { e.preventDefault(); applyFormat('undo'); return; }
+      if (key === 'k') { e.preventDefault(); applyLink(); return; }
       if (e.shiftKey && key === '7') { e.preventDefault(); applyFormat('insertOrderedList'); return; }
       if (e.shiftKey && key === '8') { e.preventDefault(); applyFormat('insertUnorderedList'); return; }
       if (e.shiftKey && key === '9') { e.preventDefault(); insertChecklistItem(); return; }
@@ -316,7 +338,7 @@ export function NoteEditor({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen]);
+  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
 
   const runSave = async () => {
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
@@ -475,6 +497,110 @@ export function NoteEditor({
     syncEditorState();
   };
 
+  const applyLink = () => {
+    if (viewerMode) setViewerMode(false);
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    // Detect existing anchor at caret so we can edit/remove instead of nesting.
+    let node: Node | null = range.startContainer;
+    let existing: HTMLAnchorElement | null = null;
+    while (node && node !== ed) {
+      if (node.nodeType === 1 && (node as HTMLElement).tagName === 'A') {
+        existing = node as HTMLAnchorElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+    const current = existing?.getAttribute('href') ?? '';
+    const input = window.prompt(existing ? 'Edit link URL (leave empty to remove):' : 'Enter URL:', current || 'https://');
+    if (input === null) return; // cancelled
+    const trimmed = input.trim();
+    // Empty → unlink
+    if (!trimmed) {
+      try { document.execCommand('unlink', false); } catch { /* noop */ }
+      syncEditorState();
+      return;
+    }
+    // Normalize bare domains to https://
+    const normalized = /^(https?:|mailto:|tel:|\/)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    if (existing) {
+      existing.setAttribute('href', normalized);
+      existing.setAttribute('target', '_blank');
+      existing.setAttribute('rel', 'noopener noreferrer');
+    } else if (sel.isCollapsed) {
+      // No selection → insert the URL as visible text
+      const a = document.createElement('a');
+      a.href = normalized;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = normalized;
+      range.insertNode(a);
+      // Place caret after the inserted link
+      const r = document.createRange();
+      r.setStartAfter(a);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } else {
+      try { document.execCommand('createLink', false, normalized); } catch { /* noop */ }
+      // Promote target/rel for security on the freshly created anchor.
+      const created = ed.querySelector(`a[href="${cssEscape(normalized)}"]`);
+      if (created) {
+        created.setAttribute('target', '_blank');
+        created.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+    syncEditorState();
+    void hapticLight();
+  };
+
+  const applyTextColor = (hex: string) => {
+    if (viewerMode) setViewerMode(false);
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.focus();
+    // Restore the selection cached when the popover was opened (iOS).
+    const cached = colorPickerRangeRef.current;
+    if (cached) {
+      try {
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(cached);
+      } catch { /* noop */ }
+    }
+    if (hex === 'inherit') {
+      // Reset color: remove inline color from spans inside the selection.
+      try { document.execCommand('foreColor', false, '#ffffff'); } catch { /* noop */ }
+      // Best-effort: strip color spans whose only style is color
+      try { document.execCommand('removeFormat', false); } catch { /* noop */ }
+    } else {
+      try { document.execCommand('styleWithCSS', false, 'true'); } catch { /* noop */ }
+      try { document.execCommand('foreColor', false, hex); } catch { /* noop */ }
+    }
+    setColorPickerOpen(false);
+    colorPickerRangeRef.current = null;
+    syncEditorState();
+    void hapticLight();
+  };
+
+  const openColorPicker = () => {
+    if (viewerMode) setViewerMode(false);
+    const ed = editorRef.current;
+    if (!ed) return;
+    // Cache the current selection BEFORE the popover takes focus
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      colorPickerRangeRef.current = sel.getRangeAt(0).cloneRange();
+    } else {
+      colorPickerRangeRef.current = null;
+    }
+    setColorPickerOpen(v => !v);
+  };
+
   const applyBeautify = () => {
     if (viewerMode) setViewerMode(false);
     const ed = editorRef.current;
@@ -553,6 +679,18 @@ export function NoteEditor({
   };
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Tab / Shift+Tab → indent / outdent
+    if (e.key === 'Tab' && !slashMenu.open) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        try { document.execCommand('outdent', false); } catch { /* noop */ }
+      } else {
+        try { document.execCommand('indent', false); } catch { /* noop */ }
+      }
+      syncEditorState();
+      return;
+    }
+
     // Markdown shortcut: `# `, `## `, `### ` at start of a line → heading
     if (e.key === ' ' && editorRef.current && !slashMenu.open) {
       const sel = window.getSelection();
@@ -581,7 +719,7 @@ export function NoteEditor({
       let n: Node | null = range.startContainer;
       let todoEl: HTMLElement | null = null;
       while (n && n !== editorRef.current) {
-        if (n.nodeType === 1 && (n as HTMLElement).getAttribute && (n as HTMLElement).getAttribute('data-todo') === '1') {
+        if (n.nodeType === 1 && (n as HTMLElement).hasAttribute && (n as HTMLElement).hasAttribute('data-todo')) {
           todoEl = n as HTMLElement;
           break;
         }
@@ -604,7 +742,7 @@ export function NoteEditor({
         } else {
           // Has content → create a new empty checklist row after this one
           const newDiv = document.createElement('div');
-          newDiv.setAttribute('data-todo', '1');
+          newDiv.setAttribute('data-todo', '0');
           const cb = document.createElement('input');
           cb.type = 'checkbox';
           cb.className = 'iv-todo-check';
@@ -924,7 +1062,10 @@ export function NoteEditor({
       {/* Formatting toolbar — fixed BELOW the header, never scrolls away.
           One row of buttons that horizontally scrolls if it overflows. */}
       <div className="flex-shrink-0 bg-background">
-        <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar">
+        <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar scrollbar-hide">
+          <ToolbarBtn label="Undo (⌘Z)" onClick={() => applyFormat('undo')}><RotateCcw className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Redo (⌘⇧Z)" onClick={() => applyFormat('redo')}><RotateCw className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
           <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
@@ -940,7 +1081,12 @@ export function NoteEditor({
           <ToolbarBtn label="Checklist (⌘⇧9)" onClick={insertChecklistItem}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Quote" onClick={applyQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
+          <ToolbarBtn label="Indent (Tab)" onClick={() => applyFormat('indent')}><Indent className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Outdent (⇧Tab)" onClick={() => applyFormat('outdent')}><Outdent className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
+          <ToolbarBtn label="Horizontal rule" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Clear formatting" onClick={() => applyFormat('removeFormat')}><RemoveFormatting className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
           <ToolbarBtn label="Beautify" onClick={applyBeautify}><Sparkles className="w-3.5 h-3.5" /></ToolbarBtn>
         </div>
@@ -1246,6 +1392,13 @@ function initialHtml(note: NoteEntry | null, starter?: { content?: string }): st
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c));
+}
+
+function cssEscape(s: string): string {
+  if (typeof (window as any).CSS !== 'undefined' && (window as any).CSS.escape) {
+    return (window as any).CSS.escape(s);
+  }
+  return s.replace(/[^a-zA-Z0-9_-]/g, c => `\\${c}`);
 }
 
 /**
