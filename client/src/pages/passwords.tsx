@@ -45,7 +45,7 @@ export default function Passwords() {
   // dashboard "fix now" tiles deep-link straight into a filtered view.
   // wouter v2 doesn't ship useSearch — useLocation re-renders on in-app
   // navigation, and we read window.location.search directly inside the effect.
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const readStrengthParam = (): 'weak' | 'medium' | 'strong' | null => {
     if (typeof window === 'undefined') return null;
     const param = new URLSearchParams(window.location.search).get('strength');
@@ -169,21 +169,29 @@ export default function Passwords() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('action') !== 'add') return;
-    const prefill = {
-      name: params.get('prefillName') || '',
-      url: params.get('prefillUrl') || '',
-      username: params.get('prefillUsername') || '',
-      password: '',
-      category: '',
-      notes: '',
-    };
-    if (prefill.name || prefill.url) {
-      setEditingPassword(prefill);
+    const action = params.get('action');
+    if (action !== 'add' && action !== 'generate') return;
+
+    if (action === 'generate') {
+      // PWA shortcut "Generate Password" — open Add modal which exposes the
+      // generator. Once a value is generated the user can save it directly.
       setShowAddModal(true);
     } else {
-      // Bare ?action=add — just open an empty add modal.
-      setShowAddModal(true);
+      const prefill = {
+        name: params.get('prefillName') || '',
+        url: params.get('prefillUrl') || '',
+        username: params.get('prefillUsername') || '',
+        password: '',
+        category: '',
+        notes: '',
+      };
+      if (prefill.name || prefill.url) {
+        setEditingPassword(prefill);
+        setShowAddModal(true);
+      } else {
+        // Bare ?action=add — just open an empty add modal.
+        setShowAddModal(true);
+      }
     }
     // Strip the params so refresh doesn't re-trigger.
     const cleanUrl = window.location.pathname + window.location.hash;
@@ -350,6 +358,54 @@ export default function Passwords() {
             </Button>
           </div>
         </div>
+
+        {/* Capacity warning — free users at 80%+ of password limit */}
+        {(() => {
+          if (isPro) return null;
+          const limit = getLimit('passwords');
+          if (limit < 0) return null;
+          const used = passwords.length;
+          const pct = limit > 0 ? used / limit : 0;
+          if (pct < 0.8) return null;
+          const atLimit = used >= limit;
+          return (
+            <div
+              data-testid="password-capacity-banner"
+              className={`rounded-2xl border px-4 py-3 flex items-center gap-3 ${
+                atLimit
+                  ? 'border-red-500/30 bg-red-500/5'
+                  : 'border-amber-500/30 bg-amber-500/5'
+              }`}
+            >
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${
+                  atLimit ? 'bg-red-500/15 ring-red-500/30' : 'bg-amber-500/15 ring-amber-500/30'
+                }`}
+              >
+                <Lock className={`w-5 h-5 ${atLimit ? 'text-red-500' : 'text-amber-500'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className={`text-sm font-semibold ${atLimit ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                  {atLimit
+                    ? `You've hit the Free plan limit of ${limit} passwords`
+                    : `You're at ${used}/${limit} passwords (${Math.round(pct * 100)}% of capacity)`}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {atLimit
+                    ? 'New passwords can’t be saved until you upgrade or remove some.'
+                    : 'Upgrade for unlimited passwords across all devices.'}
+                </div>
+              </div>
+              <button
+                onClick={() => setLocation('/upgrade')}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex-shrink-0"
+                data-testid="upgrade-from-capacity"
+              >
+                Upgrade
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Search + Filters */}
         <div className="space-y-2">

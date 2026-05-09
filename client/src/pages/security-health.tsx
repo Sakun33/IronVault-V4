@@ -1,14 +1,18 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
   Shield, ChevronLeft, ChevronRight, Lock, KeyRound, Clock, ShieldCheck,
   Smartphone, AlertTriangle, CheckCircle2, Sparkles, Trophy, Award,
-  Upload, Star, Flame, Zap,
+  Upload, Star, Flame, Zap, ShieldAlert, Loader2, RotateCw, ScanSearch,
 } from "lucide-react";
 import { useVault } from "@/contexts/vault-context";
 import { useAuth } from "@/contexts/auth-context";
 import { calculateSecurityScore, type SecurityBreakdown } from "@/lib/security-score";
+import { scanBreaches, type BreachScanResult } from "@/lib/breach-checker";
+import { PasswordGenerator } from "@/lib/password-generator";
+import { Favicon } from "@/components/favicon";
+import type { PasswordEntry } from "@shared/schema";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
@@ -208,6 +212,184 @@ function AchievementBadge({ a }: { a: AchievementDef }) {
   );
 }
 
+// ── Breach scan card ──────────────────────────────────────────────────────────
+function BreachScanCard({ passwords }: { passwords: PasswordEntry[] }) {
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [results, setResults] = useState<BreachScanResult<PasswordEntry>[] | null>(null);
+  const [lastScannedAt, setLastScannedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Hydrate last-scan timestamp
+  useEffect(() => {
+    try {
+      const ts = localStorage.getItem('iv_breach_last_scan');
+      if (ts) setLastScannedAt(parseInt(ts, 10));
+    } catch { /* noop */ }
+  }, []);
+
+  const runScan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    setProgress({ done: 0, total: passwords.length });
+    try {
+      const items = passwords.map(p => ({ entry: p, password: p.password }));
+      const out = await scanBreaches(items, p => setProgress(p));
+      setResults(out);
+      const now = Date.now();
+      try { localStorage.setItem('iv_breach_last_scan', String(now)); } catch { /* noop */ }
+      setLastScannedAt(now);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  }, [passwords]);
+
+  const breached = useMemo(() => (results || []).filter(r => r.count > 0), [results]);
+  const totalScanned = results?.length ?? 0;
+  const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+
+  return (
+    <div className="rounded-2xl border border-border/50 bg-card overflow-hidden" data-testid="breach-scan-card">
+      <div className="p-4 flex items-center gap-3 border-b border-border/40">
+        <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center ring-1 ring-red-500/20">
+          <ScanSearch className="w-5 h-5 text-red-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Dark web monitoring</h2>
+          <p className="text-[11px] text-muted-foreground">
+            Checks every password against known data breaches via Have I Been Pwned. Your passwords stay on this device — only a 5-character hash prefix is sent.
+          </p>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {scanning && (
+          <div data-testid="breach-scan-progress">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Scanning… {progress.done}/{progress.total}
+              </span>
+              <span className="text-xs font-semibold tabular-nums">{pct}%</span>
+            </div>
+            <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-red-500"
+                style={{ width: `${pct}%`, transition: 'width 0.3s ease' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!scanning && results === null && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {passwords.length === 0
+                ? 'Add passwords to run a breach scan.'
+                : `${passwords.length} password${passwords.length === 1 ? '' : 's'} ready to scan.`}
+            </p>
+            <button
+              onClick={runScan}
+              disabled={passwords.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors"
+              data-testid="run-breach-scan"
+            >
+              <ScanSearch className="w-3.5 h-3.5" /> Run scan
+            </button>
+          </div>
+        )}
+
+        {!scanning && results !== null && (
+          <div className="space-y-3" data-testid="breach-scan-results">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs">
+                {breached.length === 0 ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" /> No breaches found across {totalScanned} password{totalScanned === 1 ? '' : 's'}.
+                  </span>
+                ) : (
+                  <span className="text-red-600 dark:text-red-400 font-semibold flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5" /> {breached.length} of {totalScanned} password{totalScanned === 1 ? '' : 's'} found in breaches.
+                  </span>
+                )}
+                {lastScannedAt && (
+                  <span className="text-muted-foreground ml-2">
+                    Last scanned {new Date(lastScannedAt).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={runScan}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted/40 text-xs font-medium transition-colors"
+                data-testid="rerun-breach-scan"
+              >
+                <RotateCw className="w-3 h-3" /> Re-scan
+              </button>
+            </div>
+
+            {breached.length > 0 && (
+              <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1" data-testid="breached-list">
+                {breached.slice(0, 50).map(({ entry, count }) => {
+                  const url = (entry.url || '') as string;
+                  const name = entry.name || 'Untitled';
+                  return (
+                    <li
+                      key={entry.id}
+                      className="flex items-center gap-3 p-2.5 rounded-xl border border-red-500/20 bg-red-500/5"
+                    >
+                      <Favicon url={url} name={name} className="w-9 h-9 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{name}</div>
+                        <div className="text-[11px] text-red-600 dark:text-red-400 font-medium">
+                          Seen {count.toLocaleString()} time{count === 1 ? '' : 's'} in breaches
+                        </div>
+                      </div>
+                      <Link href={`/passwords?id=${encodeURIComponent(entry.id)}`}>
+                        <button
+                          className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+                          data-testid={`change-now-${entry.id}`}
+                        >
+                          Change Now
+                        </button>
+                      </Link>
+                    </li>
+                  );
+                })}
+                {breached.length > 50 && (
+                  <li className="text-[11px] text-muted-foreground text-center py-1">
+                    Showing first 50 of {breached.length}. Address these first, then re-scan.
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {error && <div className="text-xs text-red-500" data-testid="breach-scan-error">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Stats card (safe / weak / breached) ──────────────────────────────────────
+function StatsCard({ safe, weak, breached }: { safe: number; weak: number; breached: number }) {
+  const tile = (color: string, label: string, value: number, testId: string) => (
+    <div className="flex-1 rounded-xl border border-border/40 bg-card p-3 text-center" data-testid={testId}>
+      <div className={`text-2xl font-extrabold tabular-nums ${color}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-0.5">{label}</div>
+    </div>
+  );
+  return (
+    <div className="flex gap-2">
+      {tile('text-emerald-500', 'Safe', safe, 'stat-safe')}
+      {tile('text-amber-500', 'Weak', weak, 'stat-weak')}
+      {tile('text-red-500', 'Breached', breached, 'stat-breached')}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SecurityHealth() {
   const { passwords, notes } = useVault();
@@ -217,6 +399,34 @@ export default function SecurityHealth() {
     () => calculateSecurityScore(passwords, masterPassword || ''),
     [passwords, masterPassword],
   );
+
+  const weakCount = useMemo(() => {
+    let n = 0;
+    for (const p of passwords) {
+      if (!p.password) continue;
+      const { level } = PasswordGenerator.calculateStrength(p.password);
+      if (level === 'weak' || level === 'medium') n++;
+    }
+    return n;
+  }, [passwords]);
+
+  // Read the most recent breach count from localStorage; updated by the scan card.
+  const [breachedCount, setBreachedCount] = useState(0);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const raw = localStorage.getItem('iv_breach_count');
+        const n = raw ? parseInt(raw, 10) : 0;
+        setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
+      } catch { /* noop */ }
+    };
+    read();
+    window.addEventListener('storage', read);
+    const t = setInterval(read, 1500);
+    return () => { window.removeEventListener('storage', read); clearInterval(t); };
+  }, []);
+
+  const safeCount = Math.max(0, passwords.length - weakCount - breachedCount);
 
   const achievements = useMemo(() => {
     let imported = false;
@@ -291,6 +501,18 @@ export default function SecurityHealth() {
             </p>
           </div>
         </div>
+      </motion.div>
+
+      {/* Stats: safe / weak / breached */}
+      {passwords.length > 0 && (
+        <motion.div variants={fadeUp}>
+          <StatsCard safe={safeCount} weak={weakCount} breached={breachedCount} />
+        </motion.div>
+      )}
+
+      {/* Dark web monitoring / breach scan */}
+      <motion.div variants={fadeUp}>
+        <BreachScanCard passwords={passwords} />
       </motion.div>
 
       {/* Tips card (collapsible) */}

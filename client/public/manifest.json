@@ -48,22 +48,34 @@
       "description": "Add a new password to your vault",
       "url": "/passwords?action=add",
       "icons": [
-        {
-          "src": "/icons/shortcut-add-password.png",
-          "sizes": "96x96"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     },
     {
-      "name": "View Subscriptions", 
+      "name": "Generate Password",
+      "short_name": "Generator",
+      "description": "Generate a strong, unique password",
+      "url": "/passwords?action=generate",
+      "icons": [
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Security Check",
+      "short_name": "Security",
+      "description": "Run a breach scan and review your security health",
+      "url": "/security-health",
+      "icons": [
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "View Subscriptions",
       "short_name": "Subscriptions",
       "description": "View and manage your subscriptions",
       "url": "/subscriptions",
       "icons": [
-        {
-          "src": "/icons/shortcut-subscriptions.png",
-          "sizes": "96x96"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     }
   ],

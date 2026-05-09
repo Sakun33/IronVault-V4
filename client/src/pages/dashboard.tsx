@@ -17,6 +17,7 @@ import { ImportExportModal } from "@/components/import-export-modal";
 import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { calculateSecurityScore, type SecurityBreakdown } from "@/lib/security-score";
+import { publishWidgetSnapshot } from "@/lib/widget-data";
 import { useAutoNotifications } from "@/hooks/use-auto-notifications";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
 import { apiBase } from "@/native/platform";
@@ -434,6 +435,34 @@ export default function Dashboard() {
 
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
 
+  // Breached-password count from the most recent /security-health scan
+  const [breachedCount, setBreachedCount] = useState(0);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const raw = localStorage.getItem('iv_breach_count');
+        const n = raw ? parseInt(raw, 10) : 0;
+        setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
+      } catch { /* noop */ }
+    };
+    read();
+    window.addEventListener('storage', read);
+    const t = setInterval(read, 2000);
+    return () => { window.removeEventListener('storage', read); clearInterval(t); };
+  }, []);
+
+  // Push the latest values to the shared App Group store so the iOS widget
+  // (and any other surface that reads `group.app.ironvault.shared`) stays
+  // in sync. No-op on web.
+  useEffect(() => {
+    publishWidgetSnapshot({
+      securityScore: breakdown.totalScore,
+      securityLevel: breakdown.level,
+      upcomingRenewals: upcomingRenewals.length,
+      breachedCount,
+    });
+  }, [breakdown.totalScore, breakdown.level, upcomingRenewals.length, breachedCount]);
+
   if (isLoading && stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && stats.totalExpenses === 0) {
     return (
       <div className="space-y-4 pb-6" data-testid="dashboard-loading">
@@ -536,6 +565,30 @@ export default function Dashboard() {
             <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors shrink-0">
               <Plus className="w-4 h-4" /> Add Password
             </button>
+          </Link>
+        </motion.div>
+      )}
+
+      {!isEmpty && breachedCount > 0 && (
+        <motion.div variants={fadeUp} data-testid="breach-alert-banner">
+          <Link href="/security-health">
+            <div className="rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-600/10 via-red-500/10 to-rose-500/10 hover:from-red-600/15 hover:to-rose-500/15 transition-colors px-4 py-3 flex items-center gap-3 cursor-pointer">
+              <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center ring-1 ring-red-500/30 flex-shrink-0">
+                <ShieldAlert className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-red-700 dark:text-red-400">
+                  {breachedCount} password{breachedCount === 1 ? '' : 's'} found in data breaches
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Tap to review and update compromised credentials.
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-red-600 dark:text-red-400 hidden sm:flex items-center gap-1">
+                View Details <ArrowRight className="w-3 h-3" />
+              </span>
+              <ChevronRight className="w-4 h-4 text-red-500 sm:hidden" />
+            </div>
           </Link>
         </motion.div>
       )}

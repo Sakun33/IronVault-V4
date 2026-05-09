@@ -84,7 +84,8 @@ import {
   UserX,
   Chrome,
   KeyRound,
-  Timer
+  Timer,
+  Sparkles
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { autoLockService } from '@/native/auto-lock';
@@ -1651,6 +1652,78 @@ export default function Profile() {
               )}
             </CardContent>
           </Card>
+
+          {/* What you're missing — free users only */}
+          {userProfile.subscription.tier === 'free' && (
+            <Card className="rounded-2xl shadow-sm border-indigo-200 dark:border-indigo-800 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-pink-500/5 overflow-hidden" data-testid="whats-missing-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-500" />
+                  What you're missing
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Side-by-side: your Free plan vs. IronVault Pro.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="text-left font-semibold py-2 pr-2">Feature</th>
+                        <th className="text-center font-semibold py-2 px-2 w-20">Free</th>
+                        <th className="text-center font-semibold py-2 pl-2 w-20">
+                          <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                            Pro <Crown className="w-3 h-3" />
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {[
+                        { f: 'Passwords',           free: '50',          pro: 'Unlimited' },
+                        { f: 'Notes',               free: '10',          pro: 'Unlimited' },
+                        { f: 'Subscriptions',       free: '10',          pro: 'Unlimited' },
+                        { f: 'Documents Vault',     free: false,         pro: true },
+                        { f: 'Shared expenses',     free: false,         pro: true },
+                        { f: 'Investment tracking', free: false,         pro: true },
+                        { f: 'Bank statement OCR',  free: false,         pro: true },
+                        { f: 'API key vault',       free: false,         pro: true },
+                        { f: 'Multi-vault',         free: '1 vault',     pro: 'Unlimited vaults' },
+                        { f: 'Cloud sync',          free: '50 MB',       pro: 'Unlimited' },
+                        { f: 'Dark web monitoring', free: 'Manual',      pro: 'Auto + alerts' },
+                        { f: 'Priority support',    free: false,         pro: true },
+                      ].map(({ f, free, pro }) => (
+                        <tr key={f}>
+                          <td className="py-2 pr-2 text-foreground/90">{f}</td>
+                          <td className="py-2 px-2 text-center">
+                            {typeof free === 'boolean'
+                              ? free
+                                ? <span className="text-emerald-500">✓</span>
+                                : <span className="text-muted-foreground/40">—</span>
+                              : <span className="text-muted-foreground tabular-nums">{free}</span>}
+                          </td>
+                          <td className="py-2 pl-2 text-center font-semibold">
+                            {typeof pro === 'boolean'
+                              ? <span className="text-emerald-500">✓</span>
+                              : <span className="text-indigo-600 dark:text-indigo-400 tabular-nums">{pro}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Button
+                  className="w-full mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold"
+                  onClick={() => setLocation('/upgrade')}
+                  data-testid="whats-missing-upgrade"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Upgrade to Pro
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Account Information Card */}
           <Card className="rounded-2xl shadow-sm border-border/50">

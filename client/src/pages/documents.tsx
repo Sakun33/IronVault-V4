@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
-import { UpgradeGate } from '@/components/upgrade-gate';
+import { FeaturePreview } from '@/components/feature-preview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BrandCard } from '@/components/brand-card';
 
@@ -786,7 +786,19 @@ export default function Documents() {
     }
   };
   
-  if (!licenseLoading && !isFeatureAvailable('documents')) return <UpgradeGate feature="Documents Vault" />;
+  if (!licenseLoading && !isFeatureAvailable('documents')) return (
+    <FeaturePreview
+      feature="Documents Vault"
+      description="Encrypted, offline-first storage for IDs, receipts, and contracts. Access them on any device, no third-party cloud."
+      bullets={[
+        'Unlimited document uploads',
+        'Built-in OCR — search the contents of scanned PDFs',
+        'Folders, tags, and one-tap secure sharing',
+        'AES-256 encrypted before it leaves your device',
+      ]}
+      mock="documents"
+    />
+  );
 
   return (
     <div className="space-y-6 overflow-x-hidden">

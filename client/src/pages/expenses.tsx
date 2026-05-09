@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
-import { UpgradeGate } from '@/components/upgrade-gate';
+import { FeaturePreview } from '@/components/feature-preview';
 import { useCurrency } from '@/contexts/currency-context';
 import { useSharedExpenses } from '@/hooks/use-shared-expenses';
 import {
@@ -80,7 +80,19 @@ export default function ExpensesPage() {
   // useSubscription helper, which can briefly disagree during cross-user
   // re-login while the entitlement sync is in flight.
   if (!licenseLoading && !plan.isPaid) {
-    return <UpgradeGate feature="Expense Tracking" />;
+    return (
+      <FeaturePreview
+        feature="Expense Tracking"
+        description="Splitwise-style shared expenses, settlements, and balance tracking — all encrypted, with no third-party server seeing the numbers."
+        bullets={[
+          'Group expenses with friends, roommates, or partners',
+          'Equal, exact, percentage, or share-based splits',
+          'Multi-currency support with auto-conversion',
+          'Settle up via UPI, cash, transfer — track every payment',
+        ]}
+        mock="expenses"
+      />
+    );
   }
 
   // ── Group detail screen ──────────────────────────────────────────────────

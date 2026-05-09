@@ -603,6 +603,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── /api/security/breach-check — HIBP k-anonymity proxy ────────────────────
+  // Client SHA-1s the password and sends only the first 5 hex chars. We
+  // forward to api.pwnedpasswords.com/range/{prefix} which returns every
+  // suffix that has appeared in a breach, with occurrence counts. The full
+  // password (and full hash) never leaves the device. Proxying server-side
+  // sidesteps mobile WebView CORS quirks and lets us add server-side cache.
+  if (path === "/api/security/breach-check" && req.method === "POST") {
+    const body = (req.body ?? {}) as { prefixes?: unknown };
+    const raw = Array.isArray(body.prefixes) ? body.prefixes : [];
+    if (raw.length === 0) return res.status(400).json({ error: "prefixes required" });
+    if (raw.length > 100) return res.status(400).json({ error: "max 100 prefixes per call" });
+
+    const prefixes: string[] = [];
+    for (const p of raw) {
+      if (typeof p !== "string") continue;
+      const up = p.toUpperCase();
+      if (/^[0-9A-F]{5}$/.test(up)) prefixes.push(up);
+    }
+    if (prefixes.length === 0) return res.status(400).json({ error: "no valid prefixes" });
+
+    const results: Record<string, Record<string, number>> = {};
+    await Promise.all(prefixes.map(async (prefix) => {
+      try {
+        const r = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+          headers: { "User-Agent": "IronVault/4.2 (breach-check)", "Add-Padding": "true" },
+        });
+        if (!r.ok) { results[prefix] = {}; return; }
+        const text = await r.text();
+        const map: Record<string, number> = {};
+        for (const line of text.split(/\r?\n/)) {
+          const [suffix, countStr] = line.split(":");
+          if (!suffix || !countStr) continue;
+          const count = parseInt(countStr, 10);
+          if (count > 0) map[suffix.toUpperCase()] = count;
+        }
+        results[prefix] = map;
+      } catch {
+        results[prefix] = {};
+      }
+    }));
+
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    return res.json({ results });
+  }
+
 
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: "DATABASE_URL not configured" });
