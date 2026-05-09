@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
@@ -153,6 +153,14 @@ export default function Passwords() {
     return map;
   }, [passwords]);
 
+  // Progressive rendering for large vaults. Render the first 50 rows
+  // immediately; load 50 more whenever the sentinel scrolls into view. Avoids
+  // the cost of mounting hundreds of `motion.div` rows up front (each with
+  // hover/tap handlers and a SwipeableRow gesture binding).
+  const WINDOW_PAGE = 50;
+  const [windowSize, setWindowSize] = useState(WINDOW_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
   const filteredPasswords = useMemo(() => {
     return passwords.filter(password => {
       const q = searchQuery.toLowerCase();
@@ -171,6 +179,34 @@ export default function Passwords() {
       return matchesSearch && matchesCategory && matchesStrength;
     });
   }, [passwords, searchQuery, categoryFilter, strengthFilter, strengthCache]);
+
+  // Reset the window whenever the filter set changes — without this the user
+  // could be looking at the 5th page of the previous filter when they apply
+  // a new one.
+  useEffect(() => {
+    setWindowSize(WINDOW_PAGE);
+  }, [searchQuery, categoryFilter, strengthFilter, viewMode]);
+
+  // IntersectionObserver — load the next page when the sentinel approaches
+  // the viewport. 600px rootMargin keeps scrolling smooth.
+  useEffect(() => {
+    if (filteredPasswords.length <= windowSize) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) {
+        setWindowSize(c => Math.min(c + WINDOW_PAGE, filteredPasswords.length));
+      }
+    }, { rootMargin: '600px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [filteredPasswords.length, windowSize]);
+
+  const visibleFilteredPasswords = useMemo(
+    () => filteredPasswords.slice(0, windowSize),
+    [filteredPasswords, windowSize]
+  );
+  const hasMorePasswords = filteredPasswords.length > windowSize;
 
   const selection = useMultiSelect(filteredPasswords);
 
@@ -408,10 +444,6 @@ export default function Passwords() {
               hidden: {},
               show: {
                 transition: {
-                  // For long lists, the 0.035s-per-child stagger turned a
-                  // 100-item list into a 3.5s entrance animation. Shrink the
-                  // stagger as the list grows so the whole grid lands within
-                  // ~600ms regardless of size.
                   staggerChildren: filteredPasswords.length > 60 ? 0.005 : 0.025,
                 },
               },
@@ -420,12 +452,7 @@ export default function Passwords() {
             animate="show"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
           >
-            {/* TODO QA-R2 H4: virtualize this list once it routinely exceeds
-                ~500 items. We've benchmarked 256 cards rendering smoothly,
-                but @tanstack/react-virtual will be required as users with
-                Pro plans grow their vaults into the thousands. Tracking
-                ticket: introduce virtualization in a focused refactor PR. */}
-            {filteredPasswords.map(password => {
+            {visibleFilteredPasswords.map(password => {
               const checked = selection.isSelected(password.id);
               const score = strengthCache.get(password.id)?.score ?? 0;
               const strengthColor = score < 30 ? 'from-red-500 to-rose-400' : score < 60 ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
@@ -494,6 +521,11 @@ export default function Passwords() {
                 </motion.div>
               );
             })}
+            {hasMorePasswords && (
+              <div ref={loadMoreRef} className="col-span-full py-6 text-center text-xs text-muted-foreground" data-testid="passwords-load-more">
+                Loading more… ({windowSize}/{filteredPasswords.length})
+              </div>
+            )}
           </motion.div>
         ) : filteredPasswords.length > 0 ? (
           <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
@@ -509,7 +541,7 @@ export default function Passwords() {
               initial="hidden"
               animate="show"
             >
-              {filteredPasswords.map((password, idx) => {
+              {visibleFilteredPasswords.map((password, idx) => {
                 const checked = selection.isSelected(password.id);
                 return (
                 <SwipeableRow
@@ -517,7 +549,7 @@ export default function Passwords() {
                   onDelete={() => handleDelete(password.id)}
                   deleteLabel="Delete"
                   disabled={selection.isSelectionMode}
-                  className={idx < filteredPasswords.length - 1 ? 'border-b border-border/50' : ''}
+                  className={idx < visibleFilteredPasswords.length - 1 || hasMorePasswords ? 'border-b border-border/50' : ''}
                 >
                   <motion.button
                     variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
@@ -550,6 +582,11 @@ export default function Passwords() {
                 </SwipeableRow>
                 );
               })}
+              {hasMorePasswords && (
+                <div ref={loadMoreRef} className="py-4 text-center text-xs text-muted-foreground" data-testid="passwords-load-more">
+                  Loading more… ({windowSize}/{filteredPasswords.length})
+                </div>
+              )}
             </motion.div>
           </Card>
         ) : (

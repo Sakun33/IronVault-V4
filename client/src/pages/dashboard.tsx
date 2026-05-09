@@ -5,10 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
   Clock, Globe, Upload, Shield, RefreshCw,
-  ChevronRight, CreditCard, Activity, Key, Calendar, TrendingUp,
-  Sparkles, ShieldAlert, ShieldCheck, ArrowRight,
+  ChevronRight, CreditCard, Activity, Key, TrendingUp,
+  Sparkles, ShieldAlert, ShieldCheck, ArrowRight, Search,
 } from "lucide-react";
-import { useState, useEffect, useMemo, useDeferredValue, useRef } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
@@ -38,21 +38,13 @@ const fadeUp = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
 };
-const stagger = { show: { transition: { staggerChildren: 0.07 } } };
+const stagger = { show: { transition: { staggerChildren: 0.06 } } };
 
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function getTimeEmoji(): string {
-  const h = new Date().getHours();
-  if (h >= 5 && h < 12) return '☀️';
-  if (h >= 12 && h < 17) return '🌤️';
-  if (h >= 17 && h < 21) return '🌅';
-  return '🌙';
 }
 
 function getUserName(accountEmail: string | null): string {
@@ -116,128 +108,224 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other': '#94a3b8',
 };
 
-const LEVEL_RING_COLOR: Record<SecurityBreakdown['level'], string> = {
-  Critical: '#ef4444',
-  'Needs Work': '#f59e0b',
-  Good: '#22c55e',
-  Excellent: '#10b981',
+const LEVEL_BADGE: Record<SecurityBreakdown['level'], { bg: string; text: string; ring: string; dot: string }> = {
+  Critical:     { bg: 'bg-red-500/15',     text: 'text-red-600 dark:text-red-400',         ring: 'ring-red-500/30',     dot: 'bg-red-500' },
+  'Needs Work': { bg: 'bg-amber-500/15',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/30',   dot: 'bg-amber-500' },
+  Good:         { bg: 'bg-emerald-500/15', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/30', dot: 'bg-emerald-500' },
+  Excellent:    { bg: 'bg-emerald-500/15', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/30', dot: 'bg-emerald-500' },
 };
 
-function SecurityRing({ breakdown, isEmpty = false }: { breakdown: SecurityBreakdown; isEmpty?: boolean }) {
-  const [animScore, setAnimScore] = useState(0);
-  const size = 96, sw = 8;
-  const r = (size - sw) / 2;
-  const cx = size / 2, cy = size / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = (animScore / 100) * circ;
-  const strokeColor = LEVEL_RING_COLOR[breakdown.level];
+// ─────────────────────────────────────────────────────────────────────────
+// Compact widget shells (memoized — pure presentational)
+// ─────────────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const t = setTimeout(() => setAnimScore(breakdown.totalScore), 200);
-    return () => clearTimeout(t);
-  }, [breakdown.totalScore]);
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
-      <defs>
-        <linearGradient id="dash-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={strokeColor} stopOpacity="1" />
-          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.7" />
-        </linearGradient>
-      </defs>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={sw} />
-      {!isEmpty && (
-        <circle
-          cx={cx} cy={cy} r={r} fill="none"
-          stroke="url(#dash-ring-grad)"
-          strokeWidth={sw}
-          strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${cx} ${cy})`}
-          style={{ transition: 'stroke-dasharray 1.4s cubic-bezier(0.4,0,0.2,1)' }}
-        />
-      )}
-      <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle"
-        fontSize={isEmpty ? '22' : '26'} fontWeight="800" fill="white">
-        {isEmpty ? '—' : animScore}
-      </text>
-      <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="middle"
-        fontSize="8" fontWeight="700" fill="rgba(255,255,255,0.7)" letterSpacing="0.08em">
-        {isEmpty ? 'EMPTY' : breakdown.level.toUpperCase()}
-      </text>
-    </svg>
-  );
-}
-
-function WidgetCard({
-  title, viewAllHref, children, empty, emptyText = 'Nothing here yet',
-  accentClass = 'bg-primary/10', iconEl,
+const SectionLabel = memo(function SectionLabel({
+  icon: Icon, label, action, count,
 }: {
-  title: string;
-  viewAllHref?: string;
-  children?: React.ReactNode;
-  empty?: boolean;
-  emptyText?: string;
-  accentClass?: string;
-  iconEl?: React.ReactNode;
+  icon?: React.ElementType;
+  label: string;
+  action?: { href?: string; onClick?: () => void; label: string };
+  count?: number;
 }) {
   return (
-    <div className="rounded-2xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
-        <div className="flex items-center gap-2">
-          {iconEl && (
-            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${accentClass}`}>
-              {iconEl}
-            </div>
-          )}
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        </div>
-        {viewAllHref && (
-          <Link href={viewAllHref}>
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-              All <ChevronRight className="w-3 h-3" />
-            </span>
-          </Link>
+    <div className="flex items-center justify-between mb-2.5 px-0.5">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        {Icon && <Icon className="w-3 h-3 text-primary" />}
+        {label}
+        {typeof count === 'number' && count > 0 && (
+          <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold tabular-nums">{count}</span>
         )}
-      </div>
-      <div className="px-3 py-3 flex-1">
-        {empty ? (
-          <div className="flex flex-col items-center justify-center py-7 text-center">
-            <Clock className="w-6 h-6 text-muted-foreground/25 mb-2" />
-            <p className="text-xs text-muted-foreground">{emptyText}</p>
-          </div>
-        ) : children}
-      </div>
+      </p>
+      {action && (
+        action.href
+          ? <Link href={action.href}><span className="text-[11px] font-medium text-primary hover:underline cursor-pointer">{action.label}</span></Link>
+          : <button onClick={action.onClick} className="text-[11px] font-medium text-primary hover:underline">{action.label}</button>
+      )}
     </div>
   );
-}
+});
 
-function ExpenseBars({
-  cats, fmt,
+const QuickStatCard = memo(function QuickStatCard({
+  label, value, accent, href, fmt,
 }: {
-  cats: { cat: string; amount: number; pct: number; color: string }[];
-  fmt: (n: number) => string;
+  label: string; value: number; accent: string; href: string; fmt?: (n: number) => string;
 }) {
   return (
-    <div className="space-y-3">
-      {cats.slice(0, 3).map(c => (
-        <div key={c.cat}>
-          <div className="flex justify-between items-center mb-1">
-            <span className="flex items-center gap-1.5 text-xs">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
-              <span className="text-foreground/80 truncate max-w-[140px]">{c.cat}</span>
-            </span>
-            <span className="text-xs font-medium text-muted-foreground tabular-nums">{fmt(c.amount)}</span>
+    <Link href={href}>
+      <motion.div
+        whileHover={{ y: -2 }}
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+        className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
+        style={{ borderTop: `2px solid ${accent}` }}
+      >
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</div>
+        <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">
+          {fmt ? fmt(value) : <AnimatedNumber value={value} />}
+        </div>
+      </motion.div>
+    </Link>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Insight carousel card
+// ─────────────────────────────────────────────────────────────────────────
+
+const INSIGHT_PALETTE: Record<string, { stripe: string; iconBg: string; tag: string }> = {
+  security: {
+    stripe: 'bg-emerald-500',
+    iconBg: 'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30',
+    tag: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  },
+  finance: {
+    stripe: 'bg-amber-500',
+    iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
+    tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  },
+  productivity: {
+    stripe: 'bg-blue-500',
+    iconBg: 'bg-blue-500/15 text-blue-500 ring-blue-500/30',
+    tag: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  },
+};
+
+const InsightCarouselCard = memo(function InsightCarouselCard({
+  ins, onDismiss,
+}: {
+  ins: Insight; onDismiss: (id: string) => void;
+}) {
+  const Icon = (LucideIcons as any)[ins.icon] || Sparkles;
+  const palette = INSIGHT_PALETTE[ins.category] ?? INSIGHT_PALETTE.productivity;
+  const inner = (
+    <motion.div
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+      className="snap-start flex-shrink-0 w-[260px] sm:w-[280px] rounded-2xl border border-border/50 bg-card backdrop-blur-md hover:shadow-md transition-all cursor-pointer overflow-hidden"
+      style={{ maxHeight: 120, minHeight: 120 }}
+    >
+      <div className={`h-1 w-full ${palette.stripe}`} />
+      <div className="px-3 py-2.5 flex flex-col gap-1.5 h-[calc(120px-4px)]">
+        <div className="flex items-center gap-2">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${palette.iconBg}`}>
+            <Icon className="w-3.5 h-3.5" />
           </div>
-          <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
-            <div className="h-full rounded-full"
-              style={{ width: `${Math.min(c.pct, 100)}%`, background: c.color, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
+          <div className="text-sm font-semibold text-foreground leading-snug truncate flex-1 min-w-0">{ins.title}</div>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(ins.id); }}
+            className="text-[16px] leading-none text-muted-foreground/60 hover:text-foreground -mr-1 px-1"
+            aria-label="Dismiss insight"
+          >
+            ×
+          </button>
+        </div>
+        <div className="text-[11px] text-muted-foreground leading-snug line-clamp-1">{ins.description}</div>
+        <div className="mt-auto flex items-center justify-between">
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${palette.tag}`}>{ins.category}</span>
+          {ins.actionUrl && (
+            <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5">
+              Open <ArrowRight className="w-3 h-3" />
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+  return ins.actionUrl ? <Link href={ins.actionUrl}>{inner}</Link> : <div>{inner}</div>;
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Security alert carousel card
+// ─────────────────────────────────────────────────────────────────────────
+
+type AlertItem = { icon: React.ElementType; text: string; sub: string; variant: 'red' | 'amber' | 'scan'; href?: string };
+
+const AlertCarouselCard = memo(function AlertCarouselCard({ a }: { a: AlertItem }) {
+  const Icon = a.icon;
+  const tone = a.variant === 'red'
+    ? {
+        border: 'border-l-red-500',
+        iconBg: 'bg-red-500/15 text-red-500',
+        cta: 'text-red-600 dark:text-red-400',
+        ctaLabel: 'Fix now',
+      }
+    : a.variant === 'amber'
+      ? {
+          border: 'border-l-amber-500',
+          iconBg: 'bg-amber-500/15 text-amber-500',
+          cta: 'text-amber-600 dark:text-amber-400',
+          ctaLabel: 'Review',
+        }
+      : {
+          border: 'border-l-indigo-500',
+          iconBg: 'bg-indigo-500/15 text-indigo-500',
+          cta: 'text-indigo-600 dark:text-indigo-400',
+          ctaLabel: 'Scan now',
+        };
+  const inner = (
+    <motion.div
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] rounded-2xl bg-card border border-border/50 border-l-4 ${tone.border} backdrop-blur-md hover:shadow-md transition-all cursor-pointer overflow-hidden px-3.5 py-3 flex flex-col gap-1.5`}
+      style={{ maxHeight: 120, minHeight: 120 }}
+    >
+      <div className="flex items-center gap-2">
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone.iconBg}`}>
+          <Icon className="w-3.5 h-3.5" />
+        </div>
+        <div className="text-sm font-semibold text-foreground leading-snug truncate flex-1 min-w-0">{a.text}</div>
+      </div>
+      <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2">{a.sub}</div>
+      <div className="mt-auto flex items-center justify-end">
+        <span className={`text-[11px] font-semibold inline-flex items-center gap-0.5 ${tone.cta}`}>
+          {tone.ctaLabel} <ArrowRight className="w-3 h-3" />
+        </span>
+      </div>
+    </motion.div>
+  );
+  return a.href ? <Link href={a.href}>{inner}</Link> : <div>{inner}</div>;
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Recent activity row (memoized — list rendering hot path)
+// ─────────────────────────────────────────────────────────────────────────
+
+type ActivityItem = {
+  id: string;
+  text: string;
+  action: string;
+  icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
+  timestamp: Date;
+  href: string;
+};
+
+const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) {
+  const Icon = item.icon;
+  return (
+    <Link href={item.href}>
+      <div className="relative flex items-center gap-3 pl-1 py-1.5 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer">
+        <div className={`w-7 h-7 rounded-full ${item.iconBg} ring-2 ring-background flex items-center justify-center flex-shrink-0 z-10 shadow-sm`}>
+          <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-foreground truncate">{item.text}</div>
+          <div className="text-[11px] text-muted-foreground">
+            {formatDistanceToNow(item.timestamp, { addSuffix: true })}
           </div>
         </div>
-      ))}
-    </div>
+        <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">{item.action}</span>
+      </div>
+    </Link>
   );
-}
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Main dashboard
+// ─────────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
@@ -306,26 +394,22 @@ export default function Dashboard() {
   const userName = serverName || getUserName(accountEmail);
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
+  // Defer the score so a slow recompute can't block the urgent UI render.
+  const deferredPasswords = useDeferredValue(passwords);
+  const deferredSubs = useDeferredValue(subscriptions);
+  const deferredExpenses = useDeferredValue(expenses);
+
   const breakdown = useMemo(
-    () => calculateSecurityScore(passwords as any, masterPassword || ''),
-    [passwords, masterPassword]
+    () => calculateSecurityScore(deferredPasswords as any, masterPassword || ''),
+    [deferredPasswords, masterPassword]
   );
 
-  // Track previous score outside of useMemo (side-effects in useMemo are an
-  // anti-pattern — they fire on every memo recompute). We snapshot the
-  // previous score once, then persist the new one as a side-effect.
   const prevScoreRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     prevScoreRef.current = recordSecurityScore(breakdown.totalScore);
   }, [breakdown.totalScore]);
 
-  // Smart Insights — pattern-based, all client-side. Defer compute so
-  // a slow generateInsights() pass can't block the urgent UI render.
-  const [insightsExpanded, setInsightsExpanded] = useState(false);
   const [insightsTick, setInsightsTick] = useState(0);
-  const deferredPasswords = useDeferredValue(passwords);
-  const deferredSubs = useDeferredValue(subscriptions);
-  const deferredExpenses = useDeferredValue(expenses);
   const insights = useMemo<Insight[]>(() => {
     return generateInsights({
       passwords: deferredPasswords as any,
@@ -337,6 +421,8 @@ export default function Dashboard() {
     // insightsTick included so dismiss triggers a refresh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deferredPasswords, deferredSubs, deferredExpenses, breakdown.totalScore, insightsTick]);
+
+  const insightsTop4 = useMemo(() => insights.slice(0, 4), [insights]);
 
   const todayReminders = useMemo(() =>
     reminders
@@ -356,7 +442,7 @@ export default function Dashboard() {
         return d >= 0 && d <= 7;
       })
       .sort((a, b) => new Date(a.nextBillingDate).getTime() - new Date(b.nextBillingDate).getTime())
-      .slice(0, 4),
+      .slice(0, 3),
     [subscriptions]
   );
 
@@ -378,48 +464,7 @@ export default function Dashboard() {
       .reduce((sum, e) => sum + (e.amount || 0), 0);
   }, [expenses]);
 
-  const lastMonthExpenses = useMemo(() => {
-    const now = new Date();
-    const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-    return expenses
-      .filter(e => {
-        const d = new Date(e.date);
-        return d.getFullYear() === lastMonthYear && d.getMonth() === lastMonth;
-      })
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [expenses]);
-
-  const expenseDeltaPct = lastMonthExpenses > 0
-    ? Math.round(((thisMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100)
-    : null;
-
-  const todayExpenses = useMemo(() =>
-    expenses
-      .filter(e => isToday(new Date(e.date)))
-      .reduce((sum, e) => sum + (e.amount || 0), 0),
-    [expenses]
-  );
-
-  const topExpenseCategories = useMemo(() => {
-    const byCategory: Record<string, number> = {};
-    expenses.forEach(e => {
-      const cat = e.category || 'Other';
-      byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0);
-    });
-    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
-    if (total === 0) return [];
-    return Object.entries(byCategory)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([cat, amount]) => ({
-        cat, amount,
-        pct: (amount / total) * 100,
-        color: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS['Other'],
-      }));
-  }, [expenses]);
-
-  const recentActivity = useMemo(() => {
+  const recentActivity = useMemo<ActivityItem[]>(() => {
     const safeDate = (v: unknown): Date => {
       const d = new Date(v as any);
       return isNaN(d.getTime()) ? new Date(0) : d;
@@ -434,12 +479,11 @@ export default function Dashboard() {
     return items
       .filter(item => !normalizedSearch || (item.text ?? '').toLowerCase().includes(normalizedSearch))
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, 6);
+      .slice(0, 5);
   }, [passwords, notes, expenses, reminders, subscriptions, normalizedSearch]);
 
-  const criticalAlerts = useMemo(() => {
-    type Alert = { icon: React.ElementType; text: string; sub: string; variant: 'red' | 'amber'; href?: string };
-    const alerts: Alert[] = [];
+  const criticalAlerts = useMemo<AlertItem[]>(() => {
+    const alerts: AlertItem[] = [];
     const c = breakdown.categories;
     if (c.passwordStrength.score < 20 && passwords.length > 0) {
       alerts.push({ icon: AlertTriangle, text: 'Weak passwords detected', sub: c.passwordStrength.detail, variant: 'red', href: '/passwords?strength=weak' });
@@ -464,10 +508,7 @@ export default function Dashboard() {
 
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
 
-  // Breached-password count from the most recent breach scan. Reads once on
-  // mount, then listens for the same-tab `BREACH_COUNT_EVENT` (fired by
-  // breach-checker after every scan/persist) plus the cross-tab `storage`
-  // event. The previous 2s polling loop was burning ~30 reads/min for nothing.
+  // Breached-password count from the most recent breach scan.
   const [breachedCount, setBreachedCount] = useState(() => {
     try {
       const raw = localStorage.getItem('iv_breach_count');
@@ -487,13 +528,8 @@ export default function Dashboard() {
         setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
       } catch { /* noop */ }
     };
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'iv_breach_count') update();
-    };
-    const onCustom = (e: Event) => {
-      const detail = (e as CustomEvent<number>).detail;
-      update(detail);
-    };
+    const onStorage = (e: StorageEvent) => { if (e.key === 'iv_breach_count') update(); };
+    const onCustom = (e: Event) => { update((e as CustomEvent<number>).detail); };
     window.addEventListener('storage', onStorage);
     window.addEventListener('iv:breach-count-changed', onCustom);
     return () => {
@@ -502,9 +538,7 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Push the latest values to the shared App Group store so the iOS widget
-  // (and any other surface that reads `group.app.ironvault.shared`) stays
-  // in sync. No-op on web.
+  // Push the latest values to the shared App Group store so the iOS widget stays in sync.
   useEffect(() => {
     publishWidgetSnapshot({
       securityScore: breakdown.totalScore,
@@ -513,6 +547,29 @@ export default function Dashboard() {
       breachedCount,
     });
   }, [breakdown.totalScore, breakdown.level, upcomingRenewals.length, breachedCount]);
+
+  // Build the security alert list (always include the leak-scan tail card so
+  // /security-health gets a clear entry point even when no critical issues).
+  const alertCards = useMemo<AlertItem[]>(() => {
+    const out: AlertItem[] = [...criticalAlerts];
+    if (breachedCount > 0) {
+      out.unshift({
+        icon: ShieldAlert,
+        text: `${breachedCount} password${breachedCount === 1 ? '' : 's'} in breaches`,
+        sub: 'Tap to review and update compromised credentials.',
+        variant: 'red',
+        href: '/security-health',
+      });
+    }
+    out.push({
+      icon: Search,
+      text: 'Scan for leaks',
+      sub: 'Run a fresh dark-web scan against HIBP',
+      variant: 'scan',
+      href: '/security-health',
+    });
+    return out;
+  }, [criticalAlerts, breachedCount]);
 
   if (isLoading && stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && stats.totalExpenses === 0) {
     return (
@@ -525,60 +582,37 @@ export default function Dashboard() {
     );
   }
 
+  const levelStyle = LEVEL_BADGE[breakdown.level];
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6" data-testid="dashboard-today">
 
+      {/* ─── Section 1 · Compact hero ──────────────────────────────────── */}
       <motion.div variants={fadeUp}
-        className="rounded-3xl overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 dark:from-indigo-950 dark:via-indigo-900 dark:to-purple-950 shadow-xl shadow-indigo-500/20">
-        <div className="relative p-5 sm:p-6">
-          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-          <div className="absolute bottom-0 left-1/3 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 pointer-events-none" />
-
-          <div className="mb-5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-indigo-200/80 mb-1">
-              <Sparkles className="w-3 h-3" />
-              <span>Today · {format(new Date(), 'EEE, MMM d')}</span>
+        className="rounded-2xl border border-border/50 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent backdrop-blur-md px-4 py-3.5 sm:py-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-base sm:text-lg font-bold text-foreground truncate">
+              {getGreeting()}{userName ? `, ${userName}` : ''}
             </div>
-            <h1 className="text-[22px] sm:text-2xl font-bold text-white leading-snug">
-              {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
-            </h1>
+            <div className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</div>
           </div>
-
-          <div className="flex items-center gap-5 mb-5">
-            <SecurityRing breakdown={breakdown} isEmpty={isEmpty} />
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Bell className="w-3.5 h-3.5 text-orange-300 flex-shrink-0" />
-                <span className="text-sm text-indigo-100">
-                  <span className="font-semibold">{todayReminders.length}</span> reminder{todayReminders.length === 1 ? '' : 's'} today
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
-                <span className="text-sm text-indigo-100">
-                  Subs: <span className="font-semibold">{fmtAmt(monthlySubSpend)}</span>/mo
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
-                <span className="text-sm text-indigo-100">
-                  Spent today: <span className="font-semibold">{fmtAmt(todayExpenses)}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button onClick={handleRefresh} disabled={isRefreshing}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
               data-testid="hero-refresh"
-              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all disabled:opacity-50 active:scale-95 shadow-sm">
-              <RefreshCw className={`w-3.5 h-3.5 flex-shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="truncate">Refresh</span>
+              aria-label="Refresh dashboard"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <Select value={currency} onValueChange={setCurrency}>
               <SelectTrigger
-                className="h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium focus:ring-0 gap-1.5 shadow-sm w-full justify-center [&>svg]:text-white/60 [&>svg:last-child]:ml-0">
-                <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                aria-label="Currency"
+                className="h-9 px-2.5 rounded-xl bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground border-0 text-xs font-medium gap-1 [&>svg:last-child]:ml-0 focus:ring-0"
+              >
+                <Globe className="w-3.5 h-3.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -589,20 +623,43 @@ export default function Dashboard() {
                 ))}
               </SelectContent>
             </Select>
-            <button onClick={() => setShowImportExport(true)}
-              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all active:scale-95 shadow-sm">
-              <Upload className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="truncate">Import</span>
-            </button>
-            <button onClick={() => setShowGenerator(true)}
-              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all active:scale-95 shadow-sm">
-              <Key className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="truncate">Generator</span>
+            <button
+              onClick={() => setShowImportExport(true)}
+              aria-label="Import / export"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
             </button>
           </div>
         </div>
+
+        {/* Security badge row → single line, links to /security-health */}
+        <Link href="/security-health">
+          <div
+            data-testid="security-badge-row"
+            className={`flex items-center gap-3 rounded-xl bg-card/60 border border-border/40 px-3 py-2.5 cursor-pointer hover:bg-card transition-colors group`}
+          >
+            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${levelStyle.ring} ${levelStyle.bg}`}>
+              {isEmpty
+                ? <Shield className="w-4 h-4 text-muted-foreground" />
+                : <span className={`text-sm font-bold tabular-nums ${levelStyle.text}`}>{breakdown.totalScore}</span>}
+              <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${levelStyle.dot} ring-2 ring-background`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground">Security score</div>
+              <div className={`text-sm font-semibold ${levelStyle.text}`}>
+                {isEmpty ? 'Vault empty' : breakdown.level}
+              </div>
+            </div>
+            <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5 flex-shrink-0">
+              View Report
+              <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </div>
+        </Link>
       </motion.div>
 
+      {/* ─── Empty state ──────────────────────────────────────────────── */}
       {isEmpty && (
         <motion.div variants={fadeUp}
           className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-col sm:flex-row items-center gap-4">
@@ -621,325 +678,154 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {!isEmpty && breachedCount > 0 && (
-        <motion.div variants={fadeUp} data-testid="breach-alert-banner">
-          <Link href="/security-health">
-            <div className="rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-600/10 via-red-500/10 to-rose-500/10 hover:from-red-600/15 hover:to-rose-500/15 transition-colors px-4 py-3 flex items-center gap-3 cursor-pointer">
-              <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center ring-1 ring-red-500/30 flex-shrink-0">
-                <ShieldAlert className="w-5 h-5 text-red-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-red-700 dark:text-red-400">
-                  {breachedCount} password{breachedCount === 1 ? '' : 's'} found in data breaches
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  Tap to review and update compromised credentials.
-                </div>
-              </div>
-              <span className="text-xs font-semibold text-red-600 dark:text-red-400 hidden sm:flex items-center gap-1">
-                View Details <ArrowRight className="w-3 h-3" />
-              </span>
-              <ChevronRight className="w-4 h-4 text-red-500 sm:hidden" />
-            </div>
-          </Link>
-        </motion.div>
-      )}
-
-      {!isEmpty && criticalAlerts.length > 0 && (
-        <motion.div variants={fadeUp} data-testid="security-alerts-banner">
-          <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldAlert className="w-3 h-3 text-red-500" />
-              Security Alerts
-              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold tabular-nums">
-                {criticalAlerts.length}
-              </span>
-            </p>
-            <Link href="/profile?tab=security">
-              <span className="text-[11px] font-medium text-primary hover:underline cursor-pointer">
-                Review all
-              </span>
-            </Link>
-          </div>
-          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-2.5 sm:grid sm:grid-cols-3 pr-4 sm:pr-0 snap-x snap-mandatory">
-              {criticalAlerts.map((a, i) => {
-                const Icon = a.icon;
-                const tone = a.variant === 'red'
-                  ? {
-                      ring: 'border-red-500/30',
-                      bg: 'from-red-500/10 via-rose-500/5 to-red-500/5',
-                      iconBg: 'bg-red-500/15 text-red-500 ring-red-500/30',
-                      tag: 'bg-red-500/15 text-red-600 dark:text-red-400',
-                      label: 'Critical',
-                    }
-                  : {
-                      ring: 'border-amber-500/30',
-                      bg: 'from-amber-500/10 via-orange-500/5 to-amber-500/5',
-                      iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
-                      tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-                      label: 'Warning',
-                    };
-                const inner = (
-                  <motion.div
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-                    className={`snap-start min-w-[260px] sm:min-w-0 flex-shrink-0 rounded-2xl border ${tone.ring} bg-gradient-to-br ${tone.bg} backdrop-blur-md p-3.5 cursor-pointer hover:shadow-md transition-all flex flex-col gap-2.5 h-full`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${tone.iconBg}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${tone.tag}`}>
-                        {tone.label}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-foreground leading-snug">{a.text}</div>
-                      <div className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-2">{a.sub}</div>
-                    </div>
-                    <div className="flex items-center justify-end gap-1 text-[11px] font-semibold text-primary">
-                      Fix now <ArrowRight className="w-3 h-3" />
-                    </div>
-                  </motion.div>
-                );
-                return a.href
-                  ? <Link key={a.text} href={a.href}>{inner}</Link>
-                  : <div key={a.text}>{inner}</div>;
-              })}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {!isEmpty && criticalAlerts.length === 0 && (
-        <motion.div variants={fadeUp}
-          data-testid="security-all-clear"
-          className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Security looking good</div>
-            <div className="text-[11px] text-muted-foreground">No critical issues — score {breakdown.totalScore}/100.</div>
-          </div>
-        </motion.div>
-      )}
-
-      <motion.div variants={fadeUp}>
-        <WidgetCard
-          title="Today's Reminders"
-          viewAllHref="/reminders"
-          empty={todayReminders.length === 0}
-          emptyText="Nothing due today — clear sky"
-          accentClass="bg-orange-500/10"
-          iconEl={<Bell className="w-3.5 h-3.5 text-orange-500" />}
-        >
-          <div className="space-y-0.5" data-testid="today-reminders">
-            {todayReminders.slice(0, 5).map(r => (
-              <Link key={r.id} href="/reminders">
-                <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">{r.title}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{r.priority} priority</div>
-                  </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 bg-red-500/10 text-red-500">
-                    Today
-                  </span>
-                </div>
-              </Link>
-            ))}
-            {todayReminders.length > 5 && (
-              <Link href="/reminders">
-                <div className="text-xs text-muted-foreground hover:text-foreground text-center py-2 cursor-pointer">
-                  +{todayReminders.length - 5} more today
-                </div>
-              </Link>
-            )}
-          </div>
-        </WidgetCard>
+      {/* ─── Section 2 · Quick stats row ──────────────────────────────── */}
+      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-testid="quick-stats">
+        <QuickStatCard label="Passwords" value={stats.totalPasswords} accent="#6366f1" href="/passwords" />
+        <QuickStatCard label="Notes" value={stats.totalNotes} accent="#f59e0b" href="/notes" />
+        <Link href="/subscriptions">
+          <motion.div
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+            className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
+            style={{ borderTop: '2px solid #a855f7' }}
+          >
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Subs / mo</div>
+            <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">{fmtAmt(monthlySubSpend)}</div>
+          </motion.div>
+        </Link>
+        <Link href="/expenses">
+          <motion.div
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+            className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
+            style={{ borderTop: '2px solid #22c55e' }}
+          >
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Spent / mo</div>
+            <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">{fmtAmt(thisMonthExpenses)}</div>
+          </motion.div>
+        </Link>
       </motion.div>
 
+      {/* ─── Section 3 · Security alerts (horizontal scroll) ─────────── */}
+      {!isEmpty && (
+        <motion.div variants={fadeUp} data-testid="security-alerts-banner">
+          <SectionLabel
+            icon={ShieldAlert}
+            label="Security Alerts"
+            count={criticalAlerts.length + (breachedCount > 0 ? 1 : 0)}
+            action={{ href: '/security-health', label: 'Open report' }}
+          />
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide" data-testid="breach-alert-banner">
+            <div className="flex gap-2.5 snap-x snap-mandatory pr-4 sm:pr-0">
+              {alertCards.map((a, i) => (
+                <AlertCarouselCard key={`${a.text}-${i}`} a={a} />
+              ))}
+            </div>
+          </div>
+          {criticalAlerts.length === 0 && breachedCount === 0 && (
+            <div data-testid="security-all-clear" className="hidden">All clear · {breakdown.totalScore}/100</div>
+          )}
+        </motion.div>
+      )}
+
+      {/* ─── Section 4 · Quick actions (compact 2x2 / 4-col on desktop) ── */}
       <motion.div variants={fadeUp}>
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Quick Actions</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" data-testid="quick-actions">
+        <SectionLabel label="Quick Actions" />
+        <div className="grid grid-cols-4 gap-2.5" data-testid="quick-actions">
           {([
             { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'from-indigo-500 to-indigo-600' },
             { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'from-amber-500 to-orange-500' },
             { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bg: 'from-emerald-500 to-green-600' },
-            { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bg: 'from-orange-500 to-red-500' },
-            { label: 'Subscription', icon: CreditCard, href: '/subscriptions?action=add', bg: 'from-purple-500 to-fuchsia-500' },
             { label: 'Generator', icon: Key, bg: 'from-cyan-500 to-sky-500', onClick: () => setShowGenerator(true) },
           ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
             const inner = (
               <motion.div
-                whileHover={{ y: -2, scale: 1.01 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-                className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer h-full"
+                aria-label={label}
+                title={label}
+                className="flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer h-full"
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-md`}>
-                  <Icon className="w-5 h-5 text-white" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-sm`}>
+                  <Icon className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-xs font-medium text-foreground text-center leading-tight">{label}</span>
+                <span className="hidden sm:inline text-xs font-medium text-foreground text-center leading-tight">{label}</span>
               </motion.div>
             );
             if (href) return <Link key={label} href={href}>{inner}</Link>;
-            return <button key={label} onClick={onClick} className="text-left w-full">{inner}</button>;
+            return <button key={label} onClick={onClick} className="text-left w-full" aria-label={label}>{inner}</button>;
           })}
         </div>
       </motion.div>
 
-      {insights.length > 0 && (
+      {/* ─── Section 5 · Insights carousel (horizontal scroll) ─────── */}
+      {insightsTop4.length > 0 && (
         <motion.div variants={fadeUp} data-testid="smart-insights">
-          <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-indigo-500" /> Smart Insights
-            </p>
-            {insights.length > 4 && (
-              <button
-                className="text-[11px] font-medium text-primary hover:underline"
-                onClick={() => setInsightsExpanded((v) => !v)}
-                data-testid="insights-toggle-all"
-              >
-                {insightsExpanded ? 'Show top 4' : `See all ${insights.length}`}
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {(insightsExpanded ? insights : insights.slice(0, 4)).map((ins) => {
-              const Icon = (LucideIcons as any)[ins.icon] || Sparkles;
-              const palette =
-                ins.category === 'security'
-                  ? {
-                      grad: 'from-emerald-500/10 via-emerald-500/5 to-transparent',
-                      ring: 'border-emerald-500/30',
-                      iconBg: 'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30',
-                      tag: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-                    }
-                  : ins.category === 'finance'
-                  ? {
-                      grad: 'from-amber-500/10 via-amber-500/5 to-transparent',
-                      ring: 'border-amber-500/30',
-                      iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
-                      tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-                    }
-                  : {
-                      grad: 'from-blue-500/10 via-blue-500/5 to-transparent',
-                      ring: 'border-blue-500/30',
-                      iconBg: 'bg-blue-500/15 text-blue-500 ring-blue-500/30',
-                      tag: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-                    };
-              const priorityRing =
-                ins.priority === 'high' ? 'ring-1 ring-red-500/40' : '';
-              const inner = (
-                <motion.div
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-                  className={`group relative flex flex-col gap-2.5 p-3.5 rounded-2xl border ${palette.ring} bg-gradient-to-br ${palette.grad} bg-card backdrop-blur-md hover:shadow-md transition-all cursor-pointer h-full ${priorityRing}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${palette.iconBg}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${palette.tag}`}>
-                      {ins.category}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-foreground leading-snug">{ins.title}</div>
-                    <div className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-3">{ins.description}</div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 mt-auto">
-                    {ins.actionUrl ? (
-                      <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
-                        Take action <ArrowRight className="w-3 h-3" />
-                      </span>
-                    ) : <span />}
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissInsight(ins.id); setInsightsTick((t) => t + 1); }}
-                      className="text-[10px] text-muted-foreground/70 hover:text-foreground px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 sm:transition-opacity"
-                      aria-label="Dismiss insight"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </motion.div>
-              );
-              return ins.actionUrl
-                ? <Link key={ins.id} href={ins.actionUrl}>{inner}</Link>
-                : <div key={ins.id}>{inner}</div>;
-            })}
+          <SectionLabel icon={Sparkles} label="Smart Insights" />
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-2.5 snap-x snap-mandatory pr-4 sm:pr-0">
+              {insightsTop4.map((ins) => (
+                <InsightCarouselCard
+                  key={ins.id}
+                  ins={ins}
+                  onDismiss={(id) => { dismissInsight(id); setInsightsTick((t) => t + 1); }}
+                />
+              ))}
+            </div>
           </div>
         </motion.div>
       )}
 
-      <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <WidgetCard
-          title={`${format(new Date(), 'MMMM')} Spending`}
-          viewAllHref="/expenses"
-          empty={topExpenseCategories.length === 0}
-          emptyText="No expenses recorded yet"
-          accentClass="bg-emerald-500/10"
-          iconEl={<TrendingUp className="w-3.5 h-3.5 text-emerald-500" />}
-        >
-          <div className="mb-3" data-testid="financial-summary">
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold tabular-nums text-foreground">
-                {fmtAmt(thisMonthExpenses)}
-              </div>
-              {expenseDeltaPct !== null && (
-                <span
-                  className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
-                    expenseDeltaPct > 0
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                      : expenseDeltaPct < 0
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {expenseDeltaPct > 0 ? '↑' : expenseDeltaPct < 0 ? '↓' : '·'} {Math.abs(expenseDeltaPct)}%
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[11px]">
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Today: <span className="font-semibold text-foreground tabular-nums">{fmtAmt(todayExpenses)}</span>
-              </span>
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                Subs: <span className="font-semibold text-foreground tabular-nums">{fmtAmt(monthlySubSpend)}</span>/mo
-              </span>
-            </div>
+      {/* ─── Section 6 · Today's reminders (compact, only if any) ─── */}
+      {todayReminders.length > 0 && (
+        <motion.div variants={fadeUp}>
+          <SectionLabel
+            icon={Bell}
+            label="Today"
+            count={todayReminders.length}
+            action={todayReminders.length > 3 ? { href: '/reminders', label: 'See all' } : undefined}
+          />
+          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden divide-y divide-border/30" data-testid="today-reminders">
+            {todayReminders.slice(0, 3).map(r => (
+              <Link key={r.id} href="/reminders">
+                <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors cursor-pointer">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">{r.title}</div>
+                    <div className="text-[11px] text-muted-foreground capitalize">{r.priority} priority</div>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                </div>
+              </Link>
+            ))}
           </div>
-          <ExpenseBars cats={topExpenseCategories} fmt={fmtAmt} />
-        </WidgetCard>
+        </motion.div>
+      )}
 
-        <WidgetCard
-          title="Upcoming Renewals"
-          viewAllHref="/subscriptions"
-          empty={upcomingRenewals.length === 0}
-          emptyText="No renewals in the next 7 days"
-          accentClass="bg-purple-500/10"
-          iconEl={<Calendar className="w-3.5 h-3.5 text-purple-500" />}
-        >
-          <div className="space-y-0.5">
+      {/* ─── Section 7 · Upcoming renewals (max 3, compact list) ──── */}
+      {upcomingRenewals.length > 0 && (
+        <motion.div variants={fadeUp}>
+          <SectionLabel
+            icon={CreditCard}
+            label="Upcoming Renewals"
+            action={{ href: '/subscriptions', label: 'See all' }}
+          />
+          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden divide-y divide-border/30">
             {upcomingRenewals.map(s => {
               const daysLeft = s.nextBillingDate ? differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) : 99;
               const urgent = daysLeft <= 3;
               return (
                 <Link key={s.id} href="/subscriptions">
-                  <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
-                    <Favicon url={s.platformLink} name={s.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                  <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors cursor-pointer">
+                    <Favicon url={s.platformLink} name={s.name} className="w-7 h-7 flex-shrink-0 rounded-lg" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
-                      <div className="text-xs text-muted-foreground">{fmtAmt(s.cost || 0)}</div>
+                      <div className="text-[11px] text-muted-foreground tabular-nums">{fmtAmt(s.cost || 0)}</div>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${urgent ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 tabular-nums ${urgent ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
                       {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1d' : `${daysLeft}d`}
                     </span>
                   </div>
@@ -947,87 +833,92 @@ export default function Dashboard() {
               );
             })}
           </div>
-        </WidgetCard>
-      </motion.div>
+        </motion.div>
+      )}
 
-      <motion.div variants={fadeUp} className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-        {[
-          { icon: Lock, label: 'Passwords', value: stats.totalPasswords, href: '/passwords', accent: '#6366f1' },
-          { icon: FileText, label: 'Notes', value: stats.totalNotes, href: '/notes', accent: '#f59e0b' },
-          { icon: CreditCard, label: 'Subs', value: stats.activeSubscriptions, href: '/subscriptions', accent: '#a855f7' },
-          { icon: DollarSign, label: 'Expenses', value: stats.totalExpenses, href: '/expenses', accent: '#22c55e' },
-          { icon: Bell, label: 'Reminders', value: stats.totalReminders, href: '/reminders', accent: '#f97316' },
-          { icon: Shield, label: 'Documents', value: stats.totalBankStatements, href: '/documents', accent: '#64748b' },
-        ].map((s, i) => (
-          <Link key={s.label} href={s.href}>
-            <motion.div
-              whileHover={{ y: -2 }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-              className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <s.icon className="w-3 h-3 flex-shrink-0" style={{ color: s.accent }} />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{s.label}</span>
-              </div>
-              <div className="text-lg font-bold tabular-nums text-foreground">
-                <AnimatedNumber value={s.value} delay={0.04 * i} />
-              </div>
-            </motion.div>
-          </Link>
-        ))}
-      </motion.div>
+      {/* ─── Section 8 · Recent activity (compact timeline, max 5) ── */}
+      {recentActivity.length > 0 && (
+        <motion.div variants={fadeUp}>
+          <SectionLabel
+            icon={Activity}
+            label="Recent Activity"
+            action={{ href: '/logging', label: 'See all' }}
+          />
+          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
+            <div className="relative pl-2 py-1" data-testid="recent-activity">
+              <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gradient-to-b from-border via-border to-transparent" />
+              {recentActivity.map(item => (
+                <ActivityRow key={`${item.action}-${item.id}`} item={item} />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-      <motion.div variants={fadeUp}>
-        <WidgetCard
-          title="Recent Activity"
-          viewAllHref="/logging"
-          empty={recentActivity.length === 0}
-          emptyText="No activity yet"
-          accentClass="bg-blue-500/10"
-          iconEl={<Activity className="w-3.5 h-3.5 text-blue-500" />}
-        >
-          <motion.div
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
-            initial="hidden"
-            animate="show"
-            className="relative pl-1"
-            data-testid="recent-activity"
-          >
-            <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gradient-to-b from-border via-border to-transparent" />
-            {recentActivity.map((item) => {
-              const Icon = item.icon;
-              return (
-                <motion.div
-                  key={`${item.action}-${item.id}`}
-                  variants={{ hidden: { opacity: 0, x: -8 }, show: { opacity: 1, x: 0 } }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                >
-                  <Link href={item.href}>
-                    <div className="relative flex items-center gap-3 pl-1 py-2 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer">
-                      <div className={`w-7 h-7 rounded-full ${item.iconBg} ring-2 ring-background flex items-center justify-center flex-shrink-0 z-10 shadow-sm`}>
-                        <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
-                      </div>
-                      <div className="flex-1 min-w-0 ml-1">
-                        <div className="text-sm text-foreground truncate">{item.text}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {formatDistanceToNow(item.timestamp, { addSuffix: true })}
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">
-                        {item.action}
-                      </span>
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </WidgetCard>
-      </motion.div>
+      {/* ─── Spending breakdown (kept as a single compact widget, only when data exists) ── */}
+      {!isEmpty && thisMonthExpenses > 0 && (
+        <motion.div variants={fadeUp}>
+          <SectionLabel
+            icon={TrendingUp}
+            label={`${format(new Date(), 'MMMM')} Top Categories`}
+            action={{ href: '/expenses', label: 'See all' }}
+          />
+          <SpendingBreakdown expenses={expenses} fmt={fmtAmt} />
+        </motion.div>
+      )}
 
       <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
       <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
     </motion.div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Spending breakdown — kept as a focused single widget, not a 2-col layout
+// ─────────────────────────────────────────────────────────────────────────
+
+const SpendingBreakdown = memo(function SpendingBreakdown({
+  expenses, fmt,
+}: {
+  expenses: any[]; fmt: (n: number) => string;
+}) {
+  const cats = useMemo(() => {
+    const byCategory: Record<string, number> = {};
+    expenses.forEach(e => {
+      const cat = e.category || 'Other';
+      byCategory[cat] = (byCategory[cat] || 0) + (e.amount || 0);
+    });
+    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+    if (total === 0) return [];
+    return Object.entries(byCategory)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([cat, amount]) => ({
+        cat, amount,
+        pct: (amount / total) * 100,
+        color: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS['Other'],
+      }));
+  }, [expenses]);
+
+  if (cats.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-border/50 bg-card p-3.5 space-y-2.5">
+      {cats.map(c => (
+        <div key={c.cat}>
+          <div className="flex justify-between items-center mb-1">
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
+              <span className="text-foreground/80 truncate max-w-[180px]">{c.cat}</span>
+            </span>
+            <span className="text-xs font-medium text-muted-foreground tabular-nums">{fmt(c.amount)}</span>
+          </div>
+          <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+            <div className="h-full rounded-full"
+              style={{ width: `${Math.min(c.pct, 100)}%`, background: c.color, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
