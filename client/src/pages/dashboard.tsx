@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
   Clock, Globe, Upload, Shield, RefreshCw,
-  ChevronRight, CreditCard, Activity, Key, TrendingUp,
+  ChevronRight, CreditCard, Activity, Key, TrendingUp, TrendingDown,
   Sparkles, ShieldAlert, ShieldCheck, ArrowRight, Search,
+  Wallet, Repeat, BookOpen, Check,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } from "react";
 import { Link } from "wouter";
@@ -145,22 +146,56 @@ const SectionLabel = memo(function SectionLabel({
   );
 });
 
-const QuickStatCard = memo(function QuickStatCard({
-  label, value, accent, href, fmt,
+type StatTone = 'indigo' | 'amber' | 'emerald' | 'rose' | 'blue' | 'purple' | 'cyan';
+
+const TONE_BADGE: Record<StatTone, string> = {
+  indigo:  'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30',
+  amber:   'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  emerald: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  rose:    'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  blue:    'bg-blue-500/15 text-blue-300 ring-blue-500/30',
+  purple:  'bg-purple-500/15 text-purple-300 ring-purple-500/30',
+  cyan:    'bg-cyan-500/15 text-cyan-300 ring-cyan-500/30',
+};
+
+const RichStatCard = memo(function RichStatCard({
+  label, value, sub, icon: Icon, tone, href, fmt, badge,
 }: {
-  label: string; value: number; accent: string; href: string; fmt?: (n: number) => string;
+  label: string;
+  value: number;
+  sub?: string;
+  icon: React.ElementType;
+  tone: StatTone;
+  href: string;
+  fmt?: (n: number) => string;
+  badge?: { text: string; tone: StatTone; icon?: React.ElementType };
 }) {
+  const BadgeIcon = badge?.icon;
   return (
     <Link href={href}>
       <motion.div
-        whileHover={{ y: -2 }}
+        whileHover={{ y: -3 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-        className="glass-card p-3 cursor-pointer h-full"
+        className={`glass-card card-${tone} ring-tint-${tone} p-3.5 sm:p-4 cursor-pointer h-full min-h-[112px] flex flex-col justify-between relative overflow-hidden`}
       >
-        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</div>
-        <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: accent }}>
-          {fmt ? fmt(value) : <AnimatedNumber value={value} />}
+        <div className="flex items-start justify-between gap-2">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 stat-glow-${tone} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
+            <Icon className="w-4 h-4 text-white" />
+          </div>
+          {badge && (
+            <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-1 ${TONE_BADGE[badge.tone]} max-w-[60%] truncate`}>
+              {BadgeIcon && <BadgeIcon className="w-2.5 h-2.5 flex-shrink-0" />}
+              <span className="truncate">{badge.text}</span>
+            </span>
+          )}
+        </div>
+        <div className="mt-2">
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</div>
+          <div className="text-xl sm:text-2xl font-bold tabular-nums mt-0.5 truncate text-foreground leading-tight">
+            {fmt ? fmt(value) : <AnimatedNumber value={value} />}
+          </div>
+          {sub && <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</div>}
         </div>
       </motion.div>
     </Link>
@@ -171,21 +206,24 @@ const QuickStatCard = memo(function QuickStatCard({
 // Insight carousel card
 // ─────────────────────────────────────────────────────────────────────────
 
-const INSIGHT_PALETTE: Record<string, { dot: string; iconBg: string; tag: string }> = {
+const INSIGHT_PALETTE: Record<string, { tone: StatTone; iconGlow: string; tag: string; cta: string }> = {
   security: {
-    dot: 'bg-emerald-500',
-    iconBg: 'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30',
-    tag: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    tone: 'emerald',
+    iconGlow: 'stat-glow-emerald',
+    tag: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30',
+    cta: 'text-emerald-400',
   },
   finance: {
-    dot: 'bg-amber-500',
-    iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
-    tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    tone: 'amber',
+    iconGlow: 'stat-glow-amber',
+    tag: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30',
+    cta: 'text-amber-400',
   },
   productivity: {
-    dot: 'bg-blue-500',
-    iconBg: 'bg-blue-500/15 text-blue-500 ring-blue-500/30',
-    tag: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+    tone: 'blue',
+    iconGlow: 'stat-glow-blue',
+    tag: 'bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30',
+    cta: 'text-blue-400',
   },
 };
 
@@ -198,32 +236,33 @@ const InsightCarouselCard = memo(function InsightCarouselCard({
   const palette = INSIGHT_PALETTE[ins.category] ?? INSIGHT_PALETTE.productivity;
   const inner = (
     <motion.div
-      whileHover={{ y: -2 }}
+      whileHover={{ y: -3 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-      className="snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card hover:shadow-md cursor-pointer overflow-hidden"
-      style={{ maxHeight: 120, minHeight: 120 }}
+      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card card-${palette.tone} ring-tint-${palette.tone} hover:shadow-lg cursor-pointer overflow-hidden`}
+      style={{ maxHeight: 132, minHeight: 132 }}
     >
-      <div className="px-3 py-2.5 flex flex-col gap-1.5 h-[120px]">
-        <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${palette.iconBg}`}>
-            <Icon className="w-3.5 h-3.5" />
+      <div className="px-3.5 py-3 flex flex-col gap-1.5 h-[132px]">
+        <div className="flex items-start gap-2">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${palette.iconGlow} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
+            <Icon className="w-4 h-4 text-white" />
           </div>
-          <span aria-hidden className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${palette.dot}`} />
-          <div className="text-sm font-semibold text-foreground leading-snug truncate flex-1 min-w-0">{ins.title}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-foreground leading-snug truncate">{ins.title}</div>
+            <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{ins.description}</div>
+          </div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(ins.id); }}
-            className="text-[16px] leading-none text-muted-foreground/60 hover:text-foreground -mr-1 px-1"
+            className="text-[16px] leading-none text-muted-foreground/60 hover:text-foreground -mr-1 px-1 flex-shrink-0"
             aria-label="Dismiss insight"
           >
             ×
           </button>
         </div>
-        <div className="text-[11px] text-muted-foreground leading-snug line-clamp-1">{ins.description}</div>
         <div className="mt-auto flex items-center justify-between">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${palette.tag}`}>{ins.category}</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${palette.tag}`}>{ins.category}</span>
           {ins.actionUrl && (
-            <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5">
+            <span className={`text-[11px] font-semibold inline-flex items-center gap-0.5 ${palette.cta}`}>
               Open <ArrowRight className="w-3 h-3" />
             </span>
           )}
@@ -244,39 +283,44 @@ const AlertCarouselCard = memo(function AlertCarouselCard({ a }: { a: AlertItem 
   const Icon = a.icon;
   const tone = a.variant === 'red'
     ? {
-        glow: 'shadow-[inset_3px_0_0_0_rgba(239,68,68,0.85),0_0_24px_-8px_rgba(239,68,68,0.45)]',
-        iconBg: 'bg-red-500/15 text-red-500',
-        cta: 'text-red-600 dark:text-red-400',
+        cardClass: 'card-rose ring-tint-rose',
+        accent: 'before:bg-red-500',
+        iconGlow: 'stat-glow-rose',
+        cta: 'text-red-300',
         ctaLabel: 'Fix now',
       }
     : a.variant === 'amber'
       ? {
-          glow: 'shadow-[inset_3px_0_0_0_rgba(245,158,11,0.85),0_0_24px_-8px_rgba(245,158,11,0.45)]',
-          iconBg: 'bg-amber-500/15 text-amber-500',
-          cta: 'text-amber-600 dark:text-amber-400',
+          cardClass: 'card-amber ring-tint-amber',
+          accent: 'before:bg-amber-400',
+          iconGlow: 'stat-glow-amber',
+          cta: 'text-amber-300',
           ctaLabel: 'Review',
         }
       : {
-          glow: 'shadow-[inset_3px_0_0_0_rgba(99,102,241,0.85),0_0_24px_-8px_rgba(99,102,241,0.45)]',
-          iconBg: 'bg-indigo-500/15 text-indigo-500',
-          cta: 'text-indigo-600 dark:text-indigo-400',
+          cardClass: 'card-indigo ring-tint-indigo',
+          accent: 'before:bg-indigo-400',
+          iconGlow: 'stat-glow-indigo',
+          cta: 'text-indigo-300',
           ctaLabel: 'Scan now',
         };
   const inner = (
     <motion.div
-      whileHover={{ y: -2 }}
+      whileHover={{ y: -3 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card ${tone.glow} hover:shadow-lg cursor-pointer overflow-hidden px-3.5 py-3 flex flex-col gap-1.5`}
-      style={{ maxHeight: 120, minHeight: 120 }}
+      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card ${tone.cardClass} hover:shadow-lg cursor-pointer overflow-hidden pl-4 pr-3.5 py-3 flex flex-col gap-1.5 relative before:absolute before:left-0 before:top-3 before:bottom-3 before:w-[3px] before:rounded-r-full ${tone.accent}`}
+      style={{ maxHeight: 132, minHeight: 132 }}
     >
-      <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone.iconBg}`}>
-          <Icon className="w-3.5 h-3.5" />
+      <div className="flex items-start gap-2">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tone.iconGlow} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
+          <Icon className="w-4 h-4 text-white" />
         </div>
-        <div className="text-sm font-semibold text-foreground leading-snug truncate flex-1 min-w-0">{a.text}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-foreground leading-snug truncate">{a.text}</div>
+          <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{a.sub}</div>
+        </div>
       </div>
-      <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2">{a.sub}</div>
       <div className="mt-auto flex items-center justify-end">
         <span className={`text-[11px] font-semibold inline-flex items-center gap-0.5 ${tone.cta}`}>
           {tone.ctaLabel} <ArrowRight className="w-3 h-3" />
@@ -477,6 +521,43 @@ export default function Dashboard() {
       .reduce((sum, e) => sum + (e.amount || 0), 0);
   }, [expenses]);
 
+  const lastMonthExpenses = useMemo(() => {
+    const now = new Date();
+    const ly = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const lm = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    return expenses
+      .filter(e => {
+        const d = new Date(e.date);
+        return d.getFullYear() === ly && d.getMonth() === lm;
+      })
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+  }, [expenses]);
+
+  const spendTrend = useMemo(() => {
+    if (lastMonthExpenses <= 0) return null;
+    const pct = ((thisMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100;
+    if (Math.abs(pct) < 1) return null;
+    return { up: pct > 0, pct: Math.abs(Math.round(pct)) };
+  }, [thisMonthExpenses, lastMonthExpenses]);
+
+  const activeSubsCount = useMemo(() => subscriptions.filter(s => s.isActive).length, [subscriptions]);
+
+  const notesThisMonth = useMemo(() => {
+    const now = new Date();
+    return notes.filter(n => {
+      const d = new Date(n.updatedAt || n.createdAt);
+      return !isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length;
+  }, [notes]);
+
+  const weakPasswordCount = useMemo(() => {
+    return passwords.filter(p => {
+      const pw = (p as any).password ?? '';
+      if (typeof pw !== 'string') return false;
+      return pw.length > 0 && pw.length < 10;
+    }).length;
+  }, [passwords]);
+
   const recentActivity = useMemo<ActivityItem[]>(() => {
     const safeDate = (v: unknown): Date => {
       const d = new Date(v as any);
@@ -662,22 +743,36 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Security badge row → single line, links to /security-health */}
+        {/* Security badge row — conic ring + label, links to /security-health */}
         <Link href="/security-health">
           <div
             data-testid="security-badge-row"
-            className={`flex items-center gap-3 rounded-xl bg-card/60 border border-border/40 px-3 py-2.5 cursor-pointer hover:bg-card transition-colors group`}
+            className="flex items-center gap-3 rounded-xl bg-card/60 border border-border/40 px-3 py-2.5 cursor-pointer hover:bg-card transition-colors group"
           >
-            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${levelStyle.ring} ${levelStyle.bg} ${!isEmpty && (breakdown.level === 'Excellent' || breakdown.level === 'Good') ? 'glow-breathe' : ''}`}>
-              {isEmpty
-                ? <Shield className="w-4 h-4 text-muted-foreground" />
-                : <span className={`text-sm font-bold tabular-nums ${levelStyle.text}`}>{breakdown.totalScore}</span>}
-              <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${levelStyle.dot} ring-2 ring-background`} />
+            {/* Conic security ring */}
+            <div
+              className={`relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 security-ring ${!isEmpty && (breakdown.level === 'Excellent' || breakdown.level === 'Good') ? 'glow-breathe' : ''}`}
+              style={{
+                ['--score' as any]: isEmpty ? 0 : breakdown.totalScore,
+                ['--ring-color' as any]:
+                  isEmpty ? '#64748b'
+                  : breakdown.level === 'Critical' ? '#ef4444'
+                  : breakdown.level === 'Needs Work' ? '#f59e0b'
+                  : '#10b981',
+              } as React.CSSProperties}
+            >
+              <div className="absolute inset-[3px] rounded-full bg-card flex items-center justify-center">
+                {isEmpty
+                  ? <Shield className="w-4 h-4 text-muted-foreground" />
+                  : <span className={`text-sm font-bold tabular-nums ${levelStyle.text}`}>{breakdown.totalScore}</span>}
+              </div>
+              <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${levelStyle.dot} ring-2 ring-background`} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-muted-foreground">Security score</div>
-              <div className={`text-sm font-semibold ${levelStyle.text}`}>
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Security score</div>
+              <div className={`text-sm font-semibold ${levelStyle.text} flex items-center gap-1.5`}>
                 {isEmpty ? 'Vault empty' : breakdown.level}
+                {!isEmpty && breakdown.level === 'Excellent' && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
               </div>
             </div>
             <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5 flex-shrink-0">
@@ -707,32 +802,62 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* ─── Section 2 · Quick stats row ──────────────────────────────── */}
+      {/* ─── Section 2 · Premium stat cards ───────────────────────────── */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-testid="quick-stats">
-        <QuickStatCard label="Passwords" value={stats.totalPasswords} accent="#6366f1" href="/passwords" />
-        <QuickStatCard label="Notes" value={stats.totalNotes} accent="#f59e0b" href="/notes" />
-        <Link href="/subscriptions">
-          <motion.div
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="glass-card p-3 cursor-pointer h-full"
-          >
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Subs / mo</div>
-            <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#a855f7' }}>{fmtAmt(monthlySubSpend)}</div>
-          </motion.div>
-        </Link>
-        <Link href="/expenses">
-          <motion.div
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="glass-card p-3 cursor-pointer h-full"
-          >
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Spent / mo</div>
-            <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#22c55e' }}>{fmtAmt(thisMonthExpenses)}</div>
-          </motion.div>
-        </Link>
+        <RichStatCard
+          label="Passwords"
+          value={stats.totalPasswords}
+          sub={stats.totalPasswords === 0 ? 'Add your first' : weakPasswordCount > 0 ? `${weakPasswordCount} need attention` : 'All secured'}
+          icon={Lock}
+          tone="indigo"
+          href="/passwords"
+          badge={
+            stats.totalPasswords === 0
+              ? undefined
+              : weakPasswordCount > 0
+                ? { text: `${weakPasswordCount} weak`, tone: 'rose', icon: AlertTriangle }
+                : { text: 'All Strong', tone: 'emerald', icon: Check }
+          }
+        />
+        <RichStatCard
+          label="Notes"
+          value={stats.totalNotes}
+          sub={notesThisMonth > 0 ? `${notesThisMonth} this month` : 'Capture an idea'}
+          icon={FileText}
+          tone="amber"
+          href="/notes"
+          badge={notesThisMonth > 0 ? { text: 'Active', tone: 'amber', icon: BookOpen } : undefined}
+        />
+        <RichStatCard
+          label="Subs / mo"
+          value={monthlySubSpend}
+          fmt={fmtAmt}
+          sub={activeSubsCount > 0 ? `${activeSubsCount} active` : 'No subscriptions'}
+          icon={Repeat}
+          tone="emerald"
+          href="/subscriptions"
+          badge={activeSubsCount > 0 ? { text: `${activeSubsCount}`, tone: 'emerald', icon: Repeat } : undefined}
+        />
+        <RichStatCard
+          label="Spent / mo"
+          value={thisMonthExpenses}
+          fmt={fmtAmt}
+          sub={
+            spendTrend
+              ? `${spendTrend.up ? '+' : '−'}${spendTrend.pct}% vs last month`
+              : thisMonthExpenses > 0
+                ? format(new Date(), 'MMMM yyyy')
+                : 'Log your first'
+          }
+          icon={Wallet}
+          tone="rose"
+          href="/expenses"
+          badge={
+            spendTrend
+              ? { text: `${spendTrend.up ? '+' : '−'}${spendTrend.pct}%`, tone: spendTrend.up ? 'rose' : 'emerald', icon: spendTrend.up ? TrendingUp : TrendingDown }
+              : undefined
+          }
+        />
       </motion.div>
 
       {/* ─── Section 3 · Security alerts (horizontal scroll) ─────────── */}
@@ -757,29 +882,29 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* ─── Section 4 · Quick actions (compact 2x2 / 4-col on desktop) ── */}
+      {/* ─── Section 4 · Premium quick actions ───────────────────────── */}
       <motion.div variants={fadeUp}>
         <SectionLabel label="Quick Actions" />
         <div className="grid grid-cols-4 gap-2.5" data-testid="quick-actions">
           {([
-            { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'from-indigo-500 to-indigo-600' },
-            { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'from-amber-500 to-orange-500' },
-            { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bg: 'from-emerald-500 to-green-600' },
-            { label: 'Generator', icon: Key, bg: 'from-cyan-500 to-sky-500', onClick: () => setShowGenerator(true) },
-          ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
+            { label: 'Add Password', icon: Lock,        href: '/passwords?action=add', tone: 'indigo'  as StatTone },
+            { label: 'New Note',     icon: FileText,    href: '/notes?action=add',     tone: 'amber'   as StatTone },
+            { label: 'Log Expense',  icon: DollarSign,  href: '/expenses?action=add',  tone: 'emerald' as StatTone },
+            { label: 'Generator',    icon: Key,                                        tone: 'cyan'    as StatTone, onClick: () => setShowGenerator(true) },
+          ] as Array<{ label: string; icon: React.ElementType; tone: StatTone; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, tone, onClick }) => {
             const inner = (
               <motion.div
-                whileHover={{ y: -2, scale: 1.02 }}
+                whileHover={{ y: -3, scale: 1.02 }}
                 whileTap={{ scale: 0.96 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 aria-label={label}
                 title={label}
-                className="glass-card flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 py-3 cursor-pointer h-full"
+                className={`glass-card card-${tone} ring-tint-${tone} flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 cursor-pointer h-full min-h-[88px]`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.4)] ring-1 ring-white/15`}>
-                  <Icon className="w-4 h-4 text-white" />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 stat-glow-${tone} shadow-[0_6px_20px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
+                  <Icon className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
                 </div>
-                <span className="hidden sm:inline text-xs font-medium text-foreground text-center leading-tight">{label}</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-foreground text-center leading-tight">{label}</span>
               </motion.div>
             );
             if (href) return <Link key={label} href={href}>{inner}</Link>;
