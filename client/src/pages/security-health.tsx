@@ -3,7 +3,8 @@ import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
   Shield, ChevronLeft, ChevronRight, Lock, KeyRound, Clock, ShieldCheck,
-  Smartphone, AlertTriangle, CheckCircle2, Sparkles,
+  Smartphone, AlertTriangle, CheckCircle2, Sparkles, Trophy, Award,
+  Upload, Star, Flame, Zap,
 } from "lucide-react";
 import { useVault } from "@/contexts/vault-context";
 import { useAuth } from "@/contexts/auth-context";
@@ -138,15 +139,108 @@ function CategoryRow({ def, score, max, detail }: {
   return <div data-testid={`security-cat-${def.key}`}>{inner}</div>;
 }
 
+// ── Achievements ──────────────────────────────────────────────────────────────
+interface AchievementDef {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  earned: boolean;
+  hint: string;
+}
+
+function buildAchievements(opts: {
+  totalPasswords: number;
+  totalNotes: number;
+  twoFactorEnabled: boolean;
+  imported: boolean;
+  rotatedRecently: boolean;
+  uniquePct: number;
+  scoreLevel: SecurityBreakdown['level'];
+}): AchievementDef[] {
+  const { totalPasswords, totalNotes, twoFactorEnabled, imported, rotatedRecently, uniquePct, scoreLevel } = opts;
+  return [
+    { key: 'first-pw', label: 'First Password',  icon: Lock,         color: '#6366f1', earned: totalPasswords >= 1,  hint: 'Add your first password' },
+    { key: 'p10',     label: 'Vault Builder',    icon: Star,         color: '#a855f7', earned: totalPasswords >= 10, hint: 'Save 10 passwords' },
+    { key: 'p50',     label: 'Power User',       icon: Trophy,       color: '#f59e0b', earned: totalPasswords >= 50, hint: 'Save 50 passwords' },
+    { key: 'imp',     label: 'Migrated',         icon: Upload,       color: '#06b6d4', earned: imported,             hint: 'Run your first import' },
+    { key: '2fa',     label: '2FA Pro',          icon: ShieldCheck,  color: '#10b981', earned: twoFactorEnabled,     hint: 'Enable two-factor auth' },
+    { key: 'rot',     label: 'Hygiene Hero',     icon: Flame,        color: '#ef4444', earned: rotatedRecently,      hint: 'Rotate a password in the last 90 days' },
+    { key: 'uniq',    label: 'No Duplicates',    icon: Zap,          color: '#eab308', earned: totalPasswords >= 5 && uniquePct === 100, hint: 'Keep every password unique (5+ stored)' },
+    { key: 'note',    label: 'Note Keeper',      icon: Award,        color: '#f97316', earned: totalNotes >= 1,      hint: 'Save your first secure note' },
+    { key: 'top',     label: 'Excellent',        icon: Sparkles,     color: '#22c55e', earned: scoreLevel === 'Excellent', hint: 'Reach an Excellent security score' },
+  ];
+}
+
+function AchievementBadge({ a }: { a: AchievementDef }) {
+  const Icon = a.icon;
+  return (
+    <div
+      className={`relative rounded-2xl p-3 border transition-all ${
+        a.earned
+          ? 'bg-card border-border/60 shadow-sm'
+          : 'bg-muted/20 border-border/30 grayscale opacity-60'
+      }`}
+      data-testid={`badge-${a.key}`}
+      title={a.earned ? a.label : a.hint}
+    >
+      <div className="flex flex-col items-center text-center gap-1.5">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center ring-1 ring-white/10"
+          style={{
+            background: a.earned ? `${a.color}22` : 'rgba(120,120,120,0.12)',
+            boxShadow: a.earned ? `0 0 18px -6px ${a.color}88` : 'none',
+          }}
+        >
+          <Icon className="w-5 h-5" style={{ color: a.earned ? a.color : '#94a3b8' }} />
+        </div>
+        <span className={`text-[11px] font-semibold leading-tight ${a.earned ? 'text-foreground' : 'text-muted-foreground'}`}>
+          {a.label}
+        </span>
+        {!a.earned && <span className="text-[9px] text-muted-foreground/70 leading-tight">{a.hint}</span>}
+      </div>
+      {a.earned && (
+        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center ring-2 ring-background">
+          <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SecurityHealth() {
-  const { passwords } = useVault();
+  const { passwords, notes } = useVault();
   const { masterPassword } = useAuth();
 
   const breakdown = useMemo(
     () => calculateSecurityScore(passwords, masterPassword || ''),
     [passwords, masterPassword],
   );
+
+  const achievements = useMemo(() => {
+    let imported = false;
+    try { imported = !!localStorage.getItem('iv_imported_at'); } catch { /* noop */ }
+    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const rotatedRecently = passwords.some(p => p.updatedAt && new Date(p.updatedAt as any).getTime() >= ninetyDaysAgo);
+    const seen = new Set<string>();
+    let dupes = 0;
+    for (const p of passwords) {
+      if (!p.password) continue;
+      if (seen.has(p.password)) dupes++; else seen.add(p.password);
+    }
+    const uniquePct = passwords.length === 0 ? 100 : Math.round(((passwords.length - dupes) / passwords.length) * 100);
+    return buildAchievements({
+      totalPasswords: passwords.length,
+      totalNotes: notes.length,
+      twoFactorEnabled: breakdown.categories.twoFactorEnabled.score > 0,
+      imported,
+      rotatedRecently,
+      uniquePct,
+      scoreLevel: breakdown.level,
+    });
+  }, [passwords, notes, breakdown]);
+  const earnedCount = achievements.filter(a => a.earned).length;
 
   const heroBg =
     breakdown.levelColor === 'red'
@@ -245,6 +339,21 @@ export default function SecurityHealth() {
               />
             );
           })}
+        </div>
+      </motion.div>
+
+      {/* Achievements */}
+      <motion.div variants={fadeUp} data-testid="achievements">
+        <div className="flex items-center justify-between mb-2.5 px-1">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Achievements
+          </p>
+          <span className="text-[11px] font-semibold text-foreground tabular-nums">
+            {earnedCount}/{achievements.length} earned
+          </span>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+          {achievements.map(a => <AchievementBadge key={a.key} a={a} />)}
         </div>
       </motion.div>
 
