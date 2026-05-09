@@ -92,6 +92,80 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Scan a list of subscriptions and create renewal-reminder notifications for
+   * any that fall on the 3-day, 1-day, or 0-day mark. Idempotent per
+   * subscription+threshold (dedupes by metadata.subscriptionName + threshold)
+   * so the same subscription doesn't generate duplicates if the user revisits
+   * the dashboard multiple times in a day.
+   *
+   * Pass any object with `name`, `nextBillingDate`, and `isActive`.
+   */
+  static async scanSubscriptionRenewals(
+    userId: string,
+    subscriptions: Array<{ name: string; nextBillingDate?: string | Date | null; isActive?: boolean }>,
+  ): Promise<number> {
+    if (!Array.isArray(subscriptions) || subscriptions.length === 0) return 0;
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    let created = 0;
+
+    for (const sub of subscriptions) {
+      if (!sub.name || !sub.nextBillingDate || sub.isActive === false) continue;
+      const due = new Date(sub.nextBillingDate);
+      if (Number.isNaN(due.getTime())) continue;
+      // Calendar-day diff so a renewal "tomorrow morning" still hits the 1-day
+      // threshold even if it's <24h away in real time.
+      const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+      const todayMidnight = new Date().setHours(0, 0, 0, 0);
+      const days = Math.round((dueMidnight - todayMidnight) / dayMs);
+      if (days !== 0 && days !== 1 && days !== 3) continue;
+
+      // Dedupe: same subscription+threshold within the last 24h.
+      const dupe = this.notifications.find(n =>
+        n.type === 'subscription' &&
+        n.userId === userId &&
+        n.metadata?.subscriptionName === sub.name &&
+        n.metadata?.daysUntilRenewal === days &&
+        (now - new Date(n.timestamp).getTime()) < dayMs,
+      );
+      if (dupe) continue;
+
+      await this.createSubscriptionReminder(userId, sub.name, days);
+      created++;
+    }
+    return created;
+  }
+
+  /**
+   * Drop read notifications older than `maxAgeDays` (default 7) and cap the
+   * total store at `maxCount` (default 100, oldest first). Called on init so
+   * the bell panel doesn't accumulate cruft over months of use.
+   */
+  static cleanupOldNotifications(maxAgeDays: number = 7, maxCount: number = 100): number {
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    const before = this.notifications.length;
+
+    // Drop old, already-read notifications.
+    this.notifications = this.notifications.filter(n => {
+      const ts = new Date(n.timestamp).getTime();
+      if (n.read && ts < cutoff) return false;
+      return true;
+    });
+
+    // Cap total — keep newest.
+    if (this.notifications.length > maxCount) {
+      this.notifications = this.notifications
+        .slice()
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, maxCount);
+    }
+
+    const removed = before - this.notifications.length;
+    if (removed > 0) this.saveNotifications();
+    return removed;
+  }
+
   static async createPaymentSuccess(userId: string, amount: number, currency: string): Promise<Notification> {
     return this.createNotification({
       type: 'success',
@@ -273,6 +347,9 @@ export class NotificationService {
   static initialize(): void {
     this.loadNotifications();
     this.loadPreferences();
+    // Auto-prune so the bell panel doesn't accumulate cruft. Read items >7d
+    // old are dropped; total store capped at 100.
+    this.cleanupOldNotifications();
     // Also fetch CRM notifications on init
     this.fetchCrmNotifications();
   }

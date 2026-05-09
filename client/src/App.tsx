@@ -37,6 +37,7 @@ const ForgotPasswordPage = React.lazy(() => import("@/pages/forgot-password"));
 const ResetPasswordPage = React.lazy(() => import("@/pages/reset-password"));
 const VerifyEmailPage = React.lazy(() => import("@/pages/verify-email"));
 const Dashboard = React.lazy(() => import("@/pages/dashboard"));
+const SecurityHealth = React.lazy(() => import("@/pages/security-health"));
 const Passwords = React.lazy(() => import("@/pages/passwords"));
 const Subscriptions = React.lazy(() => import("@/pages/subscriptions"));
 const Notes = React.lazy(() => import("@/pages/notes"));
@@ -1116,6 +1117,7 @@ function Router() {
           confused with the Tier-1 LandingPage at "/". Renders the same
           component — no auth re-evaluation. */}
       <Route path="/dashboard"><MainLayout><Dashboard /></MainLayout></Route>
+      <Route path="/security-health"><MainLayout><SecurityHealth /></MainLayout></Route>
       <Route path="/passwords"><MainLayout><Passwords /></MainLayout></Route>
       <Route path="/subscriptions"><MainLayout><Subscriptions /></MainLayout></Route>
       <Route path="/notes"><MainLayout><Notes /></MainLayout></Route>

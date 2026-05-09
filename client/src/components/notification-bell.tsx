@@ -15,24 +15,33 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  // History toggle: false → 10 most recent, true → entire saved history.
+  // Persisted only in component state — collapses back on next mount.
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     loadNotifications();
-    
+
     // Refresh notifications every 30 seconds
     const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, showHistory]);
 
   const loadNotifications = async () => {
     // Fetch CRM notifications from backend first
     await NotificationService.fetchCrmNotifications();
     const [notifs, count] = await Promise.all([
-      NotificationService.getNotifications(userId, 10),
+      // Bell shows 10 by default; expand to "View all" pulls full history (cap at 200 to keep DOM sane).
+      NotificationService.getNotifications(userId, showHistory ? 200 : 10),
       NotificationService.getUnreadCount(userId),
     ]);
     setNotifications(notifs);
     setUnreadCount(count);
+  };
+
+  const handleClearAll = async () => {
+    await NotificationService.clearAllNotifications(userId);
+    loadNotifications();
   };
 
   const handleMarkAsRead = async (notificationId: string) => {

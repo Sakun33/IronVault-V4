@@ -141,8 +141,10 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
-  // Default durations: success=3000ms, error/destructive=5000ms
-  const defaultDuration = props.variant === 'destructive' ? 5000 : 3000;
+  // Auto-dismiss after 5s for both success and destructive — gives users
+  // enough time to read longer messages (e.g. multi-line security alerts)
+  // without forcing them to dismiss manually.
+  const defaultDuration = 5000;
 
   const update = (props: ToasterToast) =>
     dispatch({
