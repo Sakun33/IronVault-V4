@@ -4,14 +4,15 @@ import {
   Heading1, Heading2, Heading3, List as ListBullets, ListOrdered,
   CheckSquare, Code, Quote, Minus, Calendar,
 } from 'lucide-react';
+import type { Editor } from '@tiptap/react';
 
 export interface SlashCommand {
   id: string;
   label: string;
   hint?: string;
   icon: React.ElementType;
-  /** Receives the editor element so it can use selection / execCommand. */
-  apply: (editor: HTMLDivElement) => void;
+  /** Receives the TipTap editor instance so it can run chain commands. */
+  apply: (editor: Editor) => void;
 }
 
 interface SlashMenuProps {
@@ -19,91 +20,83 @@ interface SlashMenuProps {
   /** CSS pixels relative to the editor surface — top-left corner of the menu. */
   position: { top: number; left: number } | null;
   query: string;
-  editor: HTMLDivElement | null;
+  editor: Editor | null;
   onClose: () => void;
   onCommandPicked: () => void;
 }
 
-// All slash commands. Apply functions either call execCommand or insert raw
-// HTML — both are reliable in modern browsers' contentEditable.
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     id: 'h1',
     label: 'Heading 1',
     hint: '#',
     icon: Heading1,
-    apply: () => { try { document.execCommand('formatBlock', false, 'H1'); } catch {} },
+    apply: (e) => e.chain().focus().toggleHeading({ level: 1 }).run(),
   },
   {
     id: 'h2',
     label: 'Heading 2',
     hint: '##',
     icon: Heading2,
-    apply: () => { try { document.execCommand('formatBlock', false, 'H2'); } catch {} },
+    apply: (e) => e.chain().focus().toggleHeading({ level: 2 }).run(),
   },
   {
     id: 'h3',
     label: 'Heading 3',
     hint: '###',
     icon: Heading3,
-    apply: () => { try { document.execCommand('formatBlock', false, 'H3'); } catch {} },
+    apply: (e) => e.chain().focus().toggleHeading({ level: 3 }).run(),
   },
   {
     id: 'ul',
     label: 'Bullet list',
     hint: '⌘⇧8',
     icon: ListBullets,
-    apply: () => { try { document.execCommand('insertUnorderedList'); } catch {} },
+    apply: (e) => e.chain().focus().toggleBulletList().run(),
   },
   {
     id: 'ol',
     label: 'Numbered list',
     hint: '⌘⇧7',
     icon: ListOrdered,
-    apply: () => { try { document.execCommand('insertOrderedList'); } catch {} },
+    apply: (e) => e.chain().focus().toggleOrderedList().run(),
   },
   {
     id: 'todo',
     label: 'Checklist',
     hint: '⌘⇧9',
     icon: CheckSquare,
-    apply: () => {
-      const html = '<div data-todo="1"><input type="checkbox" class="iv-todo-check" />&nbsp;<span></span></div><p><br/></p>';
-      try { document.execCommand('insertHTML', false, html); } catch {}
-    },
+    apply: (e) => e.chain().focus().toggleTaskList().run(),
   },
   {
     id: 'code',
     label: 'Code block',
     icon: Code,
-    apply: () => { try { document.execCommand('formatBlock', false, 'PRE'); } catch {} },
+    apply: (e) => e.chain().focus().toggleCodeBlock().run(),
   },
   {
     id: 'quote',
     label: 'Quote',
     icon: Quote,
-    apply: () => { try { document.execCommand('formatBlock', false, 'BLOCKQUOTE'); } catch {} },
+    apply: (e) => e.chain().focus().toggleBlockquote().run(),
   },
   {
     id: 'hr',
     label: 'Divider',
     icon: Minus,
-    apply: () => { try { document.execCommand('insertHTML', false, '<hr/><p><br/></p>'); } catch {} },
+    apply: (e) => e.chain().focus().setHorizontalRule().run(),
   },
   {
     id: 'date',
     label: 'Date / Time',
     icon: Calendar,
-    apply: () => {
-      const stamp = new Date().toLocaleString();
-      try { document.execCommand('insertText', false, stamp); } catch {}
-    },
+    apply: (e) => e.chain().focus().insertContent(new Date().toLocaleString()).run(),
   },
 ];
 
 /**
  * Floating menu that appears when the user types "/" at the start of a line.
- * The parent passes a typed query (text after the slash) to filter the list.
+ * Parent passes the typed query (text after the slash) for filtering.
  * Arrow / Enter / Escape are handled here as window keydowns while open.
  */
 export function SlashMenu({ open, position, query, editor, onClose, onCommandPicked }: SlashMenuProps) {

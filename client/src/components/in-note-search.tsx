@@ -4,8 +4,8 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 interface InNoteSearchProps {
   open: boolean;
-  /** Editor element to search inside. */
-  editor: HTMLDivElement | null;
+  /** Editor DOM element (TipTap exposes `editor.view.dom`). */
+  editor: HTMLElement | null;
   onClose: () => void;
 }
 
@@ -16,9 +16,13 @@ interface MatchHandle {
 
 /**
  * Cmd+F-style in-note search. Wraps every match in a span.iv-search-match
- * and tracks the active one with .iv-search-active. On close all wrappers
- * are unwrapped so the underlying contentEditable returns to its original
- * state — no lingering markers in the saved HTML.
+ * over the rendered editor DOM. On close all wrappers are unwrapped so the
+ * underlying ProseMirror tree returns to its original state.
+ *
+ * NOTE: this mutates the rendered DOM, not the TipTap document model. ProseMirror
+ * may re-render and discard the wrappers on the next transaction — that's fine,
+ * the next query re-runs the wrap pass. We also avoid wrapping during typing
+ * by always running clearWraps() before re-walking on query change.
  */
 export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
   const [query, setQuery] = useState('');
@@ -27,7 +31,6 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const lastWrapsRef = useRef<HTMLSpanElement[]>([]);
 
-  // Clear all match wrappers
   const clearWraps = () => {
     for (const span of lastWrapsRef.current) {
       const parent = span.parentNode;
@@ -36,11 +39,9 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
       parent.removeChild(span);
     }
     lastWrapsRef.current = [];
-    // Normalize so adjacent text nodes merge — keeps subsequent searches sane.
     if (editor) editor.normalize();
   };
 
-  // Re-find matches whenever the query changes
   useEffect(() => {
     if (!open || !editor) return;
     clearWraps();
@@ -51,7 +52,6 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
 
     const found: MatchHandle[] = [];
     const lower = q.toLowerCase();
-    // Walk text nodes; skip script/style + wrappers we previously inserted
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         const text = node.nodeValue;
@@ -91,7 +91,6 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
         found.push({ range, span });
         cursor = idx + lower.length;
       }
-      // Replace the original text node with the spliced sequence
       const fragment = document.createDocumentFragment();
       for (const s of segments) fragment.appendChild(s);
       text.parentNode?.replaceChild(fragment, text);
@@ -100,11 +99,10 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
     lastWrapsRef.current = wraps;
     setMatches(found);
     setActive(found.length ? 0 : 0);
-    return () => { /* per-render cleanup is in clearWraps */ };
+    return () => { /* cleanup is in clearWraps */ };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, open]);
 
-  // Move .iv-search-active highlight as the active index changes
   useEffect(() => {
     if (!matches.length) return;
     matches.forEach((m, i) => {
@@ -115,7 +113,6 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
     });
   }, [active, matches]);
 
-  // Auto-focus on open, cleanup on close
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -128,7 +125,6 @@ export function InNoteSearch({ open, editor, onClose }: InNoteSearchProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Cleanup on unmount
   useEffect(() => () => clearWraps(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const total = matches.length;

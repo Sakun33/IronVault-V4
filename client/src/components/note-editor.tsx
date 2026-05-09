@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import DOMPurify from 'dompurify';
@@ -7,17 +7,25 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3, List as ListBullets, ListOrdered, CheckSquare,
   Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
-  Share2, Highlighter, Quote, Search as SearchIcon, Plus, Sparkles,
+  Share2, Highlighter, Quote, Search as SearchIcon, Plus,
   RotateCcw, RotateCw, Indent, Outdent, RemoveFormatting,
   Link2, Type,
 } from 'lucide-react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import Highlight from '@tiptap/extension-highlight';
+import Underline from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
+import { TextStyle, Color } from '@tiptap/extension-text-style';
+import Link from '@tiptap/extension-link';
 import { NoteEntry } from '@shared/schema';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { combineNotebookList, upsertNotebook, type NotebookMeta } from '@/lib/notebooks-store';
-import { SlashMenu, SLASH_COMMANDS } from '@/components/slash-menu';
+import { SlashMenu } from '@/components/slash-menu';
 import { InNoteSearch } from '@/components/in-note-search';
 import { setNoteEditing } from '@/lib/note-editing-guard';
-import { toast } from '@/hooks/use-toast';
 
 export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string }> = [
   { id: 'emerald', name: 'Emerald', hex: '#10b981' },
@@ -46,18 +54,14 @@ interface NoteEditorProps {
   note: NoteEntry | null;
   starter?: { content?: string; notebook?: string };
   defaultNotebook?: string;
-  /** Email used to namespace notebook metadata in localStorage. */
   accountEmail?: string | null;
-  /** All known tags from the user's notes — drives the autocomplete. */
   knownTags?: string[];
-  /** Notebook strings used by existing notes — combined with localStorage metadata. */
   knownNotebooks?: string[];
   onClose: () => void;
   onSave: (payload: NoteFormPayload) => Promise<void> | void;
   onDelete?: () => void;
   onDuplicate?: () => void;
   bottomGutterPx?: number;
-  /** When true, render in a docked pane (no x-slide animation, no fixed-position overlay). */
   embedded?: boolean;
 }
 
@@ -80,19 +84,106 @@ function timeAgoShort(date: Date | string | undefined): string {
 }
 
 /**
- * Notes editor — used as a fullscreen overlay on mobile/tablet AND as the
- * docked right pane on the desktop three-pane layout (`embedded` flag).
+ * Migrate legacy note HTML (saved by the old contentEditable engine) into a
+ * shape TipTap can parse. The two big translations:
+ *
+ *  1. Old checklist rows — `<div data-todo="…"><input type=checkbox><span>…</span></div>`
+ *     → grouped into `<ul data-type="taskList"><li data-type="taskItem"
+ *       data-checked="true|false"><p>…</p></li></ul>`
+ *
+ *  2. execCommand foreColor wrappers — `<font color="…">…</font>`
+ *     → `<span style="color: …">…</span>` (TipTap TextStyle/Color expects a span)
+ *
+ * Plain-text legacy content (no tags) is wrapped into <p> blocks per line.
+ */
+function migrateLegacyHtml(raw: string): string {
+  if (!raw) return '<p></p>';
+  if (!raw.includes('<')) {
+    return raw.split('\n').map(l => l ? `<p>${escapeHtml(l)}</p>` : '<p></p>').join('') || '<p></p>';
+  }
+
+  const root = document.createElement('div');
+  root.innerHTML = raw;
+
+  // <font color="…"> → <span style="color: …">
+  root.querySelectorAll('font[color]').forEach(f => {
+    const span = document.createElement('span');
+    const c = f.getAttribute('color');
+    if (c) span.setAttribute('style', `color: ${c}`);
+    while (f.firstChild) span.appendChild(f.firstChild);
+    f.replaceWith(span);
+  });
+
+  // Group consecutive `[data-todo]` rows into a TipTap taskList.
+  const todos = Array.from(root.querySelectorAll('[data-todo]'));
+  const groups: Element[][] = [];
+  let current: Element[] = [];
+  for (const td of todos) {
+    if (current.length === 0) { current.push(td); continue; }
+    const prev = current[current.length - 1];
+    if (prev.nextElementSibling === td) {
+      current.push(td);
+    } else {
+      groups.push(current);
+      current = [td];
+    }
+  }
+  if (current.length) groups.push(current);
+
+  for (const group of groups) {
+    const ul = document.createElement('ul');
+    ul.setAttribute('data-type', 'taskList');
+    for (const td of group) {
+      const cb = td.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+      const checked = !!cb?.checked || cb?.hasAttribute('checked') || td.getAttribute('data-todo') === '2';
+      const span = td.querySelector('span');
+      const text = (span?.textContent || td.textContent || '').replace(/​/g, '').trim();
+      const li = document.createElement('li');
+      li.setAttribute('data-type', 'taskItem');
+      li.setAttribute('data-checked', checked ? 'true' : 'false');
+      const p = document.createElement('p');
+      p.textContent = text;
+      li.appendChild(p);
+      ul.appendChild(li);
+    }
+    group[0].parentNode?.insertBefore(ul, group[0]);
+    for (const td of group) td.remove();
+  }
+
+  return root.innerHTML || '<p></p>';
+}
+
+function initialHtml(note: NoteEntry | null, starter?: { content?: string }): string {
+  if (note) return migrateLegacyHtml(note.content || '');
+  if (starter?.content) return migrateLegacyHtml(starter.content);
+  return '<p></p>';
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c));
+}
+
+const SANITIZE_OPTS = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3',
+    'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'span', 'a',
+  ],
+  ALLOWED_ATTR: ['type', 'checked', 'class', 'data-type', 'data-checked', 'style', 'href', 'target', 'rel'],
+  ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
+};
+
+/**
+ * TipTap-powered notes editor — used as a fullscreen overlay on mobile/tablet
+ * AND as the docked right pane on the desktop three-pane layout (`embedded`).
  *
  * Composition:
- * - top bar: ← Back · Search · Pin · Share · ⋯ More
- * - notebook + tag row (small, muted)
- * - title (26px bold, no border)
- * - body (contentEditable, 16px / 1.7)
- * - 2-row formatting toolbar pinned to the bottom (mobile) or top (desktop)
+ *  - top bar: ← Back · Search · Pin · Share · Done · ⋯ More
+ *  - formatting toolbar
+ *  - title (26px bold)
+ *  - body (TipTap EditorContent — ProseMirror under the hood)
+ *  - footer: notebook · tags · word count · save status
  *
- * Viewer mode is toggled via the More menu — when true, the body becomes
- * non-editable and renders the saved HTML; checkboxes are still
- * interactive (tap to toggle, autosave fires).
+ * Manual save only — fires on Done, Back, swipe-back, or Cmd/Ctrl+S.
  */
 export function NoteEditor({
   open,
@@ -118,32 +209,85 @@ export function NoteEditor({
   const [tagInput, setTagInput] = useState('');
   const [tagInputOpen, setTagInputOpen] = useState(false);
   const [tagAutocomplete, setTagAutocomplete] = useState(false);
-  const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
-  const [headingCycle, setHeadingCycle] = useState(0);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(note?.updatedAt ? new Date(note.updatedAt) : null);
   const [saving, setSaving] = useState(false);
-  const [viewerMode, setViewerMode] = useState<boolean>(!!note); // existing notes open in view mode
+  const [viewerMode, setViewerMode] = useState<boolean>(!!note);
   const [searchOpen, setSearchOpen] = useState(false);
   const [slashMenu, setSlashMenu] = useState<{ open: boolean; pos: { top: number; left: number } | null; query: string }>({ open: false, pos: null, query: '' });
   const [newNotebookOpen, setNewNotebookOpen] = useState(false);
   const [newNotebookValue, setNewNotebookValue] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  // Selection range cached when opening the color picker — DOM popovers steal
-  // the selection on iOS Safari, so we restore it before applying the color.
-  const colorPickerRangeRef = useRef<Range | null>(null);
+  // Tick state to force re-render when TipTap selection/transaction fires
+  // so toolbar active-state highlights update in real time.
+  const [, setStateTick] = useState(0);
 
-  const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
   const lastSnapshotRef = useRef<string>('');
-  const saveTimerRef = useRef<number | null>(null);
-  // Tracks the note?.id we last fully reset state for. Lets us detect the
-  // "new note just got promoted to a real id via autosave" transition
-  // (null → real) and skip the destructive state reset that would otherwise
-  // flip viewerMode from edit → view mid-typing — the user-facing
-  // "editor closes after a few seconds" bug.
   const prevNoteIdRef = useRef<string | null | undefined>(undefined);
+  // The portal container needs to be a real DOM element so InNoteSearch
+  // and the slash menu can use it for positioning / DOM walking.
+  const editorWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // ── TipTap editor ────────────────────────────────────────────────────────
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Highlight,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Placeholder.configure({
+        placeholder: 'Start writing…',
+        emptyEditorClass: 'is-editor-empty',
+      }),
+      TextStyle,
+      Color,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+      }),
+    ],
+    content: contentHtml,
+    editorProps: {
+      attributes: {
+        class: 'iv-rich-editor focus:outline-none',
+      },
+      handleKeyDown(view, event) {
+        // Markdown-ish heading shortcut: # / ## / ### at start of a line + Space.
+        // StarterKit's input rules already handle this, but its default behavior
+        // also fires here so the block trigger is a no-op for us.
+        // We intercept Tab so it indents lists (TipTap's default) instead of
+        // moving focus out of the editor.
+        if (event.key === 'Tab') {
+          // Let TipTap handle it via list/task extensions
+          return false;
+        }
+        return false;
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      setContentHtml(html);
+      // Detect slash trigger from current selection
+      detectSlashTrigger(ed);
+      setStateTick(t => t + 1);
+    },
+    onSelectionUpdate: () => {
+      setStateTick(t => t + 1);
+    },
+    onTransaction: () => {
+      setStateTick(t => t + 1);
+    },
+    editable: !viewerMode,
+  }, [open]);
+
+  // Push the read-only flag through whenever viewerMode toggles
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!viewerMode);
+  }, [editor, viewerMode]);
 
   // Lift the bottom toolbar above the soft keyboard on mobile (visualViewport)
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -164,25 +308,17 @@ export function NoteEditor({
     };
   }, [open, embedded]);
 
-  // Tell the rest of the app the editor is open so background sync code
-  // paths (vault-context.refreshData, cloud auto-pull, auto-lock idle
-  // timer) can skip destructive refreshes that would otherwise unmount
-  // or reset the editor mid-edit. We set the flag SYNCHRONOUSLY during
-  // render (not in a useEffect) so the very first render — before any
-  // paint — already has the guard active; otherwise a sync that landed
-  // in the same microtask as the editor mount could still slip through.
-  // The cleanup useEffect below clears it on unmount.
+  // Tell the rest of the app the editor is open so background sync code paths
+  // (vault-context.refreshData, cloud auto-pull, auto-lock idle timer) skip
+  // destructive refreshes that would otherwise unmount the editor mid-edit.
   if (open) setNoteEditing(true);
   useEffect(() => {
     if (!open) return;
     return () => setNoteEditing(false);
   }, [open]);
 
-  // Reset all the form-shaped state (title / notebook / tags / pin / color
-  // / contentHtml) when the note id flips. The DOM-side innerHTML sync is
-  // handled by the useLayoutEffect below — that one runs synchronously
-  // after commit and is the actual fix for "body shows truncated content
-  // on reopen".
+  // Reset all form-shaped state when the note id flips. The TipTap content
+  // is re-set in a separate effect below.
   useEffect(() => {
     if (!open) {
       prevNoteIdRef.current = undefined;
@@ -190,11 +326,8 @@ export function NoteEditor({
     }
     const prevId = prevNoteIdRef.current;
     const currentId = note?.id ?? null;
-    // Save-promotion detection: prev id was null (new-note session) and we
-    // now have a real id from a successful autosave. The editor's in-memory
-    // state already matches what got saved (runSave just wrote it), so a
-    // reset here would flip viewerMode true mid-typing and destroy the
-    // user's session. Bump the savedAt indicator and bail.
+    // null → real id (just-saved-new-note promotion): keep in-memory state,
+    // just bump savedAt so the indicator updates.
     if (prevId === null && currentId !== null) {
       prevNoteIdRef.current = currentId;
       if (note?.updatedAt) setSavedAt(new Date(note.updatedAt));
@@ -209,12 +342,11 @@ export function NoteEditor({
     const html = initialHtml(note, starter);
     setContentHtml(html);
     setSavedAt(note?.updatedAt ? new Date(note.updatedAt) : null);
-    setHeadingCycle(0);
     setTagInputOpen(false);
     setMoreMenuOpen(false);
     setSearchOpen(false);
     setSubmitted(false);
-    setViewerMode(!!note); // existing → view, new → edit
+    setViewerMode(!!note);
     lastSnapshotRef.current = serializeForCompare({
       title: note?.title ?? '',
       html,
@@ -228,48 +360,18 @@ export function NoteEditor({
     });
   }, [open, note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SYNCHRONOUS contentEditable population. Runs only when the editor
-  // opens or the note id changes (i.e. switching to a different note).
-  //
-  // We deliberately do NOT depend on note?.updatedAt or note?.content.
-  // Those change every time autosave commits — the parent re-renders
-  // with `setEditingNote({...prev, ...payload, updatedAt: new Date()})`
-  // (or, after the linked notes.tsx fix, the note prop ref is stable
-  // across saves). Either way, re-running this effect on save is wrong:
-  // the editor's local state already matches what was just saved, and
-  // mutating el.innerHTML mid-edit drops focus on iOS, dismisses the
-  // keyboard, and looks to the user like the editor "closed".
-  //
-  // Cloud pull / duplicate / undo paths that change a note out from
-  // under the user are already gated by `isNoteEditing()` while the
-  // editor is open, so we don't need updatedAt to catch them — they
-  // can only land after the editor closes, and reopening it goes
-  // through the id-change path here.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const el = editorRef.current;
-    if (!el) return;
-    if (typeof document !== 'undefined' && document.activeElement === el) return;
-    // QA-R2 H8: re-sanitize on read. Saves go through DOMPurify in
-    // runSave(), but a vault that was imported from another build (or an
-    // older client whose sanitizer rule-set differed) could carry HTML
-    // that doesn't match our current allow-list. Running through
-    // DOMPurify on every load means we never feed unvetted markup back
-    // into the contentEditable surface, even if the storage layer is
-    // somehow compromised. Same allow-list as runSave so round-trips
-    // are stable.
-    const raw = initialHtml(note, starter);
-    const html = DOMPurify.sanitize(raw, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span', 'a', 'font'],
-      ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style', 'href', 'target', 'rel', 'color'],
-      ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
-    });
-    if (el.innerHTML !== html) el.innerHTML = html;
-    const isEmpty = (el.textContent || '').trim() === '';
-    if (isEmpty) el.setAttribute('data-empty', 'true');
-    else el.removeAttribute('data-empty');
+  // Sync TipTap content when the loaded note changes. We pass `false` for
+  // emitUpdate so this mutation doesn't fire onUpdate (which would loop and
+  // stomp the snapshot on each pull).
+  useEffect(() => {
+    if (!open || !editor) return;
+    if (editor.isFocused) return;
+    const html = initialHtml(note, starter);
+    if (editor.getHTML() !== html) {
+      editor.commands.setContent(html, { emitUpdate: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, note?.id]);
+  }, [open, note?.id, editor]);
 
   // Combined notebook list (metadata + notes' strings)
   const notebookOptions = useMemo<NotebookMeta[]>(() => {
@@ -280,7 +382,6 @@ export function NoteEditor({
     return list;
   }, [accountEmail, knownNotebooks, notebook]);
 
-  // Tag autocomplete suggestions
   const tagSuggestions = useMemo(() => {
     if (!tagInput.trim()) return knownTags.filter(t => !tags.includes(t)).slice(0, 8);
     const q = tagInput.toLowerCase().replace(/^#/, '');
@@ -300,71 +401,12 @@ export function NoteEditor({
   );
   const dirty = currentSnapshot !== lastSnapshotRef.current;
 
-  // Autosave removed by request — save now only fires on Done button,
-  // Back button, swipe-back, or Cmd/Ctrl+S. The "Unsaved" → "Saving"
-  // flicker during typing was distracting and could race with closing.
-  // saveTimerRef is kept so any in-flight timer from a stale render is
-  // still cleared safely (and to make this comment block resilient to
-  // future reintroduction).
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (e.key === 'Escape') {
-        if (slashMenu.open) { setSlashMenu({ open: false, pos: null, query: '' }); return; }
-        if (colorPickerOpen) { setColorPickerOpen(false); return; }
-        if (moreMenuOpen) { setMoreMenuOpen(false); return; }
-        if (searchOpen) { setSearchOpen(false); return; }
-        if (tagInputOpen) { setTagInputOpen(false); return; }
-      }
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      if (key === 's') { e.preventDefault(); void runSave(); return; }
-      if (key === 'f') { e.preventDefault(); setSearchOpen(true); return; }
-      if (key === 'b') { e.preventDefault(); applyFormat('bold'); return; }
-      if (key === 'i') { e.preventDefault(); applyFormat('italic'); return; }
-      if (key === 'u') { e.preventDefault(); applyFormat('underline'); return; }
-      if (key === 'z' && e.shiftKey) { e.preventDefault(); applyFormat('redo'); return; }
-      if (key === 'y') { e.preventDefault(); applyFormat('redo'); return; }
-      if (key === 'z' && !e.shiftKey) { e.preventDefault(); applyFormat('undo'); return; }
-      if (key === 'k') { e.preventDefault(); applyLink(); return; }
-      if (e.shiftKey && key === '7') { e.preventDefault(); applyFormat('insertOrderedList'); return; }
-      if (e.shiftKey && key === '8') { e.preventDefault(); applyFormat('insertUnorderedList'); return; }
-      if (e.shiftKey && key === '9') { e.preventDefault(); insertChecklistItem(); return; }
-      if (e.shiftKey && key === 'l') { e.preventDefault(); applyFormat('insertUnorderedList'); return; }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
-
-  // Close the color picker when the user taps outside of it.
-  useEffect(() => {
-    if (!colorPickerOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('[role="menu"][aria-label="Text color"]')) return;
-      if (target.closest('[aria-label="Text color"]')) return;
-      setColorPickerOpen(false);
-      colorPickerRangeRef.current = null;
-    };
-    document.addEventListener('mousedown', onDocClick, true);
-    return () => document.removeEventListener('mousedown', onDocClick, true);
-  }, [colorPickerOpen]);
-
   const runSave = async () => {
+    if (!editor) return;
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
     setSaving(true);
     try {
-      const sanitized = DOMPurify.sanitize(contentHtml, {
-        ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span', 'a', 'font'],
-        ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style', 'href', 'target', 'rel', 'color'],
-        ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
-      });
-      // Persist notebook metadata so empty notebooks still appear in the list
+      const sanitized = DOMPurify.sanitize(editor.getHTML(), SANITIZE_OPTS);
       if (accountEmail && notebook) upsertNotebook(accountEmail, notebook);
       await onSave({
         title: title.trim() || 'Untitled',
@@ -381,479 +423,157 @@ export function NoteEditor({
     finally { setSaving(false); }
   };
 
-  // Format helpers ──────────────────────────────────────────────────────────
-  const sampleActiveFormats = () => {
-    if (!editorRef.current) return;
-    const next = new Set<string>();
-    try {
-      if (document.queryCommandState('bold')) next.add('bold');
-      if (document.queryCommandState('italic')) next.add('italic');
-      if (document.queryCommandState('underline')) next.add('underline');
-      if (document.queryCommandState('strikeThrough')) next.add('strike');
-      if (document.queryCommandState('insertUnorderedList')) next.add('ul');
-      if (document.queryCommandState('insertOrderedList')) next.add('ol');
-    } catch { /* unsupported */ }
-    setActiveFormats(next);
-  };
-
-  const applyFormat = (cmd: string, value?: string) => {
-    if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    try { document.execCommand(cmd, false, value); } catch { /* noop */ }
-    syncEditorState();
-    void hapticLight();
-  };
-
-  const applyHeading = (level: 0 | 1 | 2 | 3) => {
-    if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const block = level === 0 ? 'P' : `H${level}`;
-    try { document.execCommand('formatBlock', false, block); } catch { /* noop */ }
-    setHeadingCycle(level);
-    syncEditorState();
-  };
-
-  const applyHighlight = () => {
-    if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-    // Remove existing highlight wrapper if the selection is fully inside one
-    const parent = range.commonAncestorContainer.parentElement;
-    if (parent && parent.tagName === 'MARK') {
-      const text = parent.textContent || '';
-      const tn = document.createTextNode(text);
-      parent.replaceWith(tn);
-    } else {
-      const mark = document.createElement('mark');
-      mark.appendChild(range.extractContents());
-      range.insertNode(mark);
-    }
-    syncEditorState();
-  };
-
-  const applyQuote = () => {
-    if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    try { document.execCommand('formatBlock', false, 'BLOCKQUOTE'); } catch { /* noop */ }
-    syncEditorState();
-  };
-
-  const insertChecklistItem = () => {
-    if (viewerMode) setViewerMode(false);
-    const ed = editorRef.current;
-    if (!ed) return;
-    ed.focus();
-    // Build the checklist row imperatively so we can put the caret INSIDE
-    // the empty <span> — execCommand('insertHTML') leaves the caret after
-    // the inserted block, which dropped users into a sibling <p> and made
-    // typing skip the checklist row entirely.
-    const div = document.createElement('div');
-    div.setAttribute('data-todo', '1');
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'iv-todo-check';
-    const span = document.createElement('span');
-    span.appendChild(document.createTextNode('​')); // zero-width so the caret has a position
-    div.appendChild(cb);
-    div.appendChild(document.createTextNode(' '));
-    div.appendChild(span);
-
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      // If caret is inside an empty paragraph, replace it. Otherwise insert
-      // after the closest block-level ancestor.
-      let block: Node | null = range.startContainer;
-      while (block && block !== ed) {
-        if (block.nodeType === 1) {
-          const tag = (block as HTMLElement).tagName;
-          if (tag === 'P' || tag === 'DIV' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'BLOCKQUOTE' || tag === 'PRE') break;
-        }
-        block = block.parentNode;
-      }
-      if (block && block !== ed) {
-        const blockEl = block as HTMLElement;
-        const text = (blockEl.textContent || '').trim();
-        if (!text && blockEl.tagName === 'P') {
-          blockEl.replaceWith(div);
-        } else {
-          blockEl.parentNode?.insertBefore(div, blockEl.nextSibling);
-        }
-      } else {
-        ed.appendChild(div);
-      }
-    } else {
-      ed.appendChild(div);
-    }
-
-    // Place caret inside the empty span (after the zero-width char)
-    try {
-      const r = document.createRange();
-      r.selectNodeContents(span);
-      r.collapse(false);
-      const s = window.getSelection();
-      s?.removeAllRanges();
-      s?.addRange(r);
-    } catch { /* noop */ }
-    syncEditorState();
-  };
-
-  const insertDivider = () => {
-    if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    try { document.execCommand('insertHTML', false, '<hr/><p><br/></p>'); } catch { /* noop */ }
-    syncEditorState();
-  };
-
-  const applyLink = () => {
-    if (viewerMode) setViewerMode(false);
-    const ed = editorRef.current;
-    if (!ed) return;
-    ed.focus();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    // Detect existing anchor at caret so we can edit/remove instead of nesting.
-    let node: Node | null = range.startContainer;
-    let existing: HTMLAnchorElement | null = null;
-    while (node && node !== ed) {
-      if (node.nodeType === 1 && (node as HTMLElement).tagName === 'A') {
-        existing = node as HTMLAnchorElement;
-        break;
-      }
-      node = node.parentNode;
-    }
-    const current = existing?.getAttribute('href') ?? '';
-    const input = window.prompt(existing ? 'Edit link URL (leave empty to remove):' : 'Enter URL:', current || 'https://');
-    if (input === null) return; // cancelled
-    const trimmed = input.trim();
-    // Empty → unlink
-    if (!trimmed) {
-      try { document.execCommand('unlink', false); } catch { /* noop */ }
-      syncEditorState();
-      return;
-    }
-    // Normalize bare domains to https://
-    const normalized = /^(https?:|mailto:|tel:|\/)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    if (existing) {
-      existing.setAttribute('href', normalized);
-      existing.setAttribute('target', '_blank');
-      existing.setAttribute('rel', 'noopener noreferrer');
-    } else if (sel.isCollapsed) {
-      // No selection → insert the URL as visible text
-      const a = document.createElement('a');
-      a.href = normalized;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = normalized;
-      range.insertNode(a);
-      // Place caret after the inserted link
-      const r = document.createRange();
-      r.setStartAfter(a);
-      r.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    } else {
-      try { document.execCommand('createLink', false, normalized); } catch { /* noop */ }
-      // Promote target/rel for security on the freshly created anchor.
-      const created = ed.querySelector(`a[href="${cssEscape(normalized)}"]`);
-      if (created) {
-        created.setAttribute('target', '_blank');
-        created.setAttribute('rel', 'noopener noreferrer');
-      }
-    }
-    syncEditorState();
-    void hapticLight();
-  };
-
-  const applyTextColor = (hex: string) => {
-    if (viewerMode) setViewerMode(false);
-    const ed = editorRef.current;
-    if (!ed) return;
-    ed.focus();
-    // Restore the selection cached when the popover was opened (iOS).
-    const cached = colorPickerRangeRef.current;
-    if (cached) {
-      try {
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(cached);
-      } catch { /* noop */ }
-    }
-    if (hex === 'inherit') {
-      // Reset color WITHOUT killing bold/italic/underline. Walk the
-      // selection contents and strip inline color styles + drop empty
-      // <font> wrappers. removeFormat is too aggressive — it'd flatten
-      // bold/italic in the same range too.
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const r = sel.getRangeAt(0);
-        const frag = r.cloneContents();
-        const wrap = document.createElement('div');
-        wrap.appendChild(frag);
-        const stripColor = (n: Node) => {
-          if (n.nodeType === 1) {
-            const el = n as HTMLElement;
-            if (el.style && el.style.color) el.style.color = '';
-            if (el.tagName === 'FONT' && el.hasAttribute('color')) el.removeAttribute('color');
-            for (const c of Array.from(el.childNodes)) stripColor(c);
-            const noAttrs = el.attributes.length === 0;
-            const isWrapper = el.tagName === 'FONT' || el.tagName === 'SPAN';
-            if (noAttrs && isWrapper && el.parentNode) {
-              while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
-              el.parentNode.removeChild(el);
-            }
-          } else {
-            for (const c of Array.from(n.childNodes)) stripColor(c);
-          }
-        };
-        stripColor(wrap);
-        r.deleteContents();
-        const out = document.createDocumentFragment();
-        while (wrap.firstChild) out.appendChild(wrap.firstChild);
-        r.insertNode(out);
-      }
-    } else {
-      try { document.execCommand('styleWithCSS', false, 'true'); } catch { /* noop */ }
-      try { document.execCommand('foreColor', false, hex); } catch { /* noop */ }
-    }
-    setColorPickerOpen(false);
-    colorPickerRangeRef.current = null;
-    syncEditorState();
-    void hapticLight();
-  };
-
-  const openColorPicker = () => {
-    if (viewerMode) setViewerMode(false);
-    const ed = editorRef.current;
-    if (!ed) return;
-    // Cache the current selection BEFORE the popover takes focus
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      colorPickerRangeRef.current = sel.getRangeAt(0).cloneRange();
-    } else {
-      colorPickerRangeRef.current = null;
-    }
-    setColorPickerOpen(v => !v);
-  };
-
-  const applyBeautify = () => {
-    if (viewerMode) setViewerMode(false);
-    const ed = editorRef.current;
-    if (!ed) return;
-    ed.focus();
-    const before = ed.innerHTML;
-    const after = beautifyContent(before);
-    if (after !== before) {
-      ed.innerHTML = after;
-      const isEmpty = (ed.textContent || '').trim() === '';
-      if (isEmpty) ed.setAttribute('data-empty', 'true');
-      else ed.removeAttribute('data-empty');
-      syncEditorState();
-      void hapticSuccess();
-      toast({ title: 'Formatted!', description: 'Note cleaned up.', duration: 1800 });
-    } else {
-      toast({ title: 'Already tidy', description: 'No changes needed.', duration: 1500 });
-    }
-  };
-
-  const syncEditorState = () => {
-    if (!editorRef.current) return;
-    setContentHtml(editorRef.current.innerHTML);
-    sampleActiveFormats();
-  };
-
-  const handleEditorInput = () => {
-    if (!editorRef.current) return;
-    const el = editorRef.current;
-    setContentHtml(el.innerHTML);
-    // Drive the placeholder via a JS-set data attribute so it never lingers
-    // when the contentEditable produces structures the CSS :has() selector
-    // can't match (e.g. an empty <p><br/></p> sibling next to the typed
-    // content paragraph, which iOS WebKit can leave behind on paste).
-    const isEmpty = (el.textContent || '').trim() === '';
-    if (isEmpty) el.setAttribute('data-empty', 'true');
-    else el.removeAttribute('data-empty');
-    detectSlashTrigger();
-  };
-
-  // Slash command detection: when the user types "/" at the start of a line,
-  // open the menu and track the typed query for filtering.
-  const detectSlashTrigger = () => {
-    const ed = editorRef.current;
-    if (!ed) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      if (slashMenu.open) setSlashMenu({ open: false, pos: null, query: '' });
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    if (!ed.contains(range.startContainer)) return;
-    const text = (range.startContainer.textContent || '').slice(0, range.startOffset);
-    const slashIdx = text.lastIndexOf('/');
-    // Only trigger when "/" is at the start of the line (no preceding non-space)
+  // Slash command detection from TipTap selection
+  const detectSlashTrigger = (ed: Editor) => {
+    const { state } = ed;
+    const { from } = state.selection;
+    const $from = state.doc.resolve(from);
+    const lineText = $from.parent.textContent.slice(0, $from.parentOffset);
+    const slashIdx = lineText.lastIndexOf('/');
     if (slashIdx === -1) {
       if (slashMenu.open) setSlashMenu({ open: false, pos: null, query: '' });
       return;
     }
-    const before = text.slice(0, slashIdx);
+    const before = lineText.slice(0, slashIdx);
     if (before && !/^\s*$/.test(before)) {
       if (slashMenu.open) setSlashMenu({ open: false, pos: null, query: '' });
       return;
     }
-    const query = text.slice(slashIdx + 1);
+    const query = lineText.slice(slashIdx + 1);
     if (/[\s\n]/.test(query)) {
       if (slashMenu.open) setSlashMenu({ open: false, pos: null, query: '' });
       return;
     }
-    // Position menu under the caret
-    const caretRect = range.getBoundingClientRect();
-    const editorRect = ed.getBoundingClientRect();
-    const top = caretRect.bottom - editorRect.top + 8;
-    const left = caretRect.left - editorRect.left;
-    setSlashMenu({ open: true, pos: { top, left }, query });
-  };
-
-  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Tab / Shift+Tab → indent / outdent
-    if (e.key === 'Tab' && !slashMenu.open) {
-      e.preventDefault();
-      if (e.shiftKey) {
-        try { document.execCommand('outdent', false); } catch { /* noop */ }
-      } else {
-        try { document.execCommand('indent', false); } catch { /* noop */ }
-      }
-      syncEditorState();
-      return;
-    }
-
-    // Markdown shortcut: `# `, `## `, `### ` at start of a line → heading
-    if (e.key === ' ' && editorRef.current && !slashMenu.open) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      const text = range.startContainer.textContent || '';
-      if (text === '#' || text === '##' || text === '###') {
-        e.preventDefault();
-        const level = text.length;
-        range.startContainer.textContent = '';
-        try { document.execCommand('formatBlock', false, `H${Math.min(3, level + 1)}`); } catch {}
-        setHeadingCycle(Math.min(3, level + 1) as 0 | 1 | 2 | 3);
-        syncEditorState();
-        return;
-      }
-    }
-
-    // Enter inside a checklist row: create a NEW checkbox row (or exit on
-    // empty row). Without this the browser inserts a <br> inside the same
-    // row, so multiple typed items end up stacked on a single checkbox
-    // line — the user-reported "items all on one line" bug.
-    if (e.key === 'Enter' && !e.shiftKey && !slashMenu.open && editorRef.current) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      let n: Node | null = range.startContainer;
-      let todoEl: HTMLElement | null = null;
-      while (n && n !== editorRef.current) {
-        if (n.nodeType === 1 && (n as HTMLElement).hasAttribute && (n as HTMLElement).hasAttribute('data-todo')) {
-          todoEl = n as HTMLElement;
-          break;
-        }
-        n = n.parentNode;
-      }
-      if (todoEl) {
-        e.preventDefault();
-        // Use the WHOLE row's text (excluding the input) so we don't fall
-        // through when iOS WebKit leaks typed characters into a sibling
-        // text node of the span — the cause of the "Enter doesn't make a
-        // new line" bug. Strip zero-widths before deciding empty vs full.
-        const cb = todoEl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-        const checked = !!cb?.checked || !!cb?.hasAttribute('checked');
-        const fullText = (todoEl.textContent || '').replace(/​/g, '').replace(/^\s+|\s+$/g, '');
-        if (!fullText) {
-          // Empty row → exit checklist, replace with empty paragraph
-          const p = document.createElement('p');
-          p.appendChild(document.createElement('br'));
-          todoEl.replaceWith(p);
-          const r = document.createRange();
-          r.setStart(p, 0);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-        } else {
-          // Normalize the existing row so all its text lives inside the
-          // span — guards against iOS leakage and ensures saved HTML
-          // round-trips through the DOMPurify allow-list.
-          const span = todoEl.querySelector('span');
-          const spanText = (span?.textContent || '').replace(/​/g, '');
-          if (!span || spanText !== fullText) {
-            todoEl.innerHTML = '';
-            const fixCb = document.createElement('input');
-            fixCb.type = 'checkbox';
-            fixCb.className = 'iv-todo-check';
-            if (checked) fixCb.setAttribute('checked', '');
-            const fixedSpan = document.createElement('span');
-            fixedSpan.textContent = fullText;
-            todoEl.appendChild(fixCb);
-            todoEl.appendChild(document.createTextNode(' '));
-            todoEl.appendChild(fixedSpan);
-          }
-          // Create a new empty checklist row after this one
-          const newDiv = document.createElement('div');
-          newDiv.setAttribute('data-todo', '0');
-          const newCb = document.createElement('input');
-          newCb.type = 'checkbox';
-          newCb.className = 'iv-todo-check';
-          const newSpan = document.createElement('span');
-          newSpan.appendChild(document.createTextNode('​'));
-          newDiv.appendChild(newCb);
-          newDiv.appendChild(document.createTextNode(' '));
-          newDiv.appendChild(newSpan);
-          todoEl.parentNode?.insertBefore(newDiv, todoEl.nextSibling);
-          const r = document.createRange();
-          r.selectNodeContents(newSpan);
-          r.collapse(false);
-          sel.removeAllRanges();
-          sel.addRange(r);
-        }
-        syncEditorState();
-        return;
-      }
-    }
+    const wrap = editorWrapperRef.current;
+    if (!wrap) return;
+    const dom = ed.view.coordsAtPos(from);
+    const wrapRect = wrap.getBoundingClientRect();
+    setSlashMenu({
+      open: true,
+      pos: { top: dom.bottom - wrapRect.top + 8, left: dom.left - wrapRect.left },
+      query,
+    });
   };
 
   const onSlashPicked = () => {
-    // Remove the typed "/query" before the menu was opened
-    const ed = editorRef.current;
-    if (ed) {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        const text = range.startContainer.textContent || '';
-        const slashIdx = text.slice(0, range.startOffset).lastIndexOf('/');
-        if (slashIdx !== -1 && range.startContainer.nodeType === Node.TEXT_NODE) {
-          const before = text.slice(0, slashIdx);
-          const after = text.slice(range.startOffset);
-          (range.startContainer as Text).textContent = before + after;
-          range.setStart(range.startContainer, before.length);
-          range.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
+    if (!editor) { setSlashMenu({ open: false, pos: null, query: '' }); return; }
+    const { state } = editor;
+    const { from } = state.selection;
+    const $from = state.doc.resolve(from);
+    const lineText = $from.parent.textContent.slice(0, $from.parentOffset);
+    const slashIdx = lineText.lastIndexOf('/');
+    if (slashIdx !== -1) {
+      const removeFrom = from - (lineText.length - slashIdx);
+      editor.chain().focus().deleteRange({ from: removeFrom, to: from }).run();
     }
     setSlashMenu({ open: false, pos: null, query: '' });
-    syncEditorState();
   };
 
-  // Tag handling ───────────────────────────────────────────────────────────
+  // Toolbar actions ────────────────────────────────────────────────────────
+  const ensureEditable = () => {
+    if (viewerMode) setViewerMode(false);
+  };
+
+  const tBold = () => { ensureEditable(); editor?.chain().focus().toggleBold().run(); void hapticLight(); };
+  const tItalic = () => { ensureEditable(); editor?.chain().focus().toggleItalic().run(); void hapticLight(); };
+  const tUnderline = () => { ensureEditable(); editor?.chain().focus().toggleUnderline().run(); void hapticLight(); };
+  const tStrike = () => { ensureEditable(); editor?.chain().focus().toggleStrike().run(); void hapticLight(); };
+  const tHighlight = () => { ensureEditable(); editor?.chain().focus().toggleHighlight().run(); void hapticLight(); };
+  const tCode = () => { ensureEditable(); editor?.chain().focus().toggleCodeBlock().run(); void hapticLight(); };
+  const tQuote = () => { ensureEditable(); editor?.chain().focus().toggleBlockquote().run(); void hapticLight(); };
+  const tBullet = () => { ensureEditable(); editor?.chain().focus().toggleBulletList().run(); void hapticLight(); };
+  const tOrdered = () => { ensureEditable(); editor?.chain().focus().toggleOrderedList().run(); void hapticLight(); };
+  const tTask = () => { ensureEditable(); editor?.chain().focus().toggleTaskList().run(); void hapticLight(); };
+  const tHr = () => { ensureEditable(); editor?.chain().focus().setHorizontalRule().run(); void hapticLight(); };
+  const tClear = () => { ensureEditable(); editor?.chain().focus().clearNodes().unsetAllMarks().run(); void hapticLight(); };
+  const tUndo = () => { ensureEditable(); editor?.chain().focus().undo().run(); };
+  const tRedo = () => { ensureEditable(); editor?.chain().focus().redo().run(); };
+  const tIndent = () => {
+    ensureEditable();
+    if (!editor) return;
+    if (editor.isActive('listItem') || editor.isActive('taskItem')) {
+      editor.chain().focus().sinkListItem(editor.isActive('taskItem') ? 'taskItem' : 'listItem').run();
+    }
+  };
+  const tOutdent = () => {
+    ensureEditable();
+    if (!editor) return;
+    if (editor.isActive('listItem') || editor.isActive('taskItem')) {
+      editor.chain().focus().liftListItem(editor.isActive('taskItem') ? 'taskItem' : 'listItem').run();
+    }
+  };
+  const tHeading = (level: 1 | 2 | 3) => {
+    ensureEditable();
+    editor?.chain().focus().toggleHeading({ level }).run();
+    void hapticLight();
+  };
+
+  const applyLink = () => {
+    ensureEditable();
+    if (!editor) return;
+    const previous = editor.getAttributes('link').href || '';
+    const input = window.prompt(previous ? 'Edit link URL (leave empty to remove):' : 'Enter URL:', previous || 'https://');
+    if (input === null) return;
+    const trimmed = input.trim();
+    if (!trimmed) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    const normalized = /^(https?:|mailto:|tel:|\/)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    editor.chain().focus().extendMarkRange('link').setLink({ href: normalized }).run();
+    void hapticLight();
+  };
+
+  const applyTextColor = (hex: string) => {
+    ensureEditable();
+    if (!editor) return;
+    if (hex === 'inherit') {
+      editor.chain().focus().unsetColor().run();
+    } else {
+      editor.chain().focus().setColor(hex).run();
+    }
+    setColorPickerOpen(false);
+    void hapticLight();
+  };
+
+  // Keyboard shortcuts (window-level)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (e.key === 'Escape') {
+        if (slashMenu.open) { setSlashMenu({ open: false, pos: null, query: '' }); return; }
+        if (colorPickerOpen) { setColorPickerOpen(false); return; }
+        if (moreMenuOpen) { setMoreMenuOpen(false); return; }
+        if (searchOpen) { setSearchOpen(false); return; }
+        if (tagInputOpen) { setTagInputOpen(false); return; }
+      }
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 's') { e.preventDefault(); void runSave(); return; }
+      if (key === 'f') { e.preventDefault(); setSearchOpen(true); return; }
+      if (key === 'k') { e.preventDefault(); applyLink(); return; }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
+
+  // Close color picker when tapping outside
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[role="menu"][aria-label="Text color"]')) return;
+      if (target.closest('[aria-label="Text color"]')) return;
+      setColorPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick, true);
+    return () => document.removeEventListener('mousedown', onDocClick, true);
+  }, [colorPickerOpen]);
+
+  // ── Tag handling ─────────────────────────────────────────────────────────
   const addTag = (raw?: string) => {
     const t = (raw ?? tagInput).trim().toLowerCase().replace(/^#/, '');
     if (!t) return;
@@ -863,44 +583,9 @@ export function NoteEditor({
   };
   const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
 
-  // Notebook switch (with "Create new")
   const onNotebookSelect = (value: string) => {
-    if (value === '__new__') {
-      setNewNotebookOpen(true);
-      return;
-    }
+    if (value === '__new__') { setNewNotebookOpen(true); return; }
     setNotebook(value);
-  };
-
-  // Toggle a checkbox in viewer mode without going to edit
-  const handleViewerClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
-      // Capture the new state, persist it
-      requestAnimationFrame(() => {
-        const ed = editorRef.current;
-        if (!ed) return;
-        // Sync the input's checked attribute to the DOM so saved HTML reflects it
-        ed.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-          if ((cb as HTMLInputElement).checked) cb.setAttribute('checked', '');
-          else cb.removeAttribute('checked');
-        });
-        setContentHtml(ed.innerHTML);
-      });
-      return;
-    }
-    // Anchor tap in viewer mode → open the URL externally instead of
-    // switching into edit mode (where it would become a no-op).
-    const anchor = target.closest('a') as HTMLAnchorElement | null;
-    if (anchor && anchor.href) {
-      e.preventDefault();
-      try { window.open(anchor.href, '_blank', 'noopener,noreferrer'); } catch { /* noop */ }
-      return;
-    }
-    // Tap anywhere else in the viewer → switch to edit mode
-    if (!viewerMode) return;
-    setViewerMode(false);
-    requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   const handleShare = async () => {
@@ -914,17 +599,25 @@ export function NoteEditor({
     } catch { /* user cancelled */ }
   };
 
+  // Tap-anywhere-in-viewer-to-edit (also opens external links in new tab)
+  const handleViewerClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor && anchor.href) {
+      e.preventDefault();
+      try { window.open(anchor.href, '_blank', 'noopener,noreferrer'); } catch { /* noop */ }
+      return;
+    }
+    if (!viewerMode) return;
+    setViewerMode(false);
+    requestAnimationFrame(() => editor?.commands.focus());
+  };
+
   const accentHex = (color && NOTE_ACCENT_PALETTE.find(s => s.id === color)?.hex) || null;
 
-  // Wrapper outer container differs between fullscreen + embedded (3-pane).
-  // The mobile fullscreen overlay also reserves the iOS safe-area inset at
-  // the top so the back button + title aren't tucked behind the notch.
   const Wrapper = embedded ? 'div' : motion.div;
 
-  // Swipe-back-to-list gesture (iOS-style edge pan). Only fires for swipes
-  // that start within the first 36px from the left edge so we don't fight
-  // the editor's own horizontal scroll inside code blocks. A 70px-or-more
-  // horizontal travel with predominantly horizontal motion triggers close.
+  // Swipe-back-to-list gesture (iOS-style)
   const swipeRef = useRef<{ x: number; y: number; tracking: boolean } | null>(null);
   const handleSwipeStart = (e: React.TouchEvent) => {
     if (embedded) return;
@@ -939,12 +632,9 @@ export function NoteEditor({
     const dx = t.clientX - swipeRef.current.x;
     const dy = Math.abs(t.clientY - swipeRef.current.y);
     swipeRef.current = null;
-    if (dx > 70 && dy < 60) {
-      void saveAndClose();
-    }
+    if (dx > 70 && dy < 60) void saveAndClose();
   };
 
-  // Save (if dirty + has content) then close. Used by Back button and swipe-back.
   const saveAndClose = async () => {
     if (dirty && (title.trim() || htmlToText(contentHtml).trim())) {
       try { await runSave(); } catch {}
@@ -967,6 +657,9 @@ export function NoteEditor({
         onTouchStart: handleSwipeStart,
         onTouchEnd: handleSwipeEnd,
       } as any);
+
+  // active-state helpers (re-evaluated each render via the tick state)
+  const isActive = (name: string, attrs?: Record<string, unknown>) => !!editor?.isActive(name, attrs as any);
 
   const editorBody = (
     <>
@@ -1030,17 +723,11 @@ export function NoteEditor({
             <Share2 className="w-4 h-4" />
           </button>
           {!embedded && (
-            // Explicit Done button for mobile — saves immediately and closes.
-            // Autosave already covers most cases, but a visible action gives
-            // the user confidence and a clean way out of the editor.
             <button
               type="button"
               onClick={async () => {
                 setSubmitted(true);
-                if (!title.trim()) {
-                  titleRef.current?.focus();
-                  return;
-                }
+                if (!title.trim()) { titleRef.current?.focus(); return; }
                 await runSave();
                 onClose();
               }}
@@ -1125,27 +812,26 @@ export function NoteEditor({
           </div>
         </div>
 
-        {/* Find-in-note panel */}
-        <InNoteSearch open={searchOpen} editor={editorRef.current} onClose={() => setSearchOpen(false)} />
+        <InNoteSearch open={searchOpen} editor={editor?.view.dom ?? null} onClose={() => setSearchOpen(false)} />
       </header>
 
-      {/* Color rail under top bar */}
       {accentHex && <div className="h-px w-full" style={{ background: accentHex }} aria-hidden />}
 
-      {/* Formatting toolbar — fixed BELOW the header, never scrolls away.
-          One row of buttons that horizontally scrolls if it overflows. */}
+      {/* Formatting toolbar */}
       <div className="flex-shrink-0 bg-background">
         <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar scrollbar-hide">
-          <ToolbarBtn label="Undo (⌘Z)" onClick={() => applyFormat('undo')}><RotateCcw className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Redo (⌘⇧Z)" onClick={() => applyFormat('redo')}><RotateCw className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Undo (⌘Z)" onClick={tUndo}><RotateCcw className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Redo (⌘⇧Z)" onClick={tRedo}><RotateCw className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Bold (⌘B)" active={activeFormats.has('bold')} onClick={() => applyFormat('bold')}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Italic (⌘I)" active={activeFormats.has('italic')} onClick={() => applyFormat('italic')}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Strikethrough" active={activeFormats.has('strike')} onClick={() => applyFormat('strikeThrough')}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Highlight" onClick={applyHighlight}><Highlighter className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Bold (⌘B)" active={isActive('bold')} onClick={tBold}><Bold className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Italic (⌘I)" active={isActive('italic')} onClick={tItalic}><Italic className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Underline (⌘U)" active={isActive('underline')} onClick={tUnderline}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Strikethrough" active={isActive('strike')} onClick={tStrike}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Highlight" active={isActive('highlight')} onClick={tHighlight}><Highlighter className="w-3.5 h-3.5" /></ToolbarBtn>
           <div className="relative flex-shrink-0">
-            <ToolbarBtn label="Text color" active={colorPickerOpen} onClick={openColorPicker}><Type className="w-3.5 h-3.5" /></ToolbarBtn>
+            <ToolbarBtn label="Text color" active={colorPickerOpen} onClick={() => setColorPickerOpen(v => !v)}>
+              <Type className="w-3.5 h-3.5" />
+            </ToolbarBtn>
             <AnimatePresence>
               {colorPickerOpen && (
                 <motion.div
@@ -1176,32 +862,29 @@ export function NoteEditor({
               )}
             </AnimatePresence>
           </div>
-          <ToolbarBtn label="Link (⌘K)" onClick={applyLink}><Link2 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Link (⌘K)" active={isActive('link')} onClick={applyLink}><Link2 className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Heading 1" active={headingCycle === 1} onClick={() => applyHeading(headingCycle === 1 ? 0 : 1)}><Heading1 className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Heading 2" active={headingCycle === 2} onClick={() => applyHeading(headingCycle === 2 ? 0 : 2)}><Heading2 className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Heading 3" active={headingCycle === 3} onClick={() => applyHeading(headingCycle === 3 ? 0 : 3)}><Heading3 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Heading 1" active={isActive('heading', { level: 1 })} onClick={() => tHeading(1)}><Heading1 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Heading 2" active={isActive('heading', { level: 2 })} onClick={() => tHeading(2)}><Heading2 className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Heading 3" active={isActive('heading', { level: 3 })} onClick={() => tHeading(3)}><Heading3 className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Bullet list (⌘⇧8)" active={activeFormats.has('ul')} onClick={() => applyFormat('insertUnorderedList')}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Numbered list (⌘⇧7)" active={activeFormats.has('ol')} onClick={() => applyFormat('insertOrderedList')}><ListOrdered className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Checklist (⌘⇧9)" onClick={insertChecklistItem}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Quote" onClick={applyQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Bullet list" active={isActive('bulletList')} onClick={tBullet}><ListBullets className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Numbered list" active={isActive('orderedList')} onClick={tOrdered}><ListOrdered className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Checklist" active={isActive('taskList')} onClick={tTask}><CheckSquare className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Code block" active={isActive('codeBlock')} onClick={tCode}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Quote" active={isActive('blockquote')} onClick={tQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Indent (Tab)" onClick={() => applyFormat('indent')}><Indent className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Outdent (⇧Tab)" onClick={() => applyFormat('outdent')}><Outdent className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Indent (Tab)" onClick={tIndent}><Indent className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Outdent (⇧Tab)" onClick={tOutdent}><Outdent className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Horizontal rule" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
-          <ToolbarBtn label="Clear formatting" onClick={() => applyFormat('removeFormat')}><RemoveFormatting className="w-3.5 h-3.5" /></ToolbarBtn>
-          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
-          <ToolbarBtn label="Beautify" onClick={applyBeautify}><Sparkles className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Horizontal rule" onClick={tHr}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
+          <ToolbarBtn label="Clear formatting" onClick={tClear}><RemoveFormatting className="w-3.5 h-3.5" /></ToolbarBtn>
         </div>
       </div>
 
-      {/* Body — only this section scrolls */}
+      {/* Body */}
       <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar">
-        <div className="px-4 sm:px-8 pt-4 pb-3 max-w-3xl mx-auto w-full relative">
-          {/* Title */}
+        <div className="px-4 sm:px-8 pt-4 pb-3 max-w-3xl mx-auto w-full relative" ref={editorWrapperRef}>
           <input
             ref={titleRef}
             value={title}
@@ -1212,45 +895,29 @@ export function NoteEditor({
             className={`w-full bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 text-[26px] sm:text-[28px] font-bold tracking-tight text-foreground placeholder:text-muted-foreground/30 leading-tight pb-3 rounded-md ${
               submitted && !title.trim() ? 'ring-1 ring-red-400/60 px-2 -mx-2' : ''
             }`}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editorRef.current?.focus(); } }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editor?.commands.focus(); } }}
           />
           {submitted && !title.trim() && (
             <p className="text-sm text-red-400 mb-2 -mt-1">Title is required</p>
           )}
 
-          {/* Body */}
           <div
-            ref={editorRef}
-            contentEditable={!viewerMode}
-            suppressContentEditableWarning
-            role="textbox"
-            aria-label="Note body"
-            aria-multiline="true"
-            onInput={handleEditorInput}
-            onKeyDown={handleEditorKeyDown}
-            onKeyUp={sampleActiveFormats}
-            onMouseUp={sampleActiveFormats}
-            onFocus={sampleActiveFormats}
+            className={`note-content ${viewerMode ? 'cursor-text' : ''}`}
             onClick={viewerMode ? handleViewerClick : undefined}
-            spellCheck={!viewerMode}
-            className={`iv-rich-editor note-content outline-none border-none focus:outline-none focus-visible:outline-none ${viewerMode ? 'cursor-text' : ''}`}
-            data-placeholder={viewerMode ? '' : 'Start writing…'}
-            // Toolbar is now above the body, so we no longer need the
-            // 96px ghost gutter at the bottom of the editable area —
-            // just keep enough breathing room above the footer.
             style={{ minHeight: '300px', paddingBottom: `calc(24px + ${bottomGutterPx}px)` }}
-          />
+          >
+            <EditorContent editor={editor} />
+          </div>
 
           <SlashMenu
             open={slashMenu.open}
             position={slashMenu.pos}
             query={slashMenu.query}
-            editor={editorRef.current}
+            editor={editor}
             onClose={() => setSlashMenu({ open: false, pos: null, query: '' })}
             onCommandPicked={onSlashPicked}
           />
 
-          {/* "Create new notebook" inline form */}
           <AnimatePresence>
             {newNotebookOpen && (
               <motion.div
@@ -1297,9 +964,6 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Footer — notebook, tags, word count, save status. Fixed at the
-          bottom of the editor; lifts above the iOS soft keyboard via the
-          same visualViewport offset the toolbar used to use. */}
       <footer
         className="flex-shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-md transition-transform duration-150"
         style={{
@@ -1308,7 +972,6 @@ export function NoteEditor({
         }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          {/* Top line: notebook + tags */}
           <div className="px-3 pt-1.5 pb-1 flex items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1 flex-shrink-0">
               <BookOpen className="w-3.5 h-3.5 opacity-60" />
@@ -1385,7 +1048,6 @@ export function NoteEditor({
               )}
             </div>
           </div>
-          {/* Bottom line: word count + save status */}
           <div className="px-3 pb-1.5 flex items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
             <span>{wordCount} word{wordCount === 1 ? '' : 's'}</span>
             <span className="inline-flex items-center gap-1">
@@ -1408,11 +1070,6 @@ export function NoteEditor({
     return <Wrapper {...wrapperProps}>{editorBody}</Wrapper>;
   }
 
-  // Portal the fullscreen overlay to <body>. The page tree (notes.tsx,
-  // vault context, motion ancestors) can re-render freely without ever
-  // unmounting the editor — which was the root cause of the "editor
-  // closes mid-typing" reports. Closing is now strictly user-driven
-  // (Back / Done / Escape / explicit delete).
   if (typeof document === 'undefined') {
     return (
       <AnimatePresence>
@@ -1428,7 +1085,7 @@ export function NoteEditor({
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 
 function SaveDot({ saving, dirty, savedAt }: { saving: boolean; dirty: boolean; savedAt: Date | null }) {
   const [showCheck, setShowCheck] = useState(false);
@@ -1480,190 +1137,6 @@ function ToolbarBtn({ label, active, onClick, children }: { label: string; activ
       {children}
     </button>
   );
-}
-
-function initialHtml(note: NoteEntry | null, starter?: { content?: string }): string {
-  if (note) {
-    const raw = note.content || '';
-    if (raw.includes('<')) return raw;
-    return raw.split('\n').map(line => line ? `<p>${escapeHtml(line)}</p>` : '<p><br/></p>').join('');
-  }
-  if (starter?.content) {
-    const raw = starter.content;
-    if (raw.includes('<')) return raw;
-    return raw.split('\n').map(line => line ? `<p>${escapeHtml(line)}</p>` : '<p><br/></p>').join('');
-  }
-  return '<p><br/></p>';
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c));
-}
-
-function cssEscape(s: string): string {
-  if (typeof (window as any).CSS !== 'undefined' && (window as any).CSS.escape) {
-    return (window as any).CSS.escape(s);
-  }
-  return s.replace(/[^a-zA-Z0-9_-]/g, c => `\\${c}`);
-}
-
-/**
- * Clean up note content: trim whitespace runs, drop empty paragraphs, and
- * convert markdown-ish text patterns (`- foo`, `1. foo`, `[ ] foo`) to
- * proper HTML lists / checklists. Demotes stray H1s after the first to
- * H2 so headings have a single document title.
- */
-export function beautifyContent(html: string): string {
-  const root = document.createElement('div');
-  root.innerHTML = html || '';
-
-  const isBlankBlock = (el: Element): boolean => {
-    if (!el || el.nodeType !== 1) return false;
-    const tag = el.tagName;
-    if (tag !== 'P' && tag !== 'DIV') return false;
-    if (el.querySelector('img,input,br + *')) return false;
-    if (el.querySelector('img,input')) return false;
-    const text = (el.textContent || '').replace(/​| /g, '').trim();
-    return text === '';
-  };
-
-  // Collapse runs of empty <p>/<div> blocks to at most one
-  const collapseEmpty = () => {
-    const kids = Array.from(root.children);
-    let prevBlank = false;
-    for (const el of kids) {
-      const blank = isBlankBlock(el);
-      if (blank && prevBlank) el.remove();
-      prevBlank = blank;
-    }
-  };
-  collapseEmpty();
-
-  // Convert plain-text patterns at the start of paragraphs into lists/todos
-  const ulRe = /^[-*•]\s+(.+)$/;
-  const olRe = /^\d+[.)]\s+(.+)$/;
-  const todoRe = /^\[([ xX]?)\]\s+(.+)$/;
-
-  const kids = Array.from(root.childNodes);
-  const out: Node[] = [];
-  let i = 0;
-  while (i < kids.length) {
-    const node = kids[i];
-    if (node.nodeType === 1 && (node as Element).tagName === 'P') {
-      const text = (node.textContent || '').replace(/​/g, '').trim();
-      if (ulRe.test(text)) {
-        const ul = document.createElement('ul');
-        while (i < kids.length) {
-          const cur = kids[i];
-          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
-          const t = (cur.textContent || '').replace(/​/g, '').trim();
-          const m = t.match(ulRe);
-          if (!m) break;
-          const li = document.createElement('li');
-          li.textContent = m[1].trim();
-          ul.appendChild(li);
-          i++;
-        }
-        if (ul.children.length > 0) { out.push(ul); continue; }
-      }
-      if (olRe.test(text)) {
-        const ol = document.createElement('ol');
-        while (i < kids.length) {
-          const cur = kids[i];
-          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
-          const t = (cur.textContent || '').replace(/​/g, '').trim();
-          const m = t.match(olRe);
-          if (!m) break;
-          const li = document.createElement('li');
-          li.textContent = m[1].trim();
-          ol.appendChild(li);
-          i++;
-        }
-        if (ol.children.length > 0) { out.push(ol); continue; }
-      }
-      if (todoRe.test(text)) {
-        while (i < kids.length) {
-          const cur = kids[i];
-          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
-          const t = (cur.textContent || '').replace(/​/g, '').trim();
-          const m = t.match(todoRe);
-          if (!m) break;
-          const div = document.createElement('div');
-          div.setAttribute('data-todo', '1');
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.className = 'iv-todo-check';
-          if (m[1] === 'x' || m[1] === 'X') cb.setAttribute('checked', '');
-          const span = document.createElement('span');
-          span.textContent = m[2].trim();
-          div.appendChild(cb);
-          div.appendChild(document.createTextNode(' '));
-          div.appendChild(span);
-          out.push(div);
-          i++;
-        }
-        continue;
-      }
-      // Single-paragraph case: split inline comma-separated todo lines like
-      // "[ ] eggs, [ ] cheese, [ ] dal" — common after pasting.
-      const inlineTodoRe = /\[([ xX]?)\]\s*([^\[]+?)(?=,?\s*\[|$)/g;
-      const matches = [...text.matchAll(inlineTodoRe)];
-      if (matches.length >= 2) {
-        for (const m of matches) {
-          const div = document.createElement('div');
-          div.setAttribute('data-todo', '1');
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.className = 'iv-todo-check';
-          if (m[1] === 'x' || m[1] === 'X') cb.setAttribute('checked', '');
-          const span = document.createElement('span');
-          span.textContent = m[2].replace(/^[,\s]+|[,\s]+$/g, '');
-          div.appendChild(cb);
-          div.appendChild(document.createTextNode(' '));
-          div.appendChild(span);
-          out.push(div);
-        }
-        i++;
-        continue;
-      }
-    }
-    out.push(node);
-    i++;
-  }
-  root.innerHTML = '';
-  for (const n of out) root.appendChild(n);
-
-  // Demote stray H1s after the first to H2 (single document title)
-  const h1s = Array.from(root.querySelectorAll('h1'));
-  for (let j = 1; j < h1s.length; j++) {
-    const h2 = document.createElement('h2');
-    h2.innerHTML = h1s[j].innerHTML;
-    h1s[j].replaceWith(h2);
-  }
-
-  // Trim leading/trailing blank blocks
-  while (root.firstChild && root.firstChild.nodeType === 1 && isBlankBlock(root.firstChild as Element)) {
-    root.removeChild(root.firstChild);
-  }
-  while (root.lastChild && root.lastChild.nodeType === 1 && isBlankBlock(root.lastChild as Element)) {
-    root.removeChild(root.lastChild);
-  }
-
-  // Collapse multi-space runs inside text nodes
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const textNodes: Text[] = [];
-  let cur = walker.nextNode();
-  while (cur) {
-    textNodes.push(cur as Text);
-    cur = walker.nextNode();
-  }
-  for (const t of textNodes) {
-    if (!t.nodeValue) continue;
-    const collapsed = t.nodeValue.replace(/[ \t]{2,}/g, ' ');
-    if (collapsed !== t.nodeValue) t.nodeValue = collapsed;
-  }
-
-  return root.innerHTML || '<p><br/></p>';
 }
 
 function serializeForCompare(snap: { title: string; html: string; notebook: string; tags: string[]; isPinned: boolean; color: string | undefined }): string {
