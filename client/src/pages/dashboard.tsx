@@ -17,6 +17,8 @@ import { ImportExportModal } from "@/components/import-export-modal";
 import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { calculateSecurityScore, type SecurityBreakdown } from "@/lib/security-score";
+import { generateInsights, recordSecurityScore, dismissInsight, type Insight } from "@/lib/ai-insights";
+import * as LucideIcons from "lucide-react";
 import { publishWidgetSnapshot } from "@/lib/widget-data";
 import { useAutoNotifications } from "@/hooks/use-auto-notifications";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
@@ -308,6 +310,23 @@ export default function Dashboard() {
     () => calculateSecurityScore(passwords as any, masterPassword || ''),
     [passwords, masterPassword]
   );
+
+  // Smart Insights — pattern-based, all client-side. Refresh on vault unlock
+  // (passwords/subscriptions/expenses change) and on score change.
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
+  const [insightsTick, setInsightsTick] = useState(0);
+  const insights = useMemo<Insight[]>(() => {
+    const prevScore = recordSecurityScore(breakdown.totalScore);
+    return generateInsights({
+      passwords: passwords as any,
+      subscriptions: subscriptions as any,
+      expenses: expenses as any,
+      securityScore: breakdown.totalScore,
+      previousSecurityScore: prevScore,
+    });
+    // insightsTick included so dismiss triggers a refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passwords, subscriptions, expenses, breakdown.totalScore, insightsTick]);
 
   const todayReminders = useMemo(() =>
     reminders
@@ -719,6 +738,69 @@ export default function Dashboard() {
           })}
         </div>
       </motion.div>
+
+      {insights.length > 0 && (
+        <motion.div variants={fadeUp} data-testid="smart-insights">
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3" /> Smart Insights
+            </p>
+            {insights.length > 3 && (
+              <button
+                className="text-[11px] font-medium text-primary hover:underline"
+                onClick={() => setInsightsExpanded((v) => !v)}
+                data-testid="insights-toggle-all"
+              >
+                {insightsExpanded ? 'Show top 3' : `See all ${insights.length}`}
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {(insightsExpanded ? insights : insights.slice(0, 3)).map((ins) => {
+              const Icon = (LucideIcons as any)[ins.icon] || Sparkles;
+              const tone =
+                ins.priority === 'high'
+                  ? 'border-red-500/40 bg-red-500/5'
+                  : ins.priority === 'medium'
+                  ? 'border-amber-500/40 bg-amber-500/5'
+                  : 'border-border/60 bg-card';
+              const iconTone =
+                ins.category === 'security'
+                  ? 'text-indigo-500 bg-indigo-500/10'
+                  : ins.category === 'finance'
+                  ? 'text-emerald-500 bg-emerald-500/10'
+                  : 'text-amber-500 bg-amber-500/10';
+              const inner = (
+                <motion.div
+                  whileHover={{ y: -1 }}
+                  className={`group flex items-start gap-3 p-3 rounded-2xl border ${tone} hover:shadow-sm transition-all cursor-pointer`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconTone}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-foreground leading-snug">{ins.title}</div>
+                    <div className="text-xs text-muted-foreground leading-snug mt-0.5">{ins.description}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {ins.actionUrl && <ArrowRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-foreground" />}
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissInsight(ins.id); setInsightsTick((t) => t + 1); }}
+                      className="text-[10px] text-muted-foreground/70 hover:text-foreground px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Dismiss insight"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </motion.div>
+              );
+              return ins.actionUrl
+                ? <Link key={ins.id} href={ins.actionUrl}>{inner}</Link>
+                : <div key={ins.id}>{inner}</div>;
+            })}
+          </div>
+        </motion.div>
+      )}
 
       <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <WidgetCard

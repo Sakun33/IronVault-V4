@@ -52,6 +52,8 @@ const Documents = React.lazy(() => import("@/pages/documents"));
 const APIKeys = React.lazy(() => import("@/pages/api-keys"));
 const Profile = React.lazy(() => import("@/pages/profile"));
 const Settings = React.lazy(() => import("@/pages/settings"));
+const Integrations = React.lazy(() => import("@/pages/integrations"));
+const EmergencyAccess = React.lazy(() => import("@/pages/emergency-access"));
 const ImportPasswords = React.lazy(() => import("@/components/import-passwords"));
 const AboutPage = React.lazy(() => import("@/pages/info/about"));
 const FAQPage = React.lazy(() => import("@/pages/info/faq"));
@@ -1159,6 +1161,8 @@ function Router() {
       <Route path="/api-keys"><MainLayout><APIKeys /></MainLayout></Route>
       <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
       <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
+      <Route path="/integrations"><MainLayout><Integrations /></MainLayout></Route>
+      <Route path="/emergency-access"><MainLayout><EmergencyAccess /></MainLayout></Route>
       <Route path="/import-passwords"><MainLayout><ImportPasswords /></MainLayout></Route>
       <Route path="/qa"><MainLayout><QAPage /></MainLayout></Route>
       <Route path="/vaults"><MainLayout><VaultsPage /></MainLayout></Route>

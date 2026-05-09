@@ -15,17 +15,16 @@ import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
 import { PasswordGenerator } from '@/lib/password-generator';
-import { CryptoService } from '@/lib/crypto';
 import { ListSkeleton } from '@/components/list-skeleton';
 import { AddPasswordModal } from '@/components/add-password-modal';
 import { Favicon } from '@/components/favicon';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { GuidedImportButton } from '@/components/guided-import';
+import { SharePasswordModal } from '@/components/share-password-modal';
 import { ViewToggle } from '@/components/view-toggle';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
-import { apiBase } from '@/native/platform';
 
 export default function Passwords() {
   const { passwords, deletePassword, bulkDeletePasswords, isLoading } = useVault();
@@ -40,6 +39,7 @@ export default function Passwords() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPassword, setEditingPassword] = useState<any>(null);
+  const [sharingPassword, setSharingPassword] = useState<any>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   // Strength filter respects ?strength=weak|medium|strong from the URL so
   // dashboard "fix now" tiles deep-link straight into a filtered view.
@@ -94,66 +94,7 @@ export default function Passwords() {
     { id: 'wifi', name: 'WiFi Network', icon: Globe, category: 'Network', fields: { name: '', username: 'admin', url: '' } },
   ];
 
-  const handleShare = async (pw: any) => {
-    try {
-      const payload = JSON.stringify({
-        name: pw.name,
-        username: pw.username || pw.email || '',
-        password: pw.password,
-        url: pw.url || '',
-        sharedBy: 'IronVault User',
-      });
-
-      // Client-side encrypt: key never leaves the browser. Server only sees ciphertext + IV.
-      const key = await CryptoService.generateKey();
-      const { encrypted, iv } = await CryptoService.encrypt(payload, key);
-      const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
-
-      // /api/share/create requires Bearer auth (the server gates it behind
-      // getCloudUser). Without the Authorization header every share would
-      // 401, surfacing to the user as a generic "Could not create share
-      // link" toast — which 100% reproduced for any signed-in user.
-      const cloudToken = localStorage.getItem('iv_cloud_token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (cloudToken) headers['Authorization'] = `Bearer ${cloudToken}`;
-      const res = await fetch(`${apiBase()}/api/share/create`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          data: {
-            v: 2,
-            ct: CryptoService.uint8ArrayToBase64(encrypted),
-            iv: CryptoService.uint8ArrayToBase64(iv),
-          },
-          expiresIn: 24,
-        }),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        console.error('[SHARE] create failed', res.status, txt);
-        throw new Error(`Failed to create share link (${res.status})`);
-      }
-      const { link } = await res.json();
-
-      // The fragment is never sent in HTTP requests — server cannot read the key.
-      const linkWithKey = `${link}#k=${CryptoService.uint8ArrayToBase64(rawKey)
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
-
-      if (navigator.share) {
-        await navigator.share({
-          title: `Password for ${pw.name}`,
-          text: `Here's the login for ${pw.name}. One-time link — save the details.`,
-          url: linkWithKey,
-        });
-      } else {
-        await navigator.clipboard.writeText(linkWithKey);
-        toast({ variant: 'success', title: 'Share link copied!', description: 'One-time link valid for 24 hours' });
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      toast({ title: 'Share failed', description: 'Could not create share link', variant: 'destructive' });
-    }
-  };
+  const handleShare = (pw: any) => { setSharingPassword(pw); };
 
   const handleUseTemplate = (template: typeof PASSWORD_TEMPLATES[0]) => {
     setEditingPassword({ ...template.fields, category: template.category, isTemplate: true });
@@ -764,6 +705,12 @@ export default function Passwords() {
         onVerified={handleVerified}
         title="Reveal Password"
         description="Verify your identity to view this password."
+      />
+
+      <SharePasswordModal
+        open={!!sharingPassword}
+        onOpenChange={(open) => { if (!open) setSharingPassword(null); }}
+        password={sharingPassword}
       />
 
 

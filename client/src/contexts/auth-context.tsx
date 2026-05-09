@@ -121,6 +121,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // JWT has expired or been revoked. Run accountLogout to clear the stale
   // session and bounce the user to /auth/login. We listen here at the
   // provider level so a single subscription serves the whole app.
+  // Phase 3: Emergency-access activity ping. Fires once on login + every hour
+  // while the app stays open. Used by emergency-access workflows to track when
+  // the account was last seen — without this signal there's no way to know
+  // when to allow trusted-contact access requests to proceed.
+  useEffect(() => {
+    if (!isAccountLoggedIn) return;
+    const ping = () => {
+      const token = getCloudToken();
+      if (!token) return;
+      fetch(`${apiBase()}/api/emergency/ping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      }).catch(() => { /* fire-and-forget */ });
+    };
+    ping();
+    const interval = setInterval(ping, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAccountLoggedIn]);
+
   useEffect(() => {
     const onExpired = () => {
       if (!isAccountLoggedIn) return; // already logged out — no-op

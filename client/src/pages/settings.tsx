@@ -34,6 +34,8 @@ import {
   Moon,
   Monitor,
   Type,
+  Webhook,
+  HeartHandshake,
 } from 'lucide-react';
 import { FontSizeSettings } from '@/components/font-size-settings';
 import SupportTicketSubmission from '@/components/support-ticket-submission';
@@ -582,6 +584,33 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Integrations & Emergency Access */}
+      <Card className="rounded-2xl shadow-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="w-5 h-5" />
+            Integrations & Sharing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Link href="/integrations">
+            <Button variant="outline" className="w-full justify-start gap-2" data-testid="settings-integrations-cta">
+              <Webhook className="w-4 h-4" />
+              Webhooks (Zapier, Make, n8n)
+            </Button>
+          </Link>
+          <Link href="/emergency-access">
+            <Button variant="outline" className="w-full justify-start gap-2" data-testid="settings-emergency-cta">
+              <HeartHandshake className="w-4 h-4" />
+              Emergency Access (Digital Will)
+            </Button>
+          </Link>
+          <p className="text-xs text-muted-foreground pt-1">
+            Connect IronVault events to external automations, or designate trusted contacts who can request vault access if you become inactive.
+          </p>
         </CardContent>
       </Card>
 

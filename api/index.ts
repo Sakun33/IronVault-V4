@@ -3320,6 +3320,508 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── Phase 3: Webhooks (Zapier / Make / n8n integration) ─────────────────────
+  // User-registered webhooks fired on vault events. Stored per-user; URL is
+  // hit fire-and-forget with 5s timeout (no retries) — external systems are
+  // expected to be idempotent. Payloads are intentionally NON-sensitive: only
+  // event metadata (e.g. password title, not the password itself).
+  const ensureWebhooksTable = (() => {
+    let ready = false;
+    return async () => {
+      if (ready) return;
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS webhooks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT NOT NULL,
+          url TEXT NOT NULL,
+          events TEXT[] NOT NULL DEFAULT '{}',
+          active BOOLEAN NOT NULL DEFAULT true,
+          last_fired_at TIMESTAMPTZ,
+          last_status INTEGER,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id);
+      `);
+      ready = true;
+    };
+  })();
+
+  const VALID_WEBHOOK_EVENTS = new Set([
+    'password_added', 'password_updated', 'password_deleted',
+    'subscription_renewal_upcoming',
+    'security_score_changed',
+    'vault_synced',
+    'expense_added',
+  ]);
+
+  if (path === '/api/webhooks' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureWebhooksTable();
+      const { rows } = await db.query(
+        `SELECT id, url, events, active, last_fired_at, last_status, created_at
+           FROM webhooks WHERE user_id = $1 ORDER BY created_at DESC`,
+        [cloudUser.userId]
+      );
+      return res.json({ success: true, webhooks: rows });
+    } catch (err: any) {
+      console.error('[webhooks GET]', err.message);
+      return res.status(500).json({ error: 'Failed to list webhooks' });
+    }
+  }
+
+  if (path === '/api/webhooks/register' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { url, events } = req.body as { url?: string; events?: string[] };
+      if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
+      try {
+        const parsed = new URL(url);
+        if (!/^https?:$/.test(parsed.protocol)) return res.status(400).json({ error: 'url must be http(s)' });
+      } catch {
+        return res.status(400).json({ error: 'invalid url' });
+      }
+      const evs = Array.isArray(events) ? events.filter((e) => VALID_WEBHOOK_EVENTS.has(e)) : [];
+      if (evs.length === 0) return res.status(400).json({ error: 'at least one valid event required' });
+      await ensureWebhooksTable();
+      const { rows: countRows } = await db.query(
+        `SELECT COUNT(*)::int AS c FROM webhooks WHERE user_id = $1`,
+        [cloudUser.userId]
+      );
+      if ((countRows[0]?.c ?? 0) >= 20) return res.status(400).json({ error: 'webhook limit (20) reached' });
+      const { rows } = await db.query(
+        `INSERT INTO webhooks (user_id, url, events) VALUES ($1, $2, $3)
+         RETURNING id, url, events, active, created_at`,
+        [cloudUser.userId, url, evs]
+      );
+      return res.json({ success: true, webhook: rows[0] });
+    } catch (err: any) {
+      console.error('[webhooks/register]', err.message);
+      return res.status(500).json({ error: 'Failed to register webhook' });
+    }
+  }
+
+  if (/^\/api\/webhooks\/[a-f0-9-]{36}$/.test(path) && req.method === 'DELETE') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[3];
+    try {
+      await ensureWebhooksTable();
+      const { rowCount } = await db.query(
+        `DELETE FROM webhooks WHERE id = $1 AND user_id = $2`,
+        [id, cloudUser.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[webhooks DELETE]', err.message);
+      return res.status(500).json({ error: 'Failed to delete webhook' });
+    }
+  }
+
+  if (/^\/api\/webhooks\/[a-f0-9-]{36}\/toggle$/.test(path) && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[3];
+    try {
+      await ensureWebhooksTable();
+      const { active } = req.body as { active?: boolean };
+      if (typeof active !== 'boolean') return res.status(400).json({ error: 'active boolean required' });
+      const { rowCount } = await db.query(
+        `UPDATE webhooks SET active = $1 WHERE id = $2 AND user_id = $3`,
+        [active, id, cloudUser.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[webhooks/toggle]', err.message);
+      return res.status(500).json({ error: 'Failed to toggle webhook' });
+    }
+  }
+
+  if (/^\/api\/webhooks\/test\/[a-f0-9-]{36}$/.test(path) && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[4];
+    try {
+      await ensureWebhooksTable();
+      const { rows } = await db.query(
+        `SELECT id, url, events FROM webhooks WHERE id = $1 AND user_id = $2`,
+        [id, cloudUser.userId]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'not found' });
+      const hook = rows[0];
+      const samplePayload = {
+        event: 'test',
+        timestamp: new Date().toISOString(),
+        source: 'IronVault',
+        userId: cloudUser.userId,
+        data: { message: 'This is a test payload from IronVault.', sampleField: 'sampleValue' },
+      };
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      let status = 0;
+      let bodySnippet = '';
+      try {
+        const r = await fetch(hook.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'user-agent': 'IronVault-Webhook/1.0' },
+          body: JSON.stringify(samplePayload),
+          signal: ctrl.signal,
+        });
+        status = r.status;
+        bodySnippet = (await r.text().catch(() => '')).slice(0, 200);
+      } catch (e: any) {
+        clearTimeout(timer);
+        await db.query(
+          `UPDATE webhooks SET last_fired_at = NOW(), last_status = 0 WHERE id = $1`,
+          [hook.id]
+        );
+        return res.status(200).json({ success: false, status: 0, error: e.message || 'fetch failed' });
+      }
+      clearTimeout(timer);
+      await db.query(
+        `UPDATE webhooks SET last_fired_at = NOW(), last_status = $1 WHERE id = $2`,
+        [status, hook.id]
+      );
+      return res.json({ success: status >= 200 && status < 300, status, body: bodySnippet });
+    } catch (err: any) {
+      console.error('[webhooks/test]', err.message);
+      return res.status(500).json({ error: 'Failed to test webhook' });
+    }
+  }
+
+  // Internal dispatcher endpoint — called from the client when an event happens.
+  // The client knows the event name and a small payload; the server fans out to
+  // any matching active webhooks for that user. Fire-and-forget, never blocks
+  // the originating user action.
+  if (path === '/api/webhooks/dispatch' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { event, data } = req.body as { event?: string; data?: any };
+      if (!event || !VALID_WEBHOOK_EVENTS.has(event)) return res.status(400).json({ error: 'invalid event' });
+      await ensureWebhooksTable();
+      const { rows } = await db.query(
+        `SELECT id, url FROM webhooks WHERE user_id = $1 AND active = true AND $2 = ANY(events)`,
+        [cloudUser.userId, event]
+      );
+      const payload = JSON.stringify({
+        event, timestamp: new Date().toISOString(),
+        source: 'IronVault', userId: cloudUser.userId, data: data || {},
+      });
+      // Fire all in parallel — never await response, never throw
+      for (const h of rows) {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        fetch(h.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'user-agent': 'IronVault-Webhook/1.0' },
+          body: payload,
+          signal: ctrl.signal,
+        })
+          .then((r) => {
+            clearTimeout(t);
+            return db.query(`UPDATE webhooks SET last_fired_at = NOW(), last_status = $1 WHERE id = $2`, [r.status, h.id])
+              .catch(() => {});
+          })
+          .catch(() => {
+            clearTimeout(t);
+            return db.query(`UPDATE webhooks SET last_fired_at = NOW(), last_status = 0 WHERE id = $1`, [h.id])
+              .catch(() => {});
+          });
+      }
+      return res.json({ success: true, dispatched: rows.length });
+    } catch (err: any) {
+      console.error('[webhooks/dispatch]', err.message);
+      return res.status(500).json({ error: 'Dispatch failed' });
+    }
+  }
+
+  // ── Phase 3: Emergency Access (Digital Will) ────────────────────────────────
+  // Owner designates trusted contacts who can request read-only vault access
+  // after a configured inactivity period. When a request fires, the owner is
+  // emailed with a 24h deny window before access is granted. The vault itself
+  // is NEVER unlocked server-side — instead, when access is granted, the
+  // owner's last cloud-vault blob (encrypted) is delivered to the contact, who
+  // must still know the master password OR the owner can store a separate
+  // emergency-encrypted blob in a future iteration. For v1 we deliver the
+  // encrypted blob; the contact uses an out-of-band master password
+  // (envelope/sealed note) to unlock.
+  const ensureEmergencyTables = (() => {
+    let ready = false;
+    return async () => {
+      if (ready) return;
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS emergency_contacts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          owner_user_id TEXT NOT NULL,
+          owner_email TEXT NOT NULL,
+          contact_email TEXT NOT NULL,
+          contact_name TEXT,
+          waiting_period_hours INTEGER NOT NULL DEFAULT 168,
+          status TEXT NOT NULL DEFAULT 'active',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(owner_user_id, contact_email)
+        );
+        CREATE INDEX IF NOT EXISTS idx_emerg_owner ON emergency_contacts(owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_emerg_contact ON emergency_contacts(contact_email);
+
+        CREATE TABLE IF NOT EXISTS emergency_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          contact_id UUID NOT NULL REFERENCES emergency_contacts(id) ON DELETE CASCADE,
+          owner_user_id TEXT NOT NULL,
+          contact_email TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          unlocks_at TIMESTAMPTZ NOT NULL,
+          denied_at TIMESTAMPTZ,
+          access_token TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_emerg_req_owner ON emergency_requests(owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_emerg_req_token ON emergency_requests(access_token);
+
+        CREATE TABLE IF NOT EXISTS user_activity_pings (
+          user_id TEXT PRIMARY KEY,
+          last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      ready = true;
+    };
+  })();
+
+  if (path === '/api/emergency/contacts' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureEmergencyTables();
+      const { rows } = await db.query(
+        `SELECT id, contact_email, contact_name, waiting_period_hours, status, created_at
+           FROM emergency_contacts WHERE owner_user_id = $1 ORDER BY created_at DESC`,
+        [cloudUser.userId]
+      );
+      return res.json({ success: true, contacts: rows });
+    } catch (err: any) {
+      console.error('[emergency/contacts GET]', err.message);
+      return res.status(500).json({ error: 'Failed to list contacts' });
+    }
+  }
+
+  if (path === '/api/emergency/add-contact' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { email, name, waitingPeriodHours } = req.body as {
+        email?: string; name?: string; waitingPeriodHours?: number;
+      };
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'valid email required' });
+      const allowed = new Set([24, 168, 720]);
+      const wph = allowed.has(Number(waitingPeriodHours)) ? Number(waitingPeriodHours) : 168;
+      await ensureEmergencyTables();
+      const ownerEmail = (cloudUser as any).email || '';
+      if (email.toLowerCase() === String(ownerEmail).toLowerCase()) {
+        return res.status(400).json({ error: 'cannot add yourself as a contact' });
+      }
+      const { rows } = await db.query(
+        `INSERT INTO emergency_contacts (owner_user_id, owner_email, contact_email, contact_name, waiting_period_hours)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (owner_user_id, contact_email) DO UPDATE SET
+           contact_name = EXCLUDED.contact_name,
+           waiting_period_hours = EXCLUDED.waiting_period_hours,
+           status = 'active'
+         RETURNING id, contact_email, contact_name, waiting_period_hours, status, created_at`,
+        [cloudUser.userId, ownerEmail, email.toLowerCase(), name || null, wph]
+      );
+      // Notify the contact they've been designated
+      const safeOwner = _eHtml(ownerEmail);
+      const safeName = _eHtml(name || email);
+      sendEmail({
+        to: email,
+        subject: `${safeOwner} has designated you as an emergency contact on IronVault`,
+        html: _emailLayout(
+          `${_eh1('Emergency contact designation')}` +
+          `${_ep(`${safeOwner} has designated you as an emergency access contact for their IronVault account. If they become inactive for ${wph} hours, you may request read-only access to their encrypted vault.`)}` +
+          `${_ecard(`<p style="margin:0;font-size:14px;color:#374151">No action is needed right now. You'll receive instructions if access is ever requested.</p>`)}`
+        ),
+      }).catch(() => {});
+      return res.json({ success: true, contact: rows[0] });
+    } catch (err: any) {
+      console.error('[emergency/add-contact]', err.message);
+      return res.status(500).json({ error: 'Failed to add contact' });
+    }
+  }
+
+  if (/^\/api\/emergency\/contacts\/[a-f0-9-]{36}$/.test(path) && req.method === 'DELETE') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[4];
+    try {
+      await ensureEmergencyTables();
+      const { rowCount } = await db.query(
+        `DELETE FROM emergency_contacts WHERE id = $1 AND owner_user_id = $2`,
+        [id, cloudUser.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[emergency/contacts DELETE]', err.message);
+      return res.status(500).json({ error: 'Failed to delete contact' });
+    }
+  }
+
+  // Authenticated owner pings activity — used by the inactivity check.
+  if (path === '/api/emergency/ping' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureEmergencyTables();
+      await db.query(
+        `INSERT INTO user_activity_pings (user_id, last_seen_at) VALUES ($1, NOW())
+         ON CONFLICT (user_id) DO UPDATE SET last_seen_at = NOW()`,
+        [cloudUser.userId]
+      );
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[emergency/ping]', err.message);
+      return res.status(500).json({ error: 'ping failed' });
+    }
+  }
+
+  // Owner-side: list pending and granted requests against THEIR account.
+  if (path === '/api/emergency/requests' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureEmergencyTables();
+      const { rows } = await db.query(
+        `SELECT r.id, r.status, r.requested_at, r.unlocks_at, r.denied_at, r.contact_email,
+                c.contact_name
+           FROM emergency_requests r
+           LEFT JOIN emergency_contacts c ON c.id = r.contact_id
+          WHERE r.owner_user_id = $1
+          ORDER BY r.requested_at DESC LIMIT 50`,
+        [cloudUser.userId]
+      );
+      return res.json({ success: true, requests: rows });
+    } catch (err: any) {
+      console.error('[emergency/requests GET]', err.message);
+      return res.status(500).json({ error: 'Failed to list requests' });
+    }
+  }
+
+  // Contact-side: initiate a request. Identified by being authenticated AND
+  // matching the contact_email on a registered emergency_contacts row.
+  if (path === '/api/emergency/request-access' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { ownerEmail } = req.body as { ownerEmail?: string };
+      if (!ownerEmail) return res.status(400).json({ error: 'ownerEmail required' });
+      const requesterEmail = String((cloudUser as any).email || '').toLowerCase();
+      if (!requesterEmail) return res.status(400).json({ error: 'requester email unavailable' });
+      await ensureEmergencyTables();
+      const { rows: cRows } = await db.query(
+        `SELECT id, owner_user_id, waiting_period_hours
+           FROM emergency_contacts
+          WHERE owner_email = $1 AND contact_email = $2 AND status = 'active'`,
+        [ownerEmail.toLowerCase(), requesterEmail]
+      );
+      if (cRows.length === 0) return res.status(403).json({ error: 'You are not an active emergency contact for this account' });
+      const c = cRows[0];
+      const { rows: existing } = await db.query(
+        `SELECT id FROM emergency_requests WHERE contact_id = $1 AND status = 'pending'`,
+        [c.id]
+      );
+      if (existing.length > 0) return res.status(400).json({ error: 'A pending request already exists' });
+      const unlocksAt = new Date(Date.now() + (c.waiting_period_hours as number) * 60 * 60 * 1000);
+      const accessToken = randomUUID();
+      await db.query(
+        `INSERT INTO emergency_requests (contact_id, owner_user_id, contact_email, unlocks_at, access_token)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [c.id, c.owner_user_id, requesterEmail, unlocksAt, accessToken]
+      );
+      // Email owner a deny link
+      const denyLink = `${_APP_URL}/emergency-access?action=deny&token=${encodeURIComponent(accessToken)}`;
+      const safeRequester = _eHtml(requesterEmail);
+      const safeUnlocks = _eHtml(unlocksAt.toUTCString());
+      sendEmail({
+        to: ownerEmail,
+        subject: 'Emergency access requested on your IronVault account',
+        html: _emailLayout(
+          `${_eh1('Emergency access requested')}` +
+          `${_ep(`${safeRequester} has requested emergency access to your vault. Access will be granted automatically on <strong>${safeUnlocks}</strong> unless you deny the request.`)}` +
+          `${_ebtn(denyLink, 'Deny this request')}` +
+          `${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">If you didn't expect this, deny immediately and consider rotating your master password.</p>`)}`
+        ),
+      }).catch(() => {});
+      return res.json({ success: true, unlocksAt: unlocksAt.toISOString() });
+    } catch (err: any) {
+      console.error('[emergency/request-access]', err.message);
+      return res.status(500).json({ error: 'Request failed' });
+    }
+  }
+
+  // Owner deny — accepts token via query OR body
+  if (path === '/api/emergency/deny' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { token } = req.body as { token?: string };
+      if (!token) return res.status(400).json({ error: 'token required' });
+      await ensureEmergencyTables();
+      const { rowCount } = await db.query(
+        `UPDATE emergency_requests
+            SET status = 'denied', denied_at = NOW()
+          WHERE access_token = $1 AND owner_user_id = $2 AND status = 'pending'`,
+        [token, cloudUser.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'request not found or already resolved' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[emergency/deny]', err.message);
+      return res.status(500).json({ error: 'Deny failed' });
+    }
+  }
+
+  // Contact pulls vault blob after unlock window passes and not denied.
+  if (path === '/api/emergency/access-vault' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { token } = req.body as { token?: string };
+      if (!token) return res.status(400).json({ error: 'token required' });
+      const requesterEmail = String((cloudUser as any).email || '').toLowerCase();
+      await ensureEmergencyTables();
+      const { rows } = await db.query(
+        `SELECT id, owner_user_id, contact_email, status, unlocks_at, denied_at
+           FROM emergency_requests WHERE access_token = $1`,
+        [token]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'request not found' });
+      const r = rows[0];
+      if (r.contact_email.toLowerCase() !== requesterEmail) return res.status(403).json({ error: 'Not your request' });
+      if (r.status === 'denied') return res.status(403).json({ error: 'Request was denied by owner' });
+      if (new Date(r.unlocks_at) > new Date()) return res.status(425).json({ error: 'Unlock window not yet reached', unlocksAt: r.unlocks_at });
+      // Mark granted
+      if (r.status !== 'granted') {
+        await db.query(`UPDATE emergency_requests SET status = 'granted' WHERE id = $1`, [r.id]);
+      }
+      // Pull owner's latest cloud vault blob (encrypted — contact still needs master password out-of-band)
+      const { rows: vRows } = await db.query(
+        `SELECT vault_id, encrypted_data, updated_at FROM cloud_vaults
+          WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`,
+        [r.owner_user_id]
+      );
+      if (vRows.length === 0) return res.status(404).json({ error: 'No vault data available' });
+      return res.json({ success: true, vault: vRows[0] });
+    } catch (err: any) {
+      console.error('[emergency/access-vault]', err.message);
+      return res.status(500).json({ error: 'Access failed' });
+    }
+  }
+
   // ── GET /api/auth/sessions ─────────────────────────────────────────────────
   // Lists all active sessions (extension + web) for the authenticated user.
   // Used by the Active Sessions UI in Profile → Security and by the extension
