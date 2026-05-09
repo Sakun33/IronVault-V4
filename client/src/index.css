@@ -482,21 +482,46 @@ input:-webkit-autofill:active {
   background: linear-gradient(135deg, hsl(239, 84%, 67%) 0%, hsl(280, 80%, 55%) 50%, hsl(320, 70%, 50%) 100%);
 }
 
-/* Mesh gradient background */
+/* Mesh gradient background — premium ambient layer with slow drift */
 .gradient-mesh {
+  position: relative;
   background:
-    radial-gradient(at 20% 20%, hsl(239, 84%, 67%, 0.08) 0%, transparent 50%),
-    radial-gradient(at 80% 80%, hsl(280, 80%, 55%, 0.06) 0%, transparent 50%),
-    radial-gradient(at 50% 50%, hsl(160, 84%, 39%, 0.04) 0%, transparent 50%),
+    radial-gradient(at 20% 20%, hsl(239, 84%, 67%, 0.06) 0%, transparent 50%),
+    radial-gradient(at 80% 80%, hsl(280, 80%, 55%, 0.05) 0%, transparent 50%),
+    radial-gradient(at 50% 50%, hsl(160, 84%, 39%, 0.03) 0%, transparent 50%),
     hsl(var(--background));
 }
 
+/* Dark theme — luxurious near-black with shifting emerald/blue/violet glow.
+   The base color is `#0A0A0F` (overridden via `--background` in dark mode);
+   the ambient layer below adds slow-moving gradient mesh at low opacity so
+   the page never feels static. Only painted in dark mode — bright theme
+   keeps the cleaner radial mesh above. */
 .dark .gradient-mesh {
+  background: hsl(var(--background));
+}
+.dark .gradient-mesh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background:
-    radial-gradient(at 20% 20%, hsl(239, 84%, 67%, 0.12) 0%, transparent 50%),
-    radial-gradient(at 80% 80%, hsl(280, 80%, 55%, 0.08) 0%, transparent 50%),
-    radial-gradient(at 50% 50%, hsl(160, 84%, 39%, 0.05) 0%, transparent 50%),
-    hsl(var(--background));
+    radial-gradient(ellipse 80% 60% at 20% 40%, rgba(16, 185, 129, 0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(59, 130, 246, 0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(139, 92, 246, 0.03) 0%, transparent 70%);
+  animation: ambientShift 30s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Children of `.gradient-mesh` should always layer above the ambient bg. */
+.gradient-mesh > * { position: relative; z-index: 1; }
+
+@keyframes ambientShift {
+  0%   { opacity: 0.6; transform: scale(1) rotate(0deg); }
+  50%  { opacity: 1;   transform: scale(1.08) rotate(2deg); }
+  100% { opacity: 0.7; transform: scale(1.05) rotate(-1deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dark .gradient-mesh::before { animation: none; }
 }
 
 /* ---------- Keyframe Animations ---------- */
@@ -911,6 +936,71 @@ input:-webkit-autofill:active {
 
 .glow-emerald-soft {
   box-shadow: 0 0 18px -2px rgba(16, 185, 129, 0.35);
+}
+
+/* ---------- Premium button (subtle blooming halo on hover) ----------
+   Wrap on top of any existing button styles — adds a soft emerald→indigo
+   gradient halo that fades in on hover. Uses ::after with `inset: -2px`
+   so it renders just outside the element bounds. */
+.btn-premium {
+  position: relative;
+  isolation: isolate;
+}
+.btn-premium::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(59, 130, 246, 0.3));
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: -1;
+  filter: blur(10px);
+  pointer-events: none;
+}
+.btn-premium:hover::after,
+.btn-premium:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-premium::after { transition: none; }
+}
+
+/* ---------- Premium shimmer wash ----------
+   Light streak that drifts horizontally — useful on hero badges, premium
+   cards, etc. Composes with whatever bg the host already has. */
+.premium-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.premium-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: iv-premium-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes iv-premium-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .premium-shimmer::before { animation: none; }
+}
+
+/* ---------- Breathing emerald glow (security score, hero badges) ---------- */
+@keyframes iv-breathe {
+  0%, 100% { box-shadow: 0 0 18px rgba(16, 185, 129, 0.18); }
+  50%      { box-shadow: 0 0 36px rgba(16, 185, 129, 0.30); }
+}
+.glow-breathe {
+  animation: iv-breathe 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow-breathe { animation: none; }
 }
 
 /* ---------- Gradient border (use as wrapper) ---------- */

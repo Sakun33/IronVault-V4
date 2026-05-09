@@ -156,7 +156,7 @@ const QuickStatCard = memo(function QuickStatCard({
         whileHover={{ y: -2 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-        className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
+        className="glass-card p-3 cursor-pointer h-full"
       >
         <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</div>
         <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: accent }}>
@@ -171,19 +171,19 @@ const QuickStatCard = memo(function QuickStatCard({
 // Insight carousel card
 // ─────────────────────────────────────────────────────────────────────────
 
-const INSIGHT_PALETTE: Record<string, { stripe: string; iconBg: string; tag: string }> = {
+const INSIGHT_PALETTE: Record<string, { dot: string; iconBg: string; tag: string }> = {
   security: {
-    stripe: 'bg-emerald-500',
+    dot: 'bg-emerald-500',
     iconBg: 'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30',
     tag: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   },
   finance: {
-    stripe: 'bg-amber-500',
+    dot: 'bg-amber-500',
     iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
     tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
   productivity: {
-    stripe: 'bg-blue-500',
+    dot: 'bg-blue-500',
     iconBg: 'bg-blue-500/15 text-blue-500 ring-blue-500/30',
     tag: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
   },
@@ -201,15 +201,15 @@ const InsightCarouselCard = memo(function InsightCarouselCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-      className="snap-start flex-shrink-0 w-[260px] sm:w-[280px] rounded-2xl border border-border/50 bg-card backdrop-blur-md hover:shadow-md transition-all cursor-pointer overflow-hidden"
+      className="snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card hover:shadow-md cursor-pointer overflow-hidden"
       style={{ maxHeight: 120, minHeight: 120 }}
     >
-      <div className={`h-1 w-full ${palette.stripe}`} />
-      <div className="px-3 py-2.5 flex flex-col gap-1.5 h-[calc(120px-4px)]">
+      <div className="px-3 py-2.5 flex flex-col gap-1.5 h-[120px]">
         <div className="flex items-center gap-2">
           <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${palette.iconBg}`}>
             <Icon className="w-3.5 h-3.5" />
           </div>
+          <span aria-hidden className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${palette.dot}`} />
           <div className="text-sm font-semibold text-foreground leading-snug truncate flex-1 min-w-0">{ins.title}</div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(ins.id); }}
@@ -244,20 +244,20 @@ const AlertCarouselCard = memo(function AlertCarouselCard({ a }: { a: AlertItem 
   const Icon = a.icon;
   const tone = a.variant === 'red'
     ? {
-        border: 'border-l-red-500',
+        glow: 'shadow-[inset_3px_0_0_0_rgba(239,68,68,0.85),0_0_24px_-8px_rgba(239,68,68,0.45)]',
         iconBg: 'bg-red-500/15 text-red-500',
         cta: 'text-red-600 dark:text-red-400',
         ctaLabel: 'Fix now',
       }
     : a.variant === 'amber'
       ? {
-          border: 'border-l-amber-500',
+          glow: 'shadow-[inset_3px_0_0_0_rgba(245,158,11,0.85),0_0_24px_-8px_rgba(245,158,11,0.45)]',
           iconBg: 'bg-amber-500/15 text-amber-500',
           cta: 'text-amber-600 dark:text-amber-400',
           ctaLabel: 'Review',
         }
       : {
-          border: 'border-l-indigo-500',
+          glow: 'shadow-[inset_3px_0_0_0_rgba(99,102,241,0.85),0_0_24px_-8px_rgba(99,102,241,0.45)]',
           iconBg: 'bg-indigo-500/15 text-indigo-500',
           cta: 'text-indigo-600 dark:text-indigo-400',
           ctaLabel: 'Scan now',
@@ -267,7 +267,7 @@ const AlertCarouselCard = memo(function AlertCarouselCard({ a }: { a: AlertItem 
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] rounded-2xl bg-card border border-border/50 border-l-4 ${tone.border} backdrop-blur-md hover:shadow-md transition-all cursor-pointer overflow-hidden px-3.5 py-3 flex flex-col gap-1.5`}
+      className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card ${tone.glow} hover:shadow-lg cursor-pointer overflow-hidden px-3.5 py-3 flex flex-col gap-1.5`}
       style={{ maxHeight: 120, minHeight: 120 }}
     >
       <div className="flex items-center gap-2">
@@ -600,14 +600,17 @@ export default function Dashboard() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6" data-testid="dashboard-today">
 
-      {/* ─── Section 1 · Compact hero ──────────────────────────────────── */}
+      {/* ─── Section 1 · Premium hero ──────────────────────────────────── */}
       <motion.div variants={fadeUp}
-        className="rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent backdrop-blur-md px-4 py-3.5 sm:py-4">
+        className="glass-card relative overflow-hidden px-5 py-4 sm:py-5">
+        {/* subtle emerald edge glow */}
+        <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="mb-3">
-          <div className="text-base sm:text-lg font-bold text-foreground truncate">
-            {getGreeting()}, {userName || 'there'}
+          <div className="text-2xl sm:text-3xl font-light tracking-tight text-foreground truncate">
+            {getGreeting()}, <span className="font-semibold">{userName || 'there'}</span>
           </div>
-          <div className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</div>
+          <div className="text-[12px] text-muted-foreground mt-0.5">{format(new Date(), 'EEEE, MMM d')}</div>
         </div>
 
         {/* Compact action bar — refresh · currency · import/export · generator */}
@@ -665,7 +668,7 @@ export default function Dashboard() {
             data-testid="security-badge-row"
             className={`flex items-center gap-3 rounded-xl bg-card/60 border border-border/40 px-3 py-2.5 cursor-pointer hover:bg-card transition-colors group`}
           >
-            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${levelStyle.ring} ${levelStyle.bg}`}>
+            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${levelStyle.ring} ${levelStyle.bg} ${!isEmpty && (breakdown.level === 'Excellent' || breakdown.level === 'Good') ? 'glow-breathe' : ''}`}>
               {isEmpty
                 ? <Shield className="w-4 h-4 text-muted-foreground" />
                 : <span className={`text-sm font-bold tabular-nums ${levelStyle.text}`}>{breakdown.totalScore}</span>}
@@ -713,7 +716,7 @@ export default function Dashboard() {
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
+            className="glass-card p-3 cursor-pointer h-full"
           >
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Subs / mo</div>
             <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#a855f7' }}>{fmtAmt(monthlySubSpend)}</div>
@@ -724,7 +727,7 @@ export default function Dashboard() {
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
+            className="glass-card p-3 cursor-pointer h-full"
           >
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Spent / mo</div>
             <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#22c55e' }}>{fmtAmt(thisMonthExpenses)}</div>
@@ -771,9 +774,9 @@ export default function Dashboard() {
                 transition={{ type: 'spring', stiffness: 400, damping: 22 }}
                 aria-label={label}
                 title={label}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer h-full"
+                className="glass-card flex flex-col sm:flex-row items-center justify-center gap-1.5 px-2 py-3 cursor-pointer h-full"
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-sm`}>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.4)] ring-1 ring-white/15`}>
                   <Icon className="w-4 h-4 text-white" />
                 </div>
                 <span className="hidden sm:inline text-xs font-medium text-foreground text-center leading-tight">{label}</span>
@@ -812,7 +815,7 @@ export default function Dashboard() {
             count={todayReminders.length}
             action={todayReminders.length > 3 ? { href: '/reminders', label: 'See all' } : undefined}
           />
-          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden divide-y divide-border/30" data-testid="today-reminders">
+          <div className="glass-card overflow-hidden divide-y divide-border/30" data-testid="today-reminders">
             {todayReminders.slice(0, 3).map(r => (
               <Link key={r.id} href="/reminders">
                 <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors cursor-pointer">
@@ -837,7 +840,7 @@ export default function Dashboard() {
             label="Upcoming Renewals"
             action={{ href: '/subscriptions', label: 'See all' }}
           />
-          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden divide-y divide-border/30">
+          <div className="glass-card overflow-hidden divide-y divide-border/30">
             {upcomingRenewals.map(s => {
               const daysLeft = s.nextBillingDate ? differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) : 99;
               const urgent = daysLeft <= 3;
@@ -868,7 +871,7 @@ export default function Dashboard() {
             label="Recent Activity"
             action={{ href: '/logging', label: 'See all' }}
           />
-          <div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <div className="relative pl-2 py-1" data-testid="recent-activity">
               <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gradient-to-b from-border via-border to-transparent" />
               {recentActivity.map(item => (
@@ -927,7 +930,7 @@ const SpendingBreakdown = memo(function SpendingBreakdown({
   if (cats.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-border/50 bg-card p-3.5 space-y-2.5">
+    <div className="glass-card p-3.5 space-y-2.5">
       {cats.map(c => (
         <div key={c.cat}>
           <div className="flex justify-between items-center mb-1">

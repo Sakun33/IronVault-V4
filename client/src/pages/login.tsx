@@ -263,7 +263,7 @@ export default function Login() {
         </p>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-4 py-10 relative">
+      <main className="flex-1 flex items-center justify-center px-4 py-10 relative gradient-mesh">
         {/* ambient gradient backdrop — pure decorative, sits behind everything */}
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[420px] w-[620px] rounded-full bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-transparent blur-3xl" />
@@ -363,7 +363,7 @@ export default function Login() {
             <Button
               type="submit"
               data-testid="button-account-login"
-              className="cta-tap-pulse w-full h-11 text-base font-semibold"
+              className="btn-premium cta-tap-pulse w-full h-11 text-base font-semibold"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in…' : 'Sign In'}
