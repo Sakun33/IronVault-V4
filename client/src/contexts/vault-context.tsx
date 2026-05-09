@@ -201,6 +201,32 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isUnlocked]);
 
+  // Schedule a background breach scan after the first refresh completes.
+  // The scan itself is gated to once-per-24h and runs idle/batched, so this
+  // dispatch is cheap to call eagerly. Lazy-imported to keep the unlock
+  // path minimal.
+  const scanScheduledForUnlockRef = useRef(false);
+  useEffect(() => {
+    if (!isUnlocked) {
+      scanScheduledForUnlockRef.current = false;
+      return;
+    }
+    if (scanScheduledForUnlockRef.current) return;
+    if (passwords.length === 0) return; // wait until vault has loaded
+    scanScheduledForUnlockRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mod = await import('@/lib/breach-checker');
+        if (cancelled) return;
+        mod.scheduleBreachBackgroundScan(() =>
+          passwords.map(p => ({ password: p.password || '' }))
+        );
+      } catch { /* offline / chunk failed — try again next unlock */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isUnlocked, passwords.length]);
+
   // Pull refresh: when cloud-sync hook replaces vault data from a remote device.
   // We also gate the syncing flag with a 15-second safety timeout — even if the
   // `cloud:replaced` event is somehow missed (silent throw, race, lost listener),

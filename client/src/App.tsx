@@ -83,7 +83,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
@@ -259,6 +259,38 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('iv_sidebar_collapsed', sidebarCollapsed ? '1' : '0'); } catch {}
   }, [sidebarCollapsed]);
 
+  // Surface the most-recent HIBP breach count as a red badge on the Security
+  // Health nav link. Updated by the same-tab `BREACH_COUNT_EVENT` and the
+  // cross-tab `storage` event so the badge stays live without polling.
+  const [breachedCount, setBreachedCount] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('iv_breach_count');
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  });
+  useEffect(() => {
+    const update = (val?: number) => {
+      if (typeof val === 'number') {
+        setBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
+        return;
+      }
+      try {
+        const raw = localStorage.getItem('iv_breach_count');
+        const n = raw ? parseInt(raw, 10) : 0;
+        setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
+      } catch { /* noop */ }
+    };
+    const onStorage = (e: StorageEvent) => { if (e.key === 'iv_breach_count') update(); };
+    const onCustom = (e: Event) => update((e as CustomEvent<number>).detail);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('iv:breach-count-changed', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('iv:breach-count-changed', onCustom);
+    };
+  }, []);
+
   const looksLikeEmail = useCallback((value: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   }, []);
@@ -297,12 +329,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
   // Core vault items (top section of sidebar)
   const coreNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary', requiresPro: false },
-    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600', requiresPro: false },
-    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: isPro ? null : `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary', requiresPro: false },
-    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: isPro ? null : `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600', requiresPro: false },
-    { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600', requiresPro: true },
-    { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true },
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary', requiresPro: false, alertBadge: null as number | null },
+    { id: 'vaults', label: 'Vaults', icon: ShieldCheck, count: null, limitLabel: null as string | null, color: 'text-violet-600', requiresPro: false, alertBadge: null },
+    { id: 'passwords', label: 'Passwords', icon: Key, count: stats.totalPasswords, limitLabel: isPro ? null : `${stats.totalPasswords}/${getLimit('passwords')}`, color: 'text-primary', requiresPro: false, alertBadge: null },
+    { id: 'security-health', label: 'Security Health', icon: ShieldAlert, count: null, limitLabel: null, color: 'text-rose-500', requiresPro: false, alertBadge: breachedCount > 0 ? breachedCount : null },
+    { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: isPro ? null : `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600', requiresPro: false, alertBadge: null },
+    { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600', requiresPro: true, alertBadge: null },
+    { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true, alertBadge: null },
   ];
   // Finance items (second section)
   const financeNavItems = [
@@ -351,6 +384,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'investments', label: 'Investments', icon: TrendingUp, href: '/investments', group: 'finance' },
     { id: 'goals', label: 'Goals', icon: Target, href: '/goals', group: 'finance' },
     // Tools group
+    { id: 'security-health', label: 'Security Health', icon: ShieldAlert, href: '/security-health', group: 'tools', count: breachedCount > 0 ? breachedCount : null },
     { id: 'reminders', label: 'Reminders', icon: Bell, href: '/reminders', group: 'tools', count: stats.totalReminders },
     { id: 'logging', label: 'Activity Logs', icon: FileText, href: '/logging', group: 'tools' },
     // Account group
@@ -754,10 +788,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                       />
                     )}
                     <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                    {sidebarCollapsed && 'alertBadge' in item && item.alertBadge ? (
+                      <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-background">
+                        {item.alertBadge > 9 ? '9+' : item.alertBadge}
+                      </span>
+                    ) : null}
                     {!sidebarCollapsed && (
                       <>
                         <span className="text-sm">{item.label}</span>
-                        {'limitLabel' in item && item.limitLabel !== null ? (
+                        {'alertBadge' in item && item.alertBadge ? (
+                          <span className="ml-auto bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] px-2 py-0.5 rounded-full font-bold ring-1 ring-red-500/30">
+                            {item.alertBadge > 99 ? '99+' : item.alertBadge}
+                          </span>
+                        ) : 'limitLabel' in item && item.limitLabel !== null ? (
                           <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                             {item.limitLabel}
                           </span>

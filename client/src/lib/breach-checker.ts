@@ -189,6 +189,145 @@ export function getBreachedCount(): number {
   }
 }
 
+/** Custom event surfaces breach-count changes to subscribers in the same tab
+ * (the storage event only fires across tabs). */
+export const BREACH_COUNT_EVENT = 'iv:breach-count-changed';
+
 function persistCount(n: number) {
-  try { localStorage.setItem(COUNT_INDEX_KEY, String(n)); } catch { /* quota */ }
+  try {
+    localStorage.setItem(COUNT_INDEX_KEY, String(n));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(BREACH_COUNT_EVENT, { detail: n }));
+    }
+  } catch { /* quota */ }
+}
+
+// ── Background scan ──────────────────────────────────────────────────────
+// Run a non-blocking breach scan in the background:
+//   • At most once every 24h (timestamp in localStorage)
+//   • Yields between batches of 10 with ~500ms idle gap so the UI stays smooth
+//   • Skipped if the user is offline or the tab is hidden
+
+const LAST_SCAN_KEY = 'iv_breach_last_scan_v1';
+const SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const BATCH_SIZE = 10;
+const BATCH_DELAY_MS = 500;
+
+function lastScanAt(): number {
+  try {
+    const raw = localStorage.getItem(LAST_SCAN_KEY);
+    if (!raw) return 0;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : 0;
+  } catch { return 0; }
+}
+
+function markScanComplete() {
+  try { localStorage.setItem(LAST_SCAN_KEY, String(Date.now())); } catch { /* quota */ }
+}
+
+function idle(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const ric = (typeof window !== 'undefined' && (window as any).requestIdleCallback) as
+      | ((cb: () => void, opts?: { timeout: number }) => number)
+      | undefined;
+    if (ric) ric(() => resolve(), { timeout: timeoutMs });
+    else setTimeout(resolve, timeoutMs);
+  });
+}
+
+function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
+
+interface BgScanItem {
+  password: string;
+}
+
+let scanInFlight = false;
+
+/**
+ * Schedule a background breach scan. Returns immediately; scan runs idle.
+ * Caller passes a getter (not a snapshot) so the scan picks up the latest
+ * vault state if it starts later. Pass `force` to bypass the 24h gate.
+ */
+export function scheduleBreachBackgroundScan(
+  getPasswords: () => BgScanItem[],
+  opts: { force?: boolean } = {},
+): void {
+  if (typeof window === 'undefined') return;
+  if (scanInFlight) return;
+
+  const { force = false } = opts;
+  const elapsed = Date.now() - lastScanAt();
+  if (!force && elapsed < SCAN_INTERVAL_MS) return;
+
+  if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) return;
+
+  scanInFlight = true;
+
+  // Start on idle to avoid colliding with vault-unlock work
+  idle(2000).then(async () => {
+    try {
+      const items = (getPasswords() || []).filter(p => p && typeof p.password === 'string' && p.password.length > 0);
+      if (items.length === 0) {
+        markScanComplete();
+        persistCount(0);
+        return;
+      }
+
+      const cache = pruneCache(readCache());
+      let breachedTotal = 0;
+
+      // Process in batches of BATCH_SIZE
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          await idle(5000);
+        }
+        const batch = items.slice(i, i + BATCH_SIZE);
+
+        // Hash batch
+        const hashed: { hash: string }[] = [];
+        for (const it of batch) {
+          hashed.push({ hash: await sha1Hex(it.password) });
+        }
+
+        // Bucket uncached by prefix
+        const needed: Record<string, string[]> = {};
+        for (const h of hashed) {
+          if (cache[h.hash]) continue;
+          const prefix = h.hash.slice(0, 5);
+          const suffix = h.hash.slice(5);
+          (needed[prefix] ||= []).push(suffix);
+        }
+
+        const prefixes = Object.keys(needed);
+        if (prefixes.length > 0) {
+          let ranges: Record<string, Record<string, number>> = {};
+          try { ranges = await fetchRanges(prefixes); }
+          catch { /* network fail — try later */ }
+          for (const prefix of prefixes) {
+            const map = ranges[prefix] || {};
+            for (const suffix of (needed[prefix] || [])) {
+              const count = map[suffix] ?? 0;
+              cache[prefix + suffix] = { count, ts: Date.now() };
+            }
+          }
+        }
+
+        // Tally — covers both cached and freshly-fetched entries
+        for (const h of hashed) {
+          const c = cache[h.hash]?.count ?? 0;
+          if (c > 0) breachedTotal++;
+        }
+
+        // Yield between batches so the UI thread stays responsive
+        if (i + BATCH_SIZE < items.length) await sleep(BATCH_DELAY_MS);
+      }
+
+      writeCache(cache);
+      persistCount(breachedTotal);
+      markScanComplete();
+    } finally {
+      scanInFlight = false;
+    }
+  });
 }

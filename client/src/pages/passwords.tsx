@@ -141,6 +141,18 @@ export default function Passwords() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Strength is referenced both during filter (list) and render (cards). Cache
+  // it per password so we don't recompute the same regex pipeline twice for
+  // every visible row.
+  const strengthCache = useMemo(() => {
+    const map = new Map<string, { score: number; level: 'weak' | 'medium' | 'strong' | 'very-strong' }>();
+    for (const p of passwords) {
+      const { score, level } = PasswordGenerator.calculateStrength(p.password);
+      map.set(p.id, { score, level });
+    }
+    return map;
+  }, [passwords]);
+
   const filteredPasswords = useMemo(() => {
     return passwords.filter(password => {
       const q = searchQuery.toLowerCase();
@@ -151,14 +163,14 @@ export default function Passwords() {
         (password.category ?? '').toLowerCase().includes(q) ||
         (password.notes ?? '').toLowerCase().includes(q);
       const matchesCategory = categoryFilter === 'all' || password.category === categoryFilter;
-      const { level } = PasswordGenerator.calculateStrength(password.password);
+      const level = strengthCache.get(password.id)?.level ?? 'weak';
       const matchesStrength = strengthFilter === 'all' ||
         (strengthFilter === 'weak' && level === 'weak') ||
         (strengthFilter === 'medium' && level === 'medium') ||
         (strengthFilter === 'strong' && (level === 'strong' || level === 'very-strong'));
       return matchesSearch && matchesCategory && matchesStrength;
     });
-  }, [passwords, searchQuery, categoryFilter, strengthFilter]);
+  }, [passwords, searchQuery, categoryFilter, strengthFilter, strengthCache]);
 
   const selection = useMultiSelect(filteredPasswords);
 
@@ -392,7 +404,18 @@ export default function Passwords() {
           <ListSkeleton rows={6} showHeader={false} />
         ) : filteredPasswords.length > 0 && viewMode === 'grid' ? (
           <motion.div
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
+            variants={{
+              hidden: {},
+              show: {
+                transition: {
+                  // For long lists, the 0.035s-per-child stagger turned a
+                  // 100-item list into a 3.5s entrance animation. Shrink the
+                  // stagger as the list grows so the whole grid lands within
+                  // ~600ms regardless of size.
+                  staggerChildren: filteredPasswords.length > 60 ? 0.005 : 0.025,
+                },
+              },
+            }}
             initial="hidden"
             animate="show"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
@@ -404,7 +427,7 @@ export default function Passwords() {
                 ticket: introduce virtualization in a focused refactor PR. */}
             {filteredPasswords.map(password => {
               const checked = selection.isSelected(password.id);
-              const { score } = PasswordGenerator.calculateStrength(password.password);
+              const score = strengthCache.get(password.id)?.score ?? 0;
               const strengthColor = score < 30 ? 'from-red-500 to-rose-400' : score < 60 ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
               const strengthLabel = score < 30 ? 'Weak' : score < 60 ? 'Medium' : 'Strong';
               return (
@@ -475,7 +498,14 @@ export default function Passwords() {
         ) : filteredPasswords.length > 0 ? (
           <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
             <motion.div
-              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+              variants={{
+                hidden: {},
+                show: {
+                  transition: {
+                    staggerChildren: filteredPasswords.length > 60 ? 0.005 : 0.03,
+                  },
+                },
+              }}
               initial="hidden"
               animate="show"
             >

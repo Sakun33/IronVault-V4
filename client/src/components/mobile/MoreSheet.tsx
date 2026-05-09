@@ -176,12 +176,22 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="flex-1 text-left">
-                      <div className="font-medium text-sm text-foreground">
-                        {item.label}
+                      <div className="font-medium text-sm text-foreground flex items-center gap-2">
+                        <span>{item.label}</span>
+                        {item.id === 'security-health' && item.count != null && item.count > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 ring-1 ring-red-500/30">
+                            {item.count > 99 ? '99+' : item.count}
+                          </span>
+                        )}
                       </div>
-                      {item.count !== null && item.count !== undefined && (
+                      {item.count !== null && item.count !== undefined && item.id !== 'security-health' && (
                         <div className="text-xs text-muted-foreground">
                           {item.count} {item.count === 1 ? 'item' : 'items'}
+                        </div>
+                      )}
+                      {item.id === 'security-health' && item.count != null && item.count > 0 && (
+                        <div className="text-xs text-red-600 dark:text-red-400">
+                          {item.count} compromised — review now
                         </div>
                       )}
                     </div>

@@ -339,6 +339,15 @@ input:-webkit-autofill:active {
     background: hsl(var(--muted-foreground) / 0.35);
   }
 
+  /* Hide scrollbar for horizontal card carousels (alerts, insights). */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .password-dots {
     font-family: monospace;
     letter-spacing: 2px;

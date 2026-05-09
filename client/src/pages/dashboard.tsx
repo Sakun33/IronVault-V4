@@ -8,7 +8,7 @@ import {
   ChevronRight, CreditCard, Activity, Key, Calendar, TrendingUp,
   Sparkles, ShieldAlert, ShieldCheck, ArrowRight,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useDeferredValue, useRef } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
@@ -311,22 +311,32 @@ export default function Dashboard() {
     [passwords, masterPassword]
   );
 
-  // Smart Insights — pattern-based, all client-side. Refresh on vault unlock
-  // (passwords/subscriptions/expenses change) and on score change.
+  // Track previous score outside of useMemo (side-effects in useMemo are an
+  // anti-pattern — they fire on every memo recompute). We snapshot the
+  // previous score once, then persist the new one as a side-effect.
+  const prevScoreRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    prevScoreRef.current = recordSecurityScore(breakdown.totalScore);
+  }, [breakdown.totalScore]);
+
+  // Smart Insights — pattern-based, all client-side. Defer compute so
+  // a slow generateInsights() pass can't block the urgent UI render.
   const [insightsExpanded, setInsightsExpanded] = useState(false);
   const [insightsTick, setInsightsTick] = useState(0);
+  const deferredPasswords = useDeferredValue(passwords);
+  const deferredSubs = useDeferredValue(subscriptions);
+  const deferredExpenses = useDeferredValue(expenses);
   const insights = useMemo<Insight[]>(() => {
-    const prevScore = recordSecurityScore(breakdown.totalScore);
     return generateInsights({
-      passwords: passwords as any,
-      subscriptions: subscriptions as any,
-      expenses: expenses as any,
+      passwords: deferredPasswords as any,
+      subscriptions: deferredSubs as any,
+      expenses: deferredExpenses as any,
       securityScore: breakdown.totalScore,
-      previousSecurityScore: prevScore,
+      previousSecurityScore: prevScoreRef.current,
     });
     // insightsTick included so dismiss triggers a refresh
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passwords, subscriptions, expenses, breakdown.totalScore, insightsTick]);
+  }, [deferredPasswords, deferredSubs, deferredExpenses, breakdown.totalScore, insightsTick]);
 
   const todayReminders = useMemo(() =>
     reminders
@@ -454,20 +464,42 @@ export default function Dashboard() {
 
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
 
-  // Breached-password count from the most recent /security-health scan
-  const [breachedCount, setBreachedCount] = useState(0);
+  // Breached-password count from the most recent breach scan. Reads once on
+  // mount, then listens for the same-tab `BREACH_COUNT_EVENT` (fired by
+  // breach-checker after every scan/persist) plus the cross-tab `storage`
+  // event. The previous 2s polling loop was burning ~30 reads/min for nothing.
+  const [breachedCount, setBreachedCount] = useState(() => {
+    try {
+      const raw = localStorage.getItem('iv_breach_count');
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  });
   useEffect(() => {
-    const read = () => {
+    const update = (val?: number) => {
+      if (typeof val === 'number') {
+        setBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
+        return;
+      }
       try {
         const raw = localStorage.getItem('iv_breach_count');
         const n = raw ? parseInt(raw, 10) : 0;
         setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
       } catch { /* noop */ }
     };
-    read();
-    window.addEventListener('storage', read);
-    const t = setInterval(read, 2000);
-    return () => { window.removeEventListener('storage', read); clearInterval(t); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'iv_breach_count') update();
+    };
+    const onCustom = (e: Event) => {
+      const detail = (e as CustomEvent<number>).detail;
+      update(detail);
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('iv:breach-count-changed', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('iv:breach-count-changed', onCustom);
+    };
   }, []);
 
   // Push the latest values to the shared App Group store so the iOS widget
@@ -536,16 +568,17 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button onClick={handleRefresh} disabled={isRefreshing}
               data-testid="hero-refresh"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all disabled:opacity-50 active:scale-95">
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all disabled:opacity-50 active:scale-95 shadow-sm">
+              <RefreshCw className={`w-3.5 h-3.5 flex-shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="truncate">Refresh</span>
             </button>
             <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="h-auto py-2 px-3.5 rounded-xl bg-white/15 hover:bg-white/25 border-0 text-white text-sm font-medium focus:ring-0 gap-1.5 w-auto shadow-none [&>svg]:text-white/60">
-                <Globe className="w-3.5 h-3.5" />
+              <SelectTrigger
+                className="h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium focus:ring-0 gap-1.5 shadow-sm w-full justify-center [&>svg]:text-white/60 [&>svg:last-child]:ml-0">
+                <Globe className="w-3.5 h-3.5 flex-shrink-0" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -557,14 +590,14 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
             <button onClick={() => setShowImportExport(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all active:scale-95">
-              <Upload className="w-3.5 h-3.5" />
-              Import/Export
+              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all active:scale-95 shadow-sm">
+              <Upload className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">Import</span>
             </button>
             <button onClick={() => setShowGenerator(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all active:scale-95">
-              <Key className="w-3.5 h-3.5" />
-              Generator
+              className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white text-sm font-medium transition-all active:scale-95 shadow-sm">
+              <Key className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">Generator</span>
             </button>
           </div>
         </div>
@@ -613,49 +646,69 @@ export default function Dashboard() {
       )}
 
       {!isEmpty && criticalAlerts.length > 0 && (
-        <motion.div variants={fadeUp}
-          data-testid="security-alerts-banner"
-          className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/5 via-orange-500/5 to-amber-500/5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-red-500/10">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-red-500/15 flex items-center justify-center">
-                <ShieldAlert className="w-4 h-4 text-red-500" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Security needs attention</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  {criticalAlerts.length} action{criticalAlerts.length === 1 ? '' : 's'} could improve your score · {breakdown.totalScore}/100
-                </p>
-              </div>
-            </div>
+        <motion.div variants={fadeUp} data-testid="security-alerts-banner">
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldAlert className="w-3 h-3 text-red-500" />
+              Security Alerts
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold tabular-nums">
+                {criticalAlerts.length}
+              </span>
+            </p>
             <Link href="/profile?tab=security">
-              <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer">
-                Review <ArrowRight className="w-3 h-3" />
+              <span className="text-[11px] font-medium text-primary hover:underline cursor-pointer">
+                Review all
               </span>
             </Link>
           </div>
-          <div className="divide-y divide-border/30">
-            {criticalAlerts.map((a) => {
-              const Icon = a.icon;
-              const dotCls = a.variant === 'red'
-                ? 'bg-red-500/15 text-red-500'
-                : 'bg-amber-500/15 text-amber-500';
-              const inner = (
-                <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${dotCls}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">{a.text}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">{a.sub}</div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              );
-              return a.href
-                ? <Link key={a.text} href={a.href}>{inner}</Link>
-                : <div key={a.text}>{inner}</div>;
-            })}
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-2.5 sm:grid sm:grid-cols-3 pr-4 sm:pr-0 snap-x snap-mandatory">
+              {criticalAlerts.map((a, i) => {
+                const Icon = a.icon;
+                const tone = a.variant === 'red'
+                  ? {
+                      ring: 'border-red-500/30',
+                      bg: 'from-red-500/10 via-rose-500/5 to-red-500/5',
+                      iconBg: 'bg-red-500/15 text-red-500 ring-red-500/30',
+                      tag: 'bg-red-500/15 text-red-600 dark:text-red-400',
+                      label: 'Critical',
+                    }
+                  : {
+                      ring: 'border-amber-500/30',
+                      bg: 'from-amber-500/10 via-orange-500/5 to-amber-500/5',
+                      iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
+                      tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                      label: 'Warning',
+                    };
+                const inner = (
+                  <motion.div
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                    className={`snap-start min-w-[260px] sm:min-w-0 flex-shrink-0 rounded-2xl border ${tone.ring} bg-gradient-to-br ${tone.bg} backdrop-blur-md p-3.5 cursor-pointer hover:shadow-md transition-all flex flex-col gap-2.5 h-full`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${tone.iconBg}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${tone.tag}`}>
+                        {tone.label}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-foreground leading-snug">{a.text}</div>
+                      <div className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-2">{a.sub}</div>
+                    </div>
+                    <div className="flex items-center justify-end gap-1 text-[11px] font-semibold text-primary">
+                      Fix now <ArrowRight className="w-3 h-3" />
+                    </div>
+                  </motion.div>
+                );
+                return a.href
+                  ? <Link key={a.text} href={a.href}>{inner}</Link>
+                  : <div key={a.text}>{inner}</div>;
+              })}
+            </div>
           </div>
         </motion.div>
       )}
@@ -743,50 +796,72 @@ export default function Dashboard() {
         <motion.div variants={fadeUp} data-testid="smart-insights">
           <div className="flex items-center justify-between mb-2.5">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3" /> Smart Insights
+              <Sparkles className="w-3 h-3 text-indigo-500" /> Smart Insights
             </p>
-            {insights.length > 3 && (
+            {insights.length > 4 && (
               <button
                 className="text-[11px] font-medium text-primary hover:underline"
                 onClick={() => setInsightsExpanded((v) => !v)}
                 data-testid="insights-toggle-all"
               >
-                {insightsExpanded ? 'Show top 3' : `See all ${insights.length}`}
+                {insightsExpanded ? 'Show top 4' : `See all ${insights.length}`}
               </button>
             )}
           </div>
-          <div className="space-y-2">
-            {(insightsExpanded ? insights : insights.slice(0, 3)).map((ins) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {(insightsExpanded ? insights : insights.slice(0, 4)).map((ins) => {
               const Icon = (LucideIcons as any)[ins.icon] || Sparkles;
-              const tone =
-                ins.priority === 'high'
-                  ? 'border-red-500/40 bg-red-500/5'
-                  : ins.priority === 'medium'
-                  ? 'border-amber-500/40 bg-amber-500/5'
-                  : 'border-border/60 bg-card';
-              const iconTone =
+              const palette =
                 ins.category === 'security'
-                  ? 'text-indigo-500 bg-indigo-500/10'
+                  ? {
+                      grad: 'from-emerald-500/10 via-emerald-500/5 to-transparent',
+                      ring: 'border-emerald-500/30',
+                      iconBg: 'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30',
+                      tag: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                    }
                   : ins.category === 'finance'
-                  ? 'text-emerald-500 bg-emerald-500/10'
-                  : 'text-amber-500 bg-amber-500/10';
+                  ? {
+                      grad: 'from-amber-500/10 via-amber-500/5 to-transparent',
+                      ring: 'border-amber-500/30',
+                      iconBg: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
+                      tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                    }
+                  : {
+                      grad: 'from-blue-500/10 via-blue-500/5 to-transparent',
+                      ring: 'border-blue-500/30',
+                      iconBg: 'bg-blue-500/15 text-blue-500 ring-blue-500/30',
+                      tag: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+                    };
+              const priorityRing =
+                ins.priority === 'high' ? 'ring-1 ring-red-500/40' : '';
               const inner = (
                 <motion.div
-                  whileHover={{ y: -1 }}
-                  className={`group flex items-start gap-3 p-3 rounded-2xl border ${tone} hover:shadow-sm transition-all cursor-pointer`}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                  className={`group relative flex flex-col gap-2.5 p-3.5 rounded-2xl border ${palette.ring} bg-gradient-to-br ${palette.grad} bg-card backdrop-blur-md hover:shadow-md transition-all cursor-pointer h-full ${priorityRing}`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconTone}`}>
-                    <Icon className="w-4 h-4" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${palette.iconBg}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${palette.tag}`}>
+                      {ins.category}
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground leading-snug">{ins.title}</div>
-                    <div className="text-xs text-muted-foreground leading-snug mt-0.5">{ins.description}</div>
+                    <div className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-3">{ins.description}</div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {ins.actionUrl && <ArrowRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-foreground" />}
+                  <div className="flex items-center justify-between gap-2 mt-auto">
+                    {ins.actionUrl ? (
+                      <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
+                        Take action <ArrowRight className="w-3 h-3" />
+                      </span>
+                    ) : <span />}
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissInsight(ins.id); setInsightsTick((t) => t + 1); }}
-                      className="text-[10px] text-muted-foreground/70 hover:text-foreground px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-[10px] text-muted-foreground/70 hover:text-foreground px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 sm:transition-opacity"
                       aria-label="Dismiss insight"
                     >
                       Dismiss
@@ -902,35 +977,6 @@ export default function Dashboard() {
           </Link>
         ))}
       </motion.div>
-
-      {!isEmpty && breakdown.totalScore < 80 && breakdown.tips.length > 0 && (
-        <motion.div variants={fadeUp}
-          data-testid="security-tips"
-          className="rounded-2xl border border-border/50 bg-card overflow-hidden">
-          <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border/30">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Shield className="w-3.5 h-3.5 text-amber-500" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Security Tips</h3>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                {breakdown.level}
-              </span>
-            </div>
-            <span className="text-xs text-muted-foreground tabular-nums">{breakdown.totalScore}/100</span>
-          </div>
-          <div className="px-4 py-3 space-y-2">
-            {breakdown.tips.slice(0, 3).map((tip, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{i + 1}</span>
-                </div>
-                <p className="text-sm text-foreground/85 leading-snug">{tip}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
 
       <motion.div variants={fadeUp}>
         <WidgetCard
