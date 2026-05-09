@@ -3,26 +3,24 @@ import { useCurrency } from "@/contexts/currency-context";
 import { useAuth } from "@/contexts/auth-context";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Lock, Bookmark, FileText, DollarSign, Bell, Plus, AlertTriangle,
-  CheckCircle, Clock, Globe, Copy, Upload, Shield, RefreshCw,
-  BarChart3, ChevronRight, CreditCard, Activity, Key, Calendar,
+  Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
+  Clock, Globe, Upload, Shield, RefreshCw,
+  ChevronRight, CreditCard, Activity, Key, Calendar, TrendingUp,
+  Sparkles, ShieldAlert, ShieldCheck, ArrowRight,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, differenceInCalendarDays, formatDistanceToNow } from "date-fns";
+import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
 import { PasswordGeneratorModal } from "@/components/password-generator-modal";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
-import { PasswordGenerator } from "@/lib/password-generator";
-import { calculateSecurityScore } from "@/lib/security-score";
+import { calculateSecurityScore, type SecurityBreakdown } from "@/lib/security-score";
 import { useAutoNotifications } from "@/hooks/use-auto-notifications";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
 import { apiBase } from "@/native/platform";
 
-// Small motion-driven counter for stat tiles. Eases from 0 → value with a
-// short delay so the number lands after the card slides in.
 function AnimatedNumber({ value, duration = 0.9, delay = 0 }: { value: number; duration?: number; delay?: number }) {
   const mv = useMotionValue(0);
   const rounded = useTransform(mv, latest => Math.round(latest).toLocaleString());
@@ -33,35 +31,14 @@ function AnimatedNumber({ value, duration = 0.9, delay = 0 }: { value: number; d
   return <motion.span>{rounded}</motion.span>;
 }
 
-// ── Animation variants ────────────────────────────────────────────────────────
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
 };
 const stagger = { show: { transition: { staggerChildren: 0.07 } } };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-type StrengthBucket = 'weak' | 'medium' | 'strong';
-function pwdStrength(pwd: string): StrengthBucket {
-  if (!pwd) return 'weak';
-  const { level } = PasswordGenerator.calculateStrength(pwd);
-  if (level === 'weak') return 'weak';
-  if (level === 'medium') return 'medium';
-  return 'strong'; // 'strong' or 'very-strong'
-}
-
-function maskUsername(u: string): string {
-  if (!u) return '•••';
-  if (u.includes('@')) {
-    const [local, domain] = u.split('@');
-    return local.slice(0, 2) + '•••@' + domain;
-  }
-  return u.slice(0, 2) + '•••';
-}
-
 function getGreeting(): string {
   const h = new Date().getHours();
-  if (h < 5) return 'Good morning';
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
@@ -75,14 +52,6 @@ function getTimeEmoji(): string {
   return '🌙';
 }
 
-/**
- * Resolve the greeting name. Auth context's `accountEmail` is the source of
- * truth (the email the user actually logged in with this session).
- * customerProfile.name is consulted only when its email matches that
- * accountEmail — otherwise it's a stale/seeded entry from another session
- * (we used to literally show "John" because an old customerProfile row from
- * test data was still in localStorage).
- */
 function getUserName(accountEmail: string | null): string {
   const namifyEmail = (email: string): string => {
     const prefix = email.split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
@@ -90,40 +59,28 @@ function getUserName(accountEmail: string | null): string {
     const first = prefix.split(' ')[0];
     return first.charAt(0).toUpperCase() + first.slice(1);
   };
-
   const isEmailPrefix = (name: string, email: string | null): boolean => {
     if (!email) return false;
-    const emailLocal = email.split('@')[0];
-    // Check if the name equals the email prefix exactly (case-insensitive)
-    return name.toLowerCase() === emailLocal.toLowerCase();
+    return name.toLowerCase() === email.split('@')[0].toLowerCase();
   };
-
   try {
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
-    // Only trust the stored profile if it's for the currently-logged-in
-    // email. Otherwise it's a leftover from a previous user (or seed data).
     const profileMatchesAccount =
       accountEmail &&
       typeof cp.email === 'string' &&
       cp.email.toLowerCase() === accountEmail.toLowerCase();
     if (profileMatchesAccount) {
       const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
-      if (fullName && !fullName.includes('@')) {
-        // If the name is just the email prefix, treat it as not set
-        if (!isEmailPrefix(fullName, accountEmail)) {
-          return fullName.split(' ')[0];
-        }
+      if (fullName && !fullName.includes('@') && !isEmailPrefix(fullName, accountEmail)) {
+        return fullName.split(' ')[0];
       }
     }
     if (accountEmail) return namifyEmail(accountEmail);
-    // Last-resort: legacy iv_account_session blob.
     const session = localStorage.getItem('iv_account_session');
     if (session) {
       const { email, name } = JSON.parse(session);
-      if (name && typeof name === 'string' && !name.includes('@')) {
-        if (!isEmailPrefix(name, email)) {
-          return name.split(' ')[0];
-        }
+      if (name && typeof name === 'string' && !name.includes('@') && !isEmailPrefix(name, email)) {
+        return name.split(' ')[0];
       }
       if (email) return namifyEmail(email);
     }
@@ -156,44 +113,59 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Other': '#94a3b8',
 };
 
-// ── Animated security ring ────────────────────────────────────────────────────
-function SecurityRing({ score, isEmpty = false }: { score: number; isEmpty?: boolean }) {
+const LEVEL_RING_COLOR: Record<SecurityBreakdown['level'], string> = {
+  Critical: '#ef4444',
+  'Needs Work': '#f59e0b',
+  Good: '#22c55e',
+  Excellent: '#10b981',
+};
+
+function SecurityRing({ breakdown, isEmpty = false }: { breakdown: SecurityBreakdown; isEmpty?: boolean }) {
   const [animScore, setAnimScore] = useState(0);
-  const size = 84, sw = 7;
+  const size = 96, sw = 8;
   const r = (size - sw) / 2;
   const cx = size / 2, cy = size / 2;
   const circ = 2 * Math.PI * r;
   const dash = (animScore / 100) * circ;
+  const strokeColor = LEVEL_RING_COLOR[breakdown.level];
 
   useEffect(() => {
-    const t = setTimeout(() => setAnimScore(score), 200);
+    const t = setTimeout(() => setAnimScore(breakdown.totalScore), 200);
     return () => clearTimeout(t);
-  }, [score]);
-
-  const label = isEmpty
-    ? 'EMPTY'
-    : score >= 90 ? 'EXCELLENT' : score >= 75 ? 'STRONG' : score >= 50 ? 'FAIR' : 'WEAK';
+  }, [breakdown.totalScore]);
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
+      <defs>
+        <linearGradient id="dash-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="1" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.7" />
+        </linearGradient>
+      </defs>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={sw} />
       {!isEmpty && (
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="white" strokeWidth={sw}
+        <circle
+          cx={cx} cy={cy} r={r} fill="none"
+          stroke="url(#dash-ring-grad)"
+          strokeWidth={sw}
           strokeDasharray={`${dash.toFixed(2)} ${circ.toFixed(2)}`}
-          strokeLinecap="round" transform={`rotate(-90 ${cx} ${cy})`}
-          style={{ transition: 'stroke-dasharray 1.3s cubic-bezier(0.4,0,0.2,1)' }} />
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: 'stroke-dasharray 1.4s cubic-bezier(0.4,0,0.2,1)' }}
+        />
       )}
-      <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="middle"
-        fontSize={isEmpty ? '20' : '22'} fontWeight="800" fill="white">
+      <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle"
+        fontSize={isEmpty ? '22' : '26'} fontWeight="800" fill="white">
         {isEmpty ? '—' : animScore}
       </text>
-      <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="middle"
-        fontSize="7.5" fontWeight="700" fill="rgba(255,255,255,0.6)" letterSpacing="0.06em">{label}</text>
+      <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="middle"
+        fontSize="8" fontWeight="700" fill="rgba(255,255,255,0.7)" letterSpacing="0.08em">
+        {isEmpty ? 'EMPTY' : breakdown.level.toUpperCase()}
+      </text>
     </svg>
   );
 }
 
-// ── Widget card ───────────────────────────────────────────────────────────────
 function WidgetCard({
   title, viewAllHref, children, empty, emptyText = 'Nothing here yet',
   accentClass = 'bg-primary/10', iconEl,
@@ -237,7 +209,6 @@ function WidgetCard({
   );
 }
 
-// ── Expense category bars ─────────────────────────────────────────────────────
 function ExpenseBars({
   cats, fmt,
 }: {
@@ -245,15 +216,15 @@ function ExpenseBars({
   fmt: (n: number) => string;
 }) {
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-3">
       {cats.slice(0, 3).map(c => (
         <div key={c.cat}>
           <div className="flex justify-between items-center mb-1">
             <span className="flex items-center gap-1.5 text-xs">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
-              <span className="text-foreground/80 truncate max-w-[110px]">{c.cat}</span>
+              <span className="text-foreground/80 truncate max-w-[140px]">{c.cat}</span>
             </span>
-            <span className="text-xs font-medium text-muted-foreground">{fmt(c.amount)}</span>
+            <span className="text-xs font-medium text-muted-foreground tabular-nums">{fmt(c.amount)}</span>
           </div>
           <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
             <div className="h-full rounded-full"
@@ -265,20 +236,16 @@ function ExpenseBars({
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
   const { accountEmail, masterPassword } = useAuth();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Generates renewal & weak-password notifications in the bell panel.
-  // Daily-deduped; safe to call on every render.
   useAutoNotifications({
     userId: accountEmail || 'guest',
     subscriptions,
@@ -303,23 +270,8 @@ export default function Dashboard() {
     }
   };
 
-  const copyPassword = async (password: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(password);
-      setCopiedId(id);
-      toast({ variant: 'success', title: 'Copied', description: 'Password copied to clipboard' });
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast({ title: 'Error', description: 'Failed to copy', variant: 'destructive' });
-    }
-  };
-
   const fmtAmt = (n: number) => formatCurrency(n, currency);
-  // QA-R2 H9: prefer the server-side full_name (typed at signup) over the
-  // best-effort email-prefix parse. Fetched once on mount and cached in
-  // localStorage so subsequent loads don't await the network. Falls back
-  // through customerProfile → email-prefix → empty so the greeting always
-  // renders something sensible even offline.
+
   const [serverName, setServerName] = useState<string>(() => {
     try { return localStorage.getItem('iv_display_name') || ''; } catch { return ''; }
   });
@@ -334,38 +286,49 @@ export default function Dashboard() {
         if (cancelled) return;
         const name = (data?.fullName || '').trim();
         if (name) {
-          // Check if the name is just the email prefix (e.g., "saketsuman1312")
-          // If so, treat it as not set and let the client fall back to email humanization
           const emailLocal = accountEmail.split('@')[0];
           if (name.toLowerCase() === emailLocal.toLowerCase()) {
-            // Name is email prefix — clear any stale cached value so the
-            // greeting falls through to the namifyEmail humanization.
             try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
             setServerName('');
             return;
           }
-          // Use the first word only — same convention the namifyEmail
-          // fallback uses, and matches user expectation ("Saket Suman"
-          // → "Saket").
           const first = name.split(/\s+/)[0];
           setServerName(first);
           try { localStorage.setItem('iv_display_name', first); } catch { /* noop */ }
         }
       })
-      .catch(() => { /* network blip — fall back to local resolution */ });
+      .catch(() => { /* fallback to local resolution */ });
     return () => { cancelled = true; };
   }, [accountEmail]);
   const userName = serverName || getUserName(accountEmail);
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const weakPasswordList = useMemo(() =>
-    passwords.filter(p => pwdStrength(p.password || '') === 'weak'), [passwords]);
-  const mediumPasswordList = useMemo(() =>
-    passwords.filter(p => pwdStrength(p.password || '') === 'medium'), [passwords]);
-  const weakPasswords = weakPasswordList.length;
-  const mediumPasswords = mediumPasswordList.length;
-  const strongPasswords = Math.max(0, passwords.length - weakPasswords - mediumPasswords);
+  const breakdown = useMemo(
+    () => calculateSecurityScore(passwords as any, masterPassword || ''),
+    [passwords, masterPassword]
+  );
+
+  const todayReminders = useMemo(() =>
+    reminders
+      .filter(r => !r.isCompleted && r.dueDate && isToday(new Date(r.dueDate)))
+      .sort((a, b) => {
+        const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+        return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
+      }),
+    [reminders]
+  );
+
+  const upcomingRenewals = useMemo(() =>
+    subscriptions
+      .filter(s => s.isActive && s.nextBillingDate)
+      .filter(s => {
+        const d = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
+        return d >= 0 && d <= 7;
+      })
+      .sort((a, b) => new Date(a.nextBillingDate).getTime() - new Date(b.nextBillingDate).getTime())
+      .slice(0, 4),
+    [subscriptions]
+  );
 
   const monthlySubSpend = useMemo(() =>
     subscriptions.filter(s => s.isActive).reduce((t, s) => {
@@ -385,20 +348,28 @@ export default function Dashboard() {
       .reduce((sum, e) => sum + (e.amount || 0), 0);
   }, [expenses]);
 
-  const dueTodayCount = useMemo(() =>
-    reminders.filter(r => !r.isCompleted && r.dueDate &&
-      differenceInCalendarDays(new Date(r.dueDate), new Date()) === 0).length,
-    [reminders]);
+  const lastMonthExpenses = useMemo(() => {
+    const now = new Date();
+    const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    return expenses
+      .filter(e => {
+        const d = new Date(e.date);
+        return d.getFullYear() === lastMonthYear && d.getMonth() === lastMonth;
+      })
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+  }, [expenses]);
 
-  // Backed by calculateSecurityScore (client/src/lib/security-score.ts) — single
-  // source of truth for the score, weights, and tips. We don't have the master
-  // password on the dashboard (never re-prompted post-unlock), so that
-  // dimension scores 0/10 — fine; tips will surface "strengthen master".
-  const securityBreakdown = useMemo(
-    () => calculateSecurityScore(passwords, masterPassword || ''),
-    [passwords, masterPassword]
+  const expenseDeltaPct = lastMonthExpenses > 0
+    ? Math.round(((thisMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100)
+    : null;
+
+  const todayExpenses = useMemo(() =>
+    expenses
+      .filter(e => isToday(new Date(e.date)))
+      .reduce((sum, e) => sum + (e.amount || 0), 0),
+    [expenses]
   );
-  const securityScore = securityBreakdown.totalScore;
 
   const topExpenseCategories = useMemo(() => {
     const byCategory: Record<string, number> = {};
@@ -418,86 +389,17 @@ export default function Dashboard() {
       }));
   }, [expenses]);
 
-  const recentPasswords = useMemo(() =>
-    [...passwords]
-      .filter(p => !normalizedSearch || (p.name ?? '').toLowerCase().includes(normalizedSearch) || (p.username ?? '').toLowerCase().includes(normalizedSearch))
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 5),
-    [passwords, normalizedSearch]);
-
-  const upcomingRenewals = useMemo(() =>
-    subscriptions
-      .filter(s => s.isActive)
-      .filter(s => !normalizedSearch || (s.name ?? '').toLowerCase().includes(normalizedSearch))
-      .filter(s => {
-        if (!s.nextBillingDate) return false;
-        const d = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
-        return d >= 0 && d <= 30;
-      })
-      .sort((a, b) => new Date(a.nextBillingDate).getTime() - new Date(b.nextBillingDate).getTime())
-      .slice(0, 4),
-    [subscriptions, normalizedSearch]);
-
-  const dueSoonReminders = useMemo(() =>
-    reminders
-      .filter(r => !r.isCompleted && r.dueDate)
-      .filter(r => {
-        const d = differenceInCalendarDays(new Date(r.dueDate), new Date());
-        return d >= 0 && d <= 7;
-      })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 4),
-    [reminders]);
-
-  // Today's reminders only — drives the Today panel.
-  const dueTodayReminders = useMemo(() =>
-    reminders
-      .filter(r => !r.isCompleted && r.dueDate)
-      .filter(r => differenceInCalendarDays(new Date(r.dueDate), new Date()) === 0)
-      .sort((a, b) => {
-        const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-        return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
-      }),
-    [reminders]);
-
-  // Renewals in next 3 days — surfaced in Today panel as upcoming charges.
-  const renewalsThreeDays = useMemo(() =>
-    subscriptions
-      .filter(s => s.isActive && s.nextBillingDate)
-      .filter(s => {
-        const d = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
-        return d >= 0 && d <= 3;
-      })
-      .sort((a, b) => new Date(a.nextBillingDate).getTime() - new Date(b.nextBillingDate).getTime()),
-    [subscriptions]);
-
-  // Last-month expenses for delta in Financial Summary.
-  const lastMonthExpenses = useMemo(() => {
-    const now = new Date();
-    const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-    return expenses
-      .filter(e => {
-        const d = new Date(e.date);
-        return d.getFullYear() === lastMonthYear && d.getMonth() === lastMonth;
-      })
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [expenses]);
-  const expenseDeltaPct = lastMonthExpenses > 0
-    ? Math.round(((thisMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100)
-    : null;
-
   const recentActivity = useMemo(() => {
     const safeDate = (v: unknown): Date => {
       const d = new Date(v as any);
       return isNaN(d.getTime()) ? new Date(0) : d;
     };
     const items = [
-      ...passwords.map(p => ({ id: p.id, text: p.name ?? 'Password', action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: safeDate(p.updatedAt || p.createdAt) })),
-      ...notes.map(n => ({ id: n.id, text: n.title ?? 'Note', action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: safeDate(n.updatedAt || n.createdAt) })),
-      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: safeDate((e as any).updatedAt || e.date || e.createdAt) })),
-      ...reminders.map(r => ({ id: r.id, text: r.title ?? 'Reminder', action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: safeDate(r.updatedAt || r.createdAt) })),
-      ...subscriptions.map(s => ({ id: s.id, text: s.name ?? 'Subscription', action: 'Subscription', icon: Bookmark, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: safeDate(s.updatedAt || s.createdAt) })),
+      ...passwords.map(p => ({ id: p.id, text: p.name ?? 'Password', action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: safeDate(p.updatedAt || p.createdAt), href: '/passwords' })),
+      ...notes.map(n => ({ id: n.id, text: n.title ?? 'Note', action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: safeDate(n.updatedAt || n.createdAt), href: '/notes' })),
+      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: safeDate((e as any).updatedAt || e.date || e.createdAt), href: '/expenses' })),
+      ...reminders.map(r => ({ id: r.id, text: r.title ?? 'Reminder', action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: safeDate(r.updatedAt || r.createdAt), href: '/reminders' })),
+      ...subscriptions.map(s => ({ id: s.id, text: s.name ?? 'Subscription', action: 'Subscription', icon: CreditCard, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: safeDate(s.updatedAt || s.createdAt), href: '/subscriptions' })),
     ];
     return items
       .filter(item => !normalizedSearch || (item.text ?? '').toLowerCase().includes(normalizedSearch))
@@ -505,35 +407,30 @@ export default function Dashboard() {
       .slice(0, 6);
   }, [passwords, notes, expenses, reminders, subscriptions, normalizedSearch]);
 
-  // ── Insights ──────────────────────────────────────────────────────────────
-  interface InsightItem { icon: React.ElementType; text: string; sub?: string; variant: 'red' | 'amber' | 'green'; href?: string; }
-  const insights = useMemo((): InsightItem[] => {
-    const items: InsightItem[] = [];
-    if (weakPasswords > 0) items.push({ icon: AlertTriangle, text: `${weakPasswords} weak password${weakPasswords > 1 ? 's' : ''}`, sub: 'Tap to fix', variant: 'red', href: '/passwords?strength=weak' });
-    if (mediumPasswords > 0) items.push({ icon: AlertTriangle, text: `${mediumPasswords} medium password${mediumPasswords > 1 ? 's' : ''}`, sub: 'Could be stronger', variant: 'amber', href: '/passwords?strength=medium' });
-    const expiringCount = subscriptions.filter(s => s.isActive && s.nextBillingDate && differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) <= 7).length;
-    if (expiringCount > 0) items.push({ icon: Calendar, text: `${expiringCount} renewal${expiringCount > 1 ? 's' : ''} this week`, sub: 'Check billing', variant: 'amber', href: '/subscriptions' });
-    if (dueTodayCount > 0) items.push({ icon: Bell, text: `${dueTodayCount} reminder${dueTodayCount > 1 ? 's' : ''} due today`, sub: "Don't miss them", variant: 'red', href: '/reminders' });
-    if (items.length === 0) items.push({ icon: CheckCircle, text: 'All clear', sub: 'No action needed', variant: 'green' });
-    return items;
-  }, [weakPasswords, mediumPasswords, subscriptions, dueTodayCount]);
-
-  const insightStyles: Record<string, string> = {
-    red: 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400',
-    amber: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400',
-    green: 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400',
-  };
-
-  // ── Stat items ────────────────────────────────────────────────────────────
-  const pinnedNotes = notes.filter(n => n.isPinned).length;
-  const statItems = [
-    { icon: Lock, label: 'Passwords', value: stats.totalPasswords, sub: weakPasswords > 0 ? `${weakPasswords} weak` : mediumPasswords > 0 ? `${mediumPasswords} medium` : `${strongPasswords} strong`, subColor: weakPasswords > 0 ? '#ef4444' : mediumPasswords > 0 ? '#f59e0b' : '#22c55e', href: '/passwords', accent: '#6366f1' },
-    { icon: FileText, label: 'Notes', value: stats.totalNotes, sub: pinnedNotes > 0 ? `${pinnedNotes} pinned` : undefined, subColor: '#f59e0b', href: '/notes', accent: '#f59e0b' },
-    { icon: CreditCard, label: 'Subscriptions', value: stats.activeSubscriptions, sub: monthlySubSpend > 0 ? `${fmtAmt(monthlySubSpend)}/mo` : undefined, subColor: '#a855f7', href: '/subscriptions', accent: '#a855f7' },
-    { icon: DollarSign, label: 'Expenses', value: stats.totalExpenses, sub: thisMonthExpenses > 0 ? `${fmtAmt(thisMonthExpenses)} this mo` : undefined, subColor: '#22c55e', href: '/expenses', accent: '#22c55e' },
-    { icon: Bell, label: 'Reminders', value: stats.totalReminders, sub: dueTodayCount > 0 ? `${dueTodayCount} due today` : undefined, subColor: '#f97316', href: '/reminders', accent: '#f97316' },
-    { icon: BarChart3, label: 'Documents', value: stats.totalBankStatements, sub: undefined, subColor: '#64748b', href: '/documents', accent: '#64748b' },
-  ];
+  const criticalAlerts = useMemo(() => {
+    type Alert = { icon: React.ElementType; text: string; sub: string; variant: 'red' | 'amber'; href?: string };
+    const alerts: Alert[] = [];
+    const c = breakdown.categories;
+    if (c.passwordStrength.score < 20 && passwords.length > 0) {
+      alerts.push({ icon: AlertTriangle, text: 'Weak passwords detected', sub: c.passwordStrength.detail, variant: 'red', href: '/passwords?strength=weak' });
+    }
+    if (c.uniquePasswords.score < 16 && passwords.length > 0) {
+      alerts.push({ icon: ShieldAlert, text: 'Duplicate passwords found', sub: c.uniquePasswords.detail, variant: 'red', href: '/passwords' });
+    }
+    if (c.twoFactorEnabled.score === 0) {
+      alerts.push({ icon: Key, text: 'Two-factor not enabled', sub: 'Add an extra layer of protection', variant: 'amber', href: '/profile?tab=security' });
+    }
+    if (c.recentlyChanged.score < 8 && passwords.length > 0) {
+      alerts.push({ icon: Clock, text: 'Old passwords need rotation', sub: c.recentlyChanged.detail, variant: 'amber', href: '/passwords' });
+    }
+    if (c.masterPasswordStrength.score > 0 && c.masterPasswordStrength.score < 7) {
+      alerts.push({ icon: ShieldAlert, text: 'Master password could be stronger', sub: c.masterPasswordStrength.detail, variant: 'amber', href: '/profile?tab=security' });
+    }
+    if (c.autoLockEnabled.score === 0) {
+      alerts.push({ icon: Lock, text: 'Auto-lock is off', sub: 'Vault stays unlocked indefinitely', variant: 'amber', href: '/profile?tab=security' });
+    }
+    return alerts.slice(0, 3);
+  }, [breakdown, passwords.length]);
 
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
 
@@ -549,80 +446,51 @@ export default function Dashboard() {
   }
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4 pb-6" data-testid="dashboard-today">
 
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <motion.div variants={fadeUp}
         className="rounded-3xl overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 dark:from-indigo-950 dark:via-indigo-900 dark:to-purple-950 shadow-xl shadow-indigo-500/20">
         <div className="relative p-5 sm:p-6">
-          {/* Decorative blobs */}
           <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
           <div className="absolute bottom-0 left-1/3 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 pointer-events-none" />
 
-          <div className="mb-4">
-            <h1 className="text-[22px] font-bold text-white leading-snug">
+          <div className="mb-5">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-indigo-200/80 mb-1">
+              <Sparkles className="w-3 h-3" />
+              <span>Today · {format(new Date(), 'EEE, MMM d')}</span>
+            </div>
+            <h1 className="text-[22px] sm:text-2xl font-bold text-white leading-snug">
               {getGreeting()}{userName ? `, ${userName}` : ''} {getTimeEmoji()}
             </h1>
-            <p className="text-sm text-indigo-200 mt-0.5">
-              {format(new Date(), 'EEEE, MMMM d')} · Vault secure 🔒
-            </p>
           </div>
 
-          {/* Score + metrics row.
-              Every row uses the same shape: <div flex items-center gap-2><dot /><span /></div>.
-              Clickable rows wrap that same div in a Link so the dot+text
-              column-start matches the static rows pixel-for-pixel — using
-              <button> here previously offset the text via user-agent styles. */}
           <div className="flex items-center gap-5 mb-5">
-            <Link href="/security-health" data-testid="link-security-health">
-              <button
-                className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-transform active:scale-95 hover:scale-[1.03]"
-                aria-label={`Security score ${securityScore} of 100 — open Security Health`}
-              >
-                <SecurityRing score={securityScore} isEmpty={stats.totalPasswords === 0} />
-              </button>
-            </Link>
+            <SecurityRing breakdown={breakdown} isEmpty={isEmpty} />
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                <Bell className="w-3.5 h-3.5 text-orange-300 flex-shrink-0" />
                 <span className="text-sm text-indigo-100">
-                  Strong: <span className="font-semibold">{strongPasswords}/{stats.totalPasswords}</span>
+                  <span className="font-semibold">{todayReminders.length}</span> reminder{todayReminders.length === 1 ? '' : 's'} today
                 </span>
               </div>
-              {mediumPasswords > 0 && (
-                <Link href="/passwords?strength=medium">
-                  <div className="flex items-center gap-2 cursor-pointer group">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                    <span className="text-sm text-amber-200 group-hover:text-amber-100 underline underline-offset-2">
-                      Medium: {mediumPasswords} — improve
-                    </span>
-                  </div>
-                </Link>
-              )}
-              {weakPasswords > 0 && (
-                <Link href="/passwords?strength=weak">
-                  <div className="flex items-center gap-2 cursor-pointer group">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                    <span className="text-sm text-red-300 group-hover:text-red-100 underline underline-offset-2">
-                      Weak: {weakPasswords} — fix now
-                    </span>
-                  </div>
-                </Link>
-              )}
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-purple-300 flex-shrink-0" />
-                <span className="text-sm text-indigo-100">Subs: {fmtAmt(monthlySubSpend)}/mo</span>
+                <CreditCard className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+                <span className="text-sm text-indigo-100">
+                  Subs: <span className="font-semibold">{fmtAmt(monthlySubSpend)}</span>/mo
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
-                <span className="text-sm text-indigo-100">Spent: {fmtAmt(thisMonthExpenses)} this month</span>
+                <DollarSign className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
+                <span className="text-sm text-indigo-100">
+                  Spent today: <span className="font-semibold">{fmtAmt(todayExpenses)}</span>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Action pills */}
           <div className="flex flex-wrap gap-2">
             <button onClick={handleRefresh} disabled={isRefreshing}
+              data-testid="hero-refresh"
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-all disabled:opacity-50 active:scale-95">
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
@@ -654,7 +522,6 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── Onboarding ────────────────────────────────────────────────────── */}
       {isEmpty && (
         <motion.div variants={fadeUp}
           className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 flex flex-col sm:flex-row items-center gap-4">
@@ -673,302 +540,183 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* ── Today panel ───────────────────────────────────────────────────── */}
-      {!isEmpty && (
+      {!isEmpty && criticalAlerts.length > 0 && (
         <motion.div variants={fadeUp}
-          data-testid="today-panel"
-          className="rounded-2xl border border-border/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/10 p-4">
-          <div className="flex items-center justify-between mb-3">
+          data-testid="security-alerts-banner"
+          className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/5 via-orange-500/5 to-amber-500/5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-red-500/10">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-amber-500/15 flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <div className="w-7 h-7 rounded-lg bg-red-500/15 flex items-center justify-center">
+                <ShieldAlert className="w-4 h-4 text-red-500" />
               </div>
-              <h3 className="text-sm font-semibold text-foreground">Today</h3>
-              <span className="text-[11px] text-muted-foreground">{format(new Date(), 'EEE, MMM d')}</span>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Security needs attention</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {criticalAlerts.length} action{criticalAlerts.length === 1 ? '' : 's'} could improve your score · {breakdown.totalScore}/100
+                </p>
+              </div>
             </div>
-            {(() => {
-              const total = dueTodayReminders.length + renewalsThreeDays.length + (weakPasswords > 0 ? 1 : 0);
-              if (total === 0) {
-                return (
-                  <span className="text-[11px] font-medium text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
-                    All clear
-                  </span>
-                );
-              }
-              return (
-                <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                  {total} item{total === 1 ? '' : 's'}
-                </span>
-              );
-            })()}
+            <Link href="/profile?tab=security">
+              <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer">
+                Review <ArrowRight className="w-3 h-3" />
+              </span>
+            </Link>
           </div>
-          {dueTodayReminders.length === 0 && renewalsThreeDays.length === 0 && weakPasswords === 0 ? (
-            <div className="flex items-center gap-3 px-1 py-1.5">
-              <CheckCircle className="w-5 h-5 text-green-500/80 flex-shrink-0" />
-              <div className="text-sm text-foreground/80">
-                You're all caught up — no reminders, renewals, or password issues need action today.
-              </div>
-            </div>
-          ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {dueTodayReminders.map(r => (
-              <Link key={`r-${r.id}`} href="/reminders">
-                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card/70 border border-border/40 hover:bg-card transition-colors cursor-pointer">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
-                  <Bell className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
+          <div className="divide-y divide-border/30">
+            {criticalAlerts.map((a) => {
+              const Icon = a.icon;
+              const dotCls = a.variant === 'red'
+                ? 'bg-red-500/15 text-red-500'
+                : 'bg-amber-500/15 text-amber-500';
+              const inner = (
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${dotCls}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">{a.text}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">{a.sub}</div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </div>
+              );
+              return a.href
+                ? <Link key={a.text} href={a.href}>{inner}</Link>
+                : <div key={a.text}>{inner}</div>;
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {!isEmpty && criticalAlerts.length === 0 && (
+        <motion.div variants={fadeUp}
+          data-testid="security-all-clear"
+          className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Security looking good</div>
+            <div className="text-[11px] text-muted-foreground">No critical issues — score {breakdown.totalScore}/100.</div>
+          </div>
+        </motion.div>
+      )}
+
+      <motion.div variants={fadeUp}>
+        <WidgetCard
+          title="Today's Reminders"
+          viewAllHref="/reminders"
+          empty={todayReminders.length === 0}
+          emptyText="Nothing due today — clear sky"
+          accentClass="bg-orange-500/10"
+          iconEl={<Bell className="w-3.5 h-3.5 text-orange-500" />}
+        >
+          <div className="space-y-0.5" data-testid="today-reminders">
+            {todayReminders.slice(0, 5).map(r => (
+              <Link key={r.id} href="/reminders">
+                <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{r.title}</div>
-                    <div className="text-[11px] text-muted-foreground capitalize">{r.priority} · reminder due</div>
+                    <div className="text-xs text-muted-foreground capitalize">{r.priority} priority</div>
                   </div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 bg-red-500/10 text-red-500">
+                    Today
+                  </span>
                 </div>
               </Link>
             ))}
-            {renewalsThreeDays.map(s => {
-              const daysLeft = differenceInCalendarDays(new Date(s.nextBillingDate), new Date());
-              const labelDay = daysLeft === 0 ? 'today' : daysLeft === 1 ? 'tomorrow' : `in ${daysLeft}d`;
-              return (
-                <Link key={`s-${s.id}`} href="/subscriptions">
-                  <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card/70 border border-border/40 hover:bg-card transition-colors cursor-pointer">
-                    <Favicon url={s.platformLink} name={s.name} className="w-5 h-5 flex-shrink-0 rounded" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {fmtAmt(s.cost || 0)} renews {labelDay}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-            {weakPasswords > 0 && (
-              <Link href="/passwords?strength=weak">
-                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-card/70 border border-red-500/30 hover:bg-card transition-colors cursor-pointer">
-                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">
-                      {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">Tap to review and rotate</div>
-                  </div>
+            {todayReminders.length > 5 && (
+              <Link href="/reminders">
+                <div className="text-xs text-muted-foreground hover:text-foreground text-center py-2 cursor-pointer">
+                  +{todayReminders.length - 5} more today
                 </div>
               </Link>
             )}
           </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* ── Insights bar ──────────────────────────────────────────────────── */}
-      <motion.div variants={fadeUp} className="flex flex-wrap gap-2.5">
-        {insights.map(insight => {
-          const Icon = insight.icon;
-          const cls = insightStyles[insight.variant];
-          const card = (
-            <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border cursor-pointer select-none transition-all hover:scale-[1.02] active:scale-[0.98] flex-shrink-0 ${cls}`}>
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <div>
-                <div className="text-xs font-semibold">{insight.text}</div>
-                {insight.sub && <div className="text-[11px] opacity-70">{insight.sub}</div>}
-              </div>
-            </div>
-          );
-          return insight.href
-            ? <Link key={insight.text} href={insight.href}>{card}</Link>
-            : <div key={insight.text}>{card}</div>;
-        })}
+        </WidgetCard>
       </motion.div>
 
-      {/* ── Stats bento grid ─────────────────────────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {statItems.map((s, i) => (
-          <Link key={s.label} href={s.href}>
-            <motion.div
-              whileHover={{ y: -3, scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-              className={`group relative rounded-2xl glass-card overflow-hidden cursor-pointer ${i === 0 ? 'lg:col-span-2' : ''}`}
-            >
-              {/* colored top accent line */}
-              <div className="h-1 w-full" style={{ background: s.accent }} />
-              {/* soft accent halo on hover */}
-              <div
-                aria-hidden
-                className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-0 group-hover:opacity-60 blur-2xl transition-opacity duration-300"
-                style={{ background: s.accent }}
-              />
-              <div className="relative p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/10"
-                    style={{ background: `${s.accent}22`, boxShadow: `0 0 16px -4px ${s.accent}66` }}
-                  >
-                    <s.icon className="w-4 h-4" style={{ color: s.accent }} />
-                  </div>
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                    {s.label}
-                  </span>
-                </div>
-                <div className="text-2xl font-bold tabular-nums text-foreground">
-                  <AnimatedNumber value={s.value} delay={0.05 * i} />
-                </div>
-                {s.sub && (
-                  <div className="text-[11px] mt-0.5 font-medium" style={{ color: s.subColor }}>{s.sub}</div>
-                )}
-              </div>
-            </motion.div>
-          </Link>
-        ))}
-      </motion.div>
-
-      {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <motion.div variants={fadeUp}>
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Quick Actions</p>
-        <div
-          className="overflow-x-auto -mx-1 px-1"
-          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}
-        >
-          <div className="flex gap-2.5 pr-3" style={{ minWidth: 'max-content' }}>
-            {([
-              { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'bg-indigo-500' },
-              { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'bg-amber-500' },
-              { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bg: 'bg-emerald-500' },
-              { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bg: 'bg-orange-500' },
-              { label: 'Subscription', icon: Bookmark, href: '/subscriptions?action=add', bg: 'bg-purple-500' },
-              { label: 'Import', icon: Upload, bg: 'bg-slate-500', onClick: () => setShowImportExport(true) },
-              { label: 'Generator', icon: Key, bg: 'bg-cyan-500', onClick: () => setShowGenerator(true) },
-            ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
-              const inner = (
-                <div
-                  className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                  style={{ scrollSnapAlign: 'start' }}
-                >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
-                    <Icon className="w-[15px] h-[15px] text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-foreground whitespace-nowrap">{label}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" data-testid="quick-actions">
+          {([
+            { label: 'Add Password', icon: Lock, href: '/passwords?action=add', bg: 'from-indigo-500 to-indigo-600' },
+            { label: 'New Note', icon: FileText, href: '/notes?action=add', bg: 'from-amber-500 to-orange-500' },
+            { label: 'Log Expense', icon: DollarSign, href: '/expenses?action=add', bg: 'from-emerald-500 to-green-600' },
+            { label: 'Set Reminder', icon: Bell, href: '/reminders?action=add', bg: 'from-orange-500 to-red-500' },
+            { label: 'Subscription', icon: CreditCard, href: '/subscriptions?action=add', bg: 'from-purple-500 to-fuchsia-500' },
+            { label: 'Generator', icon: Key, bg: 'from-cyan-500 to-sky-500', onClick: () => setShowGenerator(true) },
+          ] as Array<{ label: string; icon: React.ElementType; bg: string; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, bg, onClick }) => {
+            const inner = (
+              <motion.div
+                whileHover={{ y: -2, scale: 1.01 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer h-full"
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${bg} shadow-md`}>
+                  <Icon className="w-5 h-5 text-white" />
                 </div>
-              );
-              if (href) return <Link key={label} href={href}>{inner}</Link>;
-              return <button key={label} onClick={onClick}>{inner}</button>;
-            })}
-          </div>
+                <span className="text-xs font-medium text-foreground text-center leading-tight">{label}</span>
+              </motion.div>
+            );
+            if (href) return <Link key={label} href={href}>{inner}</Link>;
+            return <button key={label} onClick={onClick} className="text-left w-full">{inner}</button>;
+          })}
         </div>
       </motion.div>
 
-      {/* ── Weak password strip ────────────────────────────────────────────── */}
-      {weakPasswords > 0 && (
-        <motion.div variants={fadeUp}
-          className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3.5">
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <span className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">
-                {weakPasswords} weak {weakPasswords === 1 ? 'password' : 'passwords'}
-              </span>
-            </div>
-            <Link href="/passwords?strength=weak">
-              <span className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 cursor-pointer flex-shrink-0 whitespace-nowrap">
-                Fix →
-              </span>
-            </Link>
-          </div>
-          <Link href="/passwords?strength=weak">
-            <div className="flex items-center gap-1.5 cursor-pointer">
-              {weakPasswordList.slice(0, 5).map(p => (
-                <div key={p.id} className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-red-500/20 flex-shrink-0 bg-card">
-                  <Favicon url={p.url} name={p.name} className="w-full h-full" />
-                </div>
-              ))}
-              {weakPasswords > 5 && (
-                <span className="ml-1 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2.5 py-1 whitespace-nowrap">
-                  +{weakPasswords - 5} more
-                </span>
-              )}
-            </div>
-          </Link>
-        </motion.div>
-      )}
-
-      {/* ── Medium password strip ─────────────────────────────────────────── */}
-      {mediumPasswords > 0 && (
-        <motion.div variants={fadeUp}
-          data-testid="medium-passwords-section"
-          className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5">
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 truncate">
-                {mediumPasswords} medium {mediumPasswords === 1 ? 'password' : 'passwords'}
-              </span>
-            </div>
-            <Link href="/passwords?strength=medium">
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 cursor-pointer flex-shrink-0 whitespace-nowrap">
-                Improve →
-              </span>
-            </Link>
-          </div>
-          <Link href="/passwords?strength=medium">
-            <div className="flex items-center gap-1.5 cursor-pointer">
-              {mediumPasswordList.slice(0, 5).map(p => (
-                <div key={p.id} className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-amber-500/20 flex-shrink-0 bg-card">
-                  <Favicon url={p.url} name={p.name} className="w-full h-full" />
-                </div>
-              ))}
-              {mediumPasswords > 5 && (
-                <span className="ml-1 text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-1 whitespace-nowrap">
-                  +{mediumPasswords - 5} more
-                </span>
-              )}
-            </div>
-          </Link>
-        </motion.div>
-      )}
-
-      {/* ── Security Tips ─────────────────────────────────────────────────── */}
-      {stats.totalPasswords > 0 && securityBreakdown.tips.length > 0 && securityBreakdown.totalScore < 90 && (() => {
-        // Tailwind JIT needs literal class strings — can't compose `bg-${color}-500/10`.
-        const levelClasses: Record<string, { iconBg: string; iconFg: string; pillBg: string; pillFg: string }> = {
-          red:     { iconBg: 'bg-red-500/10',     iconFg: 'text-red-500',     pillBg: 'bg-red-500/10',     pillFg: 'text-red-600 dark:text-red-400' },
-          amber:   { iconBg: 'bg-amber-500/10',   iconFg: 'text-amber-500',   pillBg: 'bg-amber-500/10',   pillFg: 'text-amber-600 dark:text-amber-400' },
-          emerald: { iconBg: 'bg-emerald-500/10', iconFg: 'text-emerald-500', pillBg: 'bg-emerald-500/10', pillFg: 'text-emerald-600 dark:text-emerald-400' },
-        };
-        const lc = levelClasses[securityBreakdown.levelColor] ?? levelClasses.amber;
-        return (
-          <motion.div variants={fadeUp}
-            data-testid="security-tips"
-            className="rounded-2xl border border-border/50 bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border/30">
-              <div className="flex items-center gap-2">
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${lc.iconBg}`}>
-                  <Shield className={`w-3.5 h-3.5 ${lc.iconFg}`} />
-                </div>
-                <h3 className="text-sm font-semibold text-foreground">Security Tips</h3>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${lc.pillBg} ${lc.pillFg}`}>
-                  {securityBreakdown.level}
-                </span>
-              </div>
-              <span className="text-xs text-muted-foreground tabular-nums">{securityBreakdown.totalScore}/100</span>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {securityBreakdown.tips.slice(0, 3).map((tip, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{i + 1}</span>
-                  </div>
-                  <p className="text-sm text-foreground/85 leading-snug">{tip}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        );
-      })()}
-
-      {/* ── Renewals + Reminders ───────────────────────────────────────────── */}
       <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <WidgetCard title="Upcoming Renewals" viewAllHref="/subscriptions"
-          empty={upcomingRenewals.length === 0} emptyText="No renewals due soon"
-          accentClass="bg-purple-500/10" iconEl={<CreditCard className="w-3.5 h-3.5 text-purple-500" />}>
+        <WidgetCard
+          title={`${format(new Date(), 'MMMM')} Spending`}
+          viewAllHref="/expenses"
+          empty={topExpenseCategories.length === 0}
+          emptyText="No expenses recorded yet"
+          accentClass="bg-emerald-500/10"
+          iconEl={<TrendingUp className="w-3.5 h-3.5 text-emerald-500" />}
+        >
+          <div className="mb-3" data-testid="financial-summary">
+            <div className="flex items-baseline gap-2">
+              <div className="text-2xl font-bold tabular-nums text-foreground">
+                {fmtAmt(thisMonthExpenses)}
+              </div>
+              {expenseDeltaPct !== null && (
+                <span
+                  className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
+                    expenseDeltaPct > 0
+                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                      : expenseDeltaPct < 0
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {expenseDeltaPct > 0 ? '↑' : expenseDeltaPct < 0 ? '↓' : '·'} {Math.abs(expenseDeltaPct)}%
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[11px]">
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Today: <span className="font-semibold text-foreground tabular-nums">{fmtAmt(todayExpenses)}</span>
+              </span>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                Subs: <span className="font-semibold text-foreground tabular-nums">{fmtAmt(monthlySubSpend)}</span>/mo
+              </span>
+            </div>
+          </div>
+          <ExpenseBars cats={topExpenseCategories} fmt={fmtAmt} />
+        </WidgetCard>
+
+        <WidgetCard
+          title="Upcoming Renewals"
+          viewAllHref="/subscriptions"
+          empty={upcomingRenewals.length === 0}
+          emptyText="No renewals in the next 7 days"
+          accentClass="bg-purple-500/10"
+          iconEl={<Calendar className="w-3.5 h-3.5 text-purple-500" />}
+        >
           <div className="space-y-0.5">
             {upcomingRenewals.map(s => {
               const daysLeft = s.nextBillingDate ? differenceInCalendarDays(new Date(s.nextBillingDate), new Date()) : 99;
@@ -990,126 +738,80 @@ export default function Dashboard() {
             })}
           </div>
         </WidgetCard>
-
-        <WidgetCard title="Due Soon" viewAllHref="/reminders"
-          empty={dueSoonReminders.length === 0} emptyText="No reminders in the next 7 days"
-          accentClass="bg-orange-500/10" iconEl={<Bell className="w-3.5 h-3.5 text-orange-500" />}>
-          <div className="space-y-0.5">
-            {dueSoonReminders.map(r => {
-              const daysLeft = differenceInCalendarDays(new Date(r.dueDate), new Date());
-              return (
-                <Link key={r.id} href="/reminders">
-                  <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1 ${PRIORITY_DOT[r.priority] ?? 'bg-muted'}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{r.title}</div>
-                      <div className="text-xs text-muted-foreground capitalize">{r.priority} priority</div>
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${daysLeft === 0 ? 'bg-red-500/10 text-red-500' : daysLeft <= 2 ? 'bg-orange-500/10 text-orange-500' : 'bg-muted text-muted-foreground'}`}>
-                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </WidgetCard>
       </motion.div>
 
-      {/* ── Recent Passwords ───────────────────────────────────────────────── */}
-      <motion.div variants={fadeUp}>
-        <WidgetCard title="Recently Used" viewAllHref="/passwords"
-          empty={recentPasswords.length === 0} emptyText="No passwords saved yet"
-          accentClass="bg-indigo-500/10" iconEl={<Lock className="w-3.5 h-3.5 text-indigo-500" />}>
-          <div className="space-y-0.5">
-            {recentPasswords.map(p => (
-              <div key={p.id} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group">
-                <Favicon url={p.url} name={p.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
-                  <div className="text-xs text-muted-foreground font-mono truncate">{maskUsername(p.username)}</div>
+      <motion.div variants={fadeUp} className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+        {[
+          { icon: Lock, label: 'Passwords', value: stats.totalPasswords, href: '/passwords', accent: '#6366f1' },
+          { icon: FileText, label: 'Notes', value: stats.totalNotes, href: '/notes', accent: '#f59e0b' },
+          { icon: CreditCard, label: 'Subs', value: stats.activeSubscriptions, href: '/subscriptions', accent: '#a855f7' },
+          { icon: DollarSign, label: 'Expenses', value: stats.totalExpenses, href: '/expenses', accent: '#22c55e' },
+          { icon: Bell, label: 'Reminders', value: stats.totalReminders, href: '/reminders', accent: '#f97316' },
+          { icon: Shield, label: 'Documents', value: stats.totalBankStatements, href: '/documents', accent: '#64748b' },
+        ].map((s, i) => (
+          <Link key={s.label} href={s.href}>
+            <motion.div
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+              className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                <s.icon className="w-3 h-3 flex-shrink-0" style={{ color: s.accent }} />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{s.label}</span>
+              </div>
+              <div className="text-lg font-bold tabular-nums text-foreground">
+                <AnimatedNumber value={s.value} delay={0.04 * i} />
+              </div>
+            </motion.div>
+          </Link>
+        ))}
+      </motion.div>
+
+      {!isEmpty && breakdown.totalScore < 80 && breakdown.tips.length > 0 && (
+        <motion.div variants={fadeUp}
+          data-testid="security-tips"
+          className="rounded-2xl border border-border/50 bg-card overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border/30">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Shield className="w-3.5 h-3.5 text-amber-500" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Security Tips</h3>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                {breakdown.level}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">{breakdown.totalScore}/100</span>
+          </div>
+          <div className="px-4 py-3 space-y-2">
+            {breakdown.tips.slice(0, 3).map((tip, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{i + 1}</span>
                 </div>
-                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <button onClick={() => copyPassword(p.password, p.id)}
-                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
-                    {copiedId === p.id
-                      ? <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                      : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
-                  </button>
-                  <span className="text-[10px] text-muted-foreground/50">
-                    {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
-                  </span>
-                </div>
+                <p className="text-sm text-foreground/85 leading-snug">{tip}</p>
               </div>
             ))}
           </div>
-        </WidgetCard>
-      </motion.div>
+        </motion.div>
+      )}
 
-      {/* ── Expense snapshot + Activity ────────────────────────────────────── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <WidgetCard title="Financial Summary" viewAllHref="/expenses"
-          empty={topExpenseCategories.length === 0 && monthlySubSpend === 0}
-          emptyText="No expenses or subscriptions tracked yet"
-          accentClass="bg-emerald-500/10" iconEl={<DollarSign className="w-3.5 h-3.5 text-emerald-500" />}>
-          <div className="mb-4">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <div className="text-2xl font-bold tabular-nums text-foreground">{fmtAmt(thisMonthExpenses)}</div>
-              {expenseDeltaPct !== null && (
-                <span
-                  className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
-                    expenseDeltaPct > 0
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                      : expenseDeltaPct < 0
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {expenseDeltaPct > 0 ? '↑' : expenseDeltaPct < 0 ? '↓' : '·'} {Math.abs(expenseDeltaPct)}%
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              spent in {format(new Date(), 'MMMM')}
-              {expenseDeltaPct !== null && lastMonthExpenses > 0 && (
-                <> · vs {fmtAmt(lastMonthExpenses)} last month</>
-              )}
-            </div>
-            {monthlySubSpend > 0 && (
-              <Link href="/subscriptions">
-                <div className="flex items-center justify-between mt-3 px-2.5 py-2 rounded-lg bg-purple-500/5 border border-purple-500/15 hover:bg-purple-500/10 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CreditCard className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
-                    <span className="text-xs text-foreground/80 truncate">
-                      {stats.activeSubscriptions} active sub{stats.activeSubscriptions === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 tabular-nums flex-shrink-0">
-                    {fmtAmt(monthlySubSpend)}/mo
-                  </span>
-                </div>
-              </Link>
-            )}
-          </div>
-          {topExpenseCategories.length > 0 && (
-            <>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Top categories
-              </p>
-              <ExpenseBars cats={topExpenseCategories} fmt={fmtAmt} />
-            </>
-          )}
-        </WidgetCard>
-
-        <WidgetCard title="Recent Activity" viewAllHref="/logging"
-          empty={recentActivity.length === 0} emptyText="No activity yet"
-          accentClass="bg-blue-500/10" iconEl={<Activity className="w-3.5 h-3.5 text-blue-500" />}>
-          {/* Timeline-style: vertical track on the left with icon dots, staggered entrance */}
+      <motion.div variants={fadeUp}>
+        <WidgetCard
+          title="Recent Activity"
+          viewAllHref="/logging"
+          empty={recentActivity.length === 0}
+          emptyText="No activity yet"
+          accentClass="bg-blue-500/10"
+          iconEl={<Activity className="w-3.5 h-3.5 text-blue-500" />}
+        >
           <motion.div
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
             initial="hidden"
             animate="show"
             className="relative pl-1"
+            data-testid="recent-activity"
           >
             <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gradient-to-b from-border via-border to-transparent" />
             {recentActivity.map((item) => {
@@ -1119,20 +821,23 @@ export default function Dashboard() {
                   key={`${item.action}-${item.id}`}
                   variants={{ hidden: { opacity: 0, x: -8 }, show: { opacity: 1, x: 0 } }}
                   transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                  className="relative flex items-center gap-3 pl-1 py-2 rounded-xl hover:bg-muted/40 transition-colors"
                 >
-                  <div className={`w-7 h-7 rounded-full ${item.iconBg} ring-2 ring-background flex items-center justify-center flex-shrink-0 z-10 shadow-sm`}>
-                    <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
-                  </div>
-                  <div className="flex-1 min-w-0 ml-1">
-                    <div className="text-sm text-foreground truncate">{item.text}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {formatDistanceToNow(item.timestamp, { addSuffix: true })}
+                  <Link href={item.href}>
+                    <div className="relative flex items-center gap-3 pl-1 py-2 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer">
+                      <div className={`w-7 h-7 rounded-full ${item.iconBg} ring-2 ring-background flex items-center justify-center flex-shrink-0 z-10 shadow-sm`}>
+                        <Icon className={`w-3.5 h-3.5 ${item.iconColor}`} />
+                      </div>
+                      <div className="flex-1 min-w-0 ml-1">
+                        <div className="text-sm text-foreground truncate">{item.text}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {formatDistanceToNow(item.timestamp, { addSuffix: true })}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">
+                        {item.action}
+                      </span>
                     </div>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/60 bg-muted/50 px-2 py-0.5 rounded-full flex-shrink-0">
-                    {item.action}
-                  </span>
+                  </Link>
                 </motion.div>
               );
             })}
