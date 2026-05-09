@@ -340,13 +340,28 @@ export function NoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
 
+  // Close the color picker when the user taps outside of it.
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[role="menu"][aria-label="Text color"]')) return;
+      if (target.closest('[aria-label="Text color"]')) return;
+      setColorPickerOpen(false);
+      colorPickerRangeRef.current = null;
+    };
+    document.addEventListener('mousedown', onDocClick, true);
+    return () => document.removeEventListener('mousedown', onDocClick, true);
+  }, [colorPickerOpen]);
+
   const runSave = async () => {
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
     setSaving(true);
     try {
       const sanitized = DOMPurify.sanitize(contentHtml, {
-        ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span'],
-        ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style'],
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'div', 'code', 'pre', 'hr', 'blockquote', 'input', 'span', 'a', 'font'],
+        ALLOWED_ATTR: ['type', 'checked', 'class', 'data-todo', 'style', 'href', 'target', 'rel', 'color'],
         ALLOWED_CSS_PROPERTIES: ['background-color', 'color'],
       });
       // Persist notebook metadata so empty notebooks still appear in the list
@@ -573,10 +588,38 @@ export function NoteEditor({
       } catch { /* noop */ }
     }
     if (hex === 'inherit') {
-      // Reset color: remove inline color from spans inside the selection.
-      try { document.execCommand('foreColor', false, '#ffffff'); } catch { /* noop */ }
-      // Best-effort: strip color spans whose only style is color
-      try { document.execCommand('removeFormat', false); } catch { /* noop */ }
+      // Reset color WITHOUT killing bold/italic/underline. Walk the
+      // selection contents and strip inline color styles + drop empty
+      // <font> wrappers. removeFormat is too aggressive — it'd flatten
+      // bold/italic in the same range too.
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const r = sel.getRangeAt(0);
+        const frag = r.cloneContents();
+        const wrap = document.createElement('div');
+        wrap.appendChild(frag);
+        const stripColor = (n: Node) => {
+          if (n.nodeType === 1) {
+            const el = n as HTMLElement;
+            if (el.style && el.style.color) el.style.color = '';
+            if (el.tagName === 'FONT' && el.hasAttribute('color')) el.removeAttribute('color');
+            for (const c of Array.from(el.childNodes)) stripColor(c);
+            const noAttrs = el.attributes.length === 0;
+            const isWrapper = el.tagName === 'FONT' || el.tagName === 'SPAN';
+            if (noAttrs && isWrapper && el.parentNode) {
+              while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+              el.parentNode.removeChild(el);
+            }
+          } else {
+            for (const c of Array.from(n.childNodes)) stripColor(c);
+          }
+        };
+        stripColor(wrap);
+        r.deleteContents();
+        const out = document.createDocumentFragment();
+        while (wrap.firstChild) out.appendChild(wrap.firstChild);
+        r.insertNode(out);
+      }
     } else {
       try { document.execCommand('styleWithCSS', false, 'true'); } catch { /* noop */ }
       try { document.execCommand('foreColor', false, hex); } catch { /* noop */ }
@@ -727,9 +770,14 @@ export function NoteEditor({
       }
       if (todoEl) {
         e.preventDefault();
-        const span = todoEl.querySelector('span');
-        const txt = (span?.textContent || '').replace(/​/g, '').trim();
-        if (!txt) {
+        // Use the WHOLE row's text (excluding the input) so we don't fall
+        // through when iOS WebKit leaks typed characters into a sibling
+        // text node of the span — the cause of the "Enter doesn't make a
+        // new line" bug. Strip zero-widths before deciding empty vs full.
+        const cb = todoEl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        const checked = !!cb?.checked || !!cb?.hasAttribute('checked');
+        const fullText = (todoEl.textContent || '').replace(/​/g, '').replace(/^\s+|\s+$/g, '');
+        if (!fullText) {
           // Empty row → exit checklist, replace with empty paragraph
           const p = document.createElement('p');
           p.appendChild(document.createElement('br'));
@@ -740,15 +788,32 @@ export function NoteEditor({
           sel.removeAllRanges();
           sel.addRange(r);
         } else {
-          // Has content → create a new empty checklist row after this one
+          // Normalize the existing row so all its text lives inside the
+          // span — guards against iOS leakage and ensures saved HTML
+          // round-trips through the DOMPurify allow-list.
+          const span = todoEl.querySelector('span');
+          const spanText = (span?.textContent || '').replace(/​/g, '');
+          if (!span || spanText !== fullText) {
+            todoEl.innerHTML = '';
+            const fixCb = document.createElement('input');
+            fixCb.type = 'checkbox';
+            fixCb.className = 'iv-todo-check';
+            if (checked) fixCb.setAttribute('checked', '');
+            const fixedSpan = document.createElement('span');
+            fixedSpan.textContent = fullText;
+            todoEl.appendChild(fixCb);
+            todoEl.appendChild(document.createTextNode(' '));
+            todoEl.appendChild(fixedSpan);
+          }
+          // Create a new empty checklist row after this one
           const newDiv = document.createElement('div');
           newDiv.setAttribute('data-todo', '0');
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.className = 'iv-todo-check';
+          const newCb = document.createElement('input');
+          newCb.type = 'checkbox';
+          newCb.className = 'iv-todo-check';
           const newSpan = document.createElement('span');
           newSpan.appendChild(document.createTextNode('​'));
-          newDiv.appendChild(cb);
+          newDiv.appendChild(newCb);
           newDiv.appendChild(document.createTextNode(' '));
           newDiv.appendChild(newSpan);
           todoEl.parentNode?.insertBefore(newDiv, todoEl.nextSibling);
@@ -822,6 +887,14 @@ export function NoteEditor({
         });
         setContentHtml(ed.innerHTML);
       });
+      return;
+    }
+    // Anchor tap in viewer mode → open the URL externally instead of
+    // switching into edit mode (where it would become a no-op).
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor && anchor.href) {
+      e.preventDefault();
+      try { window.open(anchor.href, '_blank', 'noopener,noreferrer'); } catch { /* noop */ }
       return;
     }
     // Tap anywhere else in the viewer → switch to edit mode
@@ -1071,6 +1144,39 @@ export function NoteEditor({
           <ToolbarBtn label="Underline (⌘U)" active={activeFormats.has('underline')} onClick={() => applyFormat('underline')}><UnderlineIcon className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Strikethrough" active={activeFormats.has('strike')} onClick={() => applyFormat('strikeThrough')}><Strikethrough className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Highlight" onClick={applyHighlight}><Highlighter className="w-3.5 h-3.5" /></ToolbarBtn>
+          <div className="relative flex-shrink-0">
+            <ToolbarBtn label="Text color" active={colorPickerOpen} onClick={openColorPicker}><Type className="w-3.5 h-3.5" /></ToolbarBtn>
+            <AnimatePresence>
+              {colorPickerOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                  transition={{ duration: 0.14 }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="absolute left-1/2 -translate-x-1/2 top-10 z-30 rounded-xl border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl p-2 grid grid-cols-4 gap-1.5"
+                  role="menu"
+                  aria-label="Text color"
+                >
+                  {NOTE_TEXT_COLORS.map(c => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      aria-label={c.name}
+                      title={c.name}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyTextColor(c.hex)}
+                      className="h-7 w-7 rounded-md border border-white/10 flex items-center justify-center transition-transform hover:scale-110"
+                      style={{ background: c.hex === 'inherit' ? 'transparent' : c.hex }}
+                    >
+                      {c.hex === 'inherit' && <RemoveFormatting className="w-3 h-3 text-muted-foreground" />}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <ToolbarBtn label="Link (⌘K)" onClick={applyLink}><Link2 className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
           <ToolbarBtn label="Heading 1" active={headingCycle === 1} onClick={() => applyHeading(headingCycle === 1 ? 0 : 1)}><Heading1 className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Heading 2" active={headingCycle === 2} onClick={() => applyHeading(headingCycle === 2 ? 0 : 2)}><Heading2 className="w-3.5 h-3.5" /></ToolbarBtn>

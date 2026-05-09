@@ -1229,6 +1229,23 @@ html, body, #root {
   border-radius: 2px;
 }
 
+/* Anchors created via the Link toolbar — keep them visually distinct in
+   both edit and view mode, and never inherit broken decoration from
+   surrounding contentEditable styles. */
+.note-content a,
+.iv-rich-editor a {
+  color: #34d399;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(52, 211, 153, 0.55);
+  cursor: pointer;
+}
+.note-content a:hover,
+.iv-rich-editor a:hover {
+  color: #6ee7b7;
+  text-decoration-color: rgba(110, 231, 183, 0.85);
+}
+
 /* Cmd+F search: visible match highlight + the active match */
 .iv-search-match {
   background: rgba(250, 204, 21, 0.30);
