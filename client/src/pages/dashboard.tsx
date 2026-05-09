@@ -156,11 +156,10 @@ const QuickStatCard = memo(function QuickStatCard({
         whileHover={{ y: -2 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-        className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
-        style={{ borderTop: `2px solid ${accent}` }}
+        className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
       >
         <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</div>
-        <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">
+        <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: accent }}>
           {fmt ? fmt(value) : <AnimatedNumber value={value} />}
         </div>
       </motion.div>
@@ -364,7 +363,21 @@ export default function Dashboard() {
   const fmtAmt = (n: number) => formatCurrency(n, currency);
 
   const [serverName, setServerName] = useState<string>(() => {
-    try { return localStorage.getItem('iv_display_name') || ''; } catch { return ''; }
+    try {
+      const cached = localStorage.getItem('iv_display_name');
+      if (cached) return cached;
+      // First-paint fallback: derive from session before /auth/me resolves
+      const session = localStorage.getItem('iv_account_session');
+      if (session) {
+        const { email, name } = JSON.parse(session);
+        if (name && typeof name === 'string' && !name.includes('@')) {
+          const first = name.split(/\s+/)[0];
+          if (first) return first;
+        }
+        if (email && typeof email === 'string') return getUserName(email);
+      }
+    } catch { /* noop */ }
+    return '';
   });
   useEffect(() => {
     if (!accountEmail) return;
@@ -589,48 +602,61 @@ export default function Dashboard() {
 
       {/* ─── Section 1 · Compact hero ──────────────────────────────────── */}
       <motion.div variants={fadeUp}
-        className="rounded-2xl border border-border/50 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent backdrop-blur-md px-4 py-3.5 sm:py-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-base sm:text-lg font-bold text-foreground truncate">
-              {getGreeting()}{userName ? `, ${userName}` : ''}
-            </div>
-            <div className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</div>
+        className="rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent backdrop-blur-md px-4 py-3.5 sm:py-4">
+        <div className="mb-3">
+          <div className="text-base sm:text-lg font-bold text-foreground truncate">
+            {getGreeting()}, {userName || 'there'}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              data-testid="hero-refresh"
-              aria-label="Refresh dashboard"
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+          <div className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</div>
+        </div>
+
+        {/* Compact action bar — refresh · currency · import/export · generator */}
+        <div className="flex items-center gap-1.5 mb-3 -mx-1 px-1 overflow-x-auto scrollbar-hide" data-testid="dashboard-action-bar">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            data-testid="hero-refresh"
+            aria-label="Refresh dashboard"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <Select value={currency} onValueChange={setCurrency}>
+            <SelectTrigger
+              aria-label="Currency"
+              data-testid="hero-currency"
+              className="h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground gap-1.5 [&>svg:last-child]:ml-0 focus:ring-0 w-auto flex-shrink-0"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger
-                aria-label="Currency"
-                className="h-9 px-2.5 rounded-xl bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground border-0 text-xs font-medium gap-1 [&>svg:last-child]:ml-0 focus:ring-0"
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {currencies.map(curr => (
-                  <SelectItem key={curr.code} value={curr.code}>
-                    {curr.symbol === curr.code ? curr.code : `${curr.symbol} ${curr.code}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <button
-              onClick={() => setShowImportExport(true)}
-              aria-label="Import / export"
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-            </button>
-          </div>
+              <Globe className="w-3.5 h-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencies.map(curr => (
+                <SelectItem key={curr.code} value={curr.code}>
+                  {curr.symbol === curr.code ? curr.code : `${curr.symbol} ${curr.code}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            onClick={() => setShowImportExport(true)}
+            data-testid="hero-import-export"
+            aria-label="Import / export"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors flex-shrink-0"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Import/Export</span>
+          </button>
+          <button
+            onClick={() => setShowGenerator(true)}
+            data-testid="hero-generator"
+            aria-label="Password generator"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors flex-shrink-0"
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>Generator</span>
+          </button>
         </div>
 
         {/* Security badge row → single line, links to /security-health */}
@@ -687,11 +713,10 @@ export default function Dashboard() {
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
-            style={{ borderTop: '2px solid #a855f7' }}
+            className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
           >
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Subs / mo</div>
-            <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">{fmtAmt(monthlySubSpend)}</div>
+            <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#a855f7' }}>{fmtAmt(monthlySubSpend)}</div>
           </motion.div>
         </Link>
         <Link href="/expenses">
@@ -699,11 +724,10 @@ export default function Dashboard() {
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="rounded-2xl bg-card border border-border/50 p-3 cursor-pointer hover:shadow-md transition-shadow h-full backdrop-blur-md"
-            style={{ borderTop: '2px solid #22c55e' }}
+            className="rounded-2xl bg-white/[0.03] dark:bg-white/[0.04] border border-white/10 p-3 cursor-pointer hover:bg-white/[0.06] hover:shadow-sm transition-all h-full backdrop-blur-md"
           >
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Spent / mo</div>
-            <div className="text-lg sm:text-xl font-bold tabular-nums text-foreground mt-0.5 truncate">{fmtAmt(thisMonthExpenses)}</div>
+            <div className="text-lg sm:text-xl font-bold tabular-nums mt-0.5 truncate" style={{ color: '#22c55e' }}>{fmtAmt(thisMonthExpenses)}</div>
           </motion.div>
         </Link>
       </motion.div>

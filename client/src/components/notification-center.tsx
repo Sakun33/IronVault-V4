@@ -135,7 +135,7 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
         <Button
           variant="ghost"
           size="icon"
-          className={`relative h-9 w-9 rounded-xl flex-shrink-0 hover:bg-accent ${triggerClassName ?? ''}`}
+          className={`relative h-9 w-9 rounded-xl flex-shrink-0 hover:bg-accent overflow-visible ${triggerClassName ?? ''}`}
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
           data-testid="notification-center-trigger"
         >
@@ -143,7 +143,7 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
-              className="absolute -top-1 -right-1 w-4 h-4 min-w-0 flex items-center justify-center text-[10px] leading-none p-0"
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-semibold leading-none ring-2 ring-background"
             >
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
