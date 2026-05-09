@@ -7,7 +7,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3, List as ListBullets, ListOrdered, CheckSquare,
   Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
-  Share2, Highlighter, Quote, Search as SearchIcon, Plus,
+  Share2, Highlighter, Quote, Search as SearchIcon, Plus, Sparkles,
 } from 'lucide-react';
 import { NoteEntry } from '@shared/schema';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
@@ -15,6 +15,7 @@ import { combineNotebookList, upsertNotebook, type NotebookMeta } from '@/lib/no
 import { SlashMenu, SLASH_COMMANDS } from '@/components/slash-menu';
 import { InNoteSearch } from '@/components/in-note-search';
 import { setNoteEditing } from '@/lib/note-editing-guard';
+import { toast } from '@/hooks/use-toast';
 
 export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string }> = [
   { id: 'emerald', name: 'Emerald', hex: '#10b981' },
@@ -408,10 +409,61 @@ export function NoteEditor({
 
   const insertChecklistItem = () => {
     if (viewerMode) setViewerMode(false);
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const html = '<div data-todo="1"><input type="checkbox" class="iv-todo-check" />&nbsp;<span></span></div><p><br/></p>';
-    try { document.execCommand('insertHTML', false, html); } catch { /* noop */ }
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.focus();
+    // Build the checklist row imperatively so we can put the caret INSIDE
+    // the empty <span> — execCommand('insertHTML') leaves the caret after
+    // the inserted block, which dropped users into a sibling <p> and made
+    // typing skip the checklist row entirely.
+    const div = document.createElement('div');
+    div.setAttribute('data-todo', '1');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'iv-todo-check';
+    const span = document.createElement('span');
+    span.appendChild(document.createTextNode('​')); // zero-width so the caret has a position
+    div.appendChild(cb);
+    div.appendChild(document.createTextNode(' '));
+    div.appendChild(span);
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      // If caret is inside an empty paragraph, replace it. Otherwise insert
+      // after the closest block-level ancestor.
+      let block: Node | null = range.startContainer;
+      while (block && block !== ed) {
+        if (block.nodeType === 1) {
+          const tag = (block as HTMLElement).tagName;
+          if (tag === 'P' || tag === 'DIV' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'BLOCKQUOTE' || tag === 'PRE') break;
+        }
+        block = block.parentNode;
+      }
+      if (block && block !== ed) {
+        const blockEl = block as HTMLElement;
+        const text = (blockEl.textContent || '').trim();
+        if (!text && blockEl.tagName === 'P') {
+          blockEl.replaceWith(div);
+        } else {
+          blockEl.parentNode?.insertBefore(div, blockEl.nextSibling);
+        }
+      } else {
+        ed.appendChild(div);
+      }
+    } else {
+      ed.appendChild(div);
+    }
+
+    // Place caret inside the empty span (after the zero-width char)
+    try {
+      const r = document.createRange();
+      r.selectNodeContents(span);
+      r.collapse(false);
+      const s = window.getSelection();
+      s?.removeAllRanges();
+      s?.addRange(r);
+    } catch { /* noop */ }
     syncEditorState();
   };
 
@@ -421,6 +473,26 @@ export function NoteEditor({
     editorRef.current.focus();
     try { document.execCommand('insertHTML', false, '<hr/><p><br/></p>'); } catch { /* noop */ }
     syncEditorState();
+  };
+
+  const applyBeautify = () => {
+    if (viewerMode) setViewerMode(false);
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.focus();
+    const before = ed.innerHTML;
+    const after = beautifyContent(before);
+    if (after !== before) {
+      ed.innerHTML = after;
+      const isEmpty = (ed.textContent || '').trim() === '';
+      if (isEmpty) ed.setAttribute('data-empty', 'true');
+      else ed.removeAttribute('data-empty');
+      syncEditorState();
+      void hapticSuccess();
+      toast({ title: 'Formatted!', description: 'Note cleaned up.', duration: 1800 });
+    } else {
+      toast({ title: 'Already tidy', description: 'No changes needed.', duration: 1500 });
+    }
   };
 
   const syncEditorState = () => {
@@ -494,6 +566,62 @@ export function NoteEditor({
         try { document.execCommand('formatBlock', false, `H${Math.min(3, level + 1)}`); } catch {}
         setHeadingCycle(Math.min(3, level + 1) as 0 | 1 | 2 | 3);
         syncEditorState();
+        return;
+      }
+    }
+
+    // Enter inside a checklist row: create a NEW checkbox row (or exit on
+    // empty row). Without this the browser inserts a <br> inside the same
+    // row, so multiple typed items end up stacked on a single checkbox
+    // line — the user-reported "items all on one line" bug.
+    if (e.key === 'Enter' && !e.shiftKey && !slashMenu.open && editorRef.current) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      let n: Node | null = range.startContainer;
+      let todoEl: HTMLElement | null = null;
+      while (n && n !== editorRef.current) {
+        if (n.nodeType === 1 && (n as HTMLElement).getAttribute && (n as HTMLElement).getAttribute('data-todo') === '1') {
+          todoEl = n as HTMLElement;
+          break;
+        }
+        n = n.parentNode;
+      }
+      if (todoEl) {
+        e.preventDefault();
+        const span = todoEl.querySelector('span');
+        const txt = (span?.textContent || '').replace(/​/g, '').trim();
+        if (!txt) {
+          // Empty row → exit checklist, replace with empty paragraph
+          const p = document.createElement('p');
+          p.appendChild(document.createElement('br'));
+          todoEl.replaceWith(p);
+          const r = document.createRange();
+          r.setStart(p, 0);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        } else {
+          // Has content → create a new empty checklist row after this one
+          const newDiv = document.createElement('div');
+          newDiv.setAttribute('data-todo', '1');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'iv-todo-check';
+          const newSpan = document.createElement('span');
+          newSpan.appendChild(document.createTextNode('​'));
+          newDiv.appendChild(cb);
+          newDiv.appendChild(document.createTextNode(' '));
+          newDiv.appendChild(newSpan);
+          todoEl.parentNode?.insertBefore(newDiv, todoEl.nextSibling);
+          const r = document.createRange();
+          r.selectNodeContents(newSpan);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        syncEditorState();
+        return;
       }
     }
   };
@@ -813,6 +941,8 @@ export function NoteEditor({
           <ToolbarBtn label="Code block" onClick={() => applyFormat('formatBlock', 'PRE')}><Code className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Quote" onClick={applyQuote}><Quote className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Divider" onClick={insertDivider}><Minus className="w-3.5 h-3.5" /></ToolbarBtn>
+          <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
+          <ToolbarBtn label="Beautify" onClick={applyBeautify}><Sparkles className="w-3.5 h-3.5" /></ToolbarBtn>
         </div>
       </div>
 
@@ -1116,6 +1246,165 @@ function initialHtml(note: NoteEntry | null, starter?: { content?: string }): st
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c));
+}
+
+/**
+ * Clean up note content: trim whitespace runs, drop empty paragraphs, and
+ * convert markdown-ish text patterns (`- foo`, `1. foo`, `[ ] foo`) to
+ * proper HTML lists / checklists. Demotes stray H1s after the first to
+ * H2 so headings have a single document title.
+ */
+export function beautifyContent(html: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = html || '';
+
+  const isBlankBlock = (el: Element): boolean => {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = el.tagName;
+    if (tag !== 'P' && tag !== 'DIV') return false;
+    if (el.querySelector('img,input,br + *')) return false;
+    if (el.querySelector('img,input')) return false;
+    const text = (el.textContent || '').replace(/​| /g, '').trim();
+    return text === '';
+  };
+
+  // Collapse runs of empty <p>/<div> blocks to at most one
+  const collapseEmpty = () => {
+    const kids = Array.from(root.children);
+    let prevBlank = false;
+    for (const el of kids) {
+      const blank = isBlankBlock(el);
+      if (blank && prevBlank) el.remove();
+      prevBlank = blank;
+    }
+  };
+  collapseEmpty();
+
+  // Convert plain-text patterns at the start of paragraphs into lists/todos
+  const ulRe = /^[-*•]\s+(.+)$/;
+  const olRe = /^\d+[.)]\s+(.+)$/;
+  const todoRe = /^\[([ xX]?)\]\s+(.+)$/;
+
+  const kids = Array.from(root.childNodes);
+  const out: Node[] = [];
+  let i = 0;
+  while (i < kids.length) {
+    const node = kids[i];
+    if (node.nodeType === 1 && (node as Element).tagName === 'P') {
+      const text = (node.textContent || '').replace(/​/g, '').trim();
+      if (ulRe.test(text)) {
+        const ul = document.createElement('ul');
+        while (i < kids.length) {
+          const cur = kids[i];
+          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
+          const t = (cur.textContent || '').replace(/​/g, '').trim();
+          const m = t.match(ulRe);
+          if (!m) break;
+          const li = document.createElement('li');
+          li.textContent = m[1].trim();
+          ul.appendChild(li);
+          i++;
+        }
+        if (ul.children.length > 0) { out.push(ul); continue; }
+      }
+      if (olRe.test(text)) {
+        const ol = document.createElement('ol');
+        while (i < kids.length) {
+          const cur = kids[i];
+          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
+          const t = (cur.textContent || '').replace(/​/g, '').trim();
+          const m = t.match(olRe);
+          if (!m) break;
+          const li = document.createElement('li');
+          li.textContent = m[1].trim();
+          ol.appendChild(li);
+          i++;
+        }
+        if (ol.children.length > 0) { out.push(ol); continue; }
+      }
+      if (todoRe.test(text)) {
+        while (i < kids.length) {
+          const cur = kids[i];
+          if (cur.nodeType !== 1 || (cur as Element).tagName !== 'P') break;
+          const t = (cur.textContent || '').replace(/​/g, '').trim();
+          const m = t.match(todoRe);
+          if (!m) break;
+          const div = document.createElement('div');
+          div.setAttribute('data-todo', '1');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'iv-todo-check';
+          if (m[1] === 'x' || m[1] === 'X') cb.setAttribute('checked', '');
+          const span = document.createElement('span');
+          span.textContent = m[2].trim();
+          div.appendChild(cb);
+          div.appendChild(document.createTextNode(' '));
+          div.appendChild(span);
+          out.push(div);
+          i++;
+        }
+        continue;
+      }
+      // Single-paragraph case: split inline comma-separated todo lines like
+      // "[ ] eggs, [ ] cheese, [ ] dal" — common after pasting.
+      const inlineTodoRe = /\[([ xX]?)\]\s*([^\[]+?)(?=,?\s*\[|$)/g;
+      const matches = [...text.matchAll(inlineTodoRe)];
+      if (matches.length >= 2) {
+        for (const m of matches) {
+          const div = document.createElement('div');
+          div.setAttribute('data-todo', '1');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'iv-todo-check';
+          if (m[1] === 'x' || m[1] === 'X') cb.setAttribute('checked', '');
+          const span = document.createElement('span');
+          span.textContent = m[2].replace(/^[,\s]+|[,\s]+$/g, '');
+          div.appendChild(cb);
+          div.appendChild(document.createTextNode(' '));
+          div.appendChild(span);
+          out.push(div);
+        }
+        i++;
+        continue;
+      }
+    }
+    out.push(node);
+    i++;
+  }
+  root.innerHTML = '';
+  for (const n of out) root.appendChild(n);
+
+  // Demote stray H1s after the first to H2 (single document title)
+  const h1s = Array.from(root.querySelectorAll('h1'));
+  for (let j = 1; j < h1s.length; j++) {
+    const h2 = document.createElement('h2');
+    h2.innerHTML = h1s[j].innerHTML;
+    h1s[j].replaceWith(h2);
+  }
+
+  // Trim leading/trailing blank blocks
+  while (root.firstChild && root.firstChild.nodeType === 1 && isBlankBlock(root.firstChild as Element)) {
+    root.removeChild(root.firstChild);
+  }
+  while (root.lastChild && root.lastChild.nodeType === 1 && isBlankBlock(root.lastChild as Element)) {
+    root.removeChild(root.lastChild);
+  }
+
+  // Collapse multi-space runs inside text nodes
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let cur = walker.nextNode();
+  while (cur) {
+    textNodes.push(cur as Text);
+    cur = walker.nextNode();
+  }
+  for (const t of textNodes) {
+    if (!t.nodeValue) continue;
+    const collapsed = t.nodeValue.replace(/[ \t]{2,}/g, ' ');
+    if (collapsed !== t.nodeValue) t.nodeValue = collapsed;
+  }
+
+  return root.innerHTML || '<p><br/></p>';
 }
 
 function serializeForCompare(snap: { title: string; html: string; notebook: string; tags: string[]; isPinned: boolean; color: string | undefined }): string {
