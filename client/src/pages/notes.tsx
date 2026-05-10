@@ -112,26 +112,59 @@ function timeAgoShort(date: Date | string | undefined): string {
 
 type SortKey = 'updated' | 'created' | 'alpha';
 
-// Group notes by relative day for the date-section list view
+// Apple-Notes-style row timestamp:
+//  - today      → "9:23 AM"
+//  - yesterday  → "Yesterday"
+//  - this week  → "Monday"
+//  - this year  → "May 8"
+//  - older      → "5/10/26"
+function formatRowTimestamp(date: Date): string {
+  if (isToday(date)) return format(date, 'h:mm a');
+  if (isYesterday(date)) return 'Yesterday';
+  if (isThisWeek(date, { weekStartsOn: 0 })) return format(date, 'EEEE');
+  const isThisYear = date.getFullYear() === new Date().getFullYear();
+  return isThisYear ? format(date, 'MMM d') : format(date, 'M/d/yy');
+}
+
+// Apple-Notes-style date grouping:
+// Today · Previous 7 Days · Previous 30 Days · then by Month-Year
 function groupNotesByDate(notes: NoteEntry[], sortBy: SortKey): Array<{ label: string; key: string; notes: NoteEntry[] }> {
-  if (sortBy === 'alpha') return [{ label: 'All notes', key: 'alpha', notes }];
-  const groups = new Map<string, { label: string; sortStamp: number; notes: NoteEntry[] }>();
+  if (notes.length === 0) return [];
+  if (sortBy === 'alpha') return [{ label: 'All Notes', key: 'alpha', notes }];
+
+  const dayMs = 86_400_000;
+  const todayStart = startOfDay(new Date()).getTime();
+  const sevenStart = todayStart - 7 * dayMs;
+  const thirtyStart = todayStart - 30 * dayMs;
+
+  const today: NoteEntry[] = [];
+  const last7: NoteEntry[] = [];
+  const last30: NoteEntry[] = [];
+  const monthBuckets = new Map<string, { label: string; sortStamp: number; notes: NoteEntry[] }>();
+
   for (const note of notes) {
     const ref = sortBy === 'created' ? new Date(note.createdAt) : new Date(note.updatedAt);
-    const dayStart = startOfDay(ref).getTime();
-    let label: string;
-    let key: string;
-    if (isToday(ref)) { label = 'Today'; key = 'today'; }
-    else if (isYesterday(ref)) { label = 'Yesterday'; key = 'yesterday'; }
-    else if (isThisWeek(ref, { weekStartsOn: 1 })) { label = 'This week'; key = 'thisweek'; }
-    else { label = format(ref, 'MMMM d, yyyy'); key = String(dayStart); }
-    const existing = groups.get(key);
-    if (existing) existing.notes.push(note);
-    else groups.set(key, { label, sortStamp: dayStart, notes: [note] });
+    const t = ref.getTime();
+    if (t >= todayStart) today.push(note);
+    else if (t >= sevenStart) last7.push(note);
+    else if (t >= thirtyStart) last30.push(note);
+    else {
+      const key = format(ref, 'yyyy-MM');
+      const sortStamp = new Date(ref.getFullYear(), ref.getMonth(), 1).getTime();
+      const label = format(ref, 'MMMM yyyy');
+      const existing = monthBuckets.get(key);
+      if (existing) existing.notes.push(note);
+      else monthBuckets.set(key, { label, sortStamp, notes: [note] });
+    }
   }
-  return Array.from(groups.values())
-    .sort((a, b) => b.sortStamp - a.sortStamp)
-    .map(g => ({ label: g.label, key: g.label, notes: g.notes }));
+
+  const out: Array<{ label: string; key: string; notes: NoteEntry[] }> = [];
+  if (today.length) out.push({ label: 'Today', key: 'today', notes: today });
+  if (last7.length) out.push({ label: 'Previous 7 Days', key: 'last7', notes: last7 });
+  if (last30.length) out.push({ label: 'Previous 30 Days', key: 'last30', notes: last30 });
+  const months = Array.from(monthBuckets.values()).sort((a, b) => b.sortStamp - a.sortStamp);
+  for (const m of months) out.push({ label: m.label, key: m.label, notes: m.notes });
+  return out;
 }
 
 // Highlight search matches inside a plain-text preview snippet. Returns
@@ -886,63 +919,148 @@ export default function Notes() {
     />
   );
 
-  // ── Desktop master-detail layout ─────────────────────────────────────────
-  // True 2-panel: ~320px notes list on the left + flex-1 editor on the right.
+  // ── Desktop / tablet master-detail layout (Apple Notes) ─────────────────
+  // True 2-panel: ~300px notes list on the left + flex-1 editor on the right.
   // Both panes stay mounted; clicking a row swaps the right pane to the new
   // note. The editor is never unmounted on selection change so its local
   // typing state survives across notes — and crucially across any cloud
-  // sync refresh that happens in the background.
-  if (isThreePane) {
+  // sync refresh that happens in the background. Each panel scrolls
+  // independently. Sidebar uses Apple Notes' near-black sidebar tone
+  // (#1c1c1e); editor pane uses pure background.
+  if (isThreePane || isTwoPane) {
     return (
-      <div className="flex flex-col h-full -mx-6 -my-6">
+      <div className="flex flex-col h-full -mx-6 -my-6 bg-background">
         <div className="flex-1 min-h-0 flex">
-          {/* LEFT pane — list + filters */}
-          <section className="w-[340px] flex-shrink-0 border-r border-border/40 bg-background flex flex-col">
-            <div className="px-4 pt-5 pb-2 space-y-2.5 border-b border-border/40 bg-background">
-              {headerBlock}
-              {searchBlock}
-              {(notebooks.length > 0 || tagFrequencies.length > 0) && (
-                <div className="-mx-1 px-1 flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-                  <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
-                  {notebooks.map(nb => (
-                    <FilterChip
-                      key={nb.name}
-                      label={nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
-                      count={notebookCounts[nb.name.toLowerCase()] ?? 0}
-                      active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()}
-                      onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }}
-                    />
-                  ))}
-                  {tagFrequencies.length > 0 && <span className="w-px h-5 bg-border/50 mx-1 flex-shrink-0" aria-hidden />}
-                  {tagFrequencies.slice(0, 8).map(([tag, count]) => (
-                    <FilterChip
-                      key={`tag-${tag}`}
-                      label={`#${tag}`}
-                      count={count}
-                      active={selectedTag === tag}
-                      onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
-                    />
-                  ))}
+          {/* LEFT pane — list, search, filters */}
+          <section className="w-[300px] flex-shrink-0 border-r border-white/[0.06] bg-[#1c1c1e] flex flex-col h-full">
+            {/* Title row */}
+            <div className="px-4 pt-4 pb-1.5 flex items-center justify-between flex-shrink-0">
+              <h1 className="text-[18px] font-bold tracking-tight text-foreground">Notes</h1>
+              <div className="flex items-center gap-0.5">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setFilterMenuOpen(v => !v); setHeaderMenuOpen(false); }}
+                    aria-label="Filter and sort"
+                    aria-expanded={filterMenuOpen}
+                    className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${filterMenuOpen ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.05]'}`}
+                  >
+                    <ListFilter className="w-4 h-4" />
+                  </button>
+                  <AnimatePresence>
+                    {filterMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                        transition={{ duration: 0.14 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-10 z-30 w-56 rounded-xl border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl py-2"
+                      >
+                        <MenuLabel>Sort</MenuLabel>
+                        <MenuOption active={sortBy === 'updated'} onClick={() => setSortBy('updated')}>Newest first</MenuOption>
+                        <MenuOption active={sortBy === 'created'} onClick={() => setSortBy('created')}>Oldest first</MenuOption>
+                        <MenuOption active={sortBy === 'alpha'} onClick={() => setSortBy('alpha')}>A → Z</MenuOption>
+                        <div className="h-px bg-white/[0.06] my-1" />
+                        <MenuOption active={showPinnedOnly} onClick={() => setShowPinnedOnly(v => !v)}>
+                          <span className="flex items-center gap-2">
+                            <Pin className={`w-3 h-3 ${showPinnedOnly ? 'fill-amber-400 text-amber-400' : ''}`} /> Pinned only
+                          </span>
+                        </MenuOption>
+                        <div className="h-px bg-white/[0.06] my-1" />
+                        <MenuOption onClick={() => setShowTemplatesModal(true)}>
+                          <span className="flex items-center gap-2"><LayoutTemplate className="w-3.5 h-3.5" /> Templates</span>
+                        </MenuOption>
+                        <MenuOption onClick={() => selection.enterSelectionMode()}>
+                          <span className="flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5" /> Select notes</span>
+                        </MenuOption>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              )}
-              {activeFilterChips}
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 truncate">
-                  {selectedTag ? `#${selectedTag}` : selectedNotebook === 'all' ? 'All Notes' : selectedNotebook}
-                  <span className="ml-1.5 text-muted-foreground/40">· {sortedNotes.length}</span>
-                </span>
-                <Button size="sm" onClick={() => openNewNote()} disabled={upgradeBlocked} className="cta-tap-pulse h-7 px-3 text-xs flex-shrink-0">
-                  <Plus className="w-3 h-3 mr-1" /> New
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => openNewNote()}
+                  disabled={upgradeBlocked}
+                  aria-label="New note"
+                  data-testid="button-new-note-header"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-amber-300 hover:text-amber-200 hover:bg-white/[0.05] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <PenLine className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar px-2">
+
+            {/* Note count */}
+            <div className="px-4 pb-2 text-[12px] text-muted-foreground/60 flex-shrink-0">
+              {sortedNotes.length} {sortedNotes.length === 1 ? 'note' : 'notes'}
+            </div>
+
+            {/* Search — always visible */}
+            <div className="px-3 pb-2 flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none" />
+                <input
+                  type="text"
+                  data-testid="input-notes-search"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search"
+                  className="w-full h-8 pl-8 pr-8 rounded-lg bg-white/[0.06] border border-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:bg-white/[0.08] focus:border-white/10 transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-white/[0.08]"
+                  >
+                    <CloseIcon className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Notebook + tag chips — compact horizontal rail */}
+            {(notebooks.length > 0 || tagFrequencies.length > 0) && (
+              <div className="px-3 pb-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide flex-shrink-0">
+                <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
+                {notebooks.map(nb => (
+                  <FilterChip
+                    key={nb.name}
+                    label={nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
+                    count={notebookCounts[nb.name.toLowerCase()] ?? 0}
+                    active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()}
+                    onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }}
+                  />
+                ))}
+                {tagFrequencies.length > 0 && <span className="w-px h-4 bg-white/10 mx-0.5 flex-shrink-0" aria-hidden />}
+                {tagFrequencies.slice(0, 6).map(([tag, count]) => (
+                  <FilterChip
+                    key={`tag-${tag}`}
+                    label={`#${tag}`}
+                    count={count}
+                    active={selectedTag === tag}
+                    onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {activeFilterChips && (
+              <div className="px-3 pb-1.5 flex-shrink-0">
+                {activeFilterChips}
+              </div>
+            )}
+
+            {/* List — independent scroll */}
+            <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar px-2 py-1">
               {notesListContent}
             </div>
           </section>
 
-          {/* RIGHT pane — editor or empty state. Always mounted. */}
-          <section className="flex-1 min-w-0 bg-background overflow-hidden">
+          {/* RIGHT pane — editor or empty state. Always mounted. Independent scroll handled inside NoteEditor. */}
+          <section className="flex-1 min-w-0 bg-background overflow-hidden h-full">
             {editorOpen || !!editingNote ? (
               <NoteEditor
                 open={editorOpen}
@@ -965,73 +1083,6 @@ export default function Notes() {
           </section>
         </div>
 
-        {dialogs}
-        {selection.isSelectionMode && (
-          <SelectionBar
-            selectedCount={selection.selectedCount}
-            totalCount={sortedNotes.length}
-            allSelected={selection.allSelected}
-            itemLabel="note"
-            onSelectAll={selection.selectAll}
-            onClear={selection.clear}
-            onExit={selection.exitSelectionMode}
-            onBulkDelete={handleBulkDelete}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // ── Two-pane (tablet) ────────────────────────────────────────────────────
-  if (isTwoPane) {
-    return (
-      <div className="flex flex-col h-full -mx-6 -my-6">
-        <div className="px-6 pt-6 pb-3 space-y-3 border-b border-border/40 bg-background">
-          {headerBlock}
-          {searchBlock}
-          {activeFilterChips}
-        </div>
-        <div className="flex-1 min-h-0 flex">
-          <section className="w-[320px] flex-shrink-0 border-r border-border/40 bg-background overflow-y-auto smooth-scrollbar">
-            <div className="px-3 pt-3 pb-2 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border/40 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                {selectedTag ? `#${selectedTag}` : selectedNotebook === 'all' ? 'All Notes' : selectedNotebook}
-                <span className="ml-1.5 text-muted-foreground/40">· {sortedNotes.length}</span>
-              </span>
-              <Button size="sm" onClick={() => openNewNote()} disabled={upgradeBlocked} className="cta-tap-pulse h-7 px-2.5 text-xs">
-                <Plus className="w-3 h-3 mr-1" /> New
-              </Button>
-            </div>
-            {/* Tablet filter rail — compact horizontal scroll */}
-            <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide border-b border-border/30 bg-background">
-              <FilterChip label="All" active={selectedNotebook === 'all' && !selectedTag} onClick={() => { setSelectedNotebook('all'); setSelectedTag(null); }} />
-              {notebooks.slice(0, 8).map(nb => (
-                <FilterChip key={nb.name} label={nb.name} active={selectedNotebook.toLowerCase() === nb.name.toLowerCase()} onClick={() => { setSelectedNotebook(nb.name); setSelectedTag(null); }} />
-              ))}
-            </div>
-            <div className="px-2">{notesListContent}</div>
-          </section>
-          <section className="flex-1 min-w-0 bg-background">
-            {editingNote || editorOpen ? (
-              <NoteEditor
-                open={editorOpen}
-                note={editingNote}
-                starter={starterContent ? { content: starterContent, notebook: starterNotebook } : undefined}
-                defaultNotebook={starterNotebook || lastNotebook || 'personal'}
-                accountEmail={accountEmail}
-                knownTags={knownTags}
-                knownNotebooks={notebooks.map(n => n.name)}
-                onClose={closeEditor}
-                onSave={handleSave}
-                onDelete={editingNote ? () => handleDeleteRequest(editingNote.id, editingNote.title) : undefined}
-                onDuplicate={editingNote ? () => duplicateNote(editingNote) : undefined}
-                embedded
-              />
-            ) : (
-              <DesktopEditorEmpty onCreate={() => openNewNote()} disabled={upgradeBlocked} />
-            )}
-          </section>
-        </div>
         {dialogs}
         {selection.isSelectionMode && (
           <SelectionBar
@@ -1149,14 +1200,14 @@ interface ListProps {
 }
 function DateGroupedList({ groups, activeId, query, selection, onOpen, onContextMenu, onLongPressStart, onLongPressCancel }: ListProps) {
   return (
-    <div>
-      {groups.map(group => (
-        <section key={group.key} className="pt-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-1 pb-2">
+    <div className="pb-6">
+      {groups.map((group, gi) => (
+        <section key={group.key} className={gi === 0 ? 'pt-1' : 'pt-4'}>
+          <h2 className="text-[12px] font-semibold text-foreground/85 px-2 pb-1.5">
             {group.label}
           </h2>
-          <div role="list" className="border-t border-border/40">
-            <AnimatePresence>
+          <div role="list" className="space-y-0.5">
+            <AnimatePresence initial={false}>
               {group.notes.map(note => (
                 <NoteRow
                   key={note.id}
@@ -1199,54 +1250,53 @@ interface RowProps {
 }
 function NoteRow({ note, active, query, selected, selectionMode, onClick, onContextMenu, onTouchStart, onTouchEnd, onTouchMove, onToggleSelect }: RowProps) {
   const accent = accentFor(note);
-  const preview = getPlainPreview(note.content || '', 160);
-  const tagsToShow = (note.tags || []).slice(0, 2);
-  const extraTags = (note.tags?.length || 0) - tagsToShow.length;
+  const preview = getPlainPreview(note.content || '', 90);
+  const stamp = formatRowTimestamp(new Date(note.updatedAt));
   return (
     <motion.button
       layout
       type="button"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
-      transition={{ duration: 0.16 }}
-      whileTap={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+      exit={{ opacity: 0, x: -12, transition: { duration: 0.16 } }}
+      transition={{ duration: 0.14 }}
       data-testid={`note-card-${note.id}`}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onTouchMove={onTouchMove}
-      className={`relative w-full flex items-start gap-3 py-3.5 pr-3 text-left rounded-xl mb-1.5 bg-white/[0.03] backdrop-blur-sm border border-white/[0.08] hover:bg-white/[0.06] active:bg-white/[0.08] transition-all duration-200 outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 focus-visible:ring-inset ${selected ? 'bg-emerald-500/[0.06]' : ''} ${active ? 'bg-emerald-500/[0.08] border-emerald-400/30' : ''} ${accent ? 'pl-3' : 'pl-2'}`}
+      className={`relative w-full flex items-start gap-2.5 px-3 py-2 text-left rounded-lg transition-colors duration-150 outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-white/15 focus-visible:ring-inset ${
+        active
+          ? 'bg-white/[0.09]'
+          : selected
+            ? 'bg-emerald-500/[0.10]'
+            : 'hover:bg-white/[0.04]'
+      }`}
     >
-      {accent && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r" style={{ background: accent }} />}
+      {accent && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r" style={{ background: accent }} />}
       {selectionMode && (
         <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}>
           <SelectionCheckbox checked={selected} onChange={onToggleSelect} label={`Select ${note.title}`} />
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
-          <h3 data-testid={`note-title-${note.id}`} className="text-[15px] font-semibold text-foreground leading-snug truncate flex-1">
-            {query ? highlightSnippet(note.title || 'Untitled', query) : (note.title || 'Untitled')}
+        <div className="flex items-center gap-1.5">
+          <h3 data-testid={`note-title-${note.id}`} className="text-[14px] font-semibold text-foreground leading-tight truncate flex-1">
+            {query ? highlightSnippet(note.title || 'New Note', query) : (note.title || 'New Note')}
           </h3>
-          {note.isPinned && <Pin className="w-3.5 h-3.5 fill-amber-400 text-amber-400 flex-shrink-0 mt-0.5" />}
+          {note.isPinned && <Pin className="w-3 h-3 fill-amber-400 text-amber-400 flex-shrink-0" />}
         </div>
-        {preview && (
-          <p data-testid={`note-content-${note.id}`} className="text-[13px] text-muted-foreground/80 leading-[1.55] line-clamp-2 mt-1 break-words">
-            {query ? highlightSnippet(preview, query) : preview}
-          </p>
-        )}
-        {(tagsToShow.length > 0) && (
-          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-            {tagsToShow.map(t => (
-              <span key={t} className="inline-flex items-center text-[10px] text-emerald-300/80 bg-emerald-500/[0.06] px-1.5 py-0.5 rounded-full">
-                #{t}
-              </span>
-            ))}
-            {extraTags > 0 && <span className="text-[10px] text-muted-foreground/50">+{extraTags}</span>}
-          </div>
-        )}
+        <div data-testid={`note-content-${note.id}`} className="flex items-center gap-1.5 mt-0.5 text-[12px] leading-snug">
+          <span className="text-foreground/55 tabular-nums flex-shrink-0">{stamp}</span>
+          {preview ? (
+            <span className="text-muted-foreground/60 truncate">
+              {query ? highlightSnippet(preview, query) : preview}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/40 italic">No additional text</span>
+          )}
+        </div>
       </div>
     </motion.button>
   );
