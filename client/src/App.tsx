@@ -920,7 +920,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             onRetry={retryCloudSync}
             vaultId={activeVault?.id}
           />
-          <div className="px-6 pb-6 pt-3 flex-1 min-w-0">
+          <div className="px-6 pb-6 pt-1 flex-1 min-w-0">
             <AnalyticsIntegration>
               <ErrorBoundary level="page" resetKey={location}>
                 <AnimatePresence mode="wait" initial={false}>

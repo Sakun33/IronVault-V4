@@ -30,7 +30,10 @@ interface NotificationCenterProps {
   triggerClassName?: string;
 }
 
-type Section = { key: 'today' | 'yesterday' | 'earlier'; label: string; items: Notification[] };
+type Section = { key: 'today' | 'yesterday' | 'earlier'; label: string; items: DisplayNotification[] };
+
+/** A notification that may represent a group of consecutive sync entries. */
+type DisplayNotification = Notification & { syncCount?: number };
 
 /**
  * Slide-in notification center. Replaces the older popover-style bell —
@@ -67,6 +70,32 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
     return () => window.removeEventListener('iv:notifications-updated', handler);
   }, [reload]);
 
+  /** Deduplicate consecutive sync notifications — keep only the latest with a count. */
+  const deduplicateSync = useCallback((items: Notification[]): DisplayNotification[] => {
+    const result: DisplayNotification[] = [];
+    let syncBatch: Notification[] = [];
+    const flushSync = () => {
+      if (syncBatch.length === 0) return;
+      const latest = syncBatch[0]; // items are already sorted newest-first
+      result.push({
+        ...latest,
+        syncCount: syncBatch.length > 1 ? syncBatch.length : undefined,
+        title: syncBatch.length > 1 ? `Vault synced (${syncBatch.length} times today)` : latest.title,
+      });
+      syncBatch = [];
+    };
+    for (const n of items) {
+      if (n.type === 'sync') {
+        syncBatch.push(n);
+      } else {
+        flushSync();
+        result.push(n);
+      }
+    }
+    flushSync();
+    return result;
+  }, []);
+
   const sections: Section[] = useMemo(() => {
     const today: Notification[] = [];
     const yesterday: Notification[] = [];
@@ -78,11 +107,11 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
       else earlier.push(n);
     }
     return [
-      { key: 'today', label: 'Today', items: today },
-      { key: 'yesterday', label: 'Yesterday', items: yesterday },
-      { key: 'earlier', label: 'Earlier', items: earlier },
+      { key: 'today' as const, label: 'Today', items: deduplicateSync(today) },
+      { key: 'yesterday' as const, label: 'Yesterday', items: deduplicateSync(yesterday) },
+      { key: 'earlier' as const, label: 'Earlier', items: deduplicateSync(earlier) },
     ];
-  }, [notifications]);
+  }, [notifications, deduplicateSync]);
 
   const handleMarkAllRead = async () => {
     await NotificationService.markAllAsRead(userId);
@@ -129,6 +158,16 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
     }
   };
 
+  const getAccentBorder = (type: Notification['type']) => {
+    switch (type) {
+      case 'sync': return 'border-l-2 border-l-cyan-400/50';
+      case 'security': return 'border-l-2 border-l-red-400/50';
+      case 'achievement': return 'border-l-2 border-l-amber-400/50';
+      case 'welcome': return 'border-l-2 border-l-emerald-400/50';
+      default: return '';
+    }
+  };
+
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
@@ -153,9 +192,9 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
 
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md p-0 flex flex-col"
+        className="w-full sm:max-w-md p-0 flex flex-col [&>button]:z-50"
       >
-        <SheetHeader className="p-4 border-b border-border space-y-0">
+        <SheetHeader className="pt-[calc(env(safe-area-inset-top,0px)+16px)] px-4 pb-4 border-b border-border space-y-0">
           <div className="flex items-center justify-between gap-2">
             <SheetTitle className="text-left">
               Notifications
@@ -186,7 +225,7 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
               <p className="text-xs mt-1">New notifications will appear here.</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
               {sections.filter(s => s.items.length > 0).map(section => (
                 <div key={section.key}>
                   <div className="px-4 py-2 bg-muted/40 sticky top-0 z-10 backdrop-blur">
@@ -194,12 +233,12 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
                       {section.label}
                     </h3>
                   </div>
-                  <ul>
+                  <ul className="px-3 py-2 space-y-0">
                     {section.items.map(n => (
                       <li
                         key={n.id}
-                        className={`group flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${
-                          !n.read ? 'bg-primary/[0.03]' : ''
+                        className={`group flex items-start gap-3 bg-white/[0.03] rounded-xl p-3 mb-2 border border-white/[0.06] ${getAccentBorder(n.type)} hover:bg-accent/50 transition-colors cursor-pointer ${
+                          !n.read ? 'ring-1 ring-primary/10' : ''
                         }`}
                         onClick={() => !n.read && handleMarkAsRead(n.id)}
                       >
