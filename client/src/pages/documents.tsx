@@ -3,6 +3,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { FeaturePreview } from '@/components/feature-preview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BrandCard } from '@/components/brand-card';
+import { SwipeRow } from '@/components/ios';
 
 const getFileBrandColor = (type: string) => {
   switch (type) {
@@ -1118,13 +1119,21 @@ export default function Documents() {
                 const FileIcon = getFileIcon(document.type);
                 const fileColor = getFileColor(document.type);
                 const checked = selection.isSelected(document.id);
+                const swipeActions = viewMode === 'list' ? [
+                  { id: 'star', label: document.isStarred ? 'Unstar' : 'Star', icon: Star, background: 'bg-amber-500',
+                    onAction: () => handleStar(document.id) },
+                  { id: 'download', label: 'Save', icon: Download, background: 'bg-blue-500',
+                    onAction: () => handleDownload(document) },
+                  { id: 'delete', label: 'Delete', icon: Trash2, background: 'bg-red-600', destructive: true,
+                    onAction: () => handleDelete(document.id) },
+                ] : [];
 
-                return (
+                const inner = (
                   <BrandCard
                     key={document.id}
                     name={document.name}
                     brandColor={getFileBrandColor(document.type)}
-                    className={`cursor-pointer ${checked ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                    className={`cursor-pointer ${checked ? 'ring-2 ring-primary bg-primary/5' : ''} ${viewMode === 'list' ? 'rounded-none border-x-0 border-t-0 last:border-b-0' : ''}`}
                     onClick={() => {
                       if (selection.isSelectionMode) selection.toggle(document.id);
                       else handleDocumentClick(document);
@@ -1202,6 +1211,9 @@ export default function Documents() {
                   </div>
                   </BrandCard>
                 );
+                return viewMode === 'list' ? (
+                  <SwipeRow key={document.id} actions={swipeActions}>{inner}</SwipeRow>
+                ) : inner;
               })}
             </div>
           )}

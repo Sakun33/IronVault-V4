@@ -85,7 +85,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
-import { BottomTabs, MoreSheet, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
+import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 import React, { useState, useEffect, useCallback } from "react";
 // ── Modal/dialog components — these only render when their `open` state
 // flips true. Lazy-importing them keeps the dialog code (and any heavy
@@ -986,11 +986,40 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
       <BottomTabs items={bottomTabItems} />
 
-      {/* More Sheet - New MoreSheet Component */}
-      <MoreSheet
+      {/* Hamburger Drawer (left-slide) — replaces the older bottom-sheet for the
+          ☰ menu trigger. The MoreSheet component still ships from
+          @/components/mobile in case any other surface still needs a bottom
+          variant; the hamburger flow now uses HamburgerDrawer. */}
+      <HamburgerDrawer
         open={showQuickAccess}
         onOpenChange={setShowQuickAccess}
         sections={allSections}
+        header={
+          <div className="flex items-center gap-2.5">
+            <AppLogo size={28} />
+            <div className="min-w-0">
+              <div className="text-[15px] font-bold leading-tight truncate">IronVault</div>
+              {accountEmail && (
+                <div className="text-[11px] text-muted-foreground truncate">{accountEmail}</div>
+              )}
+            </div>
+          </div>
+        }
+        footer={
+          <div className="flex items-center justify-between gap-2">
+            <CloudSyncPill vaultId={activeVault?.id ?? null} compact />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="h-9 px-3 rounded-xl text-[13px]"
+              aria-label="Toggle theme"
+            >
+              {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 mr-1.5" /> : <Moon className="w-4 h-4 mr-1.5" />}
+              {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
+            </Button>
+          </div>
+        }
       />
 
       {/* Global Search Modal - mobile */}

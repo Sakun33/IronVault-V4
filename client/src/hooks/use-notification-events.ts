@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { differenceInCalendarDays } from 'date-fns';
 import { NotificationService } from '@/lib/notifications';
 import type { SubscriptionEntry } from '@shared/schema';
+import { fireSecurityAlert, fireVaultSyncFailure } from '@/native/notifications';
 
 /**
  * Wires app-state changes to the notification center.
@@ -61,15 +62,32 @@ export function useNotificationEvents(opts: {
     }
     if (lastWeak.current !== weakPasswordCount) {
       NotificationService.createWeakPasswordsAlert(userId, weakPasswordCount).catch(() => {});
+      // Mirror to OS notifications for material jumps (>=3 weak passwords),
+      // so users see it even with the app backgrounded. The fire helper
+      // throttles same-hour repeats via its dedupeKey.
+      if (weakPasswordCount >= 3) {
+        void fireSecurityAlert(
+          'Weak passwords detected',
+          `${weakPasswordCount} of your saved passwords are weak. Review and rotate them.`,
+          `weak-${userId}`,
+        );
+      }
       lastWeak.current = weakPasswordCount;
     }
   }, [weakPasswordCount, userId, isUnlocked]);
 
-  // Sync success on transition syncing/idle/failed → synced.
+  // Sync transitions: confirm success in-app, push OS alert on failure only.
   useEffect(() => {
     if (!userId || userId === 'guest' || !isUnlocked) return;
     if (cloudSyncStatus === 'synced' && lastSync.current !== 'synced') {
       NotificationService.createSyncSuccess(userId).catch(() => {});
+    }
+    if (cloudSyncStatus === 'failed' && lastSync.current !== 'failed') {
+      // Only OS-notify for failures — successful syncs are silent at the OS
+      // level (the in-app pill is enough). The dedupe key is per-user-per-hour.
+      void fireVaultSyncFailure(
+        'Your changes are saved locally but not pushed to the cloud yet.',
+      );
     }
     lastSync.current = cloudSyncStatus;
   }, [cloudSyncStatus, userId, isUnlocked]);

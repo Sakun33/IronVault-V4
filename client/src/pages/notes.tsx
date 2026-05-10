@@ -1138,21 +1138,9 @@ export default function Notes() {
       {/* FAB — opens the templates picker (which includes "Quick Note"
           for a blank starter at the top) so users can choose a starting
           structure rather than always landing on an empty note. */}
-      <motion.button
-        type="button"
-        initial={{ opacity: 0, scale: 0.6 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 22, delay: 0.1 }}
-        whileHover={{ scale: 1.06 }}
-        whileTap={{ scale: 0.92 }}
-        onClick={() => setShowTemplatesModal(true)}
-        disabled={upgradeBlocked}
-        aria-label={upgradeBlocked ? 'Upgrade to add more notes' : 'New note — pick a template'}
-        data-testid="button-new-note-fab"
-        className="fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] lg:bottom-6 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_12px_32px_-6px_rgba(16,185,129,0.7)] hover:shadow-[0_16px_40px_-6px_rgba(16,185,129,0.85)] z-30 flex items-center justify-center disabled:opacity-50"
-      >
-        <Plus className="w-6 h-6" strokeWidth={2.4} />
-      </motion.button>
+      {/* Floating "+" removed in v3.26.0 — the header "New" button (and the
+          empty-state CTA) is now the single Add path. Keeps the
+          bottom-right corner clear and matches Apple Notes behaviour. */}
 
       <NoteEditor
         open={editorOpen}

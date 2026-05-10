@@ -8,6 +8,7 @@ export { BottomTabs } from './BottomTabs';
 export { MobileDialog } from './MobileDialog';
 export { MobileSheet } from './MobileSheet';
 export { MoreSheet } from './MoreSheet';
+export { HamburgerDrawer } from './HamburgerDrawer';
 export { SearchModal } from './SearchModal';
 export { ListRow, ListSection, ListDivider } from './ListRow';
 export { EmptyState, EmptySearchState } from './EmptyState';

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
@@ -21,6 +21,8 @@ import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ListSkeleton } from '@/components/list-skeleton';
 import { ViewToggle } from '@/components/view-toggle';
+import { SwipeRow, type SwipeAction } from '@/components/ios';
+import { scheduleCredentialExpiryNotification } from '@/native/notifications';
 
 interface APIKey {
   id: string;
@@ -123,6 +125,21 @@ export default function APIKeys() {
   const [deleteTargetKey, setDeleteTargetKey] = useState<{ id: string; name: string } | null>(null);
 
   const [formData, setFormData] = useState(blankForm());
+
+  // Schedule OS-level expiry alerts (7-day warning + same-day) for any key
+  // with an expiresAt set. Capacitor/web no-ops if permission isn't granted.
+  // The schedule is idempotent — re-running schedule() with the same numeric
+  // ID replaces the prior pending notification.
+  useEffect(() => {
+    if (!apiKeys || apiKeys.length === 0) return;
+    const now = Date.now();
+    apiKeys.forEach((key: APIKey) => {
+      if (!key.expiresAt) return;
+      const expiry = new Date(key.expiresAt);
+      if (expiry.getTime() < now) return;
+      void scheduleCredentialExpiryNotification(key.id, key.name, expiry);
+    });
+  }, [apiKeys]);
 
   const resetForm = () => {
     setFormData(blankForm());
@@ -514,24 +531,32 @@ export default function APIKeys() {
           className={
             viewMode === 'grid'
               ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children'
-              : 'flex flex-col gap-2'
+              : 'rounded-2xl bg-card shadow-[0_1px_0_rgba(0,0,0,0.04)] border border-border/50 overflow-hidden'
           }
         >
-          {filteredKeys.map((key: APIKey) => {
+          {filteredKeys.map((key: APIKey, idx: number) => {
             const expiringSoon = isExpiringSoon(key.expiresAt);
             const expired = isExpired(key.expiresAt);
             const cat = key.category || 'Other';
-            return (
+            const swipeActions: SwipeAction[] = viewMode === 'list' ? [
+              { id: 'copy', label: 'Copy', icon: Copy, background: 'bg-slate-500',
+                onAction: () => copyToClipboard(key.apiKey, `key-${key.id}`) },
+              { id: 'edit', label: 'Edit', icon: Edit, background: 'bg-blue-500',
+                onAction: () => openEdit(key) },
+              { id: 'delete', label: 'Delete', icon: Trash2, background: 'bg-red-600', destructive: true,
+                onAction: () => setDeleteTargetKey({ id: key.id, name: key.name }) },
+            ] : [];
+            const rowInner = (
               <Card
                 key={key.id}
-                className={`group rounded-2xl border transition-colors ${
-                  expired
-                    ? 'border-rose-500/30 bg-rose-500/[0.03]'
-                    : 'border-border/40 hover:border-emerald-500/40 bg-card'
+                className={`group transition-colors ${
+                  viewMode === 'grid'
+                    ? `rounded-2xl border ${expired ? 'border-rose-500/30 bg-rose-500/[0.03]' : 'border-border/40 hover:border-emerald-500/40 bg-card'}`
+                    : `rounded-none border-0 ${idx < filteredKeys.length - 1 ? 'border-b border-border/50' : ''} bg-transparent shadow-none ${expired ? 'bg-rose-500/[0.03]' : ''}`
                 }`}
                 data-testid={`api-key-card-${key.id}`}
               >
-                <CardContent className={viewMode === 'grid' ? 'p-4 space-y-3' : 'p-3 flex items-center gap-3'}>
+                <CardContent className={viewMode === 'grid' ? 'p-4 space-y-3' : 'px-4 py-3 flex items-center gap-3 min-h-[60px]'}>
                   {/* Header row */}
                   <div className={viewMode === 'grid' ? 'flex items-start justify-between gap-2' : 'flex items-center gap-2 flex-1 min-w-0'}>
                     <div className="min-w-0 flex-1">
@@ -707,6 +732,11 @@ export default function APIKeys() {
                 </CardContent>
               </Card>
             );
+            return viewMode === 'list' ? (
+              <SwipeRow key={key.id} actions={swipeActions}>
+                {rowInner}
+              </SwipeRow>
+            ) : rowInner;
           })}
         </div>
       )}

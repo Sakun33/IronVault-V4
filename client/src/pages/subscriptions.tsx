@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { SwipeableRow } from '@/components/swipeable-row';
+import { SwipeRow, type SwipeAction } from '@/components/ios';
+import { XCircle } from 'lucide-react';
+import { scheduleSubscriptionRenewalNotification } from '@/native/notifications';
 import { useSubscription } from '@/hooks/use-subscription';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +56,23 @@ export default function Subscriptions() {
   useEffect(() => {
     try { localStorage.setItem('iv_subscriptions_view', viewMode); } catch {}
   }, [viewMode]);
+
+  // Schedule OS-level renewal notifications (3-day warning + day-of) for any
+  // active subscription with a future renewal date. Capacitor (native) and
+  // Web Notifications (PWA) both no-op silently without permission, so we
+  // can fire-and-forget here. Re-running schedule() with the same numeric
+  // ID replaces the prior pending notification, so this stays idempotent.
+  useEffect(() => {
+    if (!subscriptions || subscriptions.length === 0) return;
+    const now = Date.now();
+    subscriptions.forEach((sub) => {
+      if (!sub.isActive || !sub.nextBillingDate) return;
+      const renewal = new Date(sub.nextBillingDate);
+      if (renewal.getTime() <= now) return;
+      const amount = formatCurrency(sub.cost || 0, currency);
+      void scheduleSubscriptionRenewalNotification(sub.id, sub.name, renewal, amount);
+    });
+  }, [subscriptions, currency, formatCurrency]);
 
   // Subscription Templates
   const SUBSCRIPTION_TEMPLATES = [
@@ -496,7 +515,7 @@ export default function Subscriptions() {
                 })}
               </motion.div>
             ) : filteredSubscriptions.length > 0 ? (
-              <Card className={`rounded-2xl shadow-sm border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+              <div className={`rounded-2xl bg-card shadow-[0_1px_0_rgba(0,0,0,0.04)] border border-border/50 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 <motion.div
                   variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
                   initial="hidden"
@@ -506,18 +525,43 @@ export default function Subscriptions() {
                   const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
                   const checked = selection.isSelected(subscription.id);
+                  const swipeActions: SwipeAction[] = [
+                    {
+                      id: 'edit',
+                      label: 'Edit',
+                      icon: Edit,
+                      background: 'bg-blue-500',
+                      onAction: () => { setEditingSubscription(subscription); setShowAddModal(true); },
+                    },
+                    {
+                      id: 'cancel',
+                      label: subscription.isActive ? 'Cancel' : 'Resume',
+                      icon: subscription.isActive ? XCircle : Bell,
+                      background: 'bg-orange-500',
+                      onAction: () => {
+                        setEditingSubscription({ ...subscription, isActive: !subscription.isActive, _autoSaveOnOpen: true });
+                        setShowAddModal(true);
+                      },
+                    },
+                    {
+                      id: 'delete',
+                      label: 'Delete',
+                      icon: Trash2,
+                      background: 'bg-red-600',
+                      destructive: true,
+                      onAction: () => handleDeleteSubscription(subscription.id, subscription.name),
+                    },
+                  ];
                   return (
-                  <SwipeableRow
+                  <SwipeRow
                     key={subscription.id}
-                    onDelete={() => handleDeleteSubscription(subscription.id, subscription.name)}
-                    deleteLabel="Delete"
+                    actions={swipeActions}
                     disabled={selection.isSelectionMode}
                     className={idx < filteredSubscriptions.length - 1 ? 'border-b border-border/50' : ''}
                   >
                     <motion.button
                       variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
                       transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                      whileHover={{ scale: 1.005 }}
                       whileTap={{ scale: 0.995 }}
                       data-testid={`subscription-row-${subscription.id}`}
                       onClick={() => {
@@ -525,34 +569,34 @@ export default function Subscriptions() {
                         else setDetailSub(subscription);
                       }}
                       onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(subscription.id); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${checked ? 'bg-primary/5' : ''}`}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 active:bg-muted/60 transition-colors min-h-[60px] ${checked ? 'bg-primary/5' : ''}`}
                     >
                       {selection.isSelectionMode && (
                         <SelectionCheckbox checked={checked} onChange={() => selection.toggle(subscription.id)} label={`Select ${subscription.name}`} />
                       )}
-                      <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                      <Favicon url={subscription.platformLink || undefined} name={subscription.name} className="w-9 h-9 flex-shrink-0 rounded-lg" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[15px] font-medium text-foreground truncate">{subscription.name}</div>
-                        <div className="text-[13px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span className="font-medium">{formatCurrency(subscription.cost || 0, currency)}/{cycleSuffix(subscription.billingCycle)}</span>
+                        <div className="text-[15px] font-medium text-foreground truncate leading-tight">{subscription.name}</div>
+                        <div className="text-[13px] text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
+                          <span className="tabular-nums">{formatCurrency(subscription.cost || 0, currency)}/{cycleSuffix(subscription.billingCycle)}</span>
                           <span className="text-muted-foreground/40">·</span>
                           <Calendar size={11} className="flex-shrink-0" />
                           <span>{format(subscription.nextBillingDate, 'MMM d')}</span>
-                          {isUpcoming && <span className="text-orange-500 font-medium">· due soon</span>}
+                          {isUpcoming && <span className="text-orange-500 font-medium ml-1">· due soon</span>}
                         </div>
                       </div>
-                      <Badge variant={subscription.isActive ? 'default' : 'secondary'} className="text-[11px] h-5 px-1.5 flex-shrink-0">
-                        {subscription.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
+                      {!subscription.isActive && (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex-shrink-0">Paused</Badge>
+                      )}
                       {!selection.isSelectionMode && (
                         <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                       )}
                     </motion.button>
-                  </SwipeableRow>
+                  </SwipeRow>
                   );
                 })}
                 </motion.div>
-              </Card>
+              </div>
             ) : (
               <Card className="rounded-2xl shadow-sm border-0 bg-card">
                 <CardContent className="p-12 text-center">

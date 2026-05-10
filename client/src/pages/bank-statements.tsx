@@ -5,6 +5,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
 import { ListSkeleton } from '@/components/list-skeleton';
+import { SwipeRow } from '@/components/ios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -525,26 +526,41 @@ export default function BankStatements() {
                   Delete All ({statements.length})
                 </Button>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {statements.map(stmt => (
-                    <div key={stmt.id} className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{stmt.bankName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(stmt.statementPeriod.startDate, 'MMM yyyy')} · {stmt.transactions?.length ?? 0} transactions
-                        </p>
+              <CardContent className="p-0">
+                <div className="rounded-2xl bg-card overflow-hidden border border-border/50">
+                  {statements.map((stmt, idx) => (
+                    <SwipeRow
+                      key={stmt.id}
+                      actions={[
+                        {
+                          id: 'delete',
+                          label: 'Delete',
+                          icon: Trash2,
+                          background: 'bg-red-600',
+                          destructive: true,
+                          onAction: () => setDeleteStatementId(stmt.id),
+                        },
+                      ]}
+                      className={idx < statements.length - 1 ? 'border-b border-border/50' : ''}
+                    >
+                      <div className="flex items-center justify-between px-4 py-3 bg-card min-h-[60px]">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-[15px] truncate">{stmt.bankName}</p>
+                          <p className="text-[13px] text-muted-foreground">
+                            {format(stmt.statementPeriod.startDate, 'MMM yyyy')} · {stmt.transactions?.length ?? 0} transactions
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0 hidden sm:inline-flex"
+                          onClick={() => setDeleteStatementId(stmt.id)}
+                          aria-label={`Delete statement ${stmt.bankName}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 shrink-0"
-                        onClick={() => setDeleteStatementId(stmt.id)}
-                        aria-label={`Delete statement ${stmt.bankName}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    </SwipeRow>
                   ))}
                 </div>
               </CardContent>

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { format, isToday, isYesterday, isThisWeek, startOfDay } from 'date-fns';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { SwipeRow } from '@/components/ios';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#0ea5e9', '#14b8a6', '#22c55e', '#a855f7', '#06b6d4'];
 const TabKeys = ['all', 'groups', 'people', 'activity', 'reports'] as const;
@@ -127,8 +128,17 @@ export default function ExpensesPage() {
             data-testid="button-settle-up"
             className="rounded-xl"
           >
-            <Banknote className="w-4 h-4 mr-1" />
-            Settle
+            <Banknote className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline">Settle</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setShowAdd(true)}
+            data-testid="button-add-expense-header"
+            className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            <Plus className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline">Add</span>
           </Button>
         </div>
       </div>
@@ -228,15 +238,10 @@ export default function ExpensesPage() {
         </>
       )}
 
-      {/* FAB */}
-      <button
-        onClick={() => setShowAdd(true)}
-        data-testid="button-add-expense-fab"
-        aria-label="Add expense"
-        className="fixed bottom-24 sm:bottom-8 right-4 sm:right-6 z-30 h-14 w-14 rounded-full shadow-lg flex items-center justify-center text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:scale-105 active:scale-95 transition-transform"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* Floating "+" removed in v3.26.0 — every tab has its own header
+          "Add" affordance and the global Quick Add button in the app
+          header is the secondary path. Keeps the bottom of the screen
+          clear and matches iOS Mail / Notes UI. */}
 
       {/* Add / Edit modal */}
       <AddExpenseModal
@@ -560,7 +565,13 @@ function ExpenseRow({
         .join(' · ')
     : null;
 
+  const swipeActions = [
+    { id: 'edit', label: 'Edit', icon: Edit, background: 'bg-blue-500', onAction: onEdit },
+    { id: 'delete', label: 'Delete', icon: Trash2, background: 'bg-red-600', destructive: true, onAction: onDelete },
+  ];
+
   return (
+    <SwipeRow actions={swipeActions} className={divider ? 'border-b border-border/40' : ''}>
     <div
       data-testid={`expense-row-${expense.id}`}
       role="button"
@@ -573,7 +584,7 @@ function ExpenseRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); }
       }}
-      className={`group flex items-center gap-3 px-3 py-3 hover:bg-accent/40 transition-colors cursor-pointer ${divider ? 'border-b border-border/40' : ''}`}
+      className={`group flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent/40 transition-colors cursor-pointer min-h-[60px]`}
     >
       <CategoryDot category={expense.category} />
       <div className="flex-1 min-w-0">
@@ -600,15 +611,16 @@ function ExpenseRow({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <Button variant="ghost" size="sm" className="p-1 h-auto sm:opacity-0 sm:group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Edit" data-testid={`button-edit-expense-${expense.id}`}>
+      <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+        <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Edit" data-testid={`button-edit-expense-${expense.id}`}>
           <Edit className="w-3.5 h-3.5 text-muted-foreground" />
         </Button>
-        <Button variant="ghost" size="sm" className="p-1 h-auto sm:opacity-0 sm:group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Delete" data-testid={`button-delete-expense-${expense.id}`}>
+        <Button variant="ghost" size="sm" className="p-1 h-auto opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Delete" data-testid={`button-delete-expense-${expense.id}`}>
           <Trash2 className="w-3.5 h-3.5 text-destructive" />
         </Button>
       </div>
     </div>
+    </SwipeRow>
   );
 }
 

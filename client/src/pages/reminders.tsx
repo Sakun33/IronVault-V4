@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 import { ListSkeleton } from '@/components/list-skeleton';
+import { SwipeRow } from '@/components/ios';
 
 export default function Reminders() {
   const { reminders, addReminder, updateReminder, deleteReminder, subscriptions, bulkDeleteReminders, isLoading } = useVault();
@@ -454,7 +455,33 @@ export default function Reminders() {
     return format(date, 'MMM dd, yyyy');
   };
 
-  const renderReminderCard = (reminder: ReminderEntry) => (
+  const renderReminderCard = (reminder: ReminderEntry) => {
+    const swipeActions = [
+      {
+        id: 'complete',
+        label: reminder.isCompleted ? 'Reopen' : 'Done',
+        icon: CheckCircle2,
+        background: reminder.isCompleted ? 'bg-slate-500' : 'bg-emerald-600',
+        onAction: () => toggleComplete(reminder),
+      },
+      {
+        id: 'edit',
+        label: 'Edit',
+        icon: Edit,
+        background: 'bg-blue-500',
+        onAction: () => handleEdit(reminder),
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        icon: Trash2,
+        background: 'bg-red-600',
+        destructive: true,
+        onAction: () => handleDelete(reminder),
+      },
+    ];
+    return (
+    <SwipeRow key={reminder.id} actions={swipeActions} className="rounded-2xl">
     <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={`${reminder.isCompleted ? 'opacity-60' : ''} cursor-pointer hover:border-emerald-500/40 transition-colors`} data-testid={`card-reminder-${reminder.id}`}>
       <CardContent
         className="p-4"
@@ -576,7 +603,9 @@ export default function Reminders() {
         </div>
       </CardContent>
     </BrandCard>
-  );
+    </SwipeRow>
+    );
+  };
 
   return (
     <div className="space-y-5 overflow-x-hidden">

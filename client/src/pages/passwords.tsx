@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
-import { SwipeableRow } from '@/components/swipeable-row';
+import { SwipeRow, type SwipeAction } from '@/components/ios';
 import { usePlan } from '@/lib/plan-service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -543,18 +543,47 @@ export default function Passwords() {
             >
               {visibleFilteredPasswords.map((password, idx) => {
                 const checked = selection.isSelected(password.id);
+                const swipeActions: SwipeAction[] = [
+                  {
+                    id: 'copy',
+                    label: 'Copy',
+                    icon: Copy,
+                    background: 'bg-slate-500',
+                    onAction: async () => {
+                      try {
+                        await navigator.clipboard.writeText(password.password);
+                        toast({ variant: 'success', title: 'Copied', description: 'Password copied to clipboard.' });
+                      } catch {
+                        toast({ title: 'Error', description: 'Failed to copy.', variant: 'destructive' });
+                      }
+                    },
+                  },
+                  {
+                    id: 'edit',
+                    label: 'Edit',
+                    icon: Edit,
+                    background: 'bg-blue-500',
+                    onAction: () => { setEditingPassword(password); setShowAddModal(true); },
+                  },
+                  {
+                    id: 'delete',
+                    label: 'Delete',
+                    icon: Trash2,
+                    background: 'bg-red-600',
+                    destructive: true,
+                    onAction: () => handleDelete(password.id),
+                  },
+                ];
                 return (
-                <SwipeableRow
+                <SwipeRow
                   key={password.id}
-                  onDelete={() => handleDelete(password.id)}
-                  deleteLabel="Delete"
+                  actions={swipeActions}
                   disabled={selection.isSelectionMode}
                   className={idx < visibleFilteredPasswords.length - 1 || hasMorePasswords ? 'border-b border-border/50' : ''}
                 >
                   <motion.button
                     variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
                     transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                    whileHover={{ scale: 1.005 }}
                     whileTap={{ scale: 0.995 }}
                     data-testid={`password-row-${password.id}`}
                     onClick={() => {
@@ -562,14 +591,14 @@ export default function Passwords() {
                       else openDetail(password);
                     }}
                     onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 active:bg-muted transition-colors ${checked ? 'bg-primary/5' : ''}`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left bg-card hover:bg-muted/40 active:bg-muted/60 transition-colors min-h-[60px] ${checked ? 'bg-primary/5' : ''}`}
                   >
                     {selection.isSelectionMode && (
                       <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
                     )}
-                    <Favicon url={password.url} name={password.name} className="w-8 h-8 flex-shrink-0 rounded-lg" />
+                    <Favicon url={password.url} name={password.name} className="w-9 h-9 flex-shrink-0 rounded-lg" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-foreground truncate">{password.name}</div>
+                      <div className="text-[15px] font-medium text-foreground truncate leading-tight">{password.name}</div>
                       <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
                         <Lock size={11} className="flex-shrink-0" />
                         <span className="truncate">{password.username}</span>
@@ -579,7 +608,7 @@ export default function Passwords() {
                       <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />
                     )}
                   </motion.button>
-                </SwipeableRow>
+                </SwipeRow>
                 );
               })}
               {hasMorePasswords && (
@@ -852,29 +881,8 @@ export default function Passwords() {
           action stays reachable. Hidden on lg+ where the header button is
           fully visible, and suppressed during selection mode so it doesn't
           collide with the SelectionBar. */}
-      {!selection.isSelectionMode && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.6 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 22, delay: 0.15 }}
-          whileHover={{ scale: 1.06 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => {
-            void hapticLight();
-            if (!isPro && passwords.length >= getLimit('passwords')) {
-              toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
-              return;
-            }
-            setEditingPassword(null);
-            setShowAddModal(true);
-          }}
-          className="lg:hidden fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-[0_12px_32px_-6px_rgba(16,185,129,0.7)] hover:shadow-[0_16px_40px_-6px_rgba(16,185,129,0.85)] z-40 flex items-center justify-center"
-          aria-label={!isPro && passwords.length >= getLimit('passwords') ? 'Upgrade to add more passwords' : 'Add password'}
-          data-testid="add-password-fab"
-        >
-          <Plus className="w-6 h-6" />
-        </motion.button>
-      )}
+      {/* Floating "+" removed in v3.26.0 — the header "Add" button at the top
+          of the page is the single Add affordance on every viewport. */}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
+import { SwipeRow } from '@/components/ios';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -847,10 +848,16 @@ export default function Investments() {
                       const gainLoss = currentValue - invested;
                       const returnPct = (gainLoss / invested) * 100;
 
+                      const swipeActions = [
+                        { id: 'edit', label: 'Edit', icon: Edit, background: 'bg-blue-500',
+                          onAction: () => handleEditInvestment(investment) },
+                        { id: 'delete', label: 'Delete', icon: Trash2, background: 'bg-red-600', destructive: true,
+                          onAction: () => handleDeleteInvestment(investment.id, investment.name) },
+                      ];
                       return (
+                        <SwipeRow key={investment.id} actions={swipeActions} className={idx < arr.length - 1 ? 'border-b border-border/50' : ''}>
                         <div
-                          key={investment.id}
-                          className={`p-4 hover:bg-muted/50 active:bg-muted transition-colors cursor-pointer${idx < arr.length - 1 ? ' border-b border-border/50' : ''}`}
+                          className="p-4 bg-card hover:bg-muted/40 active:bg-muted/60 transition-colors cursor-pointer"
                           role="button"
                           tabIndex={0}
                           onClick={() => handleViewInvestment(investment)}
@@ -926,6 +933,7 @@ export default function Investments() {
                             </div>
                           </div>
                         </div>
+                        </SwipeRow>
                       );
                     })}
                 </div>
