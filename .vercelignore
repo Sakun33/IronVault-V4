@@ -10,11 +10,22 @@ build
 *.xcarchive
 *.ipa
 .env*
-admin-console/node_modules
-admin-console/backend/node_modules
-admin-console/frontend/node_modules
+
+# Admin console is deployed as a separate Vercel project — exclude from main app
+/admin-console
 
 # build artifacts and test outputs (defense-in-depth even though above patterns cover most)
 android/app/build
-test-results
-playwright-report
+/test-results
+/playwright-report
+/reports
+/tmp
+/ironvault_release_qa
+*.log
+
+# Capacitor and native build outputs
+/.gradle
+/.dart_tool
+
+# Coverage
+/coverage
