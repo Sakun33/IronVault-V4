@@ -1,31 +1,72 @@
+# Dependencies and version control
 node_modules
 .git
+.gitignore
+
+# Native mobile platforms (Capacitor)
 /ios
 /android
-dist
-dist-ssr
-build
 *.keystore
 *.jks
 *.xcarchive
 *.ipa
+
+# Build outputs (Vercel rebuilds from source)
+dist
+dist-ssr
+build
+.next
+.turbo
+.cache
+
+# Environment files (set via Vercel dashboard)
 .env*
 
-# Admin console is deployed as a separate Vercel project — exclude from main app
+# Admin console is deployed as a separate Vercel project
 /admin-console
 
-# build artifacts and test outputs (defense-in-depth even though above patterns cover most)
-android/app/build
+# Test outputs and reports
 /test-results
 /playwright-report
+/playwright-report-*
 /reports
-/tmp
-/ironvault_release_qa
-*.log
+/coverage
+/tests
+playwright*.config.ts
+vitest.config.ts
 
-# Capacitor and native build outputs
+# Local QA and release artifacts
+/ironvault_release_qa
+/tmp
 /.gradle
 /.dart_tool
+/scripts
+/docs
+/resources
+/attached_assets
+/attached-assets
 
-# Coverage
-/coverage
+# macOS / IDE / OS junk
+.DS_Store
+**/.DS_Store
+.vscode
+.idea
+*.log
+*.bak
+
+# Internal documentation (not needed for deploy)
+*.docx
+IRONVAULT_STRATEGIC_ROADMAP.md
+agent-collaboration-dashboard.html
+ironvault-command-center.html
+qa-dashboard.html
+test-data-import.json
+test-data-import.json.bak
+CHANGELOG.md
+
+# Vercel CLI local cache
+.vercel/cache
+.vercel/output
+
+# Chrome extension (separate distribution)
+/chrome-extension
