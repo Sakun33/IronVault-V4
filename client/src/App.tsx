@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { VaultProvider, useVault } from "@/contexts/vault-context";
 import { SearchProvider } from "@/contexts/search-context";
+import { UIActionsProvider } from "@/contexts/ui-actions-context";
 import { CurrencyProvider } from "@/contexts/currency-context";
 import { LoggingProvider } from "@/contexts/logging-context";
 import { ThemeProvider, useTheme } from "@/contexts/theme-context";
@@ -397,6 +398,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
+    <UIActionsProvider
+      openPasswordGenerator={() => setShowGenerator(true)}
+      openImportExport={() => setShowImportExport(true)}
+    >
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
       {/* Travel-mode banner — visible app-wide while active. */}
       <TravelModeBanner />
@@ -1036,19 +1041,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           return {
             passwords: (passwords ?? [])
               .filter(p => p.name?.toLowerCase()?.includes(q) || p.username?.toLowerCase()?.includes(q))
-              .map(p => ({ id: p.id, type: 'password' as const, title: p.name, subtitle: p.username, href: '/passwords' })),
+              .map(p => ({ id: p.id, type: 'password' as const, title: p.name, subtitle: p.username, href: `/passwords?openId=${encodeURIComponent(p.id)}` })),
             subscriptions: (subscriptions ?? [])
               .filter(s => s.name?.toLowerCase()?.includes(q))
-              .map(s => ({ id: s.id, type: 'subscription' as const, title: s.name, subtitle: s.category, href: '/subscriptions' })),
+              .map(s => ({ id: s.id, type: 'subscription' as const, title: s.name, subtitle: s.category, href: `/subscriptions?openId=${encodeURIComponent(s.id)}` })),
             notes: (notes ?? [])
               .filter(n => n.title?.toLowerCase()?.includes(q) || n.content?.toLowerCase()?.includes(q))
-              .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: '/notes' })),
+              .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: `/notes?openId=${encodeURIComponent(n.id)}` })),
             expenses: (expenses ?? [])
               .filter(e => (e as any).description?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q))
-              .map(e => ({ id: e.id, type: 'expense' as const, title: (e as any).description || e.category || 'Expense', subtitle: e.category, href: '/expenses' })),
+              .map(e => ({ id: e.id, type: 'expense' as const, title: (e as any).description || e.category || 'Expense', subtitle: e.category, href: `/expenses?openId=${encodeURIComponent(e.id)}` })),
             reminders: (reminders ?? [])
               .filter(r => r.title?.toLowerCase()?.includes(q))
-              .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: '/reminders' })),
+              .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: `/reminders?openId=${encodeURIComponent(r.id)}` })),
           };
         })()}
       />
@@ -1081,6 +1086,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         )}
       </React.Suspense>
     </div>
+    </UIActionsProvider>
   );
 }
 

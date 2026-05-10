@@ -54,6 +54,23 @@ export default function ExpensesPage() {
   const [showContactsMgr, setShowContactsMgr] = useState(false);
   const [deleteExpense, setDeleteExpense] = useState<SharedExpense | null>(null);
 
+  // Deep-link from global search — `?openId=<id>` opens that expense in the
+  // edit modal. Waits until expenses load.
+  const openIdConsumedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || openIdConsumedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('openId');
+    if (!openId) return;
+    if (!sx.expenses || sx.expenses.length === 0) return;
+    const match = sx.expenses.find(e => e.id === openId);
+    openIdConsumedRef.current = true;
+    if (match) setEditing(match);
+    params.delete('openId');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, [sx.expenses]);
+
   const balances = useMemo(
     () => calculateBalances(sx.expenses, sx.settlements),
     [sx.expenses, sx.settlements],

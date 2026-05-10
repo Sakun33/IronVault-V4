@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useVault } from '@/contexts/vault-context';
 import { scheduleReminderNotification, requestNotificationPermission, checkNotificationPermission } from '@/native/notifications';
 import {
@@ -105,6 +105,26 @@ export default function Reminders() {
   useEffect(() => {
     const stop = startReminderLoop(() => reminders);
     return stop;
+  }, [reminders]);
+
+  // Deep-link from global search — `?openId=<id>` opens the reminder's edit
+  // modal. Waits until reminders load.
+  const openIdConsumedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || openIdConsumedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('openId');
+    if (!openId) return;
+    if (!reminders || reminders.length === 0) return;
+    const match = reminders.find(r => r.id === openId);
+    openIdConsumedRef.current = true;
+    if (match) {
+      setEditingReminder(match);
+      setShowAddModal(true);
+    }
+    params.delete('openId');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
   }, [reminders]);
 
   // Get all unique tags from reminders

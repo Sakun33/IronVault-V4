@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MobileDialog } from '@/components/mobile';
 import { Button } from '@/components/ui/button';
@@ -99,24 +99,30 @@ function CopySparkles({ play }: { play: boolean }) {
   );
 }
 
+const DEFAULT_OPTIONS: PasswordOptions = {
+  length: 16,
+  includeUppercase: true,
+  includeLowercase: true,
+  includeNumbers: true,
+  includeSymbols: true,
+  excludeSimilar: false,
+};
+
 export function PasswordGeneratorModal({
   open,
   onOpenChange,
   onPasswordGenerated,
 }: PasswordGeneratorModalProps) {
   const { toast } = useToast();
-  const [password, setPassword] = useState('');
+  const [options, setOptions] = useState<PasswordOptions>(DEFAULT_OPTIONS);
+  // Lazy initial state — generate a fresh password during the first render so
+  // the modal never flashes an empty/stale value before the effect runs.
+  const [password, setPassword] = useState<string>(() => {
+    try { return PasswordGenerator.generate(DEFAULT_OPTIONS); } catch { return ''; }
+  });
   const [copied, setCopied] = useState(false);
   const [sparkleKey, setSparkleKey] = useState(0);
-  const [history, setHistory] = useState<string[]>([]);
-  const [options, setOptions] = useState<PasswordOptions>({
-    length: 16,
-    includeUppercase: true,
-    includeLowercase: true,
-    includeNumbers: true,
-    includeSymbols: true,
-    excludeSimilar: false,
-  });
+  const [history, setHistory] = useState<string[]>(() => (password ? [password] : []));
 
   const generatePassword = () => {
     try {
@@ -138,8 +144,17 @@ export function PasswordGeneratorModal({
     }
   };
 
+  // Regenerate whenever options change while the modal is visible. The first
+  // render already has a fresh password from the lazy initializer, so we
+  // skip the open→true transition to avoid a redundant double-generate.
+  const isFirstEffectRun = useRef(true);
   useEffect(() => {
-    if (open) generatePassword();
+    if (!open) return;
+    if (isFirstEffectRun.current) {
+      isFirstEffectRun.current = false;
+      return;
+    }
+    generatePassword();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, options]);
 

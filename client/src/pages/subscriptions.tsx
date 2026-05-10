@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { SwipeRow, type SwipeAction } from '@/components/ios';
 import { XCircle } from 'lucide-react';
@@ -56,6 +56,23 @@ export default function Subscriptions() {
   useEffect(() => {
     try { localStorage.setItem('iv_subscriptions_view', viewMode); } catch {}
   }, [viewMode]);
+
+  // Deep-link from global search — `?openId=<id>` opens that subscription's
+  // detail dialog. Waits until subs load.
+  const openIdConsumedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || openIdConsumedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('openId');
+    if (!openId) return;
+    if (!subscriptions || subscriptions.length === 0) return;
+    const match = subscriptions.find(s => s.id === openId);
+    openIdConsumedRef.current = true;
+    if (match) setDetailSub(match);
+    params.delete('openId');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, [subscriptions]);
 
   // Schedule OS-level renewal notifications (3-day warning + day-of) for any
   // active subscription with a future renewal date. Capacitor (native) and

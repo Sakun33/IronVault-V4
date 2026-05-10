@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useFormDefaults } from '@/hooks/use-form-defaults';
 import { usePlan } from '@/lib/plan-service';
@@ -438,6 +438,28 @@ export default function Notes() {
     setEditorOpen(true);
   };
 
+  // Deep-link from global search — `?openId=<id>` opens that note in the
+  // editor. Waits until notes load so the lookup actually hits.
+  const openIdConsumedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || openIdConsumedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('openId');
+    if (!openId) return;
+    if (!notes || notes.length === 0) return;
+    const match = notes.find(n => n.id === openId);
+    openIdConsumedRef.current = true;
+    if (match) {
+      setEditingNote(match);
+      setStarterContent(undefined);
+      setStarterNotebook(undefined);
+      setEditorOpen(true);
+    }
+    params.delete('openId');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, [notes]);
+
   // Deep-link prefill — used by Chrome extension Quick Capture (and any
   // future "save selection as note" flow). On mount, parse
   // `?action=add&prefillContent=…&prefillNotebook=…` and open the editor
@@ -594,6 +616,41 @@ export default function Notes() {
   // ── Layout components ────────────────────────────────────────────────────
   const isThreePane = tier === 'desktop';
   const isTwoPane = tier === 'tablet';
+
+  // Desktop two-pane layout needs the page wrapper to have a definite
+  // height so that each pane (notes list + editor) can manage its own
+  // overflow-y:auto independently. The route wrapper (motion.div) and
+  // the surrounding <main> in App.tsx have no fixed height by default,
+  // so h-full on our wrapper would collapse and both panes would scroll
+  // the parent <main> instead of themselves. Walk up to motion.div /
+  // <main> on mount, force h-full propagation + overflow:hidden, and
+  // restore on unmount so other routes keep their normal scrolling.
+  const desktopWrapperRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!isThreePane && !isTwoPane) return;
+    const wrapper = desktopWrapperRef.current;
+    if (!wrapper) return;
+    const motionParent = wrapper.parentElement as HTMLElement | null;
+    const mainEl = wrapper.closest('main') as HTMLElement | null;
+    const addedToMotion: string[] = [];
+    if (motionParent) {
+      ['h-full', 'min-h-0', 'flex', 'flex-col'].forEach(c => {
+        if (!motionParent.classList.contains(c)) {
+          motionParent.classList.add(c);
+          addedToMotion.push(c);
+        }
+      });
+    }
+    let prevMainOverflow = '';
+    if (mainEl) {
+      prevMainOverflow = mainEl.style.overflowY;
+      mainEl.style.overflowY = 'hidden';
+    }
+    return () => {
+      if (motionParent) addedToMotion.forEach(c => motionParent.classList.remove(c));
+      if (mainEl) mainEl.style.overflowY = prevMainOverflow;
+    };
+  }, [isThreePane, isTwoPane]);
 
   // Shared dialogs / menus / context menu — rendered alongside every layout
   // so the Templates picker, delete confirm, notebook rename, notebook
@@ -929,8 +986,8 @@ export default function Notes() {
   // (#1c1c1e); editor pane uses pure background.
   if (isThreePane || isTwoPane) {
     return (
-      <div className="flex flex-col h-full -mx-6 -my-6 bg-background">
-        <div className="flex-1 min-h-0 flex">
+      <div ref={desktopWrapperRef} className="flex flex-col h-full min-h-0 -mx-6 -my-6 bg-background overflow-hidden">
+        <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* LEFT pane — list, search, filters */}
           <section className="w-[300px] flex-shrink-0 border-r border-white/[0.06] bg-[#1c1c1e] flex flex-col h-full">
             {/* Title row */}

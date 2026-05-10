@@ -102,6 +102,31 @@ export default function Passwords() {
     setShowAddModal(true);
   };
 
+  // Deep-link from global search — `?openId=<id>` opens that password's
+  // detail modal. Waits until the vault is loaded so the lookup actually
+  // hits. Consumes the param once a match is found.
+  const openIdConsumed = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || openIdConsumed.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('openId');
+    if (!openId) return;
+    if (!passwords || passwords.length === 0) return;
+    const match = passwords.find(p => p.id === openId);
+    if (!match) {
+      openIdConsumed.current = true;
+      params.delete('openId');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+      return;
+    }
+    openIdConsumed.current = true;
+    setDetailPassword(match);
+    params.delete('openId');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, [passwords]);
+
   // Deep-link prefill — used by the Chrome extension's Quick Capture flow
   // (and any future "save this site" affordance). On mount, parse
   // `?action=add&prefillUrl=…&prefillName=…&prefillUsername=…` and open the

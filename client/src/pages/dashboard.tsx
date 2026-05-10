@@ -13,8 +13,7 @@ import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } f
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
-import { PasswordGeneratorModal } from "@/components/password-generator-modal";
-import { ImportExportModal } from "@/components/import-export-modal";
+import { useUIActions } from "@/contexts/ui-actions-context";
 import { ListSkeleton } from "@/components/list-skeleton";
 import { Favicon } from "@/components/favicon";
 import { calculateSecurityScore, type SecurityBreakdown } from "@/lib/security-score";
@@ -376,8 +375,7 @@ export default function Dashboard() {
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
-  const [showGenerator, setShowGenerator] = useState(false);
-  const [showImportExport, setShowImportExport] = useState(false);
+  const { openPasswordGenerator, openImportExport } = useUIActions();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useAutoNotifications({
@@ -724,7 +722,7 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
           <button
-            onClick={() => setShowImportExport(true)}
+            onClick={openImportExport}
             data-testid="hero-import-export"
             aria-label="Import / export"
             className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors flex-shrink-0"
@@ -733,7 +731,7 @@ export default function Dashboard() {
             <span>Import/Export</span>
           </button>
           <button
-            onClick={() => setShowGenerator(true)}
+            onClick={openPasswordGenerator}
             data-testid="hero-generator"
             aria-label="Password generator"
             className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors flex-shrink-0"
@@ -890,7 +888,7 @@ export default function Dashboard() {
             { label: 'Add Password', icon: Lock,        href: '/passwords?action=add', tone: 'indigo'  as StatTone },
             { label: 'New Note',     icon: FileText,    href: '/notes?action=add',     tone: 'amber'   as StatTone },
             { label: 'Log Expense',  icon: DollarSign,  href: '/expenses?action=add',  tone: 'emerald' as StatTone },
-            { label: 'Generator',    icon: Key,                                        tone: 'cyan'    as StatTone, onClick: () => setShowGenerator(true) },
+            { label: 'Generator',    icon: Key,                                        tone: 'cyan'    as StatTone, onClick: openPasswordGenerator },
           ] as Array<{ label: string; icon: React.ElementType; tone: StatTone; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, tone, onClick }) => {
             const inner = (
               <motion.div
@@ -1019,8 +1017,6 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      <PasswordGeneratorModal open={showGenerator} onOpenChange={setShowGenerator} />
-      <ImportExportModal open={showImportExport} onOpenChange={setShowImportExport} />
     </motion.div>
   );
 }

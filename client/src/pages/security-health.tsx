@@ -334,24 +334,28 @@ function BreachScanCard({ passwords }: { passwords: PasswordEntry[] }) {
                 {breached.slice(0, 50).map(({ entry, count }) => {
                   const url = (entry.url || '') as string;
                   const name = entry.name || 'Untitled';
+                  const href = `/passwords?openId=${encodeURIComponent(entry.id)}`;
                   return (
-                    <li
-                      key={entry.id}
-                      className="flex items-center gap-3 p-2.5 rounded-xl border border-red-500/20 bg-red-500/5"
-                    >
-                      <Favicon url={url} name={name} className="w-9 h-9 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-foreground truncate">{name}</div>
-                        <div className="text-[11px] text-red-600 dark:text-red-400 font-medium">
-                          Seen {count.toLocaleString()} time{count === 1 ? '' : 's'} in breaches
-                        </div>
-                      </div>
-                      <Link href={`/passwords?id=${encodeURIComponent(entry.id)}`}>
+                    <li key={entry.id} data-testid={`breached-row-${entry.id}`}>
+                      <Link href={href}>
                         <button
-                          className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold transition-colors flex-shrink-0"
-                          data-testid={`change-now-${entry.id}`}
+                          type="button"
+                          className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 transition-colors cursor-pointer text-left"
+                          data-testid={`breached-link-${entry.id}`}
                         >
-                          Change Now
+                          <Favicon url={url} name={name} className="w-9 h-9 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-foreground truncate">{name}</div>
+                            <div className="text-[11px] text-red-600 dark:text-red-400 font-medium">
+                              Seen {count.toLocaleString()} time{count === 1 ? '' : 's'} in breaches
+                            </div>
+                          </div>
+                          <span
+                            className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold transition-colors flex-shrink-0"
+                            data-testid={`change-now-${entry.id}`}
+                          >
+                            Change Now
+                          </span>
                         </button>
                       </Link>
                     </li>
