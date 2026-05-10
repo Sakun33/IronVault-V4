@@ -21,7 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { NotificationService, Notification } from '@/lib/notifications';
+import { NotificationService, type Notification as IVNotification } from '@/lib/notifications';
 import { formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { requestNotificationPermission, checkNotificationPermission } from '@/native/notifications';
 
@@ -34,7 +34,7 @@ interface NotificationCenterProps {
 type Section = { key: 'today' | 'yesterday' | 'earlier'; label: string; items: DisplayNotification[] };
 
 /** A notification that may represent a group of consecutive sync entries. */
-type DisplayNotification = Notification & { syncCount?: number };
+type DisplayNotification = IVNotification & { syncCount?: number };
 
 /**
  * Slide-in notification center. Replaces the older popover-style bell —
@@ -43,7 +43,7 @@ type DisplayNotification = Notification & { syncCount?: number };
  * for storage. Escape closes the panel via Radix Sheet defaults.
  */
 export function NotificationCenter({ userId, triggerClassName }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<IVNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   // Tracks OS-level notification permission so we can surface a one-tap
@@ -97,9 +97,9 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
   }, [reload]);
 
   /** Deduplicate consecutive sync notifications — keep only the latest with a count. */
-  const deduplicateSync = useCallback((items: Notification[]): DisplayNotification[] => {
+  const deduplicateSync = useCallback((items: IVNotification[]): DisplayNotification[] => {
     const result: DisplayNotification[] = [];
-    let syncBatch: Notification[] = [];
+    let syncBatch: IVNotification[] = [];
     const flushSync = () => {
       if (syncBatch.length === 0) return;
       const latest = syncBatch[0]; // items are already sorted newest-first
@@ -123,9 +123,9 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
   }, []);
 
   const sections: Section[] = useMemo(() => {
-    const today: Notification[] = [];
-    const yesterday: Notification[] = [];
-    const earlier: Notification[] = [];
+    const today: IVNotification[] = [];
+    const yesterday: IVNotification[] = [];
+    const earlier: IVNotification[] = [];
     for (const n of notifications) {
       const ts = new Date(n.timestamp);
       if (isToday(ts)) today.push(n);
@@ -159,7 +159,7 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
     reload();
   };
 
-  const getIcon = (type: Notification['type']) => {
+  const getIcon = (type: IVNotification['type']) => {
     switch (type) {
       case 'success':
         return <Check className="w-4 h-4 text-green-500" />;
@@ -184,7 +184,7 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
     }
   };
 
-  const getAccentBorder = (type: Notification['type']) => {
+  const getAccentBorder = (type: IVNotification['type']) => {
     switch (type) {
       case 'sync': return 'border-l-2 border-l-cyan-400/50';
       case 'security': return 'border-l-2 border-l-red-400/50';
