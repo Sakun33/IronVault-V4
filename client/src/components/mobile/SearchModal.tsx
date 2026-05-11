@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell } from 'lucide-react';
-import { Link } from 'wouter';
+import { useLocation } from 'wouter';
 
 interface SearchResult {
   id: string;
@@ -49,12 +49,31 @@ function SearchModalInner({
 }: SearchModalProps) {
   const [activeTab, setActiveTab] = useState<'all' | keyof typeof typeConfig>('all');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (open) {
       setTimeout(() => { inputRef.current?.focus(); }, 100);
     }
   }, [open]);
+
+  // Dismiss on Escape — search overlay must not linger when user presses Esc.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onOpenChange(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
+
+  const handleResultClick = (href: string) => {
+    // Close the overlay BEFORE navigating so the result detail (modal opened
+    // via openId query string on the destination page) isn't covered or z-index
+    // shadowed by the search shell.
+    onOpenChange(false);
+    navigate(href);
+  };
 
   // Flatten without overriding type — items already carry the correct singular type
   const allResults: SearchResult[] = Object.values(results).flatMap(items => items ?? []);
@@ -204,30 +223,29 @@ function SearchModalInner({
               const Icon = config.icon;
 
               return (
-                <Link key={result.id} href={result.href}>
-                  <Button
-                    variant="ghost"
-                    className="w-full flex items-center gap-3 p-3 h-auto text-left rounded-xl hover:bg-accent"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    <div className="p-2 rounded-xl bg-accent shrink-0">
-                      <Icon className={cn('w-4 h-4', config.color)} />
+                <Button
+                  key={result.id}
+                  variant="ghost"
+                  className="w-full flex items-center gap-3 p-3 h-auto text-left rounded-xl hover:bg-accent"
+                  onClick={() => handleResultClick(result.href)}
+                >
+                  <div className="p-2 rounded-xl bg-accent shrink-0">
+                    <Icon className={cn('w-4 h-4', config.color)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm text-foreground truncate">
+                      {result.title}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-foreground truncate">
-                        {result.title}
+                    {result.subtitle && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {result.subtitle}
                       </div>
-                      {result.subtitle && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {result.subtitle}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground shrink-0">
-                      {config.label}
-                    </div>
-                  </Button>
-                </Link>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {config.label}
+                  </div>
+                </Button>
               );
             })}
           </div>

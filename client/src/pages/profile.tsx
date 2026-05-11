@@ -179,6 +179,7 @@ export default function Profile() {
     expenses,
     reminders,
     bankStatements,
+    bankTransactions,
     investments,
     subscriptions,
     apiKeys,
@@ -392,11 +393,34 @@ export default function Profile() {
     },
   });
 
+  // Documents live in a separate IndexedDB store (encrypted blobs) and need
+  // a direct read — their raw byte size dominates vault size, and skipping
+  // them caused the visible "7.31MB vs 0.44MB" flicker between renders.
+  const [documentsBytes, setDocumentsBytes] = useState<number>(0);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { documentService } = await import('@/lib/document-encryption');
+        // Initialize lazily — service may not be open if the user hasn't
+        // visited /documents yet this session.
+        const docs = await documentService.getAllDocuments().catch(() => []);
+        if (cancelled) return;
+        const total = docs.reduce((s, d) => s + (Number(d.size) || 0), 0);
+        setDocumentsBytes(total);
+      } catch { /* leave at 0 */ }
+    })();
+    return () => { cancelled = true; };
+    // Refresh once on tab activation; documents change is rare enough that
+    // we don't need a live subscription.
+  }, []);
+
   // Compute vault size deterministically from the actual vault data — not
   // from nav.storage.estimate(), which mixes IDB + caches + service-worker
   // storage and fluctuates between sessions even when no data was added
   // (BUG-27). Recomputes whenever any vault store changes so the number
-  // always reflects current contents.
+  // always reflects current contents — and now always sums the same set
+  // of stores so two renders with identical data produce identical sizes.
   useEffect(() => {
     try {
       const totalBytes =
@@ -405,13 +429,15 @@ export default function Profile() {
         JSON.stringify(expenses ?? []).length +
         JSON.stringify(reminders ?? []).length +
         JSON.stringify(bankStatements ?? []).length +
+        JSON.stringify(bankTransactions ?? []).length +
         JSON.stringify(investments ?? []).length +
         JSON.stringify(subscriptions ?? []).length +
-        JSON.stringify(apiKeys ?? []).length;
+        JSON.stringify(apiKeys ?? []).length +
+        documentsBytes;
       const mb = totalBytes / (1024 * 1024);
       setUserProfile(prev => ({ ...prev, stats: { ...prev.stats, vaultSize: Math.round(mb * 100) / 100 } }));
     } catch { /* leave vaultSize unchanged */ }
-  }, [passwords, notes, expenses, reminders, bankStatements, investments, subscriptions, apiKeys]);
+  }, [passwords, notes, expenses, reminders, bankStatements, bankTransactions, investments, subscriptions, apiKeys, documentsBytes]);
 
   // Load family invites (outgoing for owner + incoming for this email)
   const loadFamilyInvites = useCallback(async () => {
@@ -761,25 +787,33 @@ export default function Profile() {
   const subscriptionStatus = useMemo(() => {
     const now = new Date();
     const endDate = userProfile.subscription.endDate;
-    
+    const tier = userProfile.subscription.tier;
+
+    // BUG-08: Lifetime plans don't expire — never run the days-until-expiry
+    // path against them, otherwise a missing/now-defaulted endDate produces
+    // the nonsense "Expires in 0 days" label.
+    if (tier === 'lifetime') {
+      return { status: 'active', color: 'bg-emerald-500', text: 'Lifetime — No expiry' };
+    }
+
     if (userProfile.subscription.status === 'cancelled') {
       return { status: 'cancelled', color: 'bg-muted', text: 'Cancelled' };
     }
-    
+
     if (userProfile.subscription.status === 'expired') {
       return { status: 'expired', color: 'bg-red-500', text: 'Expired' };
     }
-    
+
     if (endDate && endDate < now) {
       return { status: 'expired', color: 'bg-red-500', text: 'Expired' };
     }
-    
+
     const daysUntilExpiry = endDate ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-    
-    if (daysUntilExpiry <= 7) {
+
+    if (endDate && daysUntilExpiry <= 7) {
       return { status: 'expiring', color: 'bg-yellow-500', text: `Expires in ${daysUntilExpiry} days` };
     }
-    
+
     return { status: 'active', color: 'bg-green-500', text: 'Active' };
   }, [userProfile.subscription]);
 

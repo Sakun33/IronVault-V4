@@ -200,7 +200,8 @@ export default function Passwords() {
       const matchesStrength = strengthFilter === 'all' ||
         (strengthFilter === 'weak' && level === 'weak') ||
         (strengthFilter === 'medium' && level === 'medium') ||
-        (strengthFilter === 'strong' && (level === 'strong' || level === 'very-strong'));
+        (strengthFilter === 'strong' && level === 'strong') ||
+        (strengthFilter === 'very-strong' && level === 'very-strong');
       return matchesSearch && matchesCategory && matchesStrength;
     });
   }, [passwords, searchQuery, categoryFilter, strengthFilter, strengthCache]);
@@ -467,6 +468,7 @@ export default function Passwords() {
                 <SelectItem value="weak">Weak</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="strong">Strong</SelectItem>
+                <SelectItem value="very-strong">Very Strong</SelectItem>
               </SelectContent>
             </Select>
             <ViewToggle view={viewMode} onChange={setViewMode} className="flex-shrink-0" />
@@ -806,15 +808,23 @@ export default function Passwords() {
                         <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Website</div>
                         <div className="text-[14px] text-foreground truncate">{pw.url}</div>
                       </div>
-                      <a
-                        href={safeHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          // BUG-09: <a target="_blank"> can navigate the
+                          // current webview on Capacitor (which destroys the
+                          // logged-in session). window.open with noopener
+                          // routes through the system browser on native and a
+                          // real new tab on web.
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(safeHref, '_blank', 'noopener,noreferrer');
+                        }}
                         className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
                         aria-label={`Open ${pw.name} website in new tab`}
                       >
                         <Globe size={15} className="text-muted-foreground" />
-                      </a>
+                      </button>
                     </div>
                   );
                 })()}

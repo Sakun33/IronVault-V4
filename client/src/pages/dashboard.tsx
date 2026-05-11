@@ -10,7 +10,7 @@ import {
   Wallet, Repeat, BookOpen, Check,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
 import { useUIActions } from "@/contexts/ui-actions-context";
@@ -21,6 +21,7 @@ import { generateInsights, recordSecurityScore, dismissInsight, type Insight } f
 import * as LucideIcons from "lucide-react";
 import { publishWidgetSnapshot } from "@/lib/widget-data";
 import { useAutoNotifications } from "@/hooks/use-auto-notifications";
+import { NotificationService } from "@/lib/notifications";
 import { motion, useMotionValue, useTransform, animate as motionAnimate } from "framer-motion";
 import { apiBase } from "@/native/platform";
 
@@ -170,12 +171,17 @@ const RichStatCard = memo(function RichStatCard({
   badge?: { text: string; tone: StatTone; icon?: React.ElementType };
 }) {
   const BadgeIcon = badge?.icon;
+  const [, navigate] = useLocation();
   return (
     <Link href={href}>
       <motion.div
         whileHover={{ y: -3 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+        onClick={() => navigate(href)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(href); } }}
         className={`glass-card card-${tone} ring-tint-${tone} p-3.5 sm:p-4 cursor-pointer h-full min-h-[112px] flex flex-col justify-between relative overflow-hidden`}
       >
         <div className="flex items-start justify-between gap-2">
@@ -700,6 +706,23 @@ export default function Dashboard() {
     return out;
   }, [criticalAlerts, breachedCount]);
 
+  // Route security alerts into the notification center so the bell badge
+  // reflects every outstanding security concern, not just CRM-driven ones.
+  // The trailing "Scan for leaks" CTA is filtered out — it's a navigation
+  // shortcut, not an alert that should accumulate unread badges.
+  useEffect(() => {
+    if (!accountEmail) return;
+    const payload = alertCards
+      .filter(a => a.variant !== 'scan')
+      .map(a => ({
+        key: `${a.text}`.toLowerCase().replace(/\s+/g, '-').slice(0, 80),
+        title: a.text,
+        message: a.sub || '',
+        actionUrl: a.href,
+      }));
+    void NotificationService.syncSecurityAlerts(accountEmail, payload);
+  }, [alertCards, accountEmail]);
+
   if (isLoading && stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0 && stats.totalExpenses === 0) {
     return (
       <div className="space-y-4 pb-6" data-testid="dashboard-loading">
@@ -836,9 +859,11 @@ export default function Dashboard() {
           badge={
             stats.totalPasswords === 0
               ? undefined
-              : weakPasswordCount > 0
-                ? { text: `${weakPasswordCount} weak`, tone: 'rose', icon: AlertTriangle }
-                : { text: 'All Strong', tone: 'emerald', icon: Check }
+              : breachedCount > 0
+                ? { text: `${breachedCount} breached`, tone: 'rose', icon: AlertTriangle }
+                : weakPasswordCount > 0
+                  ? { text: `${weakPasswordCount} weak`, tone: 'rose', icon: AlertTriangle }
+                  : { text: 'All Strong', tone: 'emerald', icon: Check }
           }
         />
         <RichStatCard

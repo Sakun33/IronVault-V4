@@ -30,6 +30,7 @@ import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { ListSkeleton } from '@/components/list-skeleton';
 import { NoteEditor, NOTE_ACCENT_PALETTE, type NoteFormPayload } from '@/components/note-editor';
 import { hapticLight } from '@/lib/haptics';
+import { isNoteDirty } from '@/lib/note-editing-guard';
 import {
   combineNotebookList, upsertNotebook, renameNotebook as renameNotebookMeta,
   removeNotebookMeta, type NotebookMeta,
@@ -321,6 +322,9 @@ export default function Notes() {
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  // Pending switch target for unsaved-changes guard. When non-null, the
+  // confirmation dialog is shown asking Save / Discard before switching.
+  const [pendingSwitch, setPendingSwitch] = useState<NoteEntry | null>(null);
   const [contextMenu, setContextMenu] = useState<{ note: NoteEntry; x: number; y: number } | null>(null);
   const [moveTarget, setMoveTarget] = useState<NoteEntry | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
@@ -449,11 +453,20 @@ export default function Notes() {
     setEditorOpen(true);
     setShowTemplatesModal(false);
   };
-  const openExistingNote = (note: NoteEntry) => {
+  const performSwitchToNote = (note: NoteEntry) => {
     setEditingNote(note);
     setStarterContent(undefined);
     setStarterNotebook(undefined);
     setEditorOpen(true);
+  };
+  const openExistingNote = (note: NoteEntry) => {
+    // Guard: if the user is switching FROM a different note that has unsaved
+    // changes, prompt Save / Discard instead of silently losing edits.
+    if (editorOpen && editingNote && editingNote.id !== note.id && isNoteDirty()) {
+      setPendingSwitch(note);
+      return;
+    }
+    performSwitchToNote(note);
   };
 
   // Deep-link from global search — `?openId=<id>` opens that note in the
@@ -750,6 +763,49 @@ export default function Notes() {
               );
             })}
           </DialogBody>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unsaved-changes confirm when switching notes */}
+      <Dialog open={!!pendingSwitch} onOpenChange={(open) => { if (!open) setPendingSwitch(null); }}>
+        <DialogContent className="max-w-sm" data-testid="dialog-unsaved-switch">
+          <DialogHeader><DialogTitle>You have unsaved changes</DialogTitle></DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-muted-foreground">
+              &ldquo;{editingNote?.title || 'Untitled'}&rdquo; has unsaved edits.
+              Save them before opening &ldquo;{pendingSwitch?.title || 'Untitled'}&rdquo;?
+            </p>
+          </DialogBody>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPendingSwitch(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              data-testid="button-discard-unsaved"
+              onClick={() => {
+                const target = pendingSwitch;
+                setPendingSwitch(null);
+                if (target) performSwitchToNote(target);
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              data-testid="button-save-unsaved"
+              onClick={() => {
+                const target = pendingSwitch;
+                if (!target) return;
+                const onDone = () => {
+                  window.removeEventListener('notes:save-done', onDone);
+                  setPendingSwitch(null);
+                  performSwitchToNote(target);
+                };
+                window.addEventListener('notes:save-done', onDone);
+                try { window.dispatchEvent(new CustomEvent('notes:save-request')); } catch { onDone(); }
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -9,7 +9,7 @@ import {
   Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
   Share2, Highlighter, Quote, Search as SearchIcon, Plus,
   RotateCcw, RotateCw, Indent, Outdent, RemoveFormatting,
-  Link2, Type,
+  Link2, Type, ChevronDown,
 } from 'lucide-react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -25,7 +25,7 @@ import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { combineNotebookList, upsertNotebook, type NotebookMeta } from '@/lib/notebooks-store';
 import { SlashMenu } from '@/components/slash-menu';
 import { InNoteSearch } from '@/components/in-note-search';
-import { setNoteEditing } from '@/lib/note-editing-guard';
+import { setNoteEditing, setNoteDirty } from '@/lib/note-editing-guard';
 
 export const NOTE_ACCENT_PALETTE: Array<{ id: string; name: string; hex: string }> = [
   { id: 'emerald', name: 'Emerald', hex: '#10b981' },
@@ -217,6 +217,7 @@ export function NoteEditor({
   const [slashMenu, setSlashMenu] = useState<{ open: boolean; pos: { top: number; left: number } | null; query: string }>({ open: false, pos: null, query: '' });
   const [newNotebookOpen, setNewNotebookOpen] = useState(false);
   const [newNotebookValue, setNewNotebookValue] = useState('');
+  const [notebookMenuOpen, setNotebookMenuOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   // Tick state to force re-render when TipTap selection/transaction fires
@@ -401,6 +402,11 @@ export function NoteEditor({
   );
   const dirty = currentSnapshot !== lastSnapshotRef.current;
 
+  // Publish dirty state to module-level guard so notes.tsx can decide whether
+  // to prompt before switching to another note.
+  useEffect(() => { setNoteDirty(dirty); }, [dirty]);
+  useEffect(() => () => { setNoteDirty(false); }, []);
+
   const runSave = async () => {
     if (!editor) return;
     if (!title.trim() && !htmlToText(contentHtml).trim()) return;
@@ -554,8 +560,23 @@ export function NoteEditor({
       if (key === 'f') { e.preventDefault(); setSearchOpen(true); return; }
       if (key === 'k') { e.preventDefault(); applyLink(); return; }
     };
+    // External save trigger — parent (notes.tsx) dispatches this when the
+    // unsaved-changes dialog is confirmed with "Save". We run the normal save
+    // path and emit a `notes:save-done` event so the parent can complete the
+    // pending switch only after the save finishes.
+    const onExternalSave = () => {
+      void (async () => {
+        try { await runSave(); } finally {
+          try { window.dispatchEvent(new CustomEvent('notes:save-done')); } catch {}
+        }
+      })();
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('notes:save-request', onExternalSave);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('notes:save-request', onExternalSave);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
 
@@ -994,21 +1015,68 @@ export function NoteEditor({
       >
         <div className="max-w-3xl mx-auto w-full">
           <div className="px-3 pt-1.5 pb-1 flex items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1 flex-shrink-0">
+            <span className="inline-flex items-center gap-1 flex-shrink-0 relative">
               <BookOpen className="w-3.5 h-3.5 opacity-60" />
-              <select
-                value={notebook}
-                onChange={e => onNotebookSelect(e.target.value)}
+              <button
+                type="button"
+                onClick={() => setNotebookMenuOpen(o => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={notebookMenuOpen}
                 aria-label="Notebook"
-                className="bg-transparent border-0 outline-none cursor-pointer hover:text-foreground transition-colors capitalize"
+                data-testid="note-notebook-dropdown"
+                className="inline-flex items-center gap-1 max-w-[160px] cursor-pointer hover:text-foreground transition-colors capitalize"
               >
-                {notebookOptions.map(nb => (
-                  <option key={nb.name} value={nb.name} className="bg-background">
-                    {nb.icon ? `${nb.icon} ${nb.name}` : nb.name}
-                  </option>
-                ))}
-                <option value="__new__" className="bg-background text-emerald-300">+ New notebook…</option>
-              </select>
+                <span className="truncate">
+                  {(() => {
+                    const cur = notebookOptions.find(nb => nb.name.toLowerCase() === notebook.toLowerCase());
+                    return cur ? (cur.icon ? `${cur.icon} ${cur.name}` : cur.name) : notebook;
+                  })()}
+                </span>
+                <ChevronDown className={`w-3 h-3 opacity-60 transition-transform ${notebookMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {notebookMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setNotebookMenuOpen(false)} aria-hidden />
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                      transition={{ duration: 0.14 }}
+                      role="listbox"
+                      aria-label="Choose notebook"
+                      className="absolute left-0 bottom-full mb-1.5 z-40 w-56 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-background/95 backdrop-blur-xl shadow-xl py-1.5"
+                    >
+                      {notebookOptions.map(nb => {
+                        const selected = nb.name.toLowerCase() === notebook.toLowerCase();
+                        return (
+                          <button
+                            type="button"
+                            key={nb.name}
+                            role="option"
+                            aria-selected={selected}
+                            data-testid={`note-notebook-option-${nb.name.toLowerCase().replace(/\s+/g, '-')}`}
+                            onClick={() => { onNotebookSelect(nb.name); setNotebookMenuOpen(false); }}
+                            className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left capitalize transition-colors ${selected ? 'bg-emerald-500/10 text-emerald-300' : 'text-foreground hover:bg-white/[0.06]'}`}
+                          >
+                            <span className="truncate">{nb.icon ? `${nb.icon} ${nb.name}` : nb.name}</span>
+                            {selected && <Check className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />}
+                          </button>
+                        );
+                      })}
+                      <div className="my-1 h-px bg-border/40" />
+                      <button
+                        type="button"
+                        onClick={() => { onNotebookSelect('__new__'); setNotebookMenuOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                        data-testid="note-notebook-new"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> New notebook…
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </span>
             <span className="w-px h-4 bg-border/60 flex-shrink-0" aria-hidden />
             <div className="flex items-center gap-1 flex-1 min-w-0 relative">
@@ -1022,11 +1090,14 @@ export function NoteEditor({
                 </span>
               ))}
               {tagInputOpen ? (
-                <div className="relative flex-shrink-0">
+                <div className="relative flex-shrink-0 inline-flex items-center gap-0.5">
+                  {/* # is auto-prepended on save — show it as a static prefix
+                      so users don't try to type it themselves. */}
+                  <span aria-hidden className="text-[13px] text-muted-foreground/60 select-none">#</span>
                   <input
                     autoFocus
                     value={tagInput}
-                    onChange={e => { setTagInput(e.target.value); setTagAutocomplete(true); }}
+                    onChange={e => { setTagInput(e.target.value.replace(/^#+/, '')); setTagAutocomplete(true); }}
                     onFocus={() => setTagAutocomplete(true)}
                     onBlur={() => { setTimeout(() => { setTagAutocomplete(false); if (tagInput.trim()) addTag(); setTagInputOpen(false); }, 120); }}
                     onKeyDown={e => {
@@ -1034,7 +1105,7 @@ export function NoteEditor({
                       else if (e.key === 'Escape') { e.preventDefault(); setTagInput(''); setTagInputOpen(false); }
                       else if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
                     }}
-                    placeholder="tag"
+                    placeholder="add tag"
                     className="bg-transparent border-0 outline-none text-[13px] w-24 placeholder:text-muted-foreground/50"
                     aria-label="Add tag"
                   />
@@ -1069,17 +1140,10 @@ export function NoteEditor({
               )}
             </div>
           </div>
+          {/* Status bar — save status moved into toolbar to avoid
+              duplicate "Unsaved" labels. Word count only. */}
           <div className="px-3 pb-1.5 flex items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
             <span>{wordCount} word{wordCount === 1 ? '' : 's'}</span>
-            <span className="inline-flex items-center gap-1">
-              {saving ? (
-                <><Save className="w-3 h-3 text-amber-400 animate-pulse" /> Saving…</>
-              ) : dirty ? (
-                <><Save className="w-3 h-3 text-amber-400" /> Unsaved</>
-              ) : savedAt ? (
-                <><Check className="w-3 h-3 text-emerald-400" /> Saved · {timeAgoShort(savedAt)}</>
-              ) : null}
-            </span>
           </div>
         </div>
       </footer>

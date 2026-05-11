@@ -110,10 +110,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setThemePreset = (id: string) => {
-    if (getThemeById(id)) {
-      setThemePresetState(id);
-      localStorage.setItem('ironvault-theme-preset', id);
-    }
+    const preset = getThemeById(id);
+    if (!preset) return;
+    // BUG-10: apply CSS vars synchronously on selection rather than waiting
+    // for the React effect to fire. Selecting a preset must show an
+    // immediate visual change; previously the user reported only the
+    // checkmark moved and the colors didn't update because the effect was
+    // batched behind other state work.
+    applyThemeVariables(preset, resolvedTheme);
+    setThemePresetState(id);
+    try { localStorage.setItem('ironvault-theme-preset', id); } catch {}
   };
 
   const toggleTheme = () => {

@@ -35,10 +35,18 @@ import {
 import { isNativeApp } from '@/native/platform';
 import { usePlanFeatures } from '@/hooks/use-plan-features';
 
+interface VaultItemBreakdown {
+  passwords: number;
+  notes: number;
+  subscriptions: number;
+  expenses: number;
+}
+
 interface VaultRow extends VaultInfo {
   biometricEnabled: boolean;
   isCloudSynced: boolean;
   itemCount?: number;
+  itemBreakdown?: VaultItemBreakdown;
 }
 
 export function VaultManagementSection() {

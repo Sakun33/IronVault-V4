@@ -58,6 +58,7 @@ export default function ExpensesPage() {
   const [tab, setTab] = useState<TabKey>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<SharedExpense | null>(null);
+  const [viewing, setViewing] = useState<SharedExpense | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [settlePrefill, setSettlePrefill] = useState<{ from?: string; to?: string; amount?: number; groupId?: string } | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
@@ -91,14 +92,13 @@ export default function ExpensesPage() {
   // Allow listings to be auto-scoped to a group via the openGroupId state.
   const visibleExpenses = sx.expenses;
 
-  // Currency for the headline (use the currency the user has on most expenses,
-  // falling back to the global preference).
-  const displayCurrency = useMemo(() => {
-    const counts = new Map<string, number>();
-    sx.expenses.forEach(e => counts.set(e.currency, (counts.get(e.currency) || 0) + 1));
-    const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
-    return top?.[0] || currency || 'USD';
-  }, [sx.expenses, currency]);
+  // BUG-07: previously this picked whichever currency appeared most often in
+  // stored expenses, while individual rows already converted to the user's
+  // selected display currency from the currency context. That mismatch
+  // produced symbol drift (summaries showing ₹ while rows showed €). Single
+  // source of truth → always use the user's selected currency for every
+  // surface (summaries, charts, rows).
+  const displayCurrency = currency || 'USD';
 
   const openGroup = useMemo(
     () => openGroupId ? sx.groups.find(g => g.id === openGroupId) || null : null,
@@ -134,6 +134,7 @@ export default function ExpensesPage() {
         onBack={() => setOpenGroupId(null)}
         onAddExpense={() => setShowAdd(true)}
         onSettle={(prefill) => { setSettlePrefill(prefill); setShowSettle(true); }}
+        onViewExpense={(e) => setViewing(e)}
         onEditExpense={(e) => setEditing(e)}
         onDeleteExpense={(e) => setDeleteExpense(e)}
       />
@@ -218,6 +219,7 @@ export default function ExpensesPage() {
               contacts={sx.contacts}
               groups={sx.groups}
               onAddExpense={() => setShowAdd(true)}
+              onViewExpense={(e) => setViewing(e)}
               onEditExpense={(e) => setEditing(e)}
               onDeleteExpense={(e) => setDeleteExpense(e)}
             />
@@ -293,6 +295,27 @@ export default function ExpensesPage() {
           }
           setShowAdd(false);
           setEditing(null);
+        }}
+      />
+
+      {/* Read-only detail view (opens on row click; Edit button switches to edit mode) */}
+      <ExpenseDetailModal
+        open={!!viewing}
+        expense={viewing}
+        contacts={sx.contacts}
+        groups={sx.groups}
+        onClose={() => setViewing(null)}
+        onEdit={() => {
+          if (!viewing) return;
+          const next = viewing;
+          setViewing(null);
+          setEditing(next);
+        }}
+        onDelete={() => {
+          if (!viewing) return;
+          const next = viewing;
+          setViewing(null);
+          setDeleteExpense(next);
         }}
       />
 
@@ -472,12 +495,13 @@ function relativeDateLabel(d: Date): string {
 // "All" tab — date-grouped expense list
 // ─────────────────────────────────────────────────────────────────────────────
 function AllTab({
-  expenses, contacts, groups, onAddExpense, onEditExpense, onDeleteExpense,
+  expenses, contacts, groups, onAddExpense, onViewExpense, onEditExpense, onDeleteExpense,
 }: {
   expenses: SharedExpense[];
   contacts: ExpenseContact[];
   groups: ExpenseGroup[];
   onAddExpense: () => void;
+  onViewExpense: (e: SharedExpense) => void;
   onEditExpense: (e: SharedExpense) => void;
   onDeleteExpense: (e: SharedExpense) => void;
 }) {
@@ -528,6 +552,7 @@ function AllTab({
                   contacts={contacts}
                   groups={groups}
                   divider={i < items.length - 1}
+                  onView={() => onViewExpense(e)}
                   onEdit={() => onEditExpense(e)}
                   onDelete={() => onDeleteExpense(e)}
                 />
@@ -541,12 +566,13 @@ function AllTab({
 }
 
 function ExpenseRow({
-  expense, contacts, groups, divider, onEdit, onDelete,
+  expense, contacts, groups, divider, onView, onEdit, onDelete,
 }: {
   expense: SharedExpense;
   contacts: ExpenseContact[];
   groups: ExpenseGroup[];
   divider: boolean;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -607,10 +633,10 @@ function ExpenseRow({
       onClick={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('button')) return;
-        onEdit();
+        onView();
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onView(); }
       }}
       className={`group flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent/40 transition-colors cursor-pointer min-h-[60px]`}
     >
@@ -900,7 +926,8 @@ function ReportsTab({ expenses, displayCurrency }: { expenses: SharedExpense[]; 
         </div>
       </div>
 
-      {/* Category pie */}
+      {/* Category pie — labels moved out to a legend below to avoid
+          overlap on small segments. */}
       <div className="rounded-2xl border border-border/50 bg-card p-3 sm:p-4">
         <div className="flex items-center gap-2 mb-3">
           <BarChart3 className="w-4 h-4 text-muted-foreground" />
@@ -909,13 +936,27 @@ function ReportsTab({ expenses, displayCurrency }: { expenses: SharedExpense[]; 
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={cats} dataKey="value" nameKey="name" outerRadius={80} label={(p) => `${p.name}`}>
+              <Pie data={cats} dataKey="value" nameKey="name" outerRadius={90} innerRadius={48} paddingAngle={1}>
                 {cats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip content={<ChartTip currency={displayCurrency} />} />
             </PieChart>
           </ResponsiveContainer>
         </div>
+        {cats.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5" data-testid="pie-category-legend">
+            {cats.map((c, i) => {
+              const pct = totalAll > 0 ? Math.round((c.value / totalAll) * 100) : 0;
+              return (
+                <div key={c.name} className="flex items-center gap-1.5 min-w-0 text-xs">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                  <span className="truncate text-muted-foreground">{c.name}</span>
+                  <span className="ml-auto tabular-nums font-medium text-foreground/80">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1604,6 +1645,134 @@ function AddExpenseModal({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Expense detail modal (read-only). Row clicks open this; the Edit button
+// inside switches to AddExpenseModal in edit mode.
+// ─────────────────────────────────────────────────────────────────────────────
+function ExpenseDetailModal({
+  open, expense, contacts, groups, onClose, onEdit, onDelete,
+}: {
+  open: boolean;
+  expense: SharedExpense | null;
+  contacts: ExpenseContact[];
+  groups: ExpenseGroup[];
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { currency: selectedCurrency, convertCurrency } = useCurrency();
+  if (!expense) return null;
+
+  const fromCur = expense.currency || 'USD';
+  const fmt = (amount: number) => {
+    const converted = fromCur === selectedCurrency
+      ? amount
+      : convertCurrency(amount, fromCur, selectedCurrency);
+    return formatAmount(converted, selectedCurrency);
+  };
+
+  const group = expense.groupId ? groups.find(g => g.id === expense.groupId) : null;
+  const payerName = expense.paidBy === 'self' ? 'You' : contactNameOf(expense.paidBy, contacts);
+  const expenseDate = new Date(expense.date);
+  const dateLabel = isToday(expenseDate)
+    ? `Today · ${format(expenseDate, 'MMM d, yyyy')}`
+    : isYesterday(expenseDate)
+      ? `Yesterday · ${format(expenseDate, 'MMM d, yyyy')}`
+      : format(expenseDate, 'EEE, MMM d, yyyy');
+  const ownShare = expense.splits.find(s => s.contactId === 'self')?.amount ?? 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md" data-testid="expense-detail-modal">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <CategoryDot category={expense.category} size={28} />
+            <span className="truncate" data-testid="expense-detail-title">{expense.title}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
+          <div className="rounded-2xl bg-muted/30 border border-border/50 p-4 text-center">
+            <p className="text-3xl font-bold tabular-nums" data-testid="expense-detail-amount">
+              {fmt(expense.amount)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">{expense.category}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Paid by</p>
+              <p className="font-medium mt-1" data-testid="expense-detail-paidby">{payerName}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</p>
+              <p className="font-medium mt-1" data-testid="expense-detail-date">{dateLabel}</p>
+            </div>
+            {group && (
+              <div className="col-span-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Group</p>
+                <p className="font-medium mt-1">{group.emoji} {group.name}</p>
+              </div>
+            )}
+            {expense.notes && (
+              <div className="col-span-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Notes</p>
+                <p className="mt-1 whitespace-pre-wrap">{expense.notes}</p>
+              </div>
+            )}
+          </div>
+
+          {expense.splits.length > 1 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                Split with {expense.splits.length - 1} {expense.splits.length === 2 ? 'person' : 'people'}
+              </p>
+              <div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
+                {expense.splits.map((s, i) => {
+                  const name = s.contactId === 'self' ? 'You' : contactNameOf(s.contactId, contacts);
+                  return (
+                    <div
+                      key={s.contactId}
+                      className={`flex items-center gap-3 px-3 py-2.5 ${i < expense.splits.length - 1 ? 'border-b border-border/40' : ''}`}
+                      data-testid={`expense-detail-split-${s.contactId}`}
+                    >
+                      <Avatar name={name} size={28} />
+                      <p className="flex-1 text-sm font-medium truncate">{name}</p>
+                      <p className="text-sm tabular-nums">{fmt(s.amount)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {ownShare > 0 && expense.paidBy !== 'self' && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Your share: <span className="font-medium tabular-nums text-foreground">{fmt(ownShare)}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {expense.receiptDataUrl && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Receipt</p>
+              <img src={expense.receiptDataUrl} alt="Receipt" className="rounded-xl border border-border/50 max-h-48 w-auto mx-auto" />
+            </div>
+          )}
+        </DialogBody>
+        <DialogFooter className="flex items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:text-destructive" data-testid="button-detail-delete">
+            <Trash2 className="w-4 h-4 mr-1" /> Delete
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onClose}>Close</Button>
+            <Button onClick={onEdit} data-testid="button-detail-edit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Edit className="w-4 h-4 mr-1" /> Edit
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ParticipantPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -1781,7 +1950,7 @@ function SettleUpModal({
 // Group detail screen
 // ─────────────────────────────────────────────────────────────────────────────
 function GroupDetailScreen({
-  group, sx, displayCurrency, onBack, onAddExpense, onSettle, onEditExpense, onDeleteExpense,
+  group, sx, displayCurrency, onBack, onAddExpense, onSettle, onViewExpense, onEditExpense, onDeleteExpense,
 }: {
   group: ExpenseGroup;
   sx: ReturnType<typeof useSharedExpenses>;
@@ -1789,6 +1958,7 @@ function GroupDetailScreen({
   onBack: () => void;
   onAddExpense: () => void;
   onSettle: (prefill?: { from?: string; to?: string; amount?: number; groupId?: string }) => void;
+  onViewExpense: (e: SharedExpense) => void;
   onEditExpense: (e: SharedExpense) => void;
   onDeleteExpense: (e: SharedExpense) => void;
 }) {
@@ -1863,6 +2033,7 @@ function GroupDetailScreen({
                   contacts={sx.contacts}
                   groups={sx.groups}
                   divider={i < arr.length - 1}
+                  onView={() => onViewExpense(e)}
                   onEdit={() => onEditExpense(e)}
                   onDelete={() => onDeleteExpense(e)}
                 />

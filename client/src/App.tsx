@@ -97,6 +97,8 @@ function warmRouteChunks() {
     () => import("@/pages/bank-statements"),
     () => import("@/pages/profile"),
     () => import("@/pages/settings"),
+    () => import("@/pages/integrations"),
+    () => import("@/pages/emergency-access"),
   ];
   const ric = (cb: () => void) => {
     const w = window as any;
@@ -451,14 +453,18 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between h-9 gap-1 overflow-visible">
           {/* Left: hamburger + logo */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowQuickAccess(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Menu" aria-label="Menu">
-                  <Menu className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Menu</TooltipContent>
-            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowQuickAccess(true)}
+              onPointerUp={() => setShowQuickAccess(true)}
+              className="h-9 w-9 rounded-xl flex-shrink-0"
+              title="Menu"
+              aria-label="Menu"
+              data-testid="mobile-hamburger"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
             <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity flex-shrink min-w-0 overflow-hidden">
               <AppLogo size={24} />
               <span className="text-sm font-bold tracking-tight text-foreground truncate">IronVault</span>
@@ -1179,8 +1185,12 @@ const PUBLIC_INFO_ROUTES = (
 // BUG-09: render a themed skeleton (not bare text on transparent bg) so
 // route transitions don't flash a black/blank screen between chunks.
 function RouteSuspenseFallback() {
+  // No fade-in here — the boundary already takes the perceptible part of the
+  // chunk fetch (especially on Integrations / Emergency Access where the
+  // chunks aren't pre-warmed), so an opacity-from-0 ramp manifests as a
+  // visible "blank flash" before the skeleton becomes legible.
   return (
-    <div className="min-h-screen w-full bg-background text-foreground animate-fade-in">
+    <div className="min-h-screen w-full bg-background text-foreground">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         <div className="h-8 w-40 rounded-md bg-muted/60 animate-pulse" />
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">

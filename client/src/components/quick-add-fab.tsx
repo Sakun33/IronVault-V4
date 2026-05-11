@@ -46,11 +46,13 @@ export function QuickAddMenu({ open, onClose }: QuickAddMenuProps) {
       {/* Tray bottom sheet — hidden while a child mode is active so the user
           isn't stacking two sheets on top of each other. */}
       <Sheet open={open && mode === null} onOpenChange={(v) => { if (!v && mode === null) onClose(); }}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+        {/* BUG-12: increase max-height + make the inner sections scrollable so
+            the "More" row never clips off the bottom on short viewports. */}
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[85vh] flex flex-col">
           <SheetHeader>
             <SheetTitle className="text-sm text-muted-foreground font-medium uppercase tracking-widest">Quick Add</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-4 overflow-y-auto flex-1 min-h-0 pb-2">
             <div>
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 px-1">Vault Items</p>
               <div className="grid grid-cols-3 gap-2">

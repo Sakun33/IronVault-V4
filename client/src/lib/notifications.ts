@@ -254,6 +254,52 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Reconcile a set of currently-active security alerts with the notification
+   * store. Each alert needs a stable `key` so a recurring condition (e.g.
+   * "weak passwords detected") doesn't accumulate duplicates. Alerts no longer
+   * present are automatically marked read so the unread badge tracks the
+   * live security state rather than historical noise.
+   *
+   * Routes the dashboard's in-memory criticalAlerts list (+ breach scan
+   * results) into the notification center so the bell badge reflects every
+   * outstanding security concern, not just the CRM-driven ones.
+   */
+  static async syncSecurityAlerts(
+    userId: string,
+    alerts: Array<{ key: string; title: string; message: string; actionUrl?: string }>,
+  ): Promise<void> {
+    const activeKeys = new Set(alerts.map(a => `security-alert:${a.key}`));
+
+    let changed = false;
+    for (const n of this.notifications) {
+      if (n.userId !== userId) continue;
+      const dk = n.metadata?.dedupeKey;
+      if (typeof dk !== 'string' || !dk.startsWith('security-alert:')) continue;
+      // Alert resolved — mark as read so it stops contributing to badge.
+      if (!activeKeys.has(dk) && !n.read) {
+        n.read = true;
+        changed = true;
+      }
+    }
+    if (changed) this.saveNotifications();
+
+    for (const a of alerts) {
+      await this.createOrSkip(
+        {
+          type: 'security',
+          title: a.title,
+          message: a.message,
+          userId,
+          actionUrl: a.actionUrl,
+          actionText: a.actionUrl ? 'Open' : undefined,
+        },
+        `security-alert:${a.key}`,
+        7 * 24 * 60 * 60 * 1000, // 7-day window — re-surfaces if user dismissed earlier in the week
+      );
+    }
+  }
+
   static async createPlanUpgrade(userId: string, newPlan: string): Promise<Notification> {
     return this.createNotification({
       type: 'success',

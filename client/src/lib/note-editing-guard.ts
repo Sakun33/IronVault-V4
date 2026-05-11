@@ -21,7 +21,19 @@
 const SAFETY_TIMEOUT_MS = 30 * 60 * 1000;
 
 let editing = false;
+let dirty = false;
 let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Mark the editor as having unsaved changes (or not). Read with isNoteDirty()
+ *  from the notes list to decide whether switching notes needs a confirm. */
+export function setNoteDirty(v: boolean): void {
+  if (dirty === v) return;
+  dirty = v;
+}
+
+export function isNoteDirty(): boolean {
+  return dirty;
+}
 
 function clearSafety(): void {
   if (safetyTimer) {
@@ -62,5 +74,6 @@ export function resetNoteEditing(): void {
     console.warn('[NOTE-GUARD] resetNoteEditing() called — flag was true');
   }
   editing = false;
+  dirty = false;
   clearSafety();
 }
