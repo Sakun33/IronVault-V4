@@ -171,13 +171,25 @@ export default function Subscriptions() {
     }
   };
 
-  const openPlatform = (url: string, subscriptionName: string) => {
+  const openPlatform = async (url: string, subscriptionName: string) => {
     if (url) {
       // Force https:// when missing — a bare "netflix.com" passed to
       // window.open is treated as a relative path and navigates the SPA
       // away, tearing down the unlocked vault session.
       const safe = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-      window.open(safe, '_blank', 'noopener,noreferrer');
+      // Capacitor: open in the system browser (same _blank pattern as BUG-09)
+      // so the vault session isn't replaced by an in-app webview.
+      try {
+        const { isNativeApp } = await import('@/native/platform');
+        if (isNativeApp()) {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url: safe });
+        } else {
+          window.open(safe, '_blank', 'noopener,noreferrer');
+        }
+      } catch {
+        window.open(safe, '_blank', 'noopener,noreferrer');
+      }
       toast({
         title: "Opening Platform",
         description: `Opening ${subscriptionName} in a new tab`,
@@ -317,13 +329,22 @@ export default function Subscriptions() {
               <Bell className="w-6 h-6 text-blue-500" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">Subscriptions</h1>
-                <Badge variant="secondary" className="rounded-full text-xs font-semibold">
+                <Badge variant="secondary" className="rounded-full text-xs font-semibold" data-testid="subs-count-badge">
                   {subscriptions.length}{!isPro && `/${subscriptionLimit}`}
                 </Badge>
               </div>
-              <p className="text-muted-foreground text-sm">Recurring payments &amp; services</p>
+              <p className="text-muted-foreground text-sm" data-testid="subs-active-inactive-summary">
+                {subscriptions.length === 0
+                  ? 'Recurring payments & services'
+                  : (() => {
+                      const inactive = subscriptions.length - activeSubscriptions;
+                      return inactive > 0
+                        ? `${activeSubscriptions} active · ${inactive} inactive · ${subscriptions.length} total`
+                        : `${activeSubscriptions} active · Recurring payments & services`;
+                    })()}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:flex-shrink-0">

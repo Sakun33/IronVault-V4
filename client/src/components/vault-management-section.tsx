@@ -102,12 +102,18 @@ export function VaultManagementSection() {
     }
 
     const rows: VaultRow[] = await Promise.all(
-      list.map(async v => ({
-        ...v,
-        biometricEnabled: isBiometricEnrolledForVault(v.id),
-        isCloudSynced: cloudIds.has(v.id) || isVaultCloudSynced(v.id),
-        itemCount: v.id === active ? await getActiveVaultItemCount() : undefined,
-      })),
+      list.map(async v => {
+        const breakdown = v.id === active ? await getActiveVaultItemBreakdown() : undefined;
+        return {
+          ...v,
+          biometricEnabled: isBiometricEnrolledForVault(v.id),
+          isCloudSynced: cloudIds.has(v.id) || isVaultCloudSynced(v.id),
+          itemBreakdown: breakdown,
+          itemCount: breakdown
+            ? breakdown.passwords + breakdown.notes + breakdown.subscriptions + breakdown.expenses
+            : undefined,
+        };
+      }),
     );
     setVaults(rows);
     // Cloud vaults that don't appear in the local registry — these still
@@ -482,6 +488,30 @@ export function VaultManagementSection() {
                           Created {format(vault.createdAt, 'MMM d, yyyy')}
                           {typeof vault.itemCount === 'number' && ` · ${vault.itemCount} items`}
                         </p>
+                        {vault.itemBreakdown && vault.itemCount && vault.itemCount > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5" data-testid={`vault-item-breakdown-${vault.id}`}>
+                            {vault.itemBreakdown.passwords > 0 && (
+                              <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 h-5 gap-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30">
+                                <span>🔐</span>{vault.itemBreakdown.passwords} passwords
+                              </Badge>
+                            )}
+                            {vault.itemBreakdown.notes > 0 && (
+                              <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 h-5 gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                                <span>📝</span>{vault.itemBreakdown.notes} notes
+                              </Badge>
+                            )}
+                            {vault.itemBreakdown.subscriptions > 0 && (
+                              <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 h-5 gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                                <span>🔁</span>{vault.itemBreakdown.subscriptions} subs
+                              </Badge>
+                            )}
+                            {vault.itemBreakdown.expenses > 0 && (
+                              <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 h-5 gap-1 bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30">
+                                <span>💸</span>{vault.itemBreakdown.expenses} expenses
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -742,19 +772,25 @@ export function VaultManagementSection() {
 }
 
 async function getActiveVaultItemCount(): Promise<number | undefined> {
+  const b = await getActiveVaultItemBreakdown();
+  if (!b) return undefined;
+  return b.passwords + b.notes + b.subscriptions + b.expenses;
+}
+
+async function getActiveVaultItemBreakdown(): Promise<VaultItemBreakdown | undefined> {
   try {
     // Storage might not be unlocked yet. Wrap each call so a single failure
     // doesn't blow up the whole count.
     const safe = async (fn: () => Promise<unknown[]>) => {
       try { return (await fn()).length; } catch { return 0; }
     };
-    const [pw, notes, subs, exp] = await Promise.all([
+    const [passwords, notes, subscriptions, expenses] = await Promise.all([
       safe(() => vaultStorage.getAllPasswords()),
       safe(() => vaultStorage.getAllNotes()),
       safe(() => vaultStorage.getAllSubscriptions()),
       safe(() => vaultStorage.getAllExpenses()),
     ]);
-    return pw + notes + subs + exp;
+    return { passwords, notes, subscriptions, expenses };
   } catch {
     return undefined;
   }

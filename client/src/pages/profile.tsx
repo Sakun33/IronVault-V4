@@ -2359,13 +2359,13 @@ export default function Profile() {
                     <Phone className="w-4 h-4 text-muted-foreground" />
                     {editingPhone ? (
                       <>
-                        <Input id="phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="Enter new phone" />
+                        <Input id="phone" type="tel" inputMode="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 98765 43210" />
                         <Button variant="default" size="sm" onClick={handleSavePhone}><Save className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="sm" onClick={() => { setEditingPhone(false); setEditPhone(''); }}>✕</Button>
                       </>
                     ) : (
                       <>
-                        <Input id="phone" value={userProfile.phone} readOnly />
+                        <Input id="phone" value={userProfile.phone} readOnly placeholder="+91 98765 43210" />
                         <Button variant="outline" size="sm" onClick={() => { setEditingPhone(true); setEditPhone(userProfile.phone || ''); }}>
                           <Edit className="w-4 h-4" />
                         </Button>

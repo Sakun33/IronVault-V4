@@ -475,6 +475,19 @@ export default function Passwords() {
           </div>
         </div>
 
+        {/* Active filter summary — surfaces what's being shown when the user
+            narrows by category / strength / search so the visible count
+            isn't mistaken for the full vault. */}
+        {!isLoading && passwords.length > 0 && (searchQuery !== '' || categoryFilter !== 'all' || strengthFilter !== 'all') && (
+          <p className="text-xs text-muted-foreground -mt-2" data-testid="passwords-filter-summary">
+            Showing <span className="font-medium text-foreground tabular-nums">{filteredPasswords.length}</span>
+            {' '}of <span className="tabular-nums">{passwords.length}</span> password{filteredPasswords.length === 1 ? '' : 's'}
+            {categoryFilter !== 'all' && (<> in <span className="font-medium text-foreground">{categoryFilter}</span></>)}
+            {strengthFilter !== 'all' && (<> · <span className="font-medium text-foreground">{strengthFilter.replace('-', ' ')}</span> strength</>)}
+            {searchQuery !== '' && (<> matching <span className="font-medium text-foreground">"{searchQuery}"</span></>)}
+          </p>
+        )}
+
         {/* Password List / Grid */}
         {isLoading && passwords.length === 0 ? (
           <ListSkeleton rows={6} showHeader={false} />
@@ -490,7 +503,7 @@ export default function Passwords() {
             }}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"
           >
             {visibleFilteredPasswords.map(password => {
               const checked = selection.isSelected(password.id);
@@ -512,25 +525,25 @@ export default function Passwords() {
                     else openDetail(password);
                   }}
                   onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
-                  className={`group glass-card cursor-pointer p-4 ${checked ? 'ring-2 ring-emerald-400/40' : ''}`}
+                  className={`group glass-card cursor-pointer p-3 ${checked ? 'ring-2 ring-emerald-400/40' : ''}`}
                 >
-                  <div className="flex items-start gap-3 mb-3">
-                    <Favicon url={password.url} name={password.name} className="w-10 h-10 flex-shrink-0 rounded-xl" />
+                  <div className="flex items-start gap-2.5 mb-2">
+                    <Favicon url={password.url} name={password.name} className="w-9 h-9 flex-shrink-0 rounded-lg" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-semibold text-foreground truncate">{password.name}</div>
-                      <div className="text-xs text-muted-foreground truncate font-mono">{password.username || '—'}</div>
+                      <div className="text-[14px] font-semibold text-foreground truncate leading-tight">{password.name}</div>
+                      <div className="text-[11px] text-muted-foreground truncate font-mono">{password.username || '—'}</div>
                     </div>
                     {selection.isSelectionMode && (
                       <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />
                     )}
                   </div>
                   {/* Strength bar */}
-                  <div className="mb-2.5">
-                    <div className="flex items-center justify-between mb-1">
+                  <div className="mb-1.5">
+                    <div className="flex items-center justify-between mb-0.5">
                       <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Strength</span>
                       <span className="text-[11px] font-medium text-foreground/80">{strengthLabel}</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${Math.max(8, score)}%` }}
@@ -541,7 +554,7 @@ export default function Passwords() {
                   </div>
                   {/* Meta row — category badge + last modified — fills the
                       previously-blank lower half of the grid card (BUG-15). */}
-                  <div className="flex items-center justify-between gap-2 mb-2 min-h-[18px]">
+                  <div className="flex items-center justify-between gap-2 mb-1 min-h-[18px]">
                     {password.category ? (
                       <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[60%]">
                         {password.category}
@@ -554,7 +567,7 @@ export default function Passwords() {
                     )}
                   </div>
                   {/* Quick actions */}
-                  <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center justify-end gap-1 -mb-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       aria-label="Copy password"
