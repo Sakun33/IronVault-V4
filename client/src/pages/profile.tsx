@@ -172,7 +172,17 @@ interface SupportTicket {
 
 export default function Profile() {
   const { formatCurrency, currency, currencies } = useCurrency();
-  const { stats } = useVault();
+  const {
+    stats,
+    passwords,
+    notes,
+    expenses,
+    reminders,
+    bankStatements,
+    investments,
+    subscriptions,
+    apiKeys,
+  } = useVault();
   const { toast } = useToast();
   const { accountEmail, masterPassword, changeMasterPassword } = useAuth();
 
@@ -382,23 +392,26 @@ export default function Profile() {
     },
   });
 
-  // Compute approximate vault size from IndexedDB navigator.storage.estimate()
+  // Compute vault size deterministically from the actual vault data — not
+  // from nav.storage.estimate(), which mixes IDB + caches + service-worker
+  // storage and fluctuates between sessions even when no data was added
+  // (BUG-27). Recomputes whenever any vault store changes so the number
+  // always reflects current contents.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const nav: any = navigator;
-        if (nav.storage?.estimate) {
-          const est = await nav.storage.estimate();
-          const mb = (est.usage ?? 0) / (1024 * 1024);
-          if (!cancelled) {
-            setUserProfile(prev => ({ ...prev, stats: { ...prev.stats, vaultSize: Math.round(mb * 100) / 100 } }));
-          }
-        }
-      } catch { /* leave vaultSize at 0 */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    try {
+      const totalBytes =
+        JSON.stringify(passwords ?? []).length +
+        JSON.stringify(notes ?? []).length +
+        JSON.stringify(expenses ?? []).length +
+        JSON.stringify(reminders ?? []).length +
+        JSON.stringify(bankStatements ?? []).length +
+        JSON.stringify(investments ?? []).length +
+        JSON.stringify(subscriptions ?? []).length +
+        JSON.stringify(apiKeys ?? []).length;
+      const mb = totalBytes / (1024 * 1024);
+      setUserProfile(prev => ({ ...prev, stats: { ...prev.stats, vaultSize: Math.round(mb * 100) / 100 } }));
+    } catch { /* leave vaultSize unchanged */ }
+  }, [passwords, notes, expenses, reminders, bankStatements, investments, subscriptions, apiKeys]);
 
   // Load family invites (outgoing for owner + incoming for this email)
   const loadFamilyInvites = useCallback(async () => {

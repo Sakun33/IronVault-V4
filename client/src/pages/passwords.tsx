@@ -523,7 +523,7 @@ export default function Passwords() {
                     )}
                   </div>
                   {/* Strength bar */}
-                  <div className="mb-3">
+                  <div className="mb-2.5">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Strength</span>
                       <span className="text-[11px] font-medium text-foreground/80">{strengthLabel}</span>
@@ -536,6 +536,20 @@ export default function Passwords() {
                         className={`h-full bg-gradient-to-r ${strengthColor}`}
                       />
                     </div>
+                  </div>
+                  {/* Meta row — category badge + last modified — fills the
+                      previously-blank lower half of the grid card (BUG-15). */}
+                  <div className="flex items-center justify-between gap-2 mb-2 min-h-[18px]">
+                    {password.category ? (
+                      <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[60%]">
+                        {password.category}
+                      </span>
+                    ) : <span />}
+                    {password.updatedAt && (
+                      <span className="text-[10px] text-muted-foreground/70 tabular-nums flex-shrink-0">
+                        {formatDistanceToNow(new Date(password.updatedAt), { addSuffix: true })}
+                      </span>
+                    )}
                   </div>
                   {/* Quick actions */}
                   <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">

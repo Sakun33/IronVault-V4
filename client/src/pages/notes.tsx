@@ -21,7 +21,7 @@ import {
   Pin, StickyNote, LayoutTemplate, Trash2, Copy as CopyIcon, CheckSquare,
   Lightbulb, ListTodo, Users, Target, PenLine, Sparkles, FileText,
   LayoutGrid, List as ListIcon, BookOpen, Hash, Pencil,
-  ShoppingCart, ChefHat, Plane,
+  ShoppingCart, ChefHat, Plane, FolderInput, Download, Share2,
 } from 'lucide-react';
 import { format, isToday, isYesterday, startOfDay, isThisWeek } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -143,7 +143,13 @@ function groupNotesByDate(notes: NoteEntry[], sortBy: SortKey): Array<{ label: s
   const monthBuckets = new Map<string, { label: string; sortStamp: number; notes: NoteEntry[] }>();
 
   for (const note of notes) {
-    const ref = sortBy === 'created' ? new Date(note.createdAt) : new Date(note.updatedAt);
+    // Always group by metadata date (updatedAt by default), never by content
+    // dates. Fall back to createdAt or now() if metadata is missing/invalid
+    // so the note doesn't disappear into an Invalid-Date bucket. (BUG-18)
+    const raw = sortBy === 'created' ? note.createdAt : note.updatedAt;
+    let ref = raw ? new Date(raw) : new Date(NaN);
+    if (isNaN(ref.getTime())) ref = note.createdAt ? new Date(note.createdAt) : new Date();
+    if (isNaN(ref.getTime())) ref = new Date();
     const t = ref.getTime();
     if (t >= todayStart) today.push(note);
     else if (t >= sevenStart) last7.push(note);
@@ -316,6 +322,7 @@ export default function Notes() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ note: NoteEntry; x: number; y: number } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<NoteEntry | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [renameNotebookTarget, setRenameNotebookTarget] = useState<string | null>(null);
@@ -556,6 +563,52 @@ export default function Notes() {
     }
   };
 
+  // BUG-26: enrich the right-click / long-press menu with Move, Export, Share.
+  const moveNoteToNotebook = async (note: NoteEntry, notebook: string) => {
+    try {
+      await updateNote(note.id, { notebook });
+      toast({ title: 'Note moved', description: `Moved to ${notebook}.` });
+    } catch {
+      toast({ title: 'Move failed', variant: 'destructive' });
+    }
+  };
+
+  const exportNote = (note: NoteEntry) => {
+    try {
+      const safeTitle = (note.title || 'note').replace(/[^a-z0-9-_ ]/gi, '').trim() || 'note';
+      const body = stripHtml(note.content || '');
+      const md = `# ${note.title || 'Untitled'}\n\n${body}`;
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Note exported' });
+    } catch {
+      toast({ title: 'Export failed', variant: 'destructive' });
+    }
+  };
+
+  const shareNote = async (note: NoteEntry) => {
+    const text = `${note.title || 'Untitled'}\n\n${stripHtml(note.content || '')}`;
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    try {
+      if (typeof nav.share === 'function') {
+        await nav.share({ title: note.title || 'Note', text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast({ title: 'Note copied to clipboard' });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      toast({ title: 'Share failed', variant: 'destructive' });
+    }
+  };
+
   const handleBulkDelete = async () => {
     const ids = Array.from(selection.selectedIds);
     if (ids.length === 0) return;
@@ -769,11 +822,47 @@ export default function Notes() {
           >
             <ContextItem icon={Pin} label={contextMenu.note.isPinned ? 'Unpin' : 'Pin'} onClick={() => { void togglePin(contextMenu.note); setContextMenu(null); }} />
             <ContextItem icon={CopyIcon} label="Duplicate" onClick={() => { void duplicateNote(contextMenu.note); setContextMenu(null); }} />
+            <ContextItem icon={FolderInput} label="Move to Notebook…" onClick={() => { setMoveTarget(contextMenu.note); setContextMenu(null); }} />
+            <ContextItem icon={Download} label="Export" onClick={() => { exportNote(contextMenu.note); setContextMenu(null); }} />
+            <ContextItem icon={Share2} label="Share" onClick={() => { void shareNote(contextMenu.note); setContextMenu(null); }} />
             <div className="h-px bg-white/[0.08] mx-2 my-1" />
             <ContextItem icon={Trash2} label="Delete" danger onClick={() => { handleDeleteRequest(contextMenu.note.id, contextMenu.note.title); setContextMenu(null); }} />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Move-to-Notebook picker (BUG-26) */}
+      <Dialog open={!!moveTarget} onOpenChange={(open) => { if (!open) setMoveTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Move to notebook</DialogTitle></DialogHeader>
+          <DialogBody>
+            <div className="max-h-[320px] overflow-y-auto -mx-1 px-1 space-y-1">
+              {[{ name: 'Default' } as NotebookMeta, ...notebooks.filter(nb => nb.name.toLowerCase() !== 'default')].map(nb => {
+                const current = (moveTarget?.notebook || 'Default').toLowerCase() === nb.name.toLowerCase();
+                return (
+                  <button
+                    key={nb.name}
+                    type="button"
+                    disabled={current}
+                    onClick={async () => {
+                      if (!moveTarget) return;
+                      await moveNoteToNotebook(moveTarget, nb.name);
+                      setMoveTarget(null);
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                      current ? 'bg-emerald-500/10 text-emerald-400 cursor-default' : 'hover:bg-white/[0.06] text-foreground'
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">{nb.name}</span>
+                    {current && <span className="ml-auto text-[10px] uppercase tracking-wider">Current</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -949,7 +1038,7 @@ export default function Notes() {
   const activeFilterChips = (selectedNotebook !== 'all' || selectedTag || showPinnedOnly || sortBy !== 'updated') && (
     <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground/80 px-4 sm:px-0">
       {selectedNotebook !== 'all' && <ActiveFilterChip label={selectedNotebook} onClear={() => setSelectedNotebook('all')} />}
-      {selectedTag && <ActiveFilterChip label={`#${selectedTag}`} onClear={() => setSelectedTag(null)} />}
+      {selectedTag && <ActiveFilterChip label={`#${selectedTag.charAt(0).toUpperCase() + selectedTag.slice(1)}`} onClear={() => setSelectedTag(null)} />}
       {showPinnedOnly && <ActiveFilterChip label="pinned only" onClear={() => setShowPinnedOnly(false)} />}
       {sortBy !== 'updated' && <ActiveFilterChip label={sortBy === 'created' ? 'oldest first' : 'A→Z'} onClear={() => setSortBy('updated')} />}
     </div>

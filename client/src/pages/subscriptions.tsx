@@ -341,25 +341,17 @@ export default function Subscriptions() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
                     onClick={() => {
+                      // Single ICS download — Apple Calendar, Google Calendar,
+                      // Outlook, and any other calendar app on web/iOS/Android/desktop
+                      // all open .ics via the OS file handler. (BUG-21)
                       const ics = exportToCalendar(subscriptions);
                       downloadICS('ironvault-subscriptions', ics);
-                      toast({ title: 'Calendar file downloaded', description: 'Open it to add events to any calendar app.' });
+                      toast({ title: 'Calendar file downloaded', description: 'Open the .ics to add renewals to your calendar.' });
                     }}
                     data-testid="export-calendar-ics"
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download .ics (all renewals)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      // Apple Calendar opens .ics files via the OS file handler.
-                      const ics = exportToCalendar(subscriptions);
-                      downloadICS('ironvault-subscriptions', ics);
-                    }}
-                    data-testid="export-calendar-apple"
-                  >
                     <Calendar className="w-4 h-4 mr-2" />
-                    Open in Apple Calendar
+                    Add to Calendar (.ics)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -630,7 +622,7 @@ export default function Subscriptions() {
                         </div>
                       </div>
                       {!subscription.isActive && (
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex-shrink-0">Paused</Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex-shrink-0">Inactive</Badge>
                       )}
                       {!selection.isSelectionMode && (
                         <ChevronRight size={16} className="text-muted-foreground/40 flex-shrink-0" />

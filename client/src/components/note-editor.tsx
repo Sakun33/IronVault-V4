@@ -835,9 +835,12 @@ export function NoteEditor({
 
       {accentHex && <div className="h-px w-full" style={{ background: accentHex }} aria-hidden />}
 
-      {/* Formatting toolbar */}
+      {/* Formatting toolbar — wraps to multi-row on narrow viewports so
+          block-level tools (H1/H2/H3, lists, code, quote, indent) stay
+          visible. Previously used overflow-x-auto, which scrolled block
+          tools off-screen on existing notes (BUG-16). */}
       <div className="flex-shrink-0 bg-background">
-        <div className="px-2 py-1 flex items-center gap-0.5 overflow-x-auto smooth-scrollbar scrollbar-hide">
+        <div className="px-2 py-1 flex flex-wrap items-center gap-0.5">
           <ToolbarBtn label="Undo (⌘Z)" onClick={tUndo}><RotateCcw className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Redo (⌘⇧Z)" onClick={tRedo}><RotateCw className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />

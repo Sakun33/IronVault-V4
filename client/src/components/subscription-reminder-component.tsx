@@ -18,7 +18,8 @@ export function SubscriptionReminderComponent({
 }: SubscriptionReminderComponentProps) {
   const [reminders, setReminders] = useState<SubscriptionReminder[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'upcoming'>('active');
-  
+  const [autoSelected, setAutoSelected] = useState(false);
+
   const reminderService = SubscriptionReminderService.getInstance();
 
   useEffect(() => {
@@ -46,6 +47,18 @@ export function SubscriptionReminderComponent({
       return due > now && due <= nextWeek;
     });
   }, [reminders]);
+
+  // BUG-24: with many subs, Active is usually 0 (nothing past due) while
+  // Upcoming has the real signal. Default to Upcoming once if Active is
+  // empty, so the user doesn't see "Active (0)" sitting on a blank tab.
+  useEffect(() => {
+    if (autoSelected) return;
+    if (reminders.length === 0) return;
+    if (activeReminders.length === 0 && upcomingReminders.length > 0 && activeTab === 'active') {
+      setActiveTab('upcoming');
+      setAutoSelected(true);
+    }
+  }, [autoSelected, reminders.length, activeReminders.length, upcomingReminders.length, activeTab]);
 
   const handleDismiss = (reminderId: string) => {
     reminderService.dismissReminder(reminderId);
@@ -142,7 +155,9 @@ export function SubscriptionReminderComponent({
         {currentReminders.length === 0 ? (
           <div className="text-center py-6">
             <p className="text-muted-foreground">
-              No {activeTab} reminders at this time.
+              {activeTab === 'active' && upcomingReminders.length > 0
+                ? `No reminders due right now. ${upcomingReminders.length} coming up — see Soon.`
+                : `No ${activeTab} reminders at this time.`}
             </p>
           </div>
         ) : (

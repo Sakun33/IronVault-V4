@@ -49,10 +49,10 @@ function getGreeting(): string {
 
 function getUserName(accountEmail: string | null): string {
   const namifyEmail = (email: string): string => {
-    const prefix = email.split('@')[0].replace(/[0-9]/g, '').replace(/[._-]/g, ' ').trim();
+    // BUG-25: don't strip digits from usernames like "saketsuman1312".
+    const prefix = email.split('@')[0].replace(/[._-]/g, ' ').trim();
     if (!prefix) return '';
-    const first = prefix.split(' ')[0];
-    return first.charAt(0).toUpperCase() + first.slice(1);
+    return prefix.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
   const isEmailPrefix = (name: string, email: string | null): boolean => {
     if (!email) return false;
@@ -1016,7 +1016,7 @@ export default function Dashboard() {
           <SectionLabel
             icon={Activity}
             label="Recent Activity"
-            action={{ href: '/logging', label: 'See all' }}
+            action={{ href: '/logging', label: 'View log' }}
           />
           <div className="glass-card overflow-hidden">
             <div className="relative pl-2 py-1" data-testid="recent-activity">
