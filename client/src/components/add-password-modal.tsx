@@ -44,7 +44,7 @@ const blankForm = () => ({
 export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPasswordModalProps) {
   const { addPassword, updatePassword } = useVault();
   const { toast } = useToast();
-  const { lastUsername, saveUsername } = useFormDefaults();
+  const { saveUsername } = useFormDefaults();
 
   const [formData, setFormData] = useState(blankForm());
   const [showPassword, setShowPassword] = useState(false);
@@ -67,7 +67,6 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
       } else {
         setFormData({
           ...blankForm(),
-          username: lastUsername,
           password: generateDefaultPassword(),
         });
       }
@@ -225,6 +224,8 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
               value={formData.username}
               onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
               required
+              autoComplete="off"
+              data-form-type="other"
               aria-invalid={submitted && !formData.username.trim()}
               className={submitted && !formData.username.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
               data-testid="input-username"

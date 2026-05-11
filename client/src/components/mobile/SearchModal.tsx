@@ -95,11 +95,19 @@ function SearchModalInner({
             <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2" />
             <Input
               ref={inputRef}
-              type="text"
+              type="search"
+              name="iv-global-search"
               placeholder="Search everything..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-muted/50 border-0"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-form-type="other"
+              data-1p-ignore="true"
+              data-lpignore="true"
             />
             {searchQuery && (
               <button

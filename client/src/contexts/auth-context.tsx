@@ -190,10 +190,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const exists = await vaultStorage.vaultExists();
       setVaultExists(exists);
 
-      // SECURITY: Master password is NEVER persisted. Older builds wrote it to
-      // sessionStorage; clear any legacy value here. The user must re-enter the
-      // master password on every page load / new session.
-      sessionStorage.removeItem(SESSION_KEY);
+      // Vault session persistence (BUG-07): cache master password in
+      // sessionStorage so an in-tab page reload doesn't bounce the user
+      // back to the vault picker. sessionStorage is per-tab and dies with
+      // the tab; logout/auto-lock/2FA still clears it explicitly below.
+      // This is a deliberate UX-over-paranoia tradeoff — closing the tab
+      // or quitting the browser still re-prompts.
+      try {
+        const persisted = exists ? sessionStorage.getItem(SESSION_KEY) : null;
+        if (persisted) {
+          const ok = await vaultStorage.unlockVault(persisted);
+          if (ok) {
+            setIsUnlocked(true);
+            setMasterPassword(persisted);
+            markLoginComplete();
+          } else {
+            sessionStorage.removeItem(SESSION_KEY);
+          }
+        }
+      } catch {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
     } finally {
@@ -506,6 +523,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
         setMasterPassword(password);
+        try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
         // REGRESSION-3: vault unlock is an auth transition too. Bump the
         // grace timestamp so background calls during the post-unlock burst
         // (refreshData, cloud sync, plan check) can't 401 → bounce.
@@ -524,6 +542,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithoutVerification = (password: string): void => {
     setIsUnlocked(true);
     setMasterPassword(password);
+    try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
     markLoginComplete(); // REGRESSION-3 — same rationale as login()
   };
 
@@ -549,6 +568,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setVaultExists(true);
       setIsUnlocked(true);
       setMasterPassword(password);
+      try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
 
       // Clear activity logs when creating a new vault
       clearLogs();

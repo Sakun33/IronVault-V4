@@ -45,6 +45,19 @@ function resetViewportZoom() {
   }, 100);
 }
 
+// BUG-08: read & clear the URL the Router stashed before showing the picker.
+// Falls back to null so callers can default to '/'.
+function consumePostUnlockRedirect(): string | null {
+  try {
+    const target = sessionStorage.getItem('iv_post_unlock_redirect');
+    if (target) {
+      sessionStorage.removeItem('iv_post_unlock_redirect');
+      return target;
+    }
+  } catch { /* noop */ }
+  return null;
+}
+
 export default function VaultPickerPage() {
   const [, setLocation] = useLocation();
   const reducedMotion = useReducedMotion();
@@ -532,22 +545,30 @@ export default function VaultPickerPage() {
         // together so a single biometric gesture handles the next sign-in.
         toast({ title: 'Vault Unlocked', description: `Welcome back! Opened "${vaultName}"` });
         await playUnlockAnimation(vaultName);
-        setLocation('/');
+        setLocation(consumePostUnlockRedirect() ?? '/');
       } else {
         void hapticError();
         setErrors(e => ({ ...e, [vaultId]: 'Incorrect master password. Please try again.' }));
+        toast({
+          title: 'Incorrect password',
+          description: 'The master password you entered is incorrect. Please try again.',
+          variant: 'destructive',
+        });
       }
     } catch (err: any) {
       void hapticError();
       const raw = (err?.message || '').toString();
       const looksLikeWrongPassword =
         /decrypt/i.test(raw) || /Invalid master key/i.test(raw) || /JSON/i.test(raw);
-      setErrors(e => ({
-        ...e,
-        [vaultId]: looksLikeWrongPassword
-          ? 'Incorrect master password. Please try again.'
-          : 'Failed to unlock vault.',
-      }));
+      const friendly = looksLikeWrongPassword
+        ? 'Incorrect master password. Please try again.'
+        : 'Failed to unlock vault.';
+      setErrors(e => ({ ...e, [vaultId]: friendly }));
+      toast({
+        title: looksLikeWrongPassword ? 'Incorrect password' : 'Unlock failed',
+        description: friendly,
+        variant: 'destructive',
+      });
     } finally {
       clearPhaseTimers();
       setUnlockPhase('Unlocking…');
@@ -780,6 +801,12 @@ export default function VaultPickerPage() {
         ? 'Incorrect master password. Please try again.'
         : raw || 'Failed to unlock cloud vault.';
       setCloudErrors(e => ({ ...e, [cloudVault.vaultId]: friendly }));
+      void hapticError();
+      toast({
+        title: looksLikeWrongPassword ? 'Incorrect password' : 'Unlock failed',
+        description: friendly,
+        variant: 'destructive',
+      });
     } finally {
       clearPhaseTimers();
       setUnlockPhase('Unlocking…');
@@ -1289,10 +1316,12 @@ export default function VaultPickerPage() {
           {(isNativeApp() || paywallBypassed) && (
             <>
               {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ShieldCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>No vaults yet. Create your first vault below.</p>
-                </div>
+                cloudVaults.length === 0 && vaults.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ShieldCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No vaults yet. Create your first vault below.</p>
+                  </div>
+                ) : null
               ) : (
                 <div className="space-y-4 mb-6">
                   {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).map(vault => (

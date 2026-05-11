@@ -464,15 +464,18 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
               <Label className="text-base font-medium">Credentials (Optional)</Label>
               
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm">Username</Label>
+                <Label htmlFor="subscription-username" className="text-sm">Username</Label>
                 <Input
-                  id="username"
+                  id="subscription-username"
+                  name="subscription-username"
                   placeholder="Your username"
                   value={formData.credentials.username}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
                     credentials: { ...prev.credentials, username: e.target.value }
                   }))}
+                  autoComplete="off"
+                  data-form-type="other"
                 />
               </div>
 

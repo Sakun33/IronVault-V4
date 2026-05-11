@@ -26,6 +26,7 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
   const { toast } = useToast();
   
   const [exportPassword, setExportPassword] = useState('');
+  const [exportError, setExportError] = useState<string | null>(null);
   const [importPassword, setImportPassword] = useState('');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -40,13 +41,15 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
   const handleExport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!exportPassword.trim()) {
+      setExportError('Please enter an export password');
       toast({
-        title: "Error",
-        description: "Please enter a password for the export file",
+        title: "Export password required",
+        description: "Enter a password to encrypt the export file before continuing.",
         variant: "destructive",
       });
       return;
     }
+    setExportError(null);
 
     setIsExporting(true);
     try {
@@ -451,16 +454,26 @@ export function ImportExportModal({ open, onOpenChange }: ImportExportModalProps
                   id="export-password"
                   type="password"
                   value={exportPassword}
-                  onChange={(e) => setExportPassword(e.target.value)}
+                  onChange={(e) => {
+                    setExportPassword(e.target.value);
+                    if (exportError) setExportError(null);
+                  }}
                   placeholder="Enter a secure password for the export file"
                   data-testid="input-export-password"
                   disabled={isExporting}
+                  aria-invalid={!!exportError}
+                  className={exportError ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
                 />
+                {exportError && (
+                  <p className="text-sm text-red-500 mt-1" data-testid="export-password-error">
+                    {exportError}
+                  </p>
+                )}
               </div>
-              
-              <Button 
-                type="submit" 
-                disabled={isExporting || !exportPassword.trim()}
+
+              <Button
+                type="submit"
+                disabled={isExporting}
                 className="w-full"
                 data-testid="button-export"
               >

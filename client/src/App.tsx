@@ -75,6 +75,38 @@ const CreateVaultPage = React.lazy(() => import("@/pages/create-vault"));
 const QAPage = React.lazy(() => import("@/pages/qa"));
 const VaultsPage = React.lazy(() => import("@/pages/vaults"));
 const TeamsPage = React.lazy(() => import("@/pages/teams"));
+
+// BUG-09: Warm up the lazy-route chunks on idle so tab-switching doesn't
+// flash a fallback while a chunk is fetched. Runs once per session,
+// guarded by typeof window for SSR safety.
+let __routesWarmed = false;
+function warmRouteChunks() {
+  if (__routesWarmed) return;
+  __routesWarmed = true;
+  const tasks: Array<() => Promise<unknown>> = [
+    () => import("@/pages/dashboard"),
+    () => import("@/pages/passwords"),
+    () => import("@/pages/notes"),
+    () => import("@/pages/subscriptions"),
+    () => import("@/pages/expenses"),
+    () => import("@/pages/reminders"),
+    () => import("@/pages/api-keys"),
+    () => import("@/pages/documents"),
+    () => import("@/pages/security-health"),
+    () => import("@/pages/investments"),
+    () => import("@/pages/bank-statements"),
+    () => import("@/pages/profile"),
+    () => import("@/pages/settings"),
+  ];
+  const ric = (cb: () => void) => {
+    const w = window as any;
+    if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(cb, { timeout: 1500 });
+    else setTimeout(cb, 800);
+  };
+  ric(() => {
+    tasks.forEach(t => { void t().catch(() => {}); });
+  });
+}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -263,23 +295,32 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   // Surface the most-recent HIBP breach count as a red badge on the Security
   // Health nav link. Updated by the same-tab `BREACH_COUNT_EVENT` and the
   // cross-tab `storage` event so the badge stays live without polling.
-  const [breachedCount, setBreachedCount] = useState<number>(() => {
+  // Clamped to passwords.length so a stale cache from a prior vault can't
+  // outlive password deletions or a vault switch.
+  const [rawBreachedCount, setRawBreachedCount] = useState<number>(() => {
     try {
       const raw = localStorage.getItem('iv_breach_count');
       const n = raw ? parseInt(raw, 10) : 0;
       return Number.isFinite(n) && n > 0 ? n : 0;
     } catch { return 0; }
   });
+  const breachedCount = Math.max(0, Math.min(rawBreachedCount, passwords?.length ?? 0));
+  useEffect(() => {
+    if (rawBreachedCount > (passwords?.length ?? 0)) {
+      try { localStorage.removeItem('iv_breach_count'); } catch { /* noop */ }
+      setRawBreachedCount(0);
+    }
+  }, [rawBreachedCount, passwords?.length]);
   useEffect(() => {
     const update = (val?: number) => {
       if (typeof val === 'number') {
-        setBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
+        setRawBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
         return;
       }
       try {
         const raw = localStorage.getItem('iv_breach_count');
         const n = raw ? parseInt(raw, 10) : 0;
-        setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
+        setRawBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
       } catch { /* noop */ }
     };
     const onStorage = (e: StorageEvent) => { if (e.key === 'iv_breach_count') update(); };
@@ -1032,7 +1073,14 @@ function MainLayout({ children }: { children: React.ReactNode }) {
         open={showSearchModal}
         onOpenChange={(open) => {
           setShowSearchModal(open);
-          if (!open) { setSearchQuery(''); setLocalSearchQuery(''); }
+          if (open) {
+            setHasSearchInteracted(false);
+            setSearchQuery('');
+            setLocalSearchQuery('');
+          } else {
+            setSearchQuery('');
+            setLocalSearchQuery('');
+          }
         }}
         searchQuery={localSearchQuery}
         onSearchChange={(q) => { setLocalSearchQuery(q); setSearchQuery(q); }}
@@ -1128,10 +1176,24 @@ const PUBLIC_INFO_ROUTES = (
 );
 
 // Suspense fallback used while a lazy-loaded route chunk is fetching.
+// BUG-09: render a themed skeleton (not bare text on transparent bg) so
+// route transitions don't flash a black/blank screen between chunks.
 function RouteSuspenseFallback() {
   return (
-    <div className="min-h-[40vh] flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground text-sm">Loading…</div>
+    <div className="min-h-screen w-full bg-background text-foreground animate-fade-in">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        <div className="h-8 w-40 rounded-md bg-muted/60 animate-pulse" />
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted/40 animate-pulse" />
+          ))}
+        </div>
+        <div className="space-y-2 mt-4">
+          <div className="h-12 rounded-lg bg-muted/40 animate-pulse" />
+          <div className="h-12 rounded-lg bg-muted/40 animate-pulse" />
+          <div className="h-12 rounded-lg bg-muted/40 animate-pulse" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1140,6 +1202,12 @@ function RouteSuspenseFallback() {
 function Router() {
   const { isUnlocked, isLoading, isAccountLoggedIn } = useAuth();
   const [location] = useLocation();
+
+  // Warm up the lazy chunks once the vault is unlocked, so the first navigation
+  // doesn't pay a chunk-fetch cost. Cheap & idempotent — runs at most once.
+  useEffect(() => {
+    if (isUnlocked) warmRouteChunks();
+  }, [isUnlocked]);
 
   // Share links are always public — bypass all auth checks
   if (location.startsWith('/share/')) {
@@ -1187,6 +1255,20 @@ function Router() {
 
   // ── Tier 2: Account logged in but vault locked → vault picker + create-vault ─
   if (!isUnlocked) {
+    // BUG-08: capture the intended URL so we can return there after unlock.
+    // Skip auth/landing/share/upgrade paths and the picker itself — we only
+    // want to remember "deep" app destinations like /passwords, /notes etc.
+    try {
+      const path = location;
+      const skip = path === '/' ||
+        path.startsWith('/auth') ||
+        path.startsWith('/login') ||
+        path.startsWith('/upgrade') ||
+        path.startsWith('/share/');
+      if (!skip) {
+        sessionStorage.setItem('iv_post_unlock_redirect', path);
+      }
+    } catch { /* noop */ }
     return (
       <PublicPageWrapper>
         <React.Suspense fallback={<RouteSuspenseFallback />}>

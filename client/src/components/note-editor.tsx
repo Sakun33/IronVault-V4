@@ -740,6 +740,24 @@ export function NoteEditor({
               Done
             </button>
           )}
+          {embedded && (
+            <button
+              type="button"
+              onClick={async () => {
+                setSubmitted(true);
+                if (!title.trim()) { titleRef.current?.focus(); return; }
+                await runSave();
+              }}
+              aria-label="Save note"
+              title="Save (⌘S)"
+              data-testid="button-editor-save"
+              className="ml-1 h-9 px-3 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center gap-1.5 hover:bg-emerald-600 active:bg-emerald-700 transition-colors disabled:opacity-60"
+              disabled={saving || !dirty}
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"

@@ -33,6 +33,17 @@ import { format, isToday, isYesterday, isThisWeek, startOfDay } from 'date-fns';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { SwipeRow } from '@/components/ios';
 
+// Local-date YYYY-MM-DD (NOT UTC). new Date().toISOString() converts to UTC and
+// shifts the date by one in any non-UTC timezone — e.g. IST (UTC+5:30) shows
+// "yesterday" before 5:30am local. Use local getters instead.
+function todayLocalISO(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#0ea5e9', '#14b8a6', '#22c55e', '#a855f7', '#06b6d4'];
 const TabKeys = ['all', 'groups', 'people', 'activity', 'reports'] as const;
 type TabKey = typeof TabKeys[number];
@@ -938,7 +949,7 @@ function AddExpenseModal({
   const [paidBy, setPaidBy] = useState<string>('self');
   const [groupId, setGroupId] = useState<string | undefined>(defaultGroupId);
   const [category, setCategory] = useState<string>('Other');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(todayLocalISO());
   const [notes, setNotes] = useState('');
   const [splitType, setSplitType] = useState<'equal' | 'exact' | 'percent' | 'shares'>('equal');
   const [participants, setParticipants] = useState<Set<string>>(new Set(['self']));
@@ -1047,7 +1058,7 @@ function AddExpenseModal({
       setPaidBy('self');
       setGroupId(defaultGroupId);
       setCategory('Other');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(todayLocalISO());
       setNotes('');
       setSplitType('equal');
       setParticipants(new Set(['self']));
@@ -1609,7 +1620,7 @@ function SettleUpModal({
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [cur, setCur] = useState(defaultCurrency);
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(todayLocalISO());
   const [method, setMethod] = useState<'cash' | 'upi' | 'bank' | 'card' | 'other'>('cash');
   const [groupId, setGroupId] = useState<string | undefined>(undefined);
   const [notes, setNotes] = useState('');
@@ -1621,7 +1632,7 @@ function SettleUpModal({
     setAmount(prefill?.amount ? String(prefill.amount) : '');
     setGroupId(prefill?.groupId);
     setCur(defaultCurrency);
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(todayLocalISO());
     setMethod('cash');
     setNotes('');
   }, [open, prefill, defaultCurrency]);

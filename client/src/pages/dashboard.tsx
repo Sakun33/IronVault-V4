@@ -1,6 +1,7 @@
 import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
 import { useAuth } from "@/contexts/auth-context";
+import { useSharedExpenses } from "@/hooks/use-shared-expenses";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
@@ -371,6 +372,7 @@ const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) 
 
 export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
+  const { expenses: sharedExpenses } = useSharedExpenses();
   const { accountEmail, masterPassword } = useAuth();
   const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
   const { toast } = useToast();
@@ -509,27 +511,49 @@ export default function Dashboard() {
       return t + cost;
     }, 0), [subscriptions]);
 
+  // User's own share of a SharedExpense — for legacy/personal entries the
+  // share equals the total amount. For Splitwise-style entries we sum only
+  // splits where contactId === 'self'. Falls back to full amount if no
+  // self split is present so personal-style additions still count.
+  const selfShare = (e: any): number => {
+    const splits = Array.isArray(e?.splits) ? e.splits : null;
+    if (!splits || splits.length === 0) return e?.amount || 0;
+    const ours = splits
+      .filter((s: any) => s?.contactId === 'self')
+      .reduce((acc: number, s: any) => acc + (s?.amount || 0), 0);
+    return ours > 0 ? ours : (e?.amount || 0);
+  };
+
+  // Merge legacy and shared expense stores by id so we don't double-count
+  // legacy rows that useSharedExpenses already mirrors via legacyToShared.
+  const mergedExpenses = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const e of (expenses ?? [])) map.set(e.id, e);
+    for (const s of (sharedExpenses ?? [])) map.set(s.id, s);
+    return Array.from(map.values());
+  }, [expenses, sharedExpenses]);
+
   const thisMonthExpenses = useMemo(() => {
     const now = new Date();
-    return expenses
+    return mergedExpenses
       .filter(e => {
         const d = new Date(e.date);
         return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
       })
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [expenses]);
+      .reduce((sum, e) => sum + selfShare(e), 0);
+  }, [mergedExpenses]);
 
   const lastMonthExpenses = useMemo(() => {
     const now = new Date();
     const ly = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const lm = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    return expenses
+    return mergedExpenses
       .filter(e => {
         const d = new Date(e.date);
         return d.getFullYear() === ly && d.getMonth() === lm;
       })
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [expenses]);
+      .reduce((sum, e) => sum + selfShare(e), 0);
+  }, [mergedExpenses]);
 
   const spendTrend = useMemo(() => {
     if (lastMonthExpenses <= 0) return null;
@@ -601,7 +625,11 @@ export default function Dashboard() {
   const isEmpty = stats.totalPasswords === 0 && stats.activeSubscriptions === 0 && stats.totalNotes === 0;
 
   // Breached-password count from the most recent breach scan.
-  const [breachedCount, setBreachedCount] = useState(() => {
+  // The raw value is cached in localStorage but a stale scan can outlive
+  // password deletions / vault switches, so we clamp it to the current
+  // password count. A fresh vault (no passwords) always shows 0 regardless
+  // of leftover cache.
+  const [rawBreachedCount, setRawBreachedCount] = useState(() => {
     try {
       const raw = localStorage.getItem('iv_breach_count');
       const n = raw ? parseInt(raw, 10) : 0;
@@ -611,13 +639,13 @@ export default function Dashboard() {
   useEffect(() => {
     const update = (val?: number) => {
       if (typeof val === 'number') {
-        setBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
+        setRawBreachedCount(Number.isFinite(val) && val > 0 ? val : 0);
         return;
       }
       try {
         const raw = localStorage.getItem('iv_breach_count');
         const n = raw ? parseInt(raw, 10) : 0;
-        setBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
+        setRawBreachedCount(Number.isFinite(n) && n > 0 ? n : 0);
       } catch { /* noop */ }
     };
     const onStorage = (e: StorageEvent) => { if (e.key === 'iv_breach_count') update(); };
@@ -629,6 +657,14 @@ export default function Dashboard() {
       window.removeEventListener('iv:breach-count-changed', onCustom);
     };
   }, []);
+  const breachedCount = Math.max(0, Math.min(rawBreachedCount, passwords.length));
+  // Drop stale cache once we detect it can't be true for this vault.
+  useEffect(() => {
+    if (rawBreachedCount > passwords.length) {
+      try { localStorage.removeItem('iv_breach_count'); } catch { /* noop */ }
+      setRawBreachedCount(0);
+    }
+  }, [rawBreachedCount, passwords.length]);
 
   // Push the latest values to the shared App Group store so the iOS widget stays in sync.
   useEffect(() => {
@@ -1013,7 +1049,7 @@ export default function Dashboard() {
             label={`${format(new Date(), 'MMMM')} Top Categories`}
             action={{ href: '/expenses', label: 'See all' }}
           />
-          <SpendingBreakdown expenses={expenses} fmt={fmtAmt} />
+          <SpendingBreakdown expenses={mergedExpenses} fmt={fmtAmt} />
         </motion.div>
       )}
 
