@@ -240,16 +240,17 @@ const InsightCarouselCard = memo(function InsightCarouselCard({
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
       className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card card-${palette.tone} ring-tint-${palette.tone} hover:shadow-lg cursor-pointer overflow-hidden`}
-      style={{ maxHeight: 132, minHeight: 132 }}
+      style={{ minHeight: 132 }}
+      title={`${ins.title}\n${ins.description}`}
     >
-      <div className="px-3.5 py-3 flex flex-col gap-1.5 h-[132px]">
+      <div className="px-3.5 py-3 flex flex-col gap-1.5 min-h-[132px]">
         <div className="flex items-start gap-2">
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${palette.iconGlow} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
             <Icon className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-foreground leading-snug truncate">{ins.title}</div>
-            <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{ins.description}</div>
+            <div className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{ins.title}</div>
+            <div className="text-[11px] text-muted-foreground leading-snug line-clamp-3 mt-0.5">{ins.description}</div>
           </div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(ins.id); }}
@@ -310,15 +311,16 @@ const AlertCarouselCard = memo(function AlertCarouselCard({ a }: { a: AlertItem 
       whileTap={{ scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
       className={`snap-start flex-shrink-0 w-[260px] sm:w-[280px] glass-card ${tone.cardClass} hover:shadow-lg cursor-pointer overflow-hidden pl-4 pr-3.5 py-3 flex flex-col gap-1.5 relative before:absolute before:left-0 before:top-3 before:bottom-3 before:w-[3px] before:rounded-r-full ${tone.accent}`}
-      style={{ maxHeight: 132, minHeight: 132 }}
+      style={{ minHeight: 132 }}
+      title={`${a.text}\n${a.sub}`}
     >
       <div className="flex items-start gap-2">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tone.iconGlow} shadow-[0_4px_18px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
           <Icon className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-foreground leading-snug truncate">{a.text}</div>
-          <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{a.sub}</div>
+          <div className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{a.text}</div>
+          <div className="text-[11px] text-muted-foreground leading-snug line-clamp-3 mt-0.5">{a.sub}</div>
         </div>
       </div>
       <div className="mt-auto flex items-center justify-end">

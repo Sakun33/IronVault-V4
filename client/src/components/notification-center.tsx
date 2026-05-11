@@ -97,16 +97,20 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
   }, [reload]);
 
   /** Deduplicate consecutive sync notifications — keep only the latest with a count. */
-  const deduplicateSync = useCallback((items: IVNotification[]): DisplayNotification[] => {
+  // Bucket label flows in so the synthesized title matches the date group the
+  // batch was binned into — "(N times yesterday)" under YESTERDAY, never the
+  // contradictory "(N times today)" the old code produced.
+  const deduplicateSync = useCallback((items: IVNotification[], bucket: 'today' | 'yesterday' | 'earlier'): DisplayNotification[] => {
     const result: DisplayNotification[] = [];
     let syncBatch: IVNotification[] = [];
+    const bucketWord = bucket === 'today' ? 'today' : bucket === 'yesterday' ? 'yesterday' : 'earlier';
     const flushSync = () => {
       if (syncBatch.length === 0) return;
       const latest = syncBatch[0]; // items are already sorted newest-first
       result.push({
         ...latest,
         syncCount: syncBatch.length > 1 ? syncBatch.length : undefined,
-        title: syncBatch.length > 1 ? `Vault synced (${syncBatch.length} times today)` : latest.title,
+        title: syncBatch.length > 1 ? `Vault synced (${syncBatch.length} times ${bucketWord})` : latest.title,
       });
       syncBatch = [];
     };
@@ -133,9 +137,9 @@ export function NotificationCenter({ userId, triggerClassName }: NotificationCen
       else earlier.push(n);
     }
     return [
-      { key: 'today' as const, label: 'Today', items: deduplicateSync(today) },
-      { key: 'yesterday' as const, label: 'Yesterday', items: deduplicateSync(yesterday) },
-      { key: 'earlier' as const, label: 'Earlier', items: deduplicateSync(earlier) },
+      { key: 'today' as const, label: 'Today', items: deduplicateSync(today, 'today') },
+      { key: 'yesterday' as const, label: 'Yesterday', items: deduplicateSync(yesterday, 'yesterday') },
+      { key: 'earlier' as const, label: 'Earlier', items: deduplicateSync(earlier, 'earlier') },
     ];
   }, [notifications, deduplicateSync]);
 

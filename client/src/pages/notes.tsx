@@ -944,14 +944,32 @@ export default function Notes() {
     </div>
   );
 
+  // A "draft" exists when the editor is open with no backing note yet (user
+  // started writing but hasn't pressed Save). Show it in the sidebar so the
+  // list doesn't read "No notes yet" while the user is clearly typing one.
+  const isDraftingNew = editorOpen && !editingNote;
+
   const notesListContent = isLoading && notes.length === 0 ? (
     <ListSkeleton rows={6} showHeader={false} />
-  ) : sortedNotes.length === 0 ? (
+  ) : sortedNotes.length === 0 && !isDraftingNew ? (
     <EmptyState
       isFiltered={notes.length > 0}
       onCreate={() => openNewNote()}
       onClearFilters={() => { setSelectedNotebook('all'); setSelectedTag(null); setSearchQuery(''); setShowPinnedOnly(false); }}
     />
+  ) : sortedNotes.length === 0 && isDraftingNew ? (
+    <div className="px-3 py-2">
+      <div
+        data-testid="notes-sidebar-draft"
+        className="rounded-xl border border-amber-400/40 bg-amber-500/[0.06] px-3 py-2.5 flex items-center gap-3"
+      >
+        <Pencil className="w-4 h-4 text-amber-300 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold text-foreground truncate">Untitled note</div>
+          <div className="text-[11px] text-amber-300/80">Draft · editing now</div>
+        </div>
+      </div>
+    </div>
   ) : view === 'list' ? (
     <DateGroupedList
       groups={groupedNotes}
@@ -1048,9 +1066,13 @@ export default function Notes() {
               </div>
             </div>
 
-            {/* Note count */}
+            {/* Note count — includes the in-flight draft so the sidebar
+                stays honest about what's visible (see isDraftingNew). */}
             <div className="px-4 pb-2 text-[12px] text-muted-foreground/60 flex-shrink-0">
-              {sortedNotes.length} {sortedNotes.length === 1 ? 'note' : 'notes'}
+              {(() => {
+                const visible = sortedNotes.length + (isDraftingNew && sortedNotes.length === 0 ? 1 : 0);
+                return `${visible} ${visible === 1 ? 'note' : 'notes'}${isDraftingNew && sortedNotes.length === 0 ? ' · 1 draft' : ''}`;
+              })()}
             </div>
 
             {/* Search — always visible */}
@@ -1559,7 +1581,11 @@ function EmptyState({ isFiltered, onCreate, onClearFilters }: { isFiltered: bool
   );
 }
 
-function DesktopEditorEmpty({ onCreate, disabled }: { onCreate: () => void; disabled: boolean }) {
+function DesktopEditorEmpty({ onCreate: _onCreate, disabled: _disabled }: { onCreate: () => void; disabled: boolean }) {
+  // Desktop two-pane layout already exposes a New-note button in the sidebar
+  // header (and the empty-state row inside the list). Showing a third one in
+  // the right pane was redundant and crowded the canvas — keep this as a
+  // simple "Pick a note" hint that points the user back to the list.
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-6">
       <div className="relative w-20 h-20 mb-5">
@@ -1569,12 +1595,9 @@ function DesktopEditorEmpty({ onCreate, disabled }: { onCreate: () => void; disa
         </div>
       </div>
       <h2 className="text-lg font-semibold text-foreground mb-1">Pick a note</h2>
-      <p className="text-sm text-muted-foreground/70 mb-5 max-w-sm">
-        Select a note from the list to view it, or create a new one.
+      <p className="text-sm text-muted-foreground/70 max-w-sm">
+        Select a note from the list, or use the <span className="text-amber-300">✎</span> button in the sidebar to start a new one.
       </p>
-      <Button size="sm" onClick={onCreate} disabled={disabled} className="cta-tap-pulse">
-        <Plus className="w-3.5 h-3.5 mr-1" /> New note
-      </Button>
     </div>
   );
 }

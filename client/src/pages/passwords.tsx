@@ -298,6 +298,19 @@ export default function Passwords() {
     return 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400';
   };
 
+  // Single source of truth for the visible strength label. Both the grid/list
+  // card and the detail modal call through here so users never see "Strong"
+  // in one place and "very strong" in another for the same password.
+  const formatStrengthLabel = (level: 'weak' | 'medium' | 'strong' | 'very-strong' | string): string => {
+    switch (level) {
+      case 'weak': return 'Weak';
+      case 'medium': return 'Medium';
+      case 'strong': return 'Strong';
+      case 'very-strong': return 'Very Strong';
+      default: return 'Weak';
+    }
+  };
+
   const openDetail = (password: any) => setDetailPassword(password);
 
   return (
@@ -479,9 +492,11 @@ export default function Passwords() {
           >
             {visibleFilteredPasswords.map(password => {
               const checked = selection.isSelected(password.id);
-              const score = strengthCache.get(password.id)?.score ?? 0;
-              const strengthColor = score < 30 ? 'from-red-500 to-rose-400' : score < 60 ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
-              const strengthLabel = score < 30 ? 'Weak' : score < 60 ? 'Medium' : 'Strong';
+              const cached = strengthCache.get(password.id);
+              const score = cached?.score ?? 0;
+              const cardLevel = cached?.level ?? 'weak';
+              const strengthColor = cardLevel === 'weak' ? 'from-red-500 to-rose-400' : cardLevel === 'medium' ? 'from-amber-500 to-yellow-400' : 'from-emerald-500 to-teal-400';
+              const strengthLabel = formatStrengthLabel(cardLevel);
               return (
                 <motion.div
                   key={password.id}
@@ -771,7 +786,7 @@ export default function Passwords() {
                 {/* Meta row */}
                 <div className="flex items-center gap-2 pt-1">
                   <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${strengthStyle(level)}`}>
-                    {level === 'very-strong' ? 'very strong' : level}
+                    {formatStrengthLabel(level)}
                   </span>
                   {pw.category && (
                     <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{pw.category}</span>

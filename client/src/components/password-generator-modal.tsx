@@ -171,10 +171,25 @@ export function PasswordGeneratorModal({
     }
   };
 
-  const usePassword = () => {
-    onPasswordGenerated?.(password);
-    onOpenChange(false);
-    toast({ title: 'Password Applied', description: 'Generated password has been applied to your form' });
+  const usePassword = async () => {
+    // When launched from a form (Add Password / etc) the parent supplies a
+    // callback to receive the value. When launched standalone (e.g. from the
+    // Home quick action) there's no callback, so "Use Password" used to do
+    // nothing. Fall back to copying the password to the clipboard so the
+    // button always produces a visible, useful result.
+    if (onPasswordGenerated) {
+      onPasswordGenerated(password);
+      onOpenChange(false);
+      toast({ title: 'Password Applied', description: 'Generated password has been applied to your form' });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(password);
+      onOpenChange(false);
+      toast({ variant: 'success', title: 'Copied', description: 'Generated password copied to clipboard' });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to copy password', variant: 'destructive' });
+    }
   };
 
   // Visual entropy arc — clamped to 120 bits at the high end so the ring

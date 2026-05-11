@@ -295,7 +295,7 @@ export function AddSubscriptionModal({ open, onOpenChange, editingSubscription }
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="9.99"
+                placeholder="0.00"
                 value={formData.cost}
                 onChange={(e) => setFormData(prev => ({ ...prev, cost: e.target.value }))}
                 required

@@ -172,13 +172,23 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
                   <button
                     key={svc.name}
                     type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      name: svc.name,
-                      url: svc.url,
-                      category: svc.category,
-                    }))}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Quick-fill should establish a clean starting point for
+                      // the chosen service: set name/url/category, and clear
+                      // any username the browser autofilled or a prior save
+                      // left behind so the user types fresh credentials.
+                      setFormData(prev => ({
+                        ...prev,
+                        name: svc.name,
+                        url: svc.url,
+                        category: svc.category,
+                        username: '',
+                      }));
+                    }}
                     className="px-2 py-1 text-xs rounded-full border border-border/60 bg-muted/40 hover:bg-muted text-foreground transition-colors"
+                    data-testid={`chip-quickfill-${svc.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                   >
                     {svc.name}
                   </button>
@@ -220,12 +230,20 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
             <Label htmlFor="username">Username/Email *</Label>
             <Input
               id="username"
+              // Chrome ignores autoComplete="off" on inputs that look like
+              // username/email fields. Adding the standard "new-password" and
+              // an opaque name attribute defeats the heuristic so the browser
+              // stops injecting the account email here.
+              name="iv-vault-credential"
               placeholder="your.email@example.com"
               value={formData.username}
               onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
               required
-              autoComplete="off"
+              autoComplete="new-password"
               data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              aria-autocomplete="none"
               aria-invalid={submitted && !formData.username.trim()}
               className={submitted && !formData.username.trim() ? 'border-red-400/60 focus-visible:ring-red-400/40' : ''}
               data-testid="input-username"

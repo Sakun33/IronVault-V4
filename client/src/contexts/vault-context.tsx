@@ -168,6 +168,11 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [investmentGoals, setInvestmentGoals] = useState<InvestmentGoal[]>([]);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
+  // Splitwise-style entries live in a separate IDB store and a separate hook
+  // (use-shared-expenses). Mirror just the count here so the sidebar/badge
+  // counts in stats.totalExpenses reflect both legacy + shared entries
+  // without requiring every count-consumer to mount the heavier hook.
+  const [sharedExpensesCount, setSharedExpensesCount] = useState(0);
   // QA-R2 H3: searchQuery moved out to its own SearchProvider so its
   // updates no longer rebuild the entire vault context value (which was
   // re-rendering every consumer of useVault() on every keystroke).
@@ -198,7 +203,31 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setBankTransactions([]);
       setInvestments([]);
       setInvestmentGoals([]);
+      setSharedExpensesCount(0);
     }
+  }, [isUnlocked]);
+
+  // Keep the shared-expenses count in sync with writes coming from the
+  // /expenses page (which owns its own state via use-shared-expenses). When
+  // the storage layer fires `vault:item:saved`, re-read just the count so
+  // sidebar badges (stats.totalExpenses) refresh without a full vault reload.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    let cancelled = false;
+    const refreshSharedCount = async () => {
+      try {
+        const all = await vaultStorage.getAllSharedExpenses();
+        if (!cancelled) setSharedExpensesCount(all.length);
+      } catch {
+        // vault may have been locked between event and read — ignore
+      }
+    };
+    const handler = () => { void refreshSharedCount(); };
+    window.addEventListener('vault:item:saved', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('vault:item:saved', handler);
+    };
   }, [isUnlocked]);
 
   // Schedule a background breach scan after the first refresh completes.
@@ -482,7 +511,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
       // Always refresh data to ensure we have the latest from storage
 
-      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData] = await Promise.all([
+      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData, sharedExpensesData] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
         vaultStorage.getAllNotes(),
@@ -493,6 +522,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllInvestments(),
         vaultStorage.getAllInvestmentGoals(),
         vaultStorage.getAllApiKeys(),
+        vaultStorage.getAllSharedExpenses().catch(() => [] as any[]),
       ]);
 
 
@@ -507,6 +537,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInvestments(investmentsData.map(hydrateDates));
       setInvestmentGoals(investmentGoalsData.map(hydrateDates));
       setApiKeys(apiKeysData.map(hydrateDates));
+      setSharedExpensesCount(sharedExpensesData.length);
 
     } catch (error) {
       console.error('Failed to refresh vault data:', error);
@@ -1316,7 +1347,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     totalPasswords: passwords.length,
     activeSubscriptions: subscriptions.filter(s => s.isActive).length,
     totalNotes: notes.length,
-    totalExpenses: expenses.length,
+    totalExpenses: expenses.length + sharedExpensesCount,
     totalReminders: reminders.length,
     totalBankStatements: bankStatements.length,
     totalBankTransactions: bankTransactions.length,

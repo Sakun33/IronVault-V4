@@ -32,11 +32,24 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onOpenAutoFocus, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      // Some dialogs have no input as their first focusable child, so Radix
+      // would auto-focus the close (X) button on open — that painted a brand
+      // ring on the X for those dialogs and not others. Default to focusing
+      // the content panel so every dialog opens with the same flat X icon.
+      // Callers can still override by passing their own onOpenAutoFocus.
+      onOpenAutoFocus={(e) => {
+        if (onOpenAutoFocus) { onOpenAutoFocus(e); return; }
+        e.preventDefault();
+        const node = (e.currentTarget as HTMLElement) || null;
+        if (node && typeof (node as any).focus === 'function') {
+          try { (node as HTMLElement).focus({ preventScroll: true }); } catch { /* noop */ }
+        }
+      }}
       className={cn(
         // Mobile: bottom sheet — pinned to the bottom edge with rounded top
         // corners, slides up from the bottom on open, full viewport width.
@@ -64,8 +77,14 @@ const DialogContent = React.forwardRef<
       <div aria-hidden className="sm:hidden flex justify-center pt-2 pb-1">
         <span className="h-1 w-10 rounded-full bg-muted-foreground/30" />
       </div>
-      {/* Sticky close button — always at top-right, never scrolls away */}
-      <DialogPrimitive.Close className="absolute right-3 top-3 z-20 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      {/* Sticky close button — always at top-right, never scrolls away.
+          Uses focus-visible: so the ring only paints on real keyboard
+          interaction; mouse/Radix auto-focus no longer leaves a stray
+          purple ring that made the X look inconsistent across modals. */}
+      <DialogPrimitive.Close
+        tabIndex={-1}
+        className="absolute right-3 top-3 z-20 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+      >
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

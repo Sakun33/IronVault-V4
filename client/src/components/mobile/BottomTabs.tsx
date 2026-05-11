@@ -30,6 +30,18 @@ export function BottomTabs({ items, className }: BottomTabsProps) {
     return location.startsWith(href);
   };
 
+  // When a tab is tapped while a Radix Dialog is open, the dialog overlay was
+  // intercepting the click. We now sit above the overlay (z-[60]) so the tap
+  // reaches the tab, and we forward an Escape key event before navigating so
+  // any open dialog dismisses itself cleanly instead of being left orphaned
+  // on the next page.
+  const dismissOpenDialogs = () => {
+    if (typeof document === 'undefined') return;
+    if (document.querySelector('[role="dialog"][data-state="open"]')) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }
+  };
+
   // Render the same content for Link/Button wrappers — duplicating the
   // markup just to swap the parent element bloated this file. Encapsulated
   // here once.
@@ -82,7 +94,7 @@ export function BottomTabs({ items, className }: BottomTabsProps) {
   return (
     <nav
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50',
+        'fixed bottom-0 left-0 right-0 z-[60]',
         'glass-surface',
         'border-t border-white/10',
         'pb-[env(safe-area-inset-bottom)]',
@@ -102,7 +114,7 @@ export function BottomTabs({ items, className }: BottomTabsProps) {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={item.onClick}
+                  onClick={() => { dismissOpenDialogs(); item.onClick?.(); }}
                   className="bg-transparent border-0 p-0"
                   aria-label={item.label}
                 >
@@ -114,7 +126,7 @@ export function BottomTabs({ items, className }: BottomTabsProps) {
               <Link
                 key={item.id}
                 href={item.href}
-                onClick={() => window.scrollTo({ top: 0, behavior: 'instant' })}
+                onClick={() => { dismissOpenDialogs(); window.scrollTo({ top: 0, behavior: 'instant' }); }}
               >
                 {renderInner(item, active)}
               </Link>

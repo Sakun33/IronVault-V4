@@ -1410,8 +1410,12 @@ export default function VaultPickerPage() {
                 </div>
               )}
 
-              {/* Create new vault (mobile only) — combined local + cloud count */}
-              {!planLoading && combinedVaultCount >= vaultLimit ? (
+              {/* Plan-limit nudge. The actual "create vault" affordance lives
+                  in the always-visible "+ New Vault" card below, so this
+                  branch only shows the upgrade hint when relevant — the old
+                  redundant "Add a vault" button was removed to give the page
+                  a single clear CTA. */}
+              {!planLoading && combinedVaultCount >= vaultLimit && (
                 <div className="w-full mb-8 p-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <Zap className="w-4 h-4 text-amber-500 shrink-0" />
@@ -1432,16 +1436,6 @@ export default function VaultPickerPage() {
                     Upgrade
                   </Button>
                 </div>
-              ) : (
-                <Button
-                  data-testid="button-create-new-vault"
-                  variant="outline"
-                  className="w-full mb-8 gap-2"
-                  onClick={() => { resetCreateForm(); setShowCreateDialog(true); }}
-                >
-                  <Plus className="w-4 h-4" />
-                  Add a vault
-                </Button>
               )}
             </>
           )}

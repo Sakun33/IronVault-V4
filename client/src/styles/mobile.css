@@ -184,7 +184,9 @@ select {
   border-top: 1px solid hsl(var(--border));
   padding: 0.5rem;
   padding-bottom: calc(var(--sab) + 0.5rem);
-  z-index: 50;
+  /* Above Radix Dialog overlay (z-50) so taps reach the nav while a modal
+     is open; BottomTabs also dispatches Escape to dismiss any open dialog. */
+  z-index: 60;
 }
 
 .mobile-bottom-nav button,
