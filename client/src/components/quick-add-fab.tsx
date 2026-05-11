@@ -31,14 +31,21 @@ export function QuickAddMenu({ open, onClose }: QuickAddMenuProps) {
   const { currency } = useCurrency();
   const [, setLocation] = useLocation();
 
-  const openMode = (m: QuickMode) => { onClose(); setMode(m); };
-  const closeMode = () => setMode(null);
+  // BUG-13 fix: calling `onClose()` here used to unmount the entire
+  // QuickAddMenu (parent gates render on `showQuickAdd`), which threw away
+  // the just-set `mode` and the matching child Sheet (Reminder, Password,
+  // Note, Expense) before it could open. We now just set the mode — the
+  // tray's `open` prop hides itself when mode is non-null, and the parent
+  // is closed only when the child sheet finishes (closeMode).
+  const openMode = (m: QuickMode) => { setMode(m); };
+  const closeMode = () => { setMode(null); onClose(); };
   const navigate = (href: string) => { onClose(); setLocation(href); };
 
   return (
     <>
-      {/* Tray bottom sheet */}
-      <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      {/* Tray bottom sheet — hidden while a child mode is active so the user
+          isn't stacking two sheets on top of each other. */}
+      <Sheet open={open && mode === null} onOpenChange={(v) => { if (!v && mode === null) onClose(); }}>
         <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
           <SheetHeader>
             <SheetTitle className="text-sm text-muted-foreground font-medium uppercase tracking-widest">Quick Add</SheetTitle>

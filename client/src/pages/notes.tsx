@@ -393,7 +393,18 @@ export default function Notes() {
     return sorted;
   }, [filteredNotes, sortBy]);
 
-  const groupedNotes = useMemo(() => groupNotesByDate(sortedNotes, sortBy), [sortedNotes, sortBy]);
+  const groupedNotes = useMemo(() => {
+    // When the user is searching, flatten into a single "Search Results"
+    // bucket. The Apple-Notes date buckets fragment matches across multiple
+    // sections — easy to miss a hit, and "Previous 30 Days" sometimes rendered
+    // with a header but no rows when every match fell into older Month-Year
+    // buckets. A flat list keeps every match visible under one label.
+    const q = debouncedQuery.trim();
+    if (q && sortedNotes.length > 0) {
+      return [{ label: `Search results (${sortedNotes.length})`, key: 'search', notes: sortedNotes }];
+    }
+    return groupNotesByDate(sortedNotes, sortBy);
+  }, [sortedNotes, sortBy, debouncedQuery]);
 
   const selection = useMultiSelect(sortedNotes);
 

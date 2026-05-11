@@ -882,9 +882,17 @@ function ReportsTab({ expenses, displayCurrency }: { expenses: SharedExpense[]; 
         </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthly} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+            {/* width={72} on YAxis + extra left margin gives ₹-prefixed values
+                room to render without ellipsizing the first digit. Recharts
+                defaults to 60px which clips amounts like ₹12,345. */}
+            <BarChart data={monthly} margin={{ top: 5, right: 8, left: 8, bottom: 0 }}>
               <XAxis dataKey="label" stroke="rgb(150,150,170)" fontSize={11} />
-              <YAxis stroke="rgb(150,150,170)" fontSize={11} tickFormatter={(v) => formatAmount(v, displayCurrency).replace(/[A-Z]{3}\s?/, '')} />
+              <YAxis
+                width={72}
+                stroke="rgb(150,150,170)"
+                fontSize={11}
+                tickFormatter={(v) => formatAmount(v, displayCurrency).replace(/[A-Z]{3}\s?/, '')}
+              />
               <Tooltip content={<ChartTip currency={displayCurrency} />} />
               <Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -1279,6 +1287,15 @@ function AddExpenseModal({
             <div className="space-y-1.5">
               <Label>Date</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+              {/* Browser <input type="date"> shows MM/DD/YYYY or DD/MM/YYYY based
+                  on locale, which is ambiguous (04/05 = April 5 or May 4?). Echo
+                  the resolved value in an unambiguous long form right under the
+                  input so the user always sees the actual date. */}
+              {date && (
+                <p className="text-[11px] text-muted-foreground" data-testid="expense-date-resolved">
+                  {format(new Date(`${date}T00:00:00`), 'EEE, d MMM yyyy')}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Category</Label>
@@ -1638,17 +1655,32 @@ function SettleUpModal({
   }, [open, prefill, defaultCurrency]);
 
   const handleSave = async () => {
-    if (!from || !to) {
-      toast({ title: 'Pick both parties', variant: 'destructive' });
+    // Validate each field independently so the user gets a precise error
+    // instead of a generic "Pick both parties" when only one side is missing
+    // or when the amount is the actual blocker.
+    if (!from && !to) {
+      toast({ title: 'Pick a payer and a recipient', variant: 'destructive' });
+      return;
+    }
+    if (!from) {
+      toast({ title: 'Pick who paid', description: 'Select the payer in the "From" field.', variant: 'destructive' });
+      return;
+    }
+    if (!to) {
+      toast({ title: 'Pick the recipient', description: 'Select who received the payment in the "To" field.', variant: 'destructive' });
       return;
     }
     if (from === to) {
-      toast({ title: 'Pick different parties', variant: 'destructive' });
+      toast({ title: 'Pick different parties', description: 'Payer and recipient can\'t be the same person.', variant: 'destructive' });
       return;
     }
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) {
-      toast({ title: 'Amount must be positive', variant: 'destructive' });
+    if (!amount.trim()) {
+      toast({ title: 'Enter an amount', description: 'Tell us how much was settled.', variant: 'destructive' });
+      return;
+    }
+    if (Number.isNaN(amt) || amt <= 0) {
+      toast({ title: 'Amount must be positive', description: 'Enter a number greater than 0.', variant: 'destructive' });
       return;
     }
     await onSave({

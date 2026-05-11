@@ -658,31 +658,61 @@ export default function Passwords() {
               )}
             </motion.div>
           </Card>
-        ) : (
-          <Card className="rounded-2xl shadow-sm border-0 bg-card">
-            <CardContent className="p-12 text-center">
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                <Plus className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No passwords yet</h3>
-              <p className="text-muted-foreground mb-6">Get started by adding your first password entry</p>
-              <Button
-                onClick={() => {
-                  if (!isPro && passwords.length >= getLimit('passwords')) {
-                    toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
-                    return;
-                  }
-                  setShowAddModal(true);
-                }}
-                disabled={!isPro && passwords.length >= getLimit('passwords')}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 py-3"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Password
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        ) : (() => {
+          const hasActiveFilters = searchQuery !== '' || categoryFilter !== 'all' || strengthFilter !== 'all';
+          if (hasActiveFilters) {
+            return (
+              <Card className="rounded-2xl shadow-sm border-0 bg-card" data-testid="passwords-empty-filtered">
+                <CardContent className="p-10 text-center">
+                  <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Search className="w-7 h-7 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground mb-1">No passwords match these filters</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Try a different search, category, or strength.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setCategoryFilter('all');
+                      setStrengthFilter('all');
+                    }}
+                    className="rounded-xl"
+                    data-testid="clear-password-filters"
+                  >
+                    Clear filters
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          }
+          return (
+            <Card className="rounded-2xl shadow-sm border-0 bg-card">
+              <CardContent className="p-12 text-center">
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">No passwords yet</h3>
+                <p className="text-muted-foreground mb-6">Get started by adding your first password entry</p>
+                <Button
+                  onClick={() => {
+                    if (!isPro && passwords.length >= getLimit('passwords')) {
+                      toast({ title: "Limit Reached", description: `Free plan allows up to ${getLimit('passwords')} passwords. Upgrade to Pro for unlimited.`, variant: "destructive" });
+                      return;
+                    }
+                    setShowAddModal(true);
+                  }}
+                  disabled={!isPro && passwords.length >= getLimit('passwords')}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 py-3"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Your First Password
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
 
       {/* Detail Modal */}

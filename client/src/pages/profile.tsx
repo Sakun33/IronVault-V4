@@ -176,7 +176,34 @@ export default function Profile() {
   const { toast } = useToast();
   const { accountEmail, masterPassword, changeMasterPassword } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('overview');
+  // Read initial tab from ?tab=… so deep-links from Dashboard / Security Health
+  // (e.g. /profile?tab=security) open the right tab on first paint instead of
+  // landing on Overview. Keep the URL in sync as the user switches tabs so
+  // refreshing or sharing preserves the view.
+  const VALID_PROFILE_TABS = ['overview', 'data', 'security', 'vaults', 'subscription', 'support'] as const;
+  type ProfileTab = typeof VALID_PROFILE_TABS[number];
+  const readTabFromUrl = (): ProfileTab => {
+    if (typeof window === 'undefined') return 'overview';
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return (VALID_PROFILE_TABS as readonly string[]).includes(t || '') ? (t as ProfileTab) : 'overview';
+  };
+  const [activeTab, setActiveTabState] = useState<ProfileTab>(readTabFromUrl);
+  const setActiveTab = (next: string) => {
+    const tab = (VALID_PROFILE_TABS as readonly string[]).includes(next) ? (next as ProfileTab) : 'overview';
+    setActiveTabState(tab);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (tab === 'overview') params.delete('tab');
+      else params.set('tab', tab);
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+    }
+  };
+  useEffect(() => {
+    const onPop = () => setActiveTabState(readTabFromUrl());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -1739,8 +1766,8 @@ export default function Profile() {
                   <div className="flex items-center gap-3">
                     <Shield className="w-5 h-5 text-primary" />
                     <div>
-                      <p className="font-medium">Offline Vault</p>
-                      <p className="text-sm text-muted-foreground">Your data stays on your device</p>
+                      <p className="font-medium">Zero-Knowledge Vault</p>
+                      <p className="text-sm text-muted-foreground">Encrypted on-device before any cloud sync</p>
                     </div>
                   </div>
                   <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
@@ -1756,7 +1783,7 @@ export default function Profile() {
                         IronVault — {userProfile.subscription.tier === 'free' ? 'Free' : userProfile.subscription.tier} Plan
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        All your data is encrypted and stored locally on your device.
+                        Your data is encrypted on-device with AES-256-GCM before it ever syncs to the cloud — only the encrypted blob leaves your device, and only you hold the key.
                         {userProfile.subscription.tier === 'free'
                           ? ' Upgrade to unlock multiple vaults and premium features.'
                           : ' Enjoy all premium features with your current plan.'}
@@ -1873,17 +1900,17 @@ export default function Profile() {
                   <div>
                     <p className="text-foreground font-medium">AES-256 Encryption</p>
                     <p className="text-muted-foreground text-sm mt-1">
-                      All your data is encrypted using industry-standard AES-256 encryption before being stored locally on your device.
+                      All your data is encrypted using industry-standard AES-256-GCM encryption on-device before it ever syncs to the cloud.
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <CloudOff className="w-6 h-6 text-primary mt-1" />
                   <div>
-                    <p className="text-foreground font-medium">Local-Only Storage</p>
+                    <p className="text-foreground font-medium">Zero-Knowledge Cloud Sync</p>
                     <p className="text-muted-foreground text-sm mt-1">
-                      Your data never leaves your device. No cloud syncing, no external servers - complete privacy and control.
+                      Only an opaque encrypted blob ever leaves your device. The server can't see your passwords, notes, or files — only you hold the key to decrypt them.
                     </p>
                   </div>
                 </div>
@@ -2315,9 +2342,9 @@ export default function Profile() {
               <div className="flex items-start gap-3">
                 <CloudOff className="w-6 h-6 text-green-600 dark:text-green-400 mt-1" />
                 <div>
-                  <p className="text-green-800 dark:text-green-300 font-medium">Your vault is encrypted with AES-256 and never leaves this device</p>
+                  <p className="text-green-800 dark:text-green-300 font-medium">Your vault is encrypted with AES-256-GCM before any cloud sync</p>
                   <p className="text-green-700 dark:text-green-400 text-sm mt-1">
-                    All sensitive data remains on-device with strong encryption. No cloud syncing - your data stays private and secure.
+                    Encryption happens entirely on this device. Only the encrypted blob ever reaches the cloud — keys never leave your browser.
                   </p>
                 </div>
               </div>

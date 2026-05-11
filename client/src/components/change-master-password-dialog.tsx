@@ -159,6 +159,11 @@ export function ChangeMasterPasswordDialog({ open, onOpenChange, accountEmail }:
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   autoFocus
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="cmp-current-master-password"
                   data-testid="input-current-master-password"
                 />
                 <button
@@ -193,6 +198,11 @@ export function ChangeMasterPasswordDialog({ open, onOpenChange, accountEmail }:
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   autoFocus
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="cmp-new-master-password"
                   data-testid="input-new-master-password"
                 />
                 <button
@@ -212,6 +222,11 @@ export function ChangeMasterPasswordDialog({ open, onOpenChange, accountEmail }:
                 type={showNew ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                name="cmp-confirm-master-password"
                 data-testid="input-confirm-master-password"
               />
             </div>

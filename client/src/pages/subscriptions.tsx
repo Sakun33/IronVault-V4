@@ -243,6 +243,31 @@ export default function Subscriptions() {
     }
   };
 
+  // Roll a stored renewal date forward by the billing cycle until it lands
+  // on or after today. Without this, a subscription added once in March 2024
+  // would still display "Mar 5, 2024" in May 2026 — every single sub on the
+  // page would show the same stale date, the issue reported as BUG-10.
+  const effectiveNextBilling = (sub: { nextBillingDate?: Date | string | null; billingCycle?: string }): Date => {
+    const raw = sub.nextBillingDate ? new Date(sub.nextBillingDate as any) : new Date();
+    if (Number.isNaN(raw.getTime())) return new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const next = new Date(raw);
+    let guard = 0;
+    while (next < today && guard < 400) {
+      switch (sub.billingCycle) {
+        case 'yearly':    next.setFullYear(next.getFullYear() + 1); break;
+        case 'quarterly': next.setMonth(next.getMonth() + 3); break;
+        case 'weekly':    next.setDate(next.getDate() + 7); break;
+        case 'daily':     next.setDate(next.getDate() + 1); break;
+        case 'monthly':
+        default:          next.setMonth(next.getMonth() + 1); break;
+      }
+      guard++;
+    }
+    return next;
+  };
+
   // Normalize each subscription's cost to a per-month amount before summing,
   // so a yearly $120 sub doesn't get reported as $120/month and a quarterly
   // $30 sub doesn't get reported as $30/month.
@@ -479,7 +504,8 @@ export default function Subscriptions() {
                 className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${selection.isSelectionMode ? 'pb-20' : ''}`}
               >
                 {filteredSubscriptions.map((subscription) => {
-                  const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
+                  const renewalDate = effectiveNextBilling(subscription);
+                  const daysUntilRenewal = differenceInCalendarDays(renewalDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
                   const checked = selection.isSelected(subscription.id);
                   return (
@@ -521,7 +547,7 @@ export default function Subscriptions() {
                       <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Calendar size={12} />
-                          <span>{format(subscription.nextBillingDate, 'MMM d, yyyy')}</span>
+                          <span>{format(renewalDate, 'MMM d, yyyy')}</span>
                         </div>
                         {isUpcoming && (
                           <span className="text-orange-500 font-medium">due in {daysUntilRenewal}d</span>
@@ -539,7 +565,8 @@ export default function Subscriptions() {
                   animate="show"
                 >
                 {filteredSubscriptions.map((subscription, idx) => {
-                  const daysUntilRenewal = differenceInCalendarDays(subscription.nextBillingDate, new Date());
+                  const renewalDate = effectiveNextBilling(subscription);
+                  const daysUntilRenewal = differenceInCalendarDays(renewalDate, new Date());
                   const isUpcoming = daysUntilRenewal <= subscription.reminderDays && daysUntilRenewal >= 0;
                   const checked = selection.isSelected(subscription.id);
                   const swipeActions: SwipeAction[] = [
@@ -598,7 +625,7 @@ export default function Subscriptions() {
                           <span className="tabular-nums">{formatCurrency(subscription.cost || 0, currency)}/{cycleSuffix(subscription.billingCycle)}</span>
                           <span className="text-muted-foreground/40">·</span>
                           <Calendar size={11} className="flex-shrink-0" />
-                          <span>{format(subscription.nextBillingDate, 'MMM d')}</span>
+                          <span>{format(renewalDate, 'MMM d')}</span>
                           {isUpcoming && <span className="text-orange-500 font-medium ml-1">· due soon</span>}
                         </div>
                       </div>
@@ -715,7 +742,8 @@ export default function Subscriptions() {
       {/* Subscription Detail Modal */}
       {detailSub && (() => {
         const sub = detailSub;
-        const daysUntilRenewal = differenceInCalendarDays(sub.nextBillingDate, new Date());
+        const renewalDate = effectiveNextBilling(sub);
+        const daysUntilRenewal = differenceInCalendarDays(renewalDate, new Date());
         const isUpcoming = daysUntilRenewal <= sub.reminderDays && daysUntilRenewal >= 0;
         const hasCredentials = sub.credentials && (sub.credentials.username || sub.credentials.email || sub.credentials.password || sub.credentials.accountId);
         const isRevealed = revealedCredentials.has(sub.id);
@@ -741,7 +769,7 @@ export default function Subscriptions() {
                 <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between">
                   <div>
                     <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Next Payment</div>
-                    <div className="text-[14px] text-foreground">{format(sub.nextBillingDate, 'MMM d, yyyy')}</div>
+                    <div className="text-[14px] text-foreground">{format(renewalDate, 'MMM d, yyyy')}</div>
                   </div>
                   {isUpcoming && (
                     <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">Due soon</span>

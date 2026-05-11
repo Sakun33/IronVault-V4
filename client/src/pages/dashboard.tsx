@@ -2,10 +2,9 @@ import { useVault } from "@/contexts/vault-context";
 import { useCurrency } from "@/contexts/currency-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useSharedExpenses } from "@/hooks/use-shared-expenses";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
-  Clock, Globe, Upload, Shield, RefreshCw,
+  Clock, Upload, Shield, RefreshCw,
   ChevronRight, CreditCard, Activity, Key, TrendingUp, TrendingDown,
   Sparkles, ShieldAlert, ShieldCheck, ArrowRight, Search,
   Wallet, Repeat, BookOpen, Check,
@@ -376,7 +375,7 @@ export default function Dashboard() {
   const { passwords, subscriptions, expenses, reminders, notes, stats, searchQuery, refreshData, isLoading } = useVault();
   const { expenses: sharedExpenses } = useSharedExpenses();
   const { accountEmail, masterPassword } = useAuth();
-  const { currency, setCurrency, formatCurrency, currencies } = useCurrency();
+  const { currency, formatCurrency } = useCurrency();
   const { toast } = useToast();
 
   const { openPasswordGenerator, openImportExport } = useUIActions();
@@ -730,7 +729,11 @@ export default function Dashboard() {
           <div className="text-[12px] text-muted-foreground mt-0.5">{format(new Date(), 'EEEE, MMM d')}</div>
         </div>
 
-        {/* Compact action bar — refresh · currency · import/export · generator */}
+        {/* Compact action bar — refresh · import/export · generator.
+            The currency switcher was removed: stored amounts have no source
+            currency tracked, so toggling here only changed the symbol while
+            values stayed the same — misleading. Set the display currency in
+            Profile → Preferences instead. */}
         <div className="flex items-center gap-1.5 mb-3 -mx-1 px-1 overflow-x-auto scrollbar-hide" data-testid="dashboard-action-bar">
           <button
             onClick={handleRefresh}
@@ -742,23 +745,6 @@ export default function Dashboard() {
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-          <Select value={currency} onValueChange={setCurrency}>
-            <SelectTrigger
-              aria-label="Currency"
-              data-testid="hero-currency"
-              className="h-8 px-2.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-foreground/80 hover:text-foreground gap-1.5 [&>svg:last-child]:ml-0 focus:ring-0 w-auto flex-shrink-0"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencies.map(curr => (
-                <SelectItem key={curr.code} value={curr.code}>
-                  {curr.symbol === curr.code ? curr.code : `${curr.symbol} ${curr.code}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <button
             onClick={openImportExport}
             data-testid="hero-import-export"

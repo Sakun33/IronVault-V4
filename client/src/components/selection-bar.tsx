@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -38,6 +39,8 @@ export function SelectionBar({
 }: SelectionBarProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const plural = selectedCount === 1 ? itemLabel : `${itemLabel}s`;
 
   const handleConfirmDelete = async () => {
@@ -50,18 +53,17 @@ export function SelectionBar({
     }
   };
 
-  return (
-    <>
-      <div
-        data-testid="selection-bar"
-        // On mobile we lift the bar above the bottom-tabs gutter (~96px +
-        // iOS safe-area inset) so the Delete button is never trapped behind
-        // the nav. lg:bottom-6 collapses back to a normal floating bar on
-        // desktop where the nav is on the left side instead.
-        className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md
-                   rounded-2xl border border-border/60 bg-background/95 backdrop-blur
-                   shadow-2xl px-2.5 py-2 flex items-center gap-1.5"
-      >
+  const bar = (
+    <div
+      data-testid="selection-bar"
+      // Portal to <body> so transformed/filtered ancestors don't accidentally
+      // contain `position: fixed`. On mobile we lift the bar above the
+      // bottom-tabs gutter (~96px + iOS safe-area inset). z-[70] sits above
+      // the bottom-tabs (z-[60]) so it stays visible at all times.
+      className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-1.5rem)] max-w-md
+                 rounded-2xl border border-border/60 bg-background/95 backdrop-blur
+                 shadow-2xl px-2.5 py-2 flex items-center gap-1.5"
+    >
         <Button
           variant="ghost"
           size="sm"
@@ -103,7 +105,12 @@ export function SelectionBar({
         >
           <X className="w-4 h-4" />
         </Button>
-      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {mounted && typeof document !== 'undefined' ? createPortal(bar, document.body) : bar}
 
       <AlertDialog open={showConfirm} onOpenChange={open => !isDeleting && setShowConfirm(open)}>
         <AlertDialogContent>

@@ -21,6 +21,12 @@ export function computeShares(expense: SharedExpense): SharedExpenseSplit[] {
  * Given a single expense, return the per-contact net effect from the
  * vault owner's perspective. Positive = the owner is owed money,
  * negative = the owner owes that contact.
+ *
+ * If self paid for alice's $50 share, alice owes self $50 — alice's
+ * delta is +50 (matches the BalanceBadge "owes you" convention and the
+ * calculateBalances comment). Pre-2026-05 the signs were inverted, which
+ * is why "You owe / You're owed / Net" always rendered as zero or backwards
+ * for shared expenses.
  */
 export function expenseDelta(expense: SharedExpense): Map<string, number> {
   const map = new Map<string, number>();
@@ -29,19 +35,28 @@ export function expenseDelta(expense: SharedExpense): Map<string, number> {
 
   for (const s of splits) {
     if (s.contactId === payer) continue;
-    add(map, payer, s.amount);
-    add(map, s.contactId, -s.amount);
+    // Per-split direction: the non-payer owes the payer their share.
+    // From owner's perspective:
+    //   - When payer === self: alice (non-payer) owes self → alice += amount.
+    //   - When payer === alice: self (non-payer) owes alice → self += amount
+    //     (dropped later) AND alice's debt-to-self is negative → alice -= amount.
+    add(map, payer, -s.amount);
+    add(map, s.contactId, s.amount);
   }
   return map;
 }
 
 /**
- * A settlement transfers money from `fromContact` to `toContact`.
+ * A settlement transfers money from `fromContact` to `toContact`. The
+ * payer's debt to the recipient is paid down by `amount`, so we move the
+ * balances toward zero (do not push them further apart).
  */
 export function settlementDelta(s: Settlement): Map<string, number> {
   const map = new Map<string, number>();
-  add(map, s.fromContact, s.amount);
-  add(map, s.toContact, -s.amount);
+  // fromContact was the debtor (or is now settling self's debt to them):
+  // their balance shifts by -amount in the owner-relative convention.
+  add(map, s.fromContact, -s.amount);
+  add(map, s.toContact, s.amount);
   return map;
 }
 

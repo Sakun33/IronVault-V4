@@ -23,7 +23,10 @@ const stagger = { show: { transition: { staggerChildren: 0.07 } } };
 // ── Big animated ring ─────────────────────────────────────────────────────────
 function BigSecurityRing({ score, level, levelColor }: { score: number; level: string; levelColor: string }) {
   const [animScore, setAnimScore] = useState(0);
-  const size = 220, sw = 14;
+  // Compact ring: 140 sits inside a 2-row hero so the breach scan card lands
+  // above the fold on a 700px viewport. 220 was pushing every category below
+  // the fold and the page felt like a one-card landing screen.
+  const size = 140, sw = 10;
   const r = (size - sw) / 2;
   const cx = size / 2, cy = size / 2;
   const circ = 2 * Math.PI * r;
@@ -49,18 +52,18 @@ function BigSecurityRing({ score, level, levelColor }: { score: number; level: s
           transform={`rotate(-90 ${cx} ${cy})`}
           style={{ transition: 'stroke-dasharray 1.4s cubic-bezier(0.4,0,0.2,1)' }}
         />
-        <text x={cx} y={cy - 6} textAnchor="middle" dominantBaseline="middle"
-          fontSize="56" fontWeight="800" fill="currentColor" className="text-foreground">
+        <text x={cx} y={cy - 4} textAnchor="middle" dominantBaseline="middle"
+          fontSize="36" fontWeight="800" fill="currentColor" className="text-foreground">
           {animScore}
         </text>
-        <text x={cx} y={cy + 30} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="700" fill="currentColor" className="text-muted-foreground"
+        <text x={cx} y={cy + 20} textAnchor="middle" dominantBaseline="middle"
+          fontSize="9" fontWeight="700" fill="currentColor" className="text-muted-foreground"
           letterSpacing="0.12em">
           OF 100
         </text>
       </svg>
       <div
-        className={`mt-3 px-4 py-1.5 rounded-full text-sm font-semibold ${
+        className={`mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
           levelColor === 'red'
             ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
             : levelColor === 'amber'
@@ -478,31 +481,33 @@ export default function SecurityHealth() {
         </Link>
       </motion.div>
 
-      {/* Hero */}
+      {/* Hero — side-by-side ring + headline so the score, level, and one-line
+          summary all fit in a 160px-tall band. Stacks on small screens. */}
       <motion.div
         variants={fadeUp}
         className={`rounded-3xl overflow-hidden bg-gradient-to-br ${heroBg} shadow-xl`}
       >
-        <div className="relative p-6">
-          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-          <div className="absolute bottom-0 left-1/3 w-28 h-28 rounded-full bg-white/5 translate-y-1/2 pointer-events-none" />
-          <div className="relative flex flex-col items-center text-center">
-            <div className="flex items-center gap-2 mb-3">
-              <Shield className="w-5 h-5 text-white" />
-              <h1 className="text-lg font-bold text-white">Security Health</h1>
-            </div>
+        <div className="relative p-4 sm:p-5">
+          <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+          <div className="relative flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
             <BigSecurityRing
               score={breakdown.totalScore}
               level={breakdown.level}
               levelColor={breakdown.levelColor}
             />
-            <p className="text-sm text-white/80 mt-4 max-w-sm">
-              {breakdown.totalScore >= 80
-                ? 'Your vault is well protected. Stay vigilant — review alerts as they appear.'
-                : breakdown.totalScore >= 50
-                ? 'Decent posture. A few quick wins below will close the gaps.'
-                : 'Several risks detected. Tap a category below to fix them.'}
-            </p>
+            <div className="flex-1 min-w-0 text-center sm:text-left">
+              <div className="flex items-center gap-2 justify-center sm:justify-start mb-1.5">
+                <Shield className="w-4 h-4 text-white" />
+                <h1 className="text-base font-bold text-white">Security Health</h1>
+              </div>
+              <p className="text-sm text-white/85 leading-snug">
+                {breakdown.totalScore >= 80
+                  ? 'Your vault is well protected. Stay vigilant — review alerts as they appear.'
+                  : breakdown.totalScore >= 50
+                  ? 'Decent posture. A few quick wins below will close the gaps.'
+                  : 'Several risks detected. Tap a category below to fix them.'}
+              </p>
+            </div>
           </div>
         </div>
       </motion.div>
