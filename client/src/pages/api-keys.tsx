@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
 import { UpgradeGate } from '@/components/upgrade-gate';
@@ -13,10 +14,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Edit, Trash2, Key, Eye, EyeOff, Copy, Check,
-  Shield, Lock, AlertCircle, Search, Code, LayoutGrid, List as ListIcon,
+  Shield, Lock, AlertCircle, Search, Code,
   CalendarClock, ExternalLink, Tag as TagIcon, ArrowUpDown, X,
+  ChevronDown, ChevronRight, CreditCard, Cloud, Hash, Sparkles, Activity, ShieldCheck,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ListSkeleton } from '@/components/list-skeleton';
@@ -49,24 +51,54 @@ interface APIKey {
 const CATEGORIES = ['Payment', 'Cloud', 'Social', 'Development', 'Other'] as const;
 type Category = typeof CATEGORIES[number];
 
+const CATEGORY_META: Record<Category, { icon: typeof CreditCard; gradient: string; accent: string; pill: string; border: string }> = {
+  Payment: {
+    icon: CreditCard,
+    gradient: 'from-violet-500 to-fuchsia-500',
+    accent: 'text-violet-300',
+    pill: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+    border: 'border-violet-500/40 hover:border-violet-500/60',
+  },
+  Cloud: {
+    icon: Cloud,
+    gradient: 'from-sky-500 to-cyan-500',
+    accent: 'text-sky-300',
+    pill: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+    border: 'border-sky-500/40 hover:border-sky-500/60',
+  },
+  Social: {
+    icon: Hash,
+    gradient: 'from-pink-500 to-rose-500',
+    accent: 'text-pink-300',
+    pill: 'bg-pink-500/15 text-pink-300 border-pink-500/30',
+    border: 'border-pink-500/40 hover:border-pink-500/60',
+  },
+  Development: {
+    icon: Code,
+    gradient: 'from-emerald-500 to-teal-500',
+    accent: 'text-emerald-300',
+    pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    border: 'border-emerald-500/40 hover:border-emerald-500/60',
+  },
+  Other: {
+    icon: Key,
+    gradient: 'from-slate-500 to-zinc-500',
+    accent: 'text-white/70',
+    pill: 'bg-white/10 text-white/70 border-white/15',
+    border: 'border-white/20 hover:border-white/30',
+  },
+};
+
 const ENV_LABEL: Record<APIKey['environment'], string> = {
-  production: 'Live',
-  staging: 'Test',
-  development: 'Dev',
+  production: 'LIVE',
+  staging: 'TEST',
+  development: 'DEV',
 };
 
 const ENV_PILL: Record<APIKey['environment'], string> = {
-  production: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  staging: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  development: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-};
-
-const CATEGORY_PILL: Record<string, string> = {
-  Payment: 'bg-violet-500/10 text-violet-300 border-violet-500/30',
-  Cloud: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
-  Social: 'bg-pink-500/10 text-pink-300 border-pink-500/30',
-  Development: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-  Other: 'bg-muted text-muted-foreground border-border/60',
+  production: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_-2px_rgba(16,185,129,0.6)]',
+  staging:    'bg-amber-500/15 text-amber-300 border-amber-500/40 shadow-[0_0_10px_-2px_rgba(245,158,11,0.5)]',
+  development:'bg-sky-500/15 text-sky-300 border-sky-500/40 shadow-[0_0_10px_-2px_rgba(56,189,248,0.5)]',
 };
 
 function maskKey(key: string): string {
@@ -84,6 +116,12 @@ function isExpiringSoon(d?: Date): boolean {
 function isExpired(d?: Date): boolean {
   if (!d) return false;
   return new Date(d).getTime() < Date.now();
+}
+
+function daysUntil(d?: Date): number | null {
+  if (!d) return null;
+  const ms = new Date(d).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
 const blankForm = () => ({
@@ -112,24 +150,34 @@ export default function APIKeys() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pendingRevealId, setPendingRevealId] = useState<string | null>(null);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [pulsedCard, setPulsedCard] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | Category>('all');
   const [envFilter, setEnvFilter] = useState<'all' | APIKey['environment']>('all');
   const [sortBy, setSortBy] = useState<'name' | 'updated' | 'expires'>('updated');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    return localStorage.getItem('iv_apikeys_view') === 'list' ? 'list' : 'grid';
+  });
+  const [grouped, setGrouped] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('iv_apikeys_grouped') !== '0';
+  });
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => { try { localStorage.setItem('iv_apikeys_view', viewMode); } catch {} }, [viewMode]);
+  useEffect(() => { try { localStorage.setItem('iv_apikeys_grouped', grouped ? '1' : '0'); } catch {} }, [grouped]);
 
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [deleteTargetKey, setDeleteTargetKey] = useState<{ id: string; name: string } | null>(null);
 
   const [formData, setFormData] = useState(blankForm());
 
-  // Schedule OS-level expiry alerts (7-day warning + same-day) for any key
-  // with an expiresAt set. Capacitor/web no-ops if permission isn't granted.
-  // The schedule is idempotent — re-running schedule() with the same numeric
-  // ID replaces the prior pending notification.
+  // Schedule OS-level expiry alerts for any key with an expiresAt set.
   useEffect(() => {
     if (!apiKeys || apiKeys.length === 0) return;
     const now = Date.now();
@@ -242,6 +290,20 @@ export default function APIKeys() {
     setRevealedKeys(prev => new Set(prev).add(id));
   };
 
+  const toggleRevealSecret = (id: string) => {
+    if (revealedSecrets.has(id)) {
+      const next = new Set(revealedSecrets);
+      next.delete(id);
+      setRevealedSecrets(next);
+      return;
+    }
+    if (!isUnlocked) {
+      setShowVerifyModal(true);
+      return;
+    }
+    setRevealedSecrets(prev => new Set(prev).add(id));
+  };
+
   const handleVerified = () => {
     setIsUnlocked(true);
     if (pendingRevealId) {
@@ -251,10 +313,11 @@ export default function APIKeys() {
     setTimeout(() => {
       setIsUnlocked(false);
       setRevealedKeys(new Set());
+      setRevealedSecrets(new Set());
     }, 5 * 60 * 1000);
   };
 
-  const copyToClipboard = async (text: string, label: string) => {
+  const copyToClipboard = async (text: string, label: string, cardId?: string) => {
     if (!isUnlocked) {
       setShowVerifyModal(true);
       return;
@@ -262,6 +325,10 @@ export default function APIKeys() {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(label);
+      if (cardId) {
+        setPulsedCard(cardId);
+        setTimeout(() => setPulsedCard(null), 700);
+      }
       toast({ title: 'Copied', description: `${label} copied.` });
       setTimeout(() => setCopiedField(null), 1500);
     } catch {
@@ -306,33 +373,64 @@ export default function APIKeys() {
     return list;
   }, [apiKeys, searchQuery, categoryFilter, envFilter, sortBy]);
 
+  const groupedKeys = useMemo(() => {
+    const buckets: Record<string, APIKey[]> = { Payment: [], Cloud: [], Social: [], Development: [], Other: [] };
+    filteredKeys.forEach((k: APIKey) => {
+      const cat = (CATEGORIES as readonly string[]).includes(k.category || '') ? (k.category as Category) : 'Other';
+      buckets[cat].push(k);
+    });
+    return buckets;
+  }, [filteredKeys]);
+
+  const toggleCategoryCollapse = (cat: string) => {
+    setCollapsedCats(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
+  };
+
   // ── Locked screen ──────────────────────────────────────────────────────────
   if (!isUnlocked) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="w-5 h-5" /> API Keys Vault
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center space-y-2">
-              <Lock className="w-10 h-10 mx-auto text-muted-foreground" />
-              <h3 className="font-semibold text-foreground">Vault Locked</h3>
-              <p className="text-sm text-muted-foreground">Verify your identity to access API keys</p>
-            </div>
-            <Button onClick={() => setShowVerifyModal(true)} className="w-full">
-              <Lock className="w-4 h-4 mr-2" /> Unlock Vault
-            </Button>
-            <div className="flex items-start gap-2 p-3 bg-primary/10 rounded-lg border border-primary/30">
-              <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground">
-                API keys are encrypted and require your master password or biometrics. The vault auto-locks after 5 minutes.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+          className="w-full max-w-sm"
+        >
+          <Card className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-md border border-white/10">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10" />
+            <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full bg-emerald-500/20 blur-3xl" />
+            <CardHeader className="relative pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <Shield className="w-5 h-5 text-emerald-300" /> API Keys Vault
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="relative space-y-4">
+              <div className="text-center space-y-2 py-2">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_24px_-4px_rgba(16,185,129,0.5)]">
+                  <Lock className="w-7 h-7 text-emerald-300" />
+                </div>
+                <h3 className="font-semibold text-white">Vault Locked</h3>
+                <p className="text-sm text-white/60">Verify your identity to access API keys</p>
+              </div>
+              <Button
+                onClick={() => setShowVerifyModal(true)}
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold shadow-[0_0_20px_-4px_rgba(16,185,129,0.5)] border-0"
+              >
+                <Lock className="w-4 h-4 mr-2" /> Unlock Vault
+              </Button>
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-white/5 border border-white/10">
+                <AlertCircle className="w-4 h-4 text-emerald-300 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-white/60">
+                  API keys are encrypted and require your master password or biometrics. The vault auto-locks after 5 minutes.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
         <VerifyAccessModal
           open={showVerifyModal}
           onOpenChange={setShowVerifyModal}
@@ -355,20 +453,278 @@ export default function APIKeys() {
     Other: apiKeys.filter(k => (k.category || 'Other') === 'Other').length,
   };
 
+  const expiringCount = apiKeys.filter(k => isExpiringSoon(k.expiresAt)).length;
+  const expiredCount = apiKeys.filter(k => isExpired(k.expiresAt)).length;
+
+  // ── Card renderer ─────────────────────────────────────────────────────────
+  const renderKeyCard = (key: APIKey, idx: number, denseGrid = false) => {
+    const expiringSoon = isExpiringSoon(key.expiresAt);
+    const expired = isExpired(key.expiresAt);
+    const cat = ((CATEGORIES as readonly string[]).includes(key.category || '') ? key.category : 'Other') as Category;
+    const meta = CATEGORY_META[cat];
+    const expiryDays = daysUntil(key.expiresAt);
+    const pulsing = pulsedCard === key.id;
+    const isKeyRevealed = revealedKeys.has(key.id);
+    const isSecretRevealed = revealedSecrets.has(key.id);
+
+    return (
+      <motion.div
+        key={key.id}
+        layout
+        variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+        whileHover={{ y: -2 }}
+        animate={pulsing ? { boxShadow: ['0 0 0 0 rgba(16,185,129,0)', '0 0 0 4px rgba(16,185,129,0.4)', '0 0 0 0 rgba(16,185,129,0)'] } : {}}
+        className={`relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/[0.07] transition-colors group ${
+          expired ? 'border-rose-500/30 bg-rose-500/[0.04]' : `hover:${meta.border.split(' ')[1] || 'border-emerald-500/40'}`
+        }`}
+        data-testid={`api-key-card-${key.id}`}
+      >
+        {/* gradient left accent */}
+        <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${meta.gradient}`} />
+
+        {/* subtle inner glow on hover */}
+        <div className={`pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br ${meta.gradient} mix-blend-overlay`}
+             style={{ background: `radial-gradient(140% 60% at 0% 0%, rgba(255,255,255,0.04), transparent 50%)` }} />
+
+        <div className={`relative ${denseGrid ? 'p-3 space-y-2' : 'p-4 space-y-3'}`}>
+          {/* Header row */}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`font-bold text-white truncate ${denseGrid ? 'text-[14px]' : 'text-[16px]'}`} data-testid={`api-key-name-${key.id}`}>
+                  {key.name}
+                </span>
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] rounded border ${ENV_PILL[key.environment]}`}>
+                  {ENV_LABEL[key.environment]}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-white/55 mt-1 flex-wrap">
+                <span className="truncate">{key.service}</span>
+                <span className={`text-[10px] px-1.5 py-px rounded-full border inline-flex items-center gap-1 ${meta.pill}`}>
+                  <meta.icon className="w-2.5 h-2.5" />
+                  {cat}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Key display */}
+          {!denseGrid && (
+            <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-black/20 backdrop-blur-sm border border-white/[0.06]">
+              <code className={`flex-1 text-xs font-mono truncate ${isKeyRevealed ? 'text-emerald-200' : 'text-white/85'}`} data-testid={`api-key-value-${key.id}`}>
+                {isKeyRevealed ? key.apiKey : maskKey(key.apiKey)}
+              </code>
+              <button
+                onClick={() => toggleReveal(key.id)}
+                className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                aria-label={isKeyRevealed ? `Hide ${key.name}` : `Reveal ${key.name}`}
+                title={isKeyRevealed ? 'Hide' : 'Reveal'}
+              >
+                {isKeyRevealed ? <EyeOff className="w-3.5 h-3.5 text-white/80" /> : <Eye className="w-3.5 h-3.5 text-white/70" />}
+              </button>
+              <button
+                onClick={() => copyToClipboard(key.apiKey, `key-${key.id}`, key.id)}
+                className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                aria-label={`Copy ${key.name}`}
+                title="Copy"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {copiedField === `key-${key.id}` ? (
+                    <motion.span
+                      key="check"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.5, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                    >
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="copy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Copy className="w-3.5 h-3.5 text-white/70" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+            </div>
+          )}
+
+          {/* Dense view: small key preview */}
+          {denseGrid && (
+            <code className="block text-[11px] font-mono text-white/55 truncate">
+              {maskKey(key.apiKey)}
+            </code>
+          )}
+
+          {/* Secret display */}
+          {!denseGrid && key.apiSecret && (
+            <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-black/20 backdrop-blur-sm border border-white/[0.06]">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-white/40 mr-0.5 font-semibold">Secret</span>
+              <code className={`flex-1 text-xs font-mono truncate ${isSecretRevealed ? 'text-emerald-200' : 'text-white/85'}`}>
+                {isSecretRevealed ? key.apiSecret : maskKey(key.apiSecret)}
+              </code>
+              <button
+                onClick={() => toggleRevealSecret(key.id)}
+                className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                aria-label={isSecretRevealed ? 'Hide secret' : 'Reveal secret'}
+                title={isSecretRevealed ? 'Hide' : 'Reveal'}
+              >
+                {isSecretRevealed ? <EyeOff className="w-3.5 h-3.5 text-white/80" /> : <Eye className="w-3.5 h-3.5 text-white/70" />}
+              </button>
+              <button
+                onClick={() => copyToClipboard(key.apiSecret!, `secret-${key.id}`, key.id)}
+                className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                title="Copy secret"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {copiedField === `secret-${key.id}` ? (
+                    <motion.span
+                      key="check"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.5, opacity: 0 }}
+                    >
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="copy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Copy className="w-3.5 h-3.5 text-white/70" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+            </div>
+          )}
+
+          {/* Tags */}
+          {!denseGrid && key.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {key.tags.slice(0, 5).map(t => (
+                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/55">
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Health indicators */}
+          {!denseGrid && (
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2 text-[11px] flex-wrap min-w-0">
+                {/* Last used */}
+                <span className={`inline-flex items-center gap-1 ${key.lastUsed ? 'text-white/55' : 'text-white/35'}`}>
+                  <Activity className="w-3 h-3" />
+                  {key.lastUsed
+                    ? `Used ${formatDistanceToNow(new Date(key.lastUsed), { addSuffix: true })}`
+                    : 'Never used'}
+                </span>
+                {/* Expiry */}
+                {key.expiresAt && (
+                  <span className={`inline-flex items-center gap-1 ${
+                    expired ? 'text-rose-300 font-medium' : expiringSoon ? 'text-amber-300 font-medium' : 'text-white/55'
+                  }`}>
+                    <CalendarClock className="w-3 h-3" />
+                    {expired
+                      ? 'Expired'
+                      : expiryDays !== null && expiryDays <= 14
+                        ? `Expires in ${expiryDays}d`
+                        : `Expires ${format(new Date(key.expiresAt), 'MMM d, yyyy')}`}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                {key.endpoint && (
+                  <button
+                    onClick={() => {
+                      const raw = (key.endpoint || '').trim();
+                      if (!raw) return;
+                      const safe = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                      window.open(safe, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                    title="Open endpoint"
+                    aria-label="Open endpoint"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-white/60" />
+                  </button>
+                )}
+                <button
+                  onClick={() => openEdit(key)}
+                  className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+                  title="Edit"
+                  aria-label={`Edit ${key.name}`}
+                  data-testid={`button-edit-api-key-${key.id}`}
+                >
+                  <Edit className="w-3.5 h-3.5 text-white/60" />
+                </button>
+                <button
+                  onClick={() => setDeleteTargetKey({ id: key.id, name: key.name })}
+                  className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-rose-500/15 hover:text-rose-300 text-white/60 transition-colors"
+                  title="Delete"
+                  aria-label={`Delete ${key.name}`}
+                  data-testid={`button-delete-api-key-${key.id}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Dense view footer */}
+          {denseGrid && (
+            <div className="flex items-center justify-between text-[10px] text-white/45 pt-1">
+              <span>{format(new Date(key.updatedAt), 'MMM d')}</span>
+              {key.expiresAt && (expired || expiringSoon) && (
+                <span className={expired ? 'text-rose-300' : 'text-amber-300'}>
+                  {expired ? 'Expired' : `${expiryDays}d`}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  const gridClass = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3';
+
   return (
     <div className="space-y-5 p-4 overflow-x-hidden">
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <Key className="w-6 h-6" /> API Keys
-            </h1>
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              {counts.all}
-            </span>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-teal-500/20 backdrop-blur-sm border border-emerald-500/30 flex items-center justify-center shadow-[0_0_20px_-4px_rgba(16,185,129,0.4)]">
+              <Key className="w-5 h-5 text-emerald-300" />
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold tracking-tight text-white">API Keys</h1>
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white/5 backdrop-blur-sm text-white/80 border border-white/10">
+                  {counts.all}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <ShieldCheck className="w-2.5 h-2.5" /> Locked
+                </span>
+              </div>
+              <p className="text-white/55 text-sm flex items-center gap-2">
+                Encrypted credentials
+                {(expiringCount > 0 || expiredCount > 0) && (
+                  <>
+                    <span className="text-white/25">·</span>
+                    {expiredCount > 0 && (
+                      <span className="text-rose-300 font-medium">{expiredCount} expired</span>
+                    )}
+                    {expiredCount > 0 && expiringCount > 0 && <span className="text-white/25">·</span>}
+                    {expiringCount > 0 && (
+                      <span className="text-amber-300 font-medium">{expiringCount} expiring soon</span>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
           </div>
-          <p className="text-muted-foreground text-sm">Encrypted credentials, ready when you are</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Button
@@ -377,9 +733,10 @@ export default function APIKeys() {
             onClick={() => {
               setIsUnlocked(false);
               setRevealedKeys(new Set());
+              setRevealedSecrets(new Set());
               toast({ title: 'Locked', description: 'API Keys vault locked' });
             }}
-            className="h-9 w-9"
+            className="h-9 w-9 rounded-xl bg-white/5 backdrop-blur-sm border-white/10 hover:bg-white/10"
             title="Lock Vault"
             aria-label="Lock vault"
           >
@@ -387,7 +744,7 @@ export default function APIKeys() {
           </Button>
           <Button
             onClick={() => { setEditingKey(null); resetForm(); setShowAddModal(true); }}
-            className="h-9 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+            className="h-9 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold shadow-[0_0_16px_-2px_rgba(16,185,129,0.5)] border-0"
             data-testid="button-add-api-key"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add Key
@@ -399,11 +756,11 @@ export default function APIKeys() {
       <div className="flex flex-col gap-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
             <Input
               type="search"
               name="iv-api-keys-search"
-              placeholder="Search keys…"
+              placeholder="Search keys, services, or tags…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoComplete="off"
@@ -413,7 +770,7 @@ export default function APIKeys() {
               data-form-type="other"
               data-lpignore="true"
               data-1p-ignore="true"
-              className="pl-10 pr-3 h-10 rounded-xl truncate"
+              className="pl-10 pr-3 h-11 rounded-xl bg-white/5 backdrop-blur-sm border-white/10 placeholder:text-white/30 focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20 truncate"
               data-testid="input-search-api-keys"
             />
           </div>
@@ -425,34 +782,51 @@ export default function APIKeys() {
           <button
             type="button"
             onClick={() => setCategoryFilter('all')}
-            className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+            className={`px-3 py-1.5 text-xs rounded-full border transition-all font-medium ${
               categoryFilter === 'all'
-                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                : 'border-border/60 bg-muted/30 hover:bg-muted/50 text-muted-foreground'
+                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-200 border-emerald-500/40 shadow-[0_0_12px_-4px_rgba(16,185,129,0.6)]'
+                : 'bg-white/5 backdrop-blur-sm border-white/10 text-white/60 hover:text-white hover:bg-white/10'
             }`}
           >
-            All <span className="ml-1 opacity-60">{counts.all}</span>
+            All <span className="ml-1 opacity-70 tabular-nums">{counts.all}</span>
           </button>
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                categoryFilter === cat
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                  : 'border-border/60 bg-muted/30 hover:bg-muted/50 text-muted-foreground'
-              }`}
-            >
-              {cat} <span className="ml-1 opacity-60">{counts[cat]}</span>
-            </button>
-          ))}
+          {CATEGORIES.map(cat => {
+            const meta = CATEGORY_META[cat];
+            const active = categoryFilter === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-all font-medium inline-flex items-center gap-1.5 ${
+                  active
+                    ? `bg-gradient-to-r ${meta.gradient} bg-opacity-20 text-white border-white/20 shadow-[0_0_12px_-4px_rgba(255,255,255,0.3)]`
+                    : 'bg-white/5 backdrop-blur-sm border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <meta.icon className="w-3 h-3" />
+                {cat} <span className="opacity-70 tabular-nums">{counts[cat]}</span>
+              </button>
+            );
+          })}
 
           <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGrouped(g => !g)}
+              className={`h-8 px-2.5 text-xs rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                grouped
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                  : 'bg-white/5 backdrop-blur-sm border-white/10 text-white/60 hover:text-white'
+              }`}
+              title="Toggle category grouping"
+            >
+              <Sparkles className="w-3 h-3" /> Group
+            </button>
             <select
               value={envFilter}
               onChange={(e) => setEnvFilter(e.target.value as any)}
-              className="h-8 px-2 text-xs rounded-lg border border-border/60 bg-muted/30 text-foreground"
+              className="h-8 px-2 text-xs rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 text-white/80 focus:outline-none focus:border-emerald-500/50"
               aria-label="Environment filter"
             >
               <option value="all">All envs</option>
@@ -465,7 +839,7 @@ export default function APIKeys() {
               onClick={() =>
                 setSortBy(prev => (prev === 'updated' ? 'name' : prev === 'name' ? 'expires' : 'updated'))
               }
-              className="h-8 px-2 text-xs rounded-lg border border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              className="h-8 px-2 text-xs rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 text-white/60 hover:text-white inline-flex items-center gap-1 transition-colors"
               title="Cycle sort"
               data-testid="button-sort-api-keys"
             >
@@ -477,7 +851,7 @@ export default function APIKeys() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowBulkDeleteConfirm(true)}
-                className="h-8 text-xs"
+                className="h-8 text-xs rounded-lg bg-white/5 backdrop-blur-sm border-white/10 hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-300"
                 data-testid="button-bulk-delete-apikeys"
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete {filteredKeys.length}
@@ -516,236 +890,155 @@ export default function APIKeys() {
       {isLoading && apiKeys.length === 0 ? (
         <ListSkeleton rows={5} showHeader={false} />
       ) : filteredKeys.length === 0 ? (
-        <Card className="rounded-2xl shadow-sm border-0 bg-card">
+        <Card className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
           <CardContent className="p-12 text-center">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <Code className="w-8 h-8 text-muted-foreground" />
+            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Code className="w-8 h-8 text-emerald-300" />
             </div>
-            <h3 className="text-lg font-medium mb-2">No API Keys</h3>
-            <p className="text-muted-foreground mb-4">
+            <h3 className="text-lg font-semibold text-white mb-2">No API Keys</h3>
+            <p className="text-white/55 mb-4 text-sm">
               {apiKeys.length === 0 ? 'Get started by adding your first API key' : 'No keys match your filters'}
             </p>
             {apiKeys.length === 0 && (
               <Button
                 onClick={() => { setEditingKey(null); resetForm(); setShowAddModal(true); }}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold shadow-[0_0_20px_-4px_rgba(16,185,129,0.5)] border-0"
               >
                 <Plus className="w-4 h-4 mr-2" /> Add Your First API Key
               </Button>
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div
-          className={
-            viewMode === 'grid'
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children'
-              : 'rounded-2xl bg-card shadow-[0_1px_0_rgba(0,0,0,0.04)] border border-border/50 overflow-hidden'
-          }
+      ) : grouped && viewMode === 'grid' && categoryFilter === 'all' ? (
+        // Grouped grid view
+        <div className="space-y-5">
+          {CATEGORIES.map(cat => {
+            const items = groupedKeys[cat];
+            if (!items || items.length === 0) return null;
+            const meta = CATEGORY_META[cat];
+            const collapsed = collapsedCats.has(cat);
+            return (
+              <div key={cat} className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => toggleCategoryCollapse(cat)}
+                  className="w-full flex items-center gap-2 px-1 py-1 group"
+                >
+                  <motion.span animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.18 }}>
+                    <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
+                  </motion.span>
+                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${meta.gradient} bg-opacity-20 flex items-center justify-center`}>
+                    <meta.icon className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">{cat}</h3>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60 tabular-nums">
+                    {items.length}
+                  </span>
+                  <span className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent ml-2" />
+                </button>
+                <AnimatePresence initial={false}>
+                  {!collapsed && (
+                    <motion.div
+                      key={`${cat}-grid`}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.22 }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <motion.div
+                        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+                        initial="hidden"
+                        animate="show"
+                        className={gridClass}
+                      >
+                        {items.map((k, i) => renderKeyCard(k, i))}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      ) : viewMode === 'grid' ? (
+        <motion.div
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
+          initial="hidden"
+          animate="show"
+          className={gridClass}
         >
+          {filteredKeys.map((k, i) => renderKeyCard(k, i))}
+        </motion.div>
+      ) : (
+        // List view
+        <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
           {filteredKeys.map((key: APIKey, idx: number) => {
             const expiringSoon = isExpiringSoon(key.expiresAt);
             const expired = isExpired(key.expiresAt);
-            const cat = key.category || 'Other';
-            const swipeActions: SwipeAction[] = viewMode === 'list' ? [
+            const cat = ((CATEGORIES as readonly string[]).includes(key.category || '') ? key.category : 'Other') as Category;
+            const meta = CATEGORY_META[cat];
+            const expiryDays = daysUntil(key.expiresAt);
+            const swipeActions: SwipeAction[] = [
               { id: 'copy', label: 'Copy', icon: Copy, background: 'bg-slate-500',
-                onAction: () => copyToClipboard(key.apiKey, `key-${key.id}`) },
+                onAction: () => copyToClipboard(key.apiKey, `key-${key.id}`, key.id) },
               { id: 'edit', label: 'Edit', icon: Edit, background: 'bg-blue-500',
                 onAction: () => openEdit(key) },
               { id: 'delete', label: 'Delete', icon: Trash2, background: 'bg-red-600', destructive: true,
                 onAction: () => setDeleteTargetKey({ id: key.id, name: key.name }) },
-            ] : [];
-            const rowInner = (
-              <Card
+            ];
+            return (
+              <SwipeRow
                 key={key.id}
-                className={`group transition-colors ${
-                  viewMode === 'grid'
-                    ? `rounded-2xl border ${expired ? 'border-rose-500/30 bg-rose-500/[0.03]' : 'border-border/40 hover:border-emerald-500/40 bg-card'}`
-                    : `rounded-none border-0 ${idx < filteredKeys.length - 1 ? 'border-b border-border/50' : ''} bg-transparent shadow-none ${expired ? 'bg-rose-500/[0.03]' : ''}`
-                }`}
-                data-testid={`api-key-card-${key.id}`}
+                actions={swipeActions}
+                className={idx < filteredKeys.length - 1 ? 'border-b border-white/[0.06]' : ''}
               >
-                <CardContent className={viewMode === 'grid' ? 'p-4 space-y-3' : 'px-4 py-3 flex items-center gap-3 min-h-[60px]'}>
-                  {/* Header row */}
-                  <div className={viewMode === 'grid' ? 'flex items-start justify-between gap-2' : 'flex items-center gap-2 flex-1 min-w-0'}>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold text-foreground truncate text-[15px]" data-testid={`api-key-name-${key.id}`}>
-                          {key.name}
-                        </span>
-                        <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded border ${ENV_PILL[key.environment]}`}>
-                          {ENV_LABEL[key.environment]}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                        <span className="truncate">{key.service}</span>
-                        <span className={`px-1.5 py-px rounded border ${CATEGORY_PILL[cat] || CATEGORY_PILL.Other}`}>
-                          {cat}
-                        </span>
-                      </div>
-                    </div>
-                    {viewMode === 'list' && (
-                      <span className="text-xs text-muted-foreground/80 hidden sm:inline tabular-nums">
-                        {format(new Date(key.updatedAt), 'MMM d')}
+                <motion.div
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                  className={`relative flex items-center gap-3 px-4 py-3 min-h-[64px] hover:bg-white/[0.04] transition-colors group ${expired ? 'bg-rose-500/[0.04]' : ''}`}
+                  data-testid={`api-key-card-${key.id}`}
+                >
+                  <span className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-gradient-to-b ${meta.gradient} opacity-80`} />
+                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${meta.gradient} bg-opacity-20 border border-white/10 flex items-center justify-center flex-shrink-0`}>
+                    <meta.icon className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[15px] font-semibold text-white truncate" data-testid={`api-key-name-${key.id}`}>{key.name}</span>
+                      <span className={`px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] rounded border ${ENV_PILL[key.environment]}`}>
+                        {ENV_LABEL[key.environment]}
                       </span>
-                    )}
-                  </div>
-
-                  {/* Masked key value */}
-                  {viewMode === 'grid' && (
-                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/40 border border-border/30">
-                      <code className="flex-1 text-xs font-mono truncate text-foreground" data-testid={`api-key-value-${key.id}`}>
-                        {revealedKeys.has(key.id) ? key.apiKey : maskKey(key.apiKey)}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => toggleReveal(key.id)}
-                        title={revealedKeys.has(key.id) ? 'Hide' : 'Reveal'}
-                        aria-label={revealedKeys.has(key.id) ? `Hide ${key.name}` : `Reveal ${key.name}`}
-                      >
-                        {revealedKeys.has(key.id) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => copyToClipboard(key.apiKey, `key-${key.id}`)}
-                        title="Copy"
-                        aria-label={`Copy ${key.name}`}
-                      >
-                        {copiedField === `key-${key.id}` ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
                     </div>
-                  )}
-
-                  {viewMode === 'grid' && key.apiSecret && (
-                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/40 border border-border/30">
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mr-1">Secret</span>
-                      <code className="flex-1 text-xs font-mono truncate text-foreground">
-                        {revealedKeys.has(key.id) ? key.apiSecret : maskKey(key.apiSecret)}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => copyToClipboard(key.apiSecret!, `secret-${key.id}`)}
-                        title="Copy secret"
-                      >
-                        {copiedField === `secret-${key.id}` ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Tags */}
-                  {viewMode === 'grid' && key.tags?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {key.tags.slice(0, 5).map(t => (
-                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 border border-border/30 text-muted-foreground">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Metadata + actions */}
-                  <div className={viewMode === 'grid' ? 'flex items-center justify-between pt-2 border-t border-border/40' : 'flex items-center gap-1 ml-auto'}>
-                    {viewMode === 'grid' && (
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground/80 flex-wrap">
-                        <span className="tabular-nums">Created {format(new Date(key.createdAt), 'MMM d, yyyy')}</span>
-                        {key.expiresAt && (
-                          <span
-                            className={`inline-flex items-center gap-1 ${
-                              expired ? 'text-rose-400' : expiringSoon ? 'text-amber-400' : ''
-                            }`}
-                          >
-                            <CalendarClock className="w-3 h-3" />
-                            {expired ? 'Expired' : 'Expires'} {format(new Date(key.expiresAt), 'MMM d, yyyy')}
+                    <div className="text-[12px] text-white/55 flex items-center gap-1.5 mt-0.5 truncate">
+                      <span>{key.service}</span>
+                      <span className="text-white/25">·</span>
+                      <code className="font-mono text-white/40">{maskKey(key.apiKey)}</code>
+                      {key.expiresAt && (expired || expiringSoon) && (
+                        <>
+                          <span className="text-white/25">·</span>
+                          <span className={expired ? 'text-rose-300 font-medium' : 'text-amber-300 font-medium'}>
+                            {expired ? 'Expired' : `${expiryDays}d`}
                           </span>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      {viewMode === 'list' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => toggleReveal(key.id)}
-                          aria-label="Reveal"
-                        >
-                          {revealedKeys.has(key.id) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </Button>
+                        </>
                       )}
-                      {viewMode === 'list' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => copyToClipboard(key.apiKey, `key-${key.id}`)}
-                          aria-label="Copy"
-                        >
-                          {copiedField === `key-${key.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        </Button>
-                      )}
-                      {key.endpoint && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => {
-                            const raw = (key.endpoint || '').trim();
-                            if (!raw) return;
-                            const safe = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-                            window.open(safe, '_blank', 'noopener,noreferrer');
-                          }}
-                          title="Open endpoint"
-                          aria-label="Open endpoint"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => openEdit(key)}
-                        title="Edit"
-                        aria-label={`Edit ${key.name}`}
-                        data-testid={`button-edit-api-key-${key.id}`}
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-rose-400 hover:text-rose-300"
-                        onClick={() => setDeleteTargetKey({ id: key.id, name: key.name })}
-                        title="Delete"
-                        aria-label={`Delete ${key.name}`}
-                        data-testid={`button-delete-api-key-${key.id}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            );
-            return viewMode === 'list' ? (
-              <SwipeRow key={key.id} actions={swipeActions}>
-                {rowInner}
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <button onClick={() => toggleReveal(key.id)} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors" aria-label="Reveal">
+                      {revealedKeys.has(key.id) ? <EyeOff className="w-3.5 h-3.5 text-white/70" /> : <Eye className="w-3.5 h-3.5 text-white/70" />}
+                    </button>
+                    <button onClick={() => copyToClipboard(key.apiKey, `key-${key.id}`, key.id)} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors" aria-label="Copy">
+                      {copiedField === `key-${key.id}` ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5 text-white/70" />}
+                    </button>
+                    <button onClick={() => openEdit(key)} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors" aria-label="Edit">
+                      <Edit className="w-3.5 h-3.5 text-white/70" />
+                    </button>
+                  </div>
+                </motion.div>
               </SwipeRow>
-            ) : rowInner;
+            );
           })}
         </div>
       )}
@@ -803,7 +1096,7 @@ export default function APIKeys() {
                     className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
                       formData.service === svc
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                        : 'border-border/60 bg-muted/40 hover:bg-muted text-foreground'
+                        : 'border-white/10 bg-white/5 hover:bg-white/10 text-white/80'
                     }`}
                   >
                     {svc}
@@ -958,7 +1251,7 @@ export default function APIKeys() {
             </Button>
             <Button
               onClick={editingKey ? handleUpdateKey : handleAddKey}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold border-0"
               data-testid="button-save-api-key"
             >
               {editingKey ? 'Update' : 'Add'} Key
