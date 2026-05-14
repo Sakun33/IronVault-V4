@@ -177,7 +177,7 @@ interface DocumentVaultStats {
 }
 
 export default function Documents() {
-  const { isFeatureAvailable, isLoading: licenseLoading } = useSubscription();
+  const { isFeatureAvailable, isPro, isLoading: licenseLoading } = useSubscription();
 
   const { stats } = useVault();
   const { toast } = useToast();
@@ -224,9 +224,12 @@ export default function Documents() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   
-  // Real subscription gate — `isFeatureAvailable('documents')` is the
-  // single source of truth (Free plan only gets metadata-only docs).
-  const isPaidUser = isFeatureAvailable('documents');
+  // SEC-21: previously gated on isFeatureAvailable('documents'), but that hook
+  // hard-codes `documents: true` for every tier (free users still get the page,
+  // just with a 10-doc cap). The result was isPaidUser === true for everyone,
+  // so the cap never fired and the limit-reached banner never showed. Gate on
+  // the real plan tier via `isPro` (true for Pro / Family / Lifetime).
+  const isPaidUser = isPro;
   const maxDocuments = isPaidUser ? -1 : 10; // -1 means unlimited
   
   // Initialize services. documentService is required (vault storage); ocrService

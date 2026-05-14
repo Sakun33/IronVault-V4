@@ -69,14 +69,45 @@ function verifyJWT(token: string): object | null {
     if (!h || !b || !s) return null;
     const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${h}.${b}`).digest("base64url");
     if (!safeStrEq(s, expected)) return null;
-    const payload = JSON.parse(Buffer.from(b, "base64url").toString()) as { exp: number };
-    return payload.exp >= Date.now() / 1000 ? payload : null;
+    const payload = JSON.parse(Buffer.from(b, "base64url").toString()) as {
+      exp: number;
+      role?: string;
+      iss?: string;
+      aud?: string;
+    };
+    if (payload.exp < Date.now() / 1000) return null;
+    // ADM-02 / SEC-17: admin endpoints must only accept admin-issued JWTs.
+    // A main-app user JWT will fail HMAC if JWT_SECRET differs, but we also
+    // hard-require role + iss claims so even a shared-secret deploy is safe.
+    if (payload.iss !== "ironvault-admin") return null;
+    if (payload.role !== "admin" && payload.role !== "super_admin") return null;
+    return payload;
   } catch { return null; }
 }
 
 function getToken(req: VercelRequest): object | null {
   const auth = (req.headers.authorization || "").replace("Bearer ", "").trim();
   return auth ? verifyJWT(auth) : null;
+}
+
+// ADM-04: in-memory rate limiter for the public registration endpoint.
+// 5 requests per IP per hour. Resets when the function instance recycles —
+// acceptable for this endpoint (idempotent insert, abuse limited to one box).
+const _registerRateBuckets = new Map<string, { count: number; resetAt: number }>();
+function registerRateLimitHit(ip: string): boolean {
+  const now = Date.now();
+  const HOUR = 3600_000;
+  const b = _registerRateBuckets.get(ip);
+  if (!b || b.resetAt < now) {
+    _registerRateBuckets.set(ip, { count: 1, resetAt: now + HOUR });
+    return false;
+  }
+  b.count++;
+  return b.count > 5;
+}
+function getClientIp(req: VercelRequest): string {
+  const xff = (req.headers["x-forwarded-for"] as string) || "";
+  return xff.split(",")[0]?.trim() || (req.socket as any)?.remoteAddress || "unknown";
 }
 
 // ── Static data ── canonical plan set (must match client/src/lib/plans.ts) ─────
@@ -141,7 +172,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           [username]
         ).catch(() => {});
       }
-      return res.json({ token: createJWT({ username, role: "super_admin" }), user: { username, role: "super_admin" } });
+      return res.json({
+        token: createJWT({ username, role: "super_admin", iss: "ironvault-admin", aud: "ironvault-admin" }),
+        user: { username, role: "super_admin" }
+      });
     }
     return res.status(401).json({ error: "Invalid credentials" });
   }
@@ -181,20 +215,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── Public customer registration (writes to crm_users — same table as main backend) ─
+  // ADM-04: rate-limited (5/hr/IP) + INSERT-only. Existing emails respond with a
+  // generic success to avoid leaking account existence.
   if (path === "/api/public/customers/register" && method === "POST") {
-    const { email, fullName, country, platform, planType } = (req.body as Record<string, string>) || {};
+    const ip = getClientIp(req);
+    if (registerRateLimitHit(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+    const { email, fullName, country, platform } = (req.body as Record<string, string>) || {};
     if (!email) return res.status(400).json({ error: "email required" });
     try {
       const { rows } = await db.query(
         `INSERT INTO crm_users (email, full_name, country, platform, marketing_consent, support_consent)
          VALUES ($1, $2, $3, $4, false, true)
-         ON CONFLICT (email) DO UPDATE SET
-           full_name = EXCLUDED.full_name, country = EXCLUDED.country,
-           platform = EXCLUDED.platform, last_active_at = NOW(), updated_at = NOW()
+         ON CONFLICT (email) DO NOTHING
          RETURNING id, email, full_name, country, platform, created_at`,
         [email.toLowerCase().trim(), fullName || null, country || null, platform || null]
       );
-      return res.json({ success: true, customer: rows[0] });
+      // Always respond success — don't leak whether the email already existed.
+      return res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -603,11 +642,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── /api/customers/:id/tags ────────────────────────────────────────────────
+  // ADM-06: GET returns empty list (not yet implemented); writes return 501 so
+  // callers don't get fake success without persistence.
   const tagsMatch = path.match(/^\/api\/customers\/([^/]+)\/tags(?:\/([^/]+))?$/);
   if (tagsMatch) {
     if (method === "GET")    return res.json([]);
-    if (method === "POST")   return res.json({ success: true });
-    if (method === "DELETE") return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── /api/customers/:id/subscription ────────────────────────────────────────
@@ -665,9 +705,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/customers/:id/message ────────────────────────────────────────
+  // ADM-06: not implemented — return 501 instead of fake success.
   const msgMatch = path.match(/^\/api\/customers\/([^/]+)\/message$/);
   if (msgMatch && method === "POST") {
-    return res.json({ success: true, message: "Message queued" });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── GET /api/tags ───────────────────────────────────────────────────────────
@@ -676,8 +717,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ── POST /api/plans ─────────────────────────────────────────────────────────
+  // ADM-06: plan catalog is hard-coded; runtime CRUD not implemented.
   if (path === "/api/plans" && method === "POST") {
-    return res.json({ success: true, plan: req.body });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── GET/PUT/DELETE /api/plans/:id ───────────────────────────────────────────
@@ -685,8 +727,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (planMatch) {
     const plan = PLANS.find(p => p.id === planMatch[1]);
     if (method === "GET") return plan ? res.json(plan) : res.status(404).json({ error: "Plan not found" });
-    if (method === "PUT") return res.json({ ...(plan || {}), ...req.body });
-    if (method === "DELETE") return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── GET/POST /api/tickets ───────────────────────────────────────────────────
@@ -913,11 +954,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ).catch(() => {});
       const rows = await queryCrmCustomers(`WHERE u.id = $1`, [id]);
       // Fire plan upgrade email via main app notify endpoint (fire-and-forget)
-      const jwtSecret = process.env.JWT_SECRET;
-      if (jwtSecret && old[0].email && dbPlan !== 'free') {
+      // ADM-05: use CRM_NOTIFY_SECRET, not JWT_SECRET (leaking JWT_SECRET to a
+      // sibling service lets it forge tokens for the entire main app).
+      const notifySecret = process.env.CRM_NOTIFY_SECRET;
+      if (notifySecret && old[0].email && dbPlan !== 'free') {
         fetch('https://www.ironvault.app/api/crm/notify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-notify-secret': jwtSecret },
+          headers: { 'Content-Type': 'application/json', 'x-notify-secret': notifySecret },
           body: JSON.stringify({ type: 'plan_upgrade', email: old[0].email, data: { plan: dbPlan } }),
         }).catch(() => {});
       }
@@ -1065,16 +1108,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path.startsWith("/api/analytics/")) return res.json({ data: [], labels: [] });
 
   // ── Email stubs ─────────────────────────────────────────────────────────────
+  // ADM-06: GET returns empty list; writes return 501.
   if (path.startsWith("/api/email")) {
     if (method === "GET") return res.json([]);
-    return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── Notifications stubs ─────────────────────────────────────────────────────
   if (path === "/api/notifications/count") return res.json({ count: 0 });
   if (path.startsWith("/api/notifications") || path.startsWith("/api/admin/notifications")) {
     if (method === "GET") return res.json([]);
-    return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── Admins ──────────────────────────────────────────────────────────────────
@@ -1099,19 +1143,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         created_at: null,
       }]);
     }
-    return res.json({ success: true });
+    // ADM-06: admin creation/edit not implemented — single env-driven account.
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── Promotions stub ─────────────────────────────────────────────────────────
   if (path.startsWith("/api/promotions")) {
     if (method === "GET") return res.json([]);
-    return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   // ── Email templates stub ────────────────────────────────────────────────────
   if (path.startsWith("/api/email-templates")) {
     if (method === "GET") return res.json([]);
-    return res.json({ success: true });
+    return res.status(501).json({ error: "Not implemented" });
   }
 
   return res.status(404).json({ error: "not found", path });

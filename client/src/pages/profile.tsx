@@ -829,13 +829,50 @@ export default function Profile() {
     setShowCancelConfirm(true);
   };
 
-  const confirmCancelSubscription = () => {
-    setUserProfile(prev => ({
-      ...prev,
-      subscription: { ...prev.subscription, status: 'cancelled' },
-    }));
-    toast({ title: "Subscription Cancelled", description: "Your subscription will remain active until the end of your billing period." });
+  const confirmCancelSubscription = async () => {
     setShowCancelConfirm(false);
+    // SEC-22: hit the canonical server endpoint that flips entitlements +
+    // will_renew. Local-only mutation used to leave the user still billed by
+    // Razorpay while the UI claimed they were cancelled. A follow-up support
+    // ticket is filed so the team can finalize the Razorpay-side cancellation
+    // (refunds, prorations) — the user keeps access until current_period_end.
+    const cloudToken = localStorage.getItem('iv_cloud_token');
+    if (!cloudToken) {
+      toast({ title: 'Sign-in required', description: 'Please sign in to cancel.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBase()}/api/subscription/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      setUserProfile(prev => ({
+        ...prev,
+        subscription: { ...prev.subscription, status: 'cancelled' },
+      }));
+      toast({
+        title: 'Subscription Cancelled',
+        description: 'Your subscription will remain active until the end of your billing period.',
+      });
+      // Best-effort: file a support ticket for the team to clean up the
+      // Razorpay-side subscription. Don't fail the cancel if this errors.
+      handleCreateSupportTicket({
+        title: 'Subscription Cancellation Follow-up',
+        description: 'User cancelled via the Cancel Subscription button. Entitlements flipped server-side; please confirm Razorpay-side cancellation.',
+        category: 'other',
+        priority: 'medium',
+      }).catch(() => {});
+    } catch (err: any) {
+      toast({
+        title: 'Cancel failed',
+        description: err?.message || 'Could not cancel subscription. Please try again or contact support.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleCreateSupportTicket = async (ticketData: Partial<SupportTicket>) => {

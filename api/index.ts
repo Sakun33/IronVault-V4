@@ -946,7 +946,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // second granularity. The +1s shift on a 30-day exp is irrelevant.
     const iat = Math.ceil(Date.now() / 1000) + 1;
     const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = b64url(JSON.stringify({ userId, email, exp: iat + 30 * 24 * 3600, iat }));
+    // SEC-17: stamp iss/aud so a main-app token can't be replayed against
+    // the admin console (which now requires iss='ironvault-admin').
+    const payload = b64url(JSON.stringify({
+      userId, email,
+      exp: iat + 30 * 24 * 3600, iat,
+      iss: 'ironvault', aud: 'ironvault-app',
+    }));
     const sig = b64url(createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest());
     return `${header}.${payload}.${sig}`;
   }
@@ -959,6 +965,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!safeEq(expected, sig)) return null;
       const data = JSON.parse(Buffer.from(payload, 'base64').toString());
       if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;
+      // SEC-17: pre-rollout tokens lack iss/aud entirely — accept those for
+      // the 30-day rollover window. Any token that DOES carry a claim must
+      // match the main app's audience.
+      if (data.iss && data.iss !== 'ironvault') return null;
+      if (data.aud && data.aud !== 'ironvault-app') return null;
       return { userId: data.userId, email: data.email, iat: data.iat || 0 };
     } catch { return null; }
   }
@@ -999,21 +1010,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   async function getCloudUser(req: VercelRequest): Promise<{ userId: string; email: string } | null> {
     const auth = req.headers.authorization as string | undefined;
     if (!auth?.startsWith('Bearer ')) return null;
-    const decoded = verifyCloudToken(auth.substring(7));
+    const token = auth.substring(7);
+    const decoded = verifyCloudToken(token);
     if (!decoded) return null;
-    // P0 (2026-05-05) — verifyTokenNotStale was actively rejecting freshly
-    // issued tokens for at least one production user (Lifetime plan, fresh
-    // mobile login). Both the +1s iat forward bias in signCloudToken and
-    // the 2s tolerance in verifyTokenNotStale failed to close the window —
-    // the symptom remained "Bearer token JUST issued returns 401 on every
-    // protected endpoint". The downstream effect was the user appearing as
-    // free-plan with no cloud vaults.
-    //
-    // Removing the staleness gate. JWT signature + 30-day exp + the 401
-    // interceptor's auto-logout on real session loss cover the threat
-    // model adequately. If/when we need post-password-change invalidation
-    // again, do it via a per-user version int bumped on password change
-    // and embedded in the JWT — no clock-comparison required.
+    // SEC-18: cryptographic validity isn't enough — a leaked/revoked token
+    // must stop working immediately. Every successful login registers a row
+    // in extension_sessions; logout/revoke flips is_active=false. Require an
+    // active session here so revocation is honored across all protected
+    // endpoints, not just the few that already called getActiveSessionByToken.
+    try {
+      const hash = hashJwtToken(token);
+      const { rows } = await db.query(
+        `SELECT 1 FROM extension_sessions WHERE jwt_token_hash = $1 AND is_active = true LIMIT 1`,
+        [hash]
+      );
+      if (!rows[0]) return null;
+    } catch (e: any) {
+      // Table missing or query failed — treat as no active session rather than
+      // fail-open. ensureSessionAndActivityTables runs in every login path so
+      // the table is provisioned on first auth/token.
+      console.error('[getCloudUser] session check failed:', e.message);
+      return null;
+    }
     return { userId: decoded.userId, email: decoded.email };
   }
 
@@ -2094,6 +2112,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const userId = cloudUser.userId;
     const email = cloudUser.email;
+    // SEC-03 / SEC-19: irreversible action — require fresh password (and TOTP
+    // if 2FA is enabled) so a stolen bearer token alone can't nuke the account.
+    const { password, totpCode } = (req.body || {}) as { password?: string; totpCode?: string };
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ error: 'password required' });
+    }
+    try {
+      const { rows: pwRows } = await db.query(
+        `SELECT account_password_hash, totp_enabled FROM crm_users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      if (pwRows.length === 0) return res.status(404).json({ error: 'Account not found' });
+      const v = await verifyAccountPassword(password, pwRows[0].account_password_hash);
+      if (!v.ok) {
+        recordLoginFailure(getClientIp(req));
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+      if (pwRows[0].totp_enabled) {
+        if (!totpCode || typeof totpCode !== 'string') {
+          return res.status(400).json({ error: 'totpCode required', requires2fa: true });
+        }
+        const tv = await verifyTotpOrBackup(userId, totpCode);
+        if (!tv.ok) {
+          recordLoginFailure(getClientIp(req));
+          return res.status(401).json({ error: 'Invalid 2FA code' });
+        }
+      }
+    } catch (err: any) {
+      console.error('[auth/account DELETE pw-check]', err.message);
+      return res.status(500).json({ error: 'Account deletion failed' });
+    }
     try {
       // Wipe rows in dependent tables first to avoid FK trip-ups, but tolerate
       // any individual failure (table may not exist on older deploys).
@@ -3056,6 +3105,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ── POST /api/subscription/cancel ───────────────────────────────────────────
+  // SEC-22: user-initiated cancel. Previously the Profile UI just flipped local
+  // state, so the user thought they cancelled but Razorpay kept charging. Now
+  // persists status='cancelled' + will_renew=false in entitlements; the Razorpay
+  // subscription itself winds down on the next billing event (or the user can
+  // refund via support). This is a soft cancel — access remains until
+  // current_period_end, matching the toast text the UI shows.
+  if (path === '/api/subscription/cancel' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { rowCount } = await db.query(
+        `UPDATE entitlements
+            SET status = 'cancelled', will_renew = false, updated_at = NOW()
+          WHERE user_id = $1 AND plan <> 'free' AND plan <> 'lifetime'`,
+        [cloudUser.userId]
+      );
+      if (rowCount === 0) {
+        return res.status(400).json({ error: 'No active subscription to cancel' });
+      }
+      // Audit (best-effort).
+      await db.query(
+        `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
+         SELECT $1, plan::text, plan::text, 'user', 'user_cancel' FROM entitlements WHERE user_id = $2`,
+        [cloudUser.email, cloudUser.userId]
+      ).catch(() => {});
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[subscription/cancel]', err.message);
+      return res.status(500).json({ error: 'Cancel failed' });
+    }
+  }
+
   // ── POST /api/payments/create-order ─────────────────────────────────────────
   if (path === '/api/payments/create-order' && req.method === 'POST') {
     const cloudUser = await getCloudUser(req);
@@ -3354,6 +3436,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     'expense_added',
   ]);
 
+  // SEC-20: SSRF guard. Reject URLs targeting loopback / RFC-1918 / link-local
+  // / .local mDNS so an attacker can't pivot through our serverless function
+  // to internal Vercel-environment metadata, K8s control planes, etc. Returns
+  // a string error message, or null if the URL is safe.
+  function validateWebhookUrl(rawUrl: string): string | null {
+    let parsed: URL;
+    try { parsed = new URL(rawUrl); }
+    catch { return 'invalid url'; }
+    if (!/^https?:$/.test(parsed.protocol)) return 'url must be http(s)';
+    const host = parsed.hostname.toLowerCase();
+    if (!host) return 'invalid host';
+    // Block hostname-form internal targets.
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
+      return 'private/internal hosts are not allowed';
+    }
+    // IPv6 literals in URL appear bracketed; URL strips brackets in hostname.
+    if (host.includes(':')) {
+      // ::1 loopback or fe80::/10 link-local
+      if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
+        return 'private/internal hosts are not allowed';
+      }
+    }
+    // IPv4 literal check.
+    const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (m) {
+      const o = m.slice(1).map(Number);
+      if (o.some((n) => n < 0 || n > 255)) return 'invalid ipv4';
+      // 127.0.0.0/8, 10.0.0.0/8, 169.254.0.0/16, 192.168.0.0/16,
+      // 172.16.0.0/12, 0.0.0.0/8, multicast/reserved.
+      if (
+        o[0] === 0 || o[0] === 127 || o[0] === 10 ||
+        (o[0] === 169 && o[1] === 254) ||
+        (o[0] === 192 && o[1] === 168) ||
+        (o[0] === 172 && o[1] >= 16 && o[1] <= 31) ||
+        o[0] >= 224
+      ) {
+        return 'private/internal hosts are not allowed';
+      }
+    }
+    return null;
+  }
+
   if (path === '/api/webhooks' && req.method === 'GET') {
     const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
@@ -3377,12 +3501,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const { url, events } = req.body as { url?: string; events?: string[] };
       if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
-      try {
-        const parsed = new URL(url);
-        if (!/^https?:$/.test(parsed.protocol)) return res.status(400).json({ error: 'url must be http(s)' });
-      } catch {
-        return res.status(400).json({ error: 'invalid url' });
-      }
+      const urlErr = validateWebhookUrl(url);
+      if (urlErr) return res.status(400).json({ error: urlErr });
       const evs = Array.isArray(events) ? events.filter((e) => VALID_WEBHOOK_EVENTS.has(e)) : [];
       if (evs.length === 0) return res.status(400).json({ error: 'at least one valid event required' });
       await ensureWebhooksTable();
@@ -3453,6 +3573,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       if (rows.length === 0) return res.status(404).json({ error: 'not found' });
       const hook = rows[0];
+      // SEC-20: re-validate URL at test time — a row could pre-date the
+      // validator, or have been side-loaded. Don't blindly trust the DB.
+      const urlErr = validateWebhookUrl(hook.url);
+      if (urlErr) return res.status(400).json({ error: urlErr });
       const samplePayload = {
         event: 'test',
         timestamp: new Date().toISOString(),
@@ -3463,7 +3587,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
       let status = 0;
-      let bodySnippet = '';
       try {
         const r = await fetch(hook.url, {
           method: 'POST',
@@ -3472,21 +3595,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           signal: ctrl.signal,
         });
         status = r.status;
-        bodySnippet = (await r.text().catch(() => '')).slice(0, 200);
+        // SEC-20: drain body without echoing — leaking internal-host
+        // responses to the caller is the SSRF amplification we're avoiding.
+        await r.text().catch(() => '');
       } catch (e: any) {
         clearTimeout(timer);
         await db.query(
           `UPDATE webhooks SET last_fired_at = NOW(), last_status = 0 WHERE id = $1`,
           [hook.id]
         );
-        return res.status(200).json({ success: false, status: 0, error: e.message || 'fetch failed' });
+        return res.status(200).json({ success: false, status: 0, error: 'fetch failed' });
       }
       clearTimeout(timer);
       await db.query(
         `UPDATE webhooks SET last_fired_at = NOW(), last_status = $1 WHERE id = $2`,
         [status, hook.id]
       );
-      return res.json({ success: status >= 200 && status < 300, status, body: bodySnippet });
+      return res.json({ success: status >= 200 && status < 300, status });
     } catch (err: any) {
       console.error('[webhooks/test]', err.message);
       return res.status(500).json({ error: 'Failed to test webhook' });
@@ -3512,8 +3637,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         event, timestamp: new Date().toISOString(),
         source: 'IronVault', userId: cloudUser.userId, data: data || {},
       });
-      // Fire all in parallel — never await response, never throw
+      // Fire all in parallel — never await response, never throw.
+      // SEC-20: skip rows whose URL now fails validation (legacy/private targets).
       for (const h of rows) {
+        if (validateWebhookUrl(h.url)) continue;
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
         fetch(h.url, {
