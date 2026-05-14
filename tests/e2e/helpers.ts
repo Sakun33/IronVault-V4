@@ -118,6 +118,16 @@ export async function unlockVault(page: Page): Promise<void> {
   // guard, causing the test to fail seeking dashboard content.
   await page.locator(AUTHED_MARKER_SELECTOR).first()
     .waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
+  // Settle through handleCloudUnlock's tail: the unlock function calls
+  // `loginWithoutVerification(pw)` (→ isUnlocked=true → VaultPicker
+  // unmounts → master input detaches → authedMarker visible) BEFORE
+  // running its 1.8 s success animation and the final `setLocation('/')`.
+  // If we return now, the caller's spaNavigate('/passwords') runs first
+  // and is immediately overridden when the trailing setLocation('/')
+  // fires, bouncing the test back to the dashboard. Sit out the
+  // animation + a slack buffer so that final route change is already
+  // behind us before downstream navigation tries to compete.
+  await page.waitForTimeout(2500);
 }
 
 /**
