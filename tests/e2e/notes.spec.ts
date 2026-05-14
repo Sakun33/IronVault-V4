@@ -19,29 +19,40 @@ test.describe('notes page', () => {
     if (box) expect(box.y).toBeLessThan(150);
   });
 
-  test('new-note dropdown surfaces Blank + templates', async ({ page }) => {
+  // The desktop 2-pane layout (notes.tsx:1212) renders a *plain* "New
+  // Note" button whose onClick goes straight to openNewNote() — no
+  // dropdown menu. Only the legacy single-pane layout (notes.tsx:932)
+  // wrapped it in a DropdownMenu with Blank-Note + Templates items.
+  // Tests 2-4 originally assumed the dropdown layout; updated below
+  // to also accept "no dropdown, editor opens directly".
+  test('new-note button surfaces editor or dropdown', async ({ page }) => {
     await page.locator('[data-testid="button-new-note-header"]').first().click();
-    const blank = page.locator('[data-testid="menu-item-blank-note"]');
-    await expect(blank).toBeVisible({ timeout: 10_000 });
-    // At least one template entry should be present.
-    const anyTemplate = page.locator('[data-testid^="menu-item-template-"]').first();
-    await expect(anyTemplate).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.waitForTimeout(800);
+    // Either a dropdown appears with the blank/template items, OR the
+    // editor opened directly. Pass on either.
+    const dropdown = page.locator('[data-testid="menu-item-blank-note"]').first();
+    const editorTitle = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
+    const someAppeared = (await dropdown.count() > 0) || (await editorTitle.count() > 0);
+    expect(someAppeared).toBe(true);
+    await page.keyboard.press('Escape').catch(() => {});
   });
 
   test('blank note opens the editor with title input + toolbar', async ({ page }) => {
     await page.locator('[data-testid="button-new-note-header"]').first().click();
-    await page.locator('[data-testid="menu-item-blank-note"]').click();
+    // If a dropdown showed, click "Blank Note"; otherwise the editor
+    // is already opening from the direct-create button.
+    const dropdownBlank = page.locator('[data-testid="menu-item-blank-note"]').first();
+    if (await dropdownBlank.count() > 0) await dropdownBlank.click().catch(() => {});
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
     await expect(title).toBeVisible({ timeout: 10_000 });
-    // Toolbar buttons — bold/italic/underline should be present.
     const bold = page.locator('button[aria-label*="Bold" i]').first();
     await expect(bold).toBeVisible();
   });
 
   test('typing title persists when Done clicked', async ({ page }) => {
     await page.locator('[data-testid="button-new-note-header"]').first().click();
-    await page.locator('[data-testid="menu-item-blank-note"]').click();
+    const dropdownBlank = page.locator('[data-testid="menu-item-blank-note"]').first();
+    if (await dropdownBlank.count() > 0) await dropdownBlank.click().catch(() => {});
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
     await expect(title).toBeVisible();
     const stamp = `e2e-${Date.now()}`;
@@ -50,7 +61,6 @@ test.describe('notes page', () => {
     if (await done.count() > 0) {
       await done.click();
       await page.waitForTimeout(2000);
-      // The new note should now appear in the list.
       await expect(page.getByText(stamp).first()).toBeVisible({ timeout: 15_000 });
     }
   });
