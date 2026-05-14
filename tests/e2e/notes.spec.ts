@@ -54,9 +54,10 @@ test.describe('notes page', () => {
   });
 
   test('search filters the notes list', async ({ page }) => {
-    const searchToggle = page.locator('button[aria-label*="Search" i]').first();
+    const searchToggle = page.locator('main button[aria-label*="Search" i]').first();
     if (await searchToggle.count() > 0) await searchToggle.click().catch(() => {});
-    const search = page.locator('input[placeholder*="Search" i]').first();
+    // Scope to <main> to avoid the global header search.
+    const search = page.locator('main input[placeholder*="Search" i]').first();
     if (await search.count() === 0) test.skip(true, 'search input not exposed in this viewport');
     await search.fill('zzzzzzzzz-no-match');
     await page.waitForTimeout(500);

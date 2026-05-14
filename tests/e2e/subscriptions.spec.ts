@@ -35,7 +35,8 @@ test.describe('subscriptions page', () => {
   });
 
   test('search filters the visible list', async ({ page }) => {
-    const search = page.locator('input[placeholder*="Search" i], input[type="search"]').first();
+    // Scope to <main> to avoid the global header search.
+    const search = page.locator('main input[placeholder*="Search" i], main input[type="search"]').first();
     if (await search.count() === 0) test.skip(true, 'search not in this viewport');
     await search.fill('zzzzzzzz-no-match');
     await page.waitForTimeout(500);

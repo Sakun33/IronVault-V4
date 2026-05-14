@@ -16,7 +16,10 @@ test.describe('passwords page', () => {
   });
 
   test('search input filters the visible list', async ({ page }) => {
-    const search = page.locator('input[placeholder*="Search" i], input[type="search"]').first();
+    // Scope to <main> so we hit the passwords-page search input
+    // (placeholder "Search passwords...") rather than the global
+    // header search ("Search passwords, subscriptions, notes...").
+    const search = page.locator('main input[placeholder*="Search" i], main input[type="search"]').first();
     await expect(search).toBeVisible();
     await search.fill('zzzzzzzzzz-no-match-zzzzzzz');
     await page.waitForTimeout(500);
