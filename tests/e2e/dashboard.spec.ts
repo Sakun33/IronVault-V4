@@ -11,8 +11,11 @@ test.describe('dashboard', () => {
   test('renders main shell + has greeting / heading', async ({ page }) => {
     await expect(page.locator('main, [role="main"]').first()).toBeVisible({ timeout: 20_000 });
     // Greeting / welcome / hello — match any of the common copy variants.
+    // `.or()` aggregates matches from both sides, so wrap with `.first()`
+    // to pick a single element under playwright strict-mode (a `<h1>`
+    // header is always present in addition to the greeting copy).
     const greeting = page.getByText(/welcome|hello|good (morning|afternoon|evening)|hi /i).first();
-    await expect(greeting.or(page.locator('h1').first())).toBeVisible();
+    await expect(greeting.or(page.locator('h1').first()).first()).toBeVisible();
   });
 
   test('stat cards visible (passwords / notes / subscriptions / expenses / reminders)', async ({ page }) => {
