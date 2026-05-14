@@ -10,7 +10,9 @@ test.describe('notes page', () => {
   });
 
   test('header New Note button is visible without scrolling', async ({ page }) => {
-    const header = page.locator('[data-testid="button-new-note-header"]');
+    // App renders the same testid in both panes of the two-panel
+    // notes layout — use .first() to pick the desktop header copy.
+    const header = page.locator('[data-testid="button-new-note-header"]').first();
     await expect(header).toBeVisible({ timeout: 20_000 });
     const box = await header.boundingBox();
     expect(box).not.toBeNull();
@@ -18,7 +20,7 @@ test.describe('notes page', () => {
   });
 
   test('new-note dropdown surfaces Blank + templates', async ({ page }) => {
-    await page.locator('[data-testid="button-new-note-header"]').click();
+    await page.locator('[data-testid="button-new-note-header"]').first().click();
     const blank = page.locator('[data-testid="menu-item-blank-note"]');
     await expect(blank).toBeVisible({ timeout: 10_000 });
     // At least one template entry should be present.
@@ -28,7 +30,7 @@ test.describe('notes page', () => {
   });
 
   test('blank note opens the editor with title input + toolbar', async ({ page }) => {
-    await page.locator('[data-testid="button-new-note-header"]').click();
+    await page.locator('[data-testid="button-new-note-header"]').first().click();
     await page.locator('[data-testid="menu-item-blank-note"]').click();
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
     await expect(title).toBeVisible({ timeout: 10_000 });
@@ -38,7 +40,7 @@ test.describe('notes page', () => {
   });
 
   test('typing title persists when Done clicked', async ({ page }) => {
-    await page.locator('[data-testid="button-new-note-header"]').click();
+    await page.locator('[data-testid="button-new-note-header"]').first().click();
     await page.locator('[data-testid="menu-item-blank-note"]').click();
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
     await expect(title).toBeVisible();
