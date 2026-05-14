@@ -53,8 +53,11 @@ test.describe('passwords page', () => {
   });
 
   test('add button opens the create-password dialog', async ({ page }) => {
+    // Source of truth: client/src/pages/passwords.tsx:366 →
+    // data-testid="add-password-button" (note the order — was reversed
+    // in the original locator).
     const addBtn = page.locator(
-      '[data-testid="button-add-password"], button[aria-label*="Add Password" i], button[title*="Add Password" i]',
+      '[data-testid="add-password-button"], [data-testid="button-add-password-fab"], button[aria-label*="Add Password" i], button[title*="Add Password" i]',
     ).first();
     await addBtn.scrollIntoViewIfNeeded().catch(() => {});
     await addBtn.click();
