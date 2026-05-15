@@ -708,13 +708,27 @@ export default function Notes() {
     const wrapper = desktopWrapperRef.current;
     if (!wrapper) return;
     const motionParent = wrapper.parentElement as HTMLElement | null;
+    // px-6 wrapper between motion.div and <main> — see App.tsx MainLayout.
+    // Without min-h-0 + flex-col here, the desktop two-pane's h-full
+    // collapses to content height and the sidebar list cannot scroll —
+    // it pushes the page itself instead of overflowing internally.
+    const layoutWrapper = motionParent?.parentElement as HTMLElement | null;
     const mainEl = wrapper.closest('main') as HTMLElement | null;
     const addedToMotion: string[] = [];
+    const addedToLayoutWrapper: string[] = [];
     if (motionParent) {
       ['h-full', 'min-h-0', 'flex', 'flex-col'].forEach(c => {
         if (!motionParent.classList.contains(c)) {
           motionParent.classList.add(c);
           addedToMotion.push(c);
+        }
+      });
+    }
+    if (layoutWrapper) {
+      ['min-h-0', 'flex', 'flex-col'].forEach(c => {
+        if (!layoutWrapper.classList.contains(c)) {
+          layoutWrapper.classList.add(c);
+          addedToLayoutWrapper.push(c);
         }
       });
     }
@@ -725,6 +739,7 @@ export default function Notes() {
     }
     return () => {
       if (motionParent) addedToMotion.forEach(c => motionParent.classList.remove(c));
+      if (layoutWrapper) addedToLayoutWrapper.forEach(c => layoutWrapper.classList.remove(c));
       if (mainEl) mainEl.style.overflowY = prevMainOverflow;
     };
   }, [isThreePane, isTwoPane]);

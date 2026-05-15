@@ -86,10 +86,13 @@ export function MobileSheet({
           </SheetHeader>
         )}
 
-        {/* Scrollable Content */}
+        {/* Scrollable Content — extra mobile bottom padding so the save
+            button at the end of a form (consumer-supplied children) clears
+            the fixed bottom tab bar and the device safe-area inset. */}
         <div className={cn(
           'flex-1 overflow-y-auto overflow-x-hidden',
-          'px-4 py-4',
+          'px-4 pt-4',
+          'pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:pb-4',
           'overscroll-contain',
           contentClassName
         )}>

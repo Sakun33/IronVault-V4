@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell } from 'lucide-react';
+import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell, CreditCard, UserCircle } from 'lucide-react';
 import { useLocation } from 'wouter';
 
 interface SearchResult {
   id: string;
-  type: 'password' | 'subscription' | 'note' | 'expense' | 'reminder';
+  type: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'card' | 'identity';
   title: string;
   subtitle?: string;
   href: string;
@@ -24,6 +24,8 @@ interface SearchModalProps {
     notes?: SearchResult[];
     expenses?: SearchResult[];
     reminders?: SearchResult[];
+    creditCards?: SearchResult[];
+    identities?: SearchResult[];
   };
   recentSearches?: string[];
   onClearRecentSearches?: () => void;
@@ -36,6 +38,8 @@ const typeConfig = {
   note: { icon: BookOpen, label: 'Notes', color: 'text-foreground' },
   expense: { icon: DollarSign, label: 'Expenses', color: 'text-foreground' },
   reminder: { icon: Bell, label: 'Reminders', color: 'text-foreground' },
+  card: { icon: CreditCard, label: 'Cards', color: 'text-sky-300' },
+  identity: { icon: UserCircle, label: 'Identities', color: 'text-violet-300' },
 };
 
 function SearchModalInner({
@@ -57,15 +61,28 @@ function SearchModalInner({
     }
   }, [open]);
 
-  // Dismiss on Escape — search overlay must not linger when user presses Esc.
+  // Flatten without overriding type — items already carry the correct singular type
+  const allResultsForKeys: SearchResult[] = Object.values(results).flatMap(items => items ?? []);
+
+  // Dismiss on Escape, submit on Enter (opens the first match). Earlier
+  // there was no Enter handler so pressing Enter felt like search was
+  // broken even when results were rendered.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onOpenChange(false); }
+      if (e.key === 'Escape') { e.preventDefault(); onOpenChange(false); return; }
+      if (e.key === 'Enter') {
+        const first = allResultsForKeys[0];
+        if (first) {
+          e.preventDefault();
+          onOpenChange(false);
+          navigate(first.href);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, allResultsForKeys, navigate]);
 
   const handleResultClick = (href: string) => {
     // Close the overlay BEFORE navigating so the result detail (modal opened
@@ -91,6 +108,8 @@ function SearchModalInner({
     note: results.notes?.length ?? 0,
     expense: results.expenses?.length ?? 0,
     reminder: results.reminders?.length ?? 0,
+    card: results.creditCards?.length ?? 0,
+    identity: results.identities?.length ?? 0,
   };
 
   if (!open) return null;

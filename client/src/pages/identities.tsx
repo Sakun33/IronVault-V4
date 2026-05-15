@@ -278,36 +278,47 @@ export default function Identities() {
             const theme = resolveTheme(i.type);
             const Icon = theme.icon;
             return (
-              <motion.button
+              // motion.div handles the stagger animation; a plain inner button
+              // owns the click handler. Earlier we used motion.button directly,
+              // but the variants+layout combination ate the click in some
+              // builds and the detail modal never opened — splitting them
+              // makes click semantics deterministic.
+              <motion.div
                 key={i.id}
-                type="button"
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
-                onClick={() => setDetail(i)}
-                className={`relative text-left rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-white/20 ring-1 ${theme.ring} p-4 transition-colors overflow-hidden group`}
-                data-testid={`identity-${i.id}`}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className="h-full"
               >
-                {/* Brand gradient corner accent */}
-                <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full bg-gradient-to-br ${theme.tile} opacity-30 blur-2xl pointer-events-none`} />
-                <div className="relative flex items-start gap-3">
-                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${theme.tile} flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/20`}>
-                    <Icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate text-foreground">{i.title}</div>
-                    <div className="text-xs text-muted-foreground truncate">{fullName(i)}</div>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium`}>
-                        {theme.label}
-                      </span>
-                      {i.documentNumber && (
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {maskMiddle(i.documentNumber)}
+                <button
+                  type="button"
+                  onClick={() => setDetail(i)}
+                  data-testid={`identity-${i.id}`}
+                  className={`w-full h-full relative text-left rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-white/20 ring-1 ${theme.ring} p-4 transition-colors overflow-hidden group cursor-pointer`}
+                >
+                  {/* Brand gradient corner accent — non-interactive */}
+                  <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full bg-gradient-to-br ${theme.tile} opacity-30 blur-2xl pointer-events-none`} aria-hidden />
+                  <div className="relative flex items-start gap-3">
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${theme.tile} flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/20`}>
+                      <Icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate text-foreground">{i.title}</div>
+                      <div className="text-xs text-muted-foreground truncate">{fullName(i)}</div>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium`}>
+                          {theme.label}
                         </span>
-                      )}
+                        {i.documentNumber && (
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {maskMiddle(i.documentNumber)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </motion.button>
+                </button>
+              </motion.div>
             );
           })}
         </motion.div>

@@ -77,10 +77,16 @@ export function MobileDialog({
           </div>
         </DialogHeader>
 
-        {/* Scrollable Content */}
+        {/* Scrollable Content.
+            Bottom padding on mobile clears both the device safe-area inset
+            AND the fixed bottom tab bar (~60px) so save/submit buttons that
+            live at the end of the form's children are always reachable.
+            Desktop falls back to py-4. The non-prefixed `pb-…` covers small
+            screens; `sm:pb-4` resets on >=640px where the tab bar is hidden. */}
         <div className={cn(
           'flex-1 overflow-y-auto overflow-x-hidden',
-          'px-4 py-4',
+          'px-4 pt-4',
+          'pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:pb-4',
           'overscroll-contain',
           contentClassName
         )}>

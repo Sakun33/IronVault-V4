@@ -165,7 +165,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const slideUp = makeSlideUp(reducedMotion);
   const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
   const notificationUserId = accountEmail || 'guest';
-  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders, creditCards, identities } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
@@ -1122,12 +1122,36 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             notes: (notes ?? [])
               .filter(n => n.title?.toLowerCase()?.includes(q) || n.content?.toLowerCase()?.includes(q))
               .map(n => ({ id: n.id, type: 'note' as const, title: n.title, href: `/notes?openId=${encodeURIComponent(n.id)}` })),
+            // ExpenseEntry schema uses `title`, not `description` — the older
+            // code read `(e as any).description` which is always undefined,
+            // so expenses never matched search. Read `title` first, with
+            // notes as a secondary haystack.
             expenses: (expenses ?? [])
-              .filter(e => (e as any).description?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q))
-              .map(e => ({ id: e.id, type: 'expense' as const, title: (e as any).description || e.category || 'Expense', subtitle: e.category, href: `/expenses?openId=${encodeURIComponent(e.id)}` })),
+              .filter(e => e.title?.toLowerCase()?.includes(q) || e.category?.toLowerCase()?.includes(q) || e.notes?.toLowerCase()?.includes(q))
+              .map(e => ({ id: e.id, type: 'expense' as const, title: e.title || e.category || 'Expense', subtitle: e.category, href: `/expenses?openId=${encodeURIComponent(e.id)}` })),
             reminders: (reminders ?? [])
               .filter(r => r.title?.toLowerCase()?.includes(q))
               .map(r => ({ id: r.id, type: 'reminder' as const, title: r.title, href: `/reminders?openId=${encodeURIComponent(r.id)}` })),
+            creditCards: (creditCards ?? [])
+              .filter(c => c.cardName?.toLowerCase()?.includes(q) || c.cardholderName?.toLowerCase()?.includes(q) || c.brand?.toLowerCase()?.includes(q))
+              .map(c => ({ id: c.id, type: 'card' as const, title: c.cardName, subtitle: c.cardholderName, href: `/cards?openId=${encodeURIComponent(c.id)}` })),
+            identities: (identities ?? [])
+              .filter(i => {
+                const fullName = [i.firstName, i.middleName, i.lastName].filter(Boolean).join(' ').toLowerCase();
+                return (
+                  i.title?.toLowerCase()?.includes(q) ||
+                  fullName.includes(q) ||
+                  i.documentNumber?.toLowerCase()?.includes(q) ||
+                  i.email?.toLowerCase()?.includes(q)
+                );
+              })
+              .map(i => ({
+                id: i.id,
+                type: 'identity' as const,
+                title: i.title,
+                subtitle: [i.firstName, i.lastName].filter(Boolean).join(' ') || undefined,
+                href: `/identities?openId=${encodeURIComponent(i.id)}`,
+              })),
           };
         })()}
       />
