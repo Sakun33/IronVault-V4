@@ -58,76 +58,100 @@ export async function login(page: Page): Promise<void> {
 const AUTHED_MARKER_SELECTOR =
   '[data-testid="dashboard-loading"], [data-testid="dashboard-today"], [data-testid="dashboard-action-bar"], [data-testid="text-greeting"], nav a[href="/passwords"], nav a[href="/notes"]';
 
-export async function unlockVault(page: Page): Promise<void> {
-  await login(page);
-  // The vault picker may already be visible. Wait up to 30s for the
-  // master password input — if we land straight on /dashboard (single
-  // vault, already unlocked) the input never renders and we return.
+/**
+ * Probes the post-storageState landing page and reports which entry
+ * point we're on. Saves significant per-test setup time by skipping
+ * stages that storageState already covered:
+ *
+ *   - 'authed'      → already unlocked (sessionStorage replay worked
+ *                     OR a single-vault auto-unlock fired). No work.
+ *   - 'picker'      → account-logged-in but vault locked (cookies +
+ *                     localStorage restored, but IndexedDB is empty
+ *                     in a fresh Playwright context so the
+ *                     auth-context's auto-unlock saw no vault blob
+ *                     and skipped the sessionStorage path).
+ *   - 'signed-out'  → clean context (auth/security/admin specs that
+ *                     opted out of storageState).
+ */
+async function detectEntry(page: Page): Promise<'authed' | 'picker' | 'signed-out'> {
+  await disableAutoLockOnPage(page);
+  await page.goto('/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  // Race the three signals — first one to surface wins.
+  const authedPromise = page.locator(AUTHED_MARKER_SELECTOR).first()
+    .waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'authed' as const).catch(() => null);
+  const pickerPromise = page.locator('input[data-testid="input-unlock-password"], input[placeholder*="Master password" i]').first()
+    .waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'picker' as const).catch(() => null);
+  const loginPromise = page.locator('input[type="email"]').first()
+    .waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'signed-out' as const).catch(() => null);
+  const winner = await Promise.race([authedPromise, pickerPromise, loginPromise]);
+  if (winner) return winner;
+  // None showed up — settle for whatever is there. Default to signed-out.
+  const stillAuthed = await page.locator(AUTHED_MARKER_SELECTOR).first().isVisible().catch(() => false);
+  if (stillAuthed) return 'authed';
+  const stillPicker = await page.locator('input[data-testid="input-unlock-password"]').first().isVisible().catch(() => false);
+  if (stillPicker) return 'picker';
+  return 'signed-out';
+}
+
+/**
+ * Enter the master password on a visible vault picker and wait for the
+ * authenticated shell. Shared between the medium-path (storageState
+ * landed us on the picker) and the slow path (full login → picker →
+ * unlock). Lifted out of unlockVault so both paths share the same
+ * detach + animation-tail handling.
+ */
+async function fillMasterPasswordAndUnlock(page: Page): Promise<void> {
   const masterInput = page.locator(
     'input[data-testid="input-unlock-password"], input[data-testid="input-master-password"], input[type="password"]'
   ).first();
-  try {
-    await masterInput.waitFor({ state: 'visible', timeout: 30_000 });
-  } catch {
-    // Already on the authenticated surface — verify with a marker that
-    // does NOT also appear on the vault picker (the picker has <main>,
-    // so the previous looser fallback bounced through silently when
-    // unlock failed to even surface its input).
-    await page.locator(AUTHED_MARKER_SELECTOR).first()
-      .waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-    return;
-  }
+  await masterInput.waitFor({ state: 'visible', timeout: 30_000 });
   await masterInput.fill(TEST_MASTER_PASSWORD);
-  // Sanity check: confirm the fill landed. Headless Chromium has been
-  // observed (rarely) to no-op fills when the input is briefly
-  // re-mounted by a cloudVaults refresh between waitFor and fill.
   let typed = await masterInput.inputValue().catch(() => '');
   if (typed !== TEST_MASTER_PASSWORD) {
     await masterInput.click({ force: true }).catch(() => {});
     await masterInput.fill(TEST_MASTER_PASSWORD);
-    typed = await masterInput.inputValue().catch(() => '');
   }
-  // Cloud-vault unlock has its own testid — match either, and a generic
-  // text fallback for legacy renders.
-  const unlockBtn = page
-    .locator(
-      '[data-testid="button-unlock-cloud-vault"], [data-testid="button-unlock-vault"], button:has-text("Unlock"), button[type="submit"]'
-    )
-    .first();
+  const unlockBtn = page.locator(
+    '[data-testid="button-unlock-cloud-vault"], [data-testid="button-unlock-vault"], button:has-text("Unlock"), button[type="submit"]'
+  ).first();
   await unlockBtn.click();
-  // Wait for the master-password input to detach (signal that the
-  // VaultPicker has been replaced by the authenticated layout). The
-  // SPA stays on `/` after unlock — we can't rely on URL change.
-  // Cloud unlock = Downloading + PBKDF2 600k + Decrypting + animation;
-  // on slow runners this can clear 60s easily. Give it 120s.
-  const detachedRes = await masterInput.waitFor({ state: 'detached', timeout: 120_000 }).then(() => 'detached').catch(() => 'still-attached');
-  if (detachedRes === 'still-attached') {
-    // Unlock didn't complete on first try — re-fill (state may have been
-    // reset by a cloud-vault list re-fetch) and click again. The cloud
-    // unlock path bails out instantly with "Please enter your master
-    // password" if the controlled input ended up empty, which mimics a
-    // long-running unlock from the helper's POV.
+  const detached = await masterInput.waitFor({ state: 'detached', timeout: 120_000 })
+    .then(() => true).catch(() => false);
+  if (!detached) {
     await masterInput.fill(TEST_MASTER_PASSWORD).catch(() => {});
     await unlockBtn.click().catch(() => {});
     await masterInput.waitFor({ state: 'detached', timeout: 120_000 }).catch(() => {});
   }
-  // Belt + braces: confirm we landed on an authenticated surface by
-  // waiting for a marker that only renders post-unlock. Without this,
-  // a slow cloud unlock leaves the picker rendered and the next
-  // spaNavigate() ends up bounced back to the picker by the route
-  // guard, causing the test to fail seeking dashboard content.
   await page.locator(AUTHED_MARKER_SELECTOR).first()
     .waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
-  // Settle through handleCloudUnlock's tail: the unlock function calls
-  // `loginWithoutVerification(pw)` (→ isUnlocked=true → VaultPicker
-  // unmounts → master input detaches → authedMarker visible) BEFORE
-  // running its 1.8 s success animation and the final `setLocation('/')`.
-  // If we return now, the caller's spaNavigate('/passwords') runs first
-  // and is immediately overridden when the trailing setLocation('/')
-  // fires, bouncing the test back to the dashboard. Sit out the
-  // animation + a slack buffer so that final route change is already
-  // behind us before downstream navigation tries to compete.
+  // Sit out the unlock animation tail + the final setLocation('/') —
+  // see helpers.ts:120 history comment.
   await page.waitForTimeout(2500);
+}
+
+export async function unlockVault(page: Page): Promise<void> {
+  const entry = await detectEntry(page);
+  if (entry === 'authed') return;
+  if (entry === 'picker') {
+    // Account login was preserved by storageState — just unlock.
+    await fillMasterPasswordAndUnlock(page);
+    return;
+  }
+  // 'signed-out' — full flow.
+  await login(page);
+  // login() lands on either vault picker or straight on the dashboard.
+  // If we're at the picker, finish the unlock; if we're already in the
+  // authed shell, fillMasterPasswordAndUnlock's first waitFor will time
+  // out and we just confirm the marker.
+  const stillNeedsUnlock = await page.locator(
+    'input[data-testid="input-unlock-password"], input[data-testid="input-master-password"]',
+  ).first().isVisible().catch(() => false);
+  if (stillNeedsUnlock) {
+    await fillMasterPasswordAndUnlock(page);
+  } else {
+    await page.locator(AUTHED_MARKER_SELECTOR).first()
+      .waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  }
 }
 
 /**

@@ -15,7 +15,7 @@
  *  - 5 API Keys (to reach 6 total)
  */
 
-import { test as base, type Page, type BrowserContext } from '@playwright/test';
+import { test as base, type Page, type BrowserContext } from './fixtures';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const BASE_URL       = 'https://www.ironvault.app';

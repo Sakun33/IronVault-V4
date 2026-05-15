@@ -14,7 +14,7 @@ import {
   expect,
   type Page,
   type BrowserContext,
-} from '@playwright/test';
+} from './fixtures';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BASE_URL = 'https://www.ironvault.app';

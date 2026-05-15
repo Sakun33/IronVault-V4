@@ -2,7 +2,7 @@
  * IronVault Deep Pass — GAPs 2, 3, 4, 5, 7, 8
  * Runs against https://www.ironvault.app
  */
-import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from './fixtures';
 
 const BASE = 'https://www.ironvault.app';
 const TEST_EMAIL = 'saketsuman1312@gmail.com';

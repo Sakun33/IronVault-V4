@@ -1,5 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { unlockVault, spaNavigate, TEST_EMAIL } from './helpers';
+
+// Most tests here assert UNAUTHENTICATED behavior (login-form fuzzing,
+// public-surface lands, API auth gating). Override the user storageState
+// so they start on a clean context. The XSS-in-note-title test calls
+// `unlockVault` which pays the full login+unlock toll — that's fine
+// for one test.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('security — input fuzzing', () => {
   test('SQL-injection-shaped payload in email is sanitized at the form level', async ({ page }) => {

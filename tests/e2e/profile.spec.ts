@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { unlockVault, spaNavigate, expectNoHorizontalOverflow } from './helpers';
 
 test.describe('profile page', () => {

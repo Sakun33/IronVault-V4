@@ -1,5 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { login, unlockVault, TEST_EMAIL, TEST_MASTER_PASSWORD } from './helpers';
+
+// Auth tests assert the LOGIN FLOW itself; they must start from a
+// signed-out context. Override the global user storageState.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('auth — login flows', () => {
   test('valid credentials reach vault picker or dashboard', async ({ page }) => {

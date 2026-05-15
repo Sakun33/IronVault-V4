@@ -19,6 +19,11 @@
 
 import { test, expect, type Page } from '@playwright/test';
 
+// Admin specs target admin.ironvault.app as `admin / admin123`. Override
+// the globally-configured user storageState so the admin origin sees a
+// clean context — the main-app user identity must not leak across origins.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 const ADMIN_URL = 'https://admin.ironvault.app';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'admin123';

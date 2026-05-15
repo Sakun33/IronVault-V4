@@ -16,7 +16,7 @@
  *   IRONVAULT_E2E_PASSWORD=...
  *   IRONVAULT_E2E_MASTER_PASSWORD=...
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page } from './fixtures';
 
 const EMAIL = process.env.IRONVAULT_E2E_EMAIL || '';
 const PASSWORD = process.env.IRONVAULT_E2E_PASSWORD || '';

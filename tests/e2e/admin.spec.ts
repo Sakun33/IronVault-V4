@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+// Admin specs target admin.ironvault.app — clean storageState so the
+// main-app user identity from playwright.config.ts doesn't leak across
+// origins.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * Admin console smoke tests against https://admin.ironvault.app.
  * The admin app is a separate origin so we override `baseURL` per test.
