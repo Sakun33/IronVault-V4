@@ -60,6 +60,8 @@ const Investments = React.lazy(() => import("@/pages/investments"));
 const Goals = React.lazy(() => import("@/pages/goals"));
 const Documents = React.lazy(() => import("@/pages/documents"));
 const APIKeys = React.lazy(() => import("@/pages/api-keys"));
+const CreditCards = React.lazy(() => import("@/pages/credit-cards"));
+const Identities = React.lazy(() => import("@/pages/identities"));
 const Profile = React.lazy(() => import("@/pages/profile"));
 const Settings = React.lazy(() => import("@/pages/settings"));
 const Integrations = React.lazy(() => import("@/pages/integrations"));
@@ -126,7 +128,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -394,6 +396,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'notes', label: 'Notes', icon: BookOpen, count: stats.totalNotes, limitLabel: isPro ? null : `${stats.totalNotes}/${getLimit('notes')}`, color: 'text-orange-600', requiresPro: false, alertBadge: null },
     { id: 'documents', label: 'Documents', icon: FileText, count: null, color: 'text-indigo-600', requiresPro: true, alertBadge: null },
     { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true, alertBadge: null },
+    { id: 'cards', label: 'Cards', icon: CardIcon, count: null, color: 'text-sky-600', requiresPro: false, alertBadge: null },
+    { id: 'identities', label: 'Identities', icon: UserCircle, count: null, color: 'text-violet-600', requiresPro: false, alertBadge: null },
   ];
   // Finance items (second section)
   const financeNavItems = [
@@ -435,6 +439,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'notes', label: 'Notes', icon: BookOpen, href: '/notes', group: 'vault', count: stats.totalNotes },
     { id: 'documents', label: 'Documents', icon: FileText, href: '/documents', group: 'vault' },
     { id: 'api-keys', label: 'API Keys', icon: Shield, href: '/api-keys', group: 'vault' },
+    { id: 'cards', label: 'Cards', icon: CardIcon, href: '/cards', group: 'vault' },
+    { id: 'identities', label: 'Identities', icon: UserCircle, href: '/identities', group: 'vault' },
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
@@ -1347,6 +1353,8 @@ function Router() {
       <Route path="/profile"><MainLayout><Profile /></MainLayout></Route>
       <Route path="/documents"><MainLayout><Documents /></MainLayout></Route>
       <Route path="/api-keys"><MainLayout><APIKeys /></MainLayout></Route>
+      <Route path="/cards"><MainLayout><CreditCards /></MainLayout></Route>
+      <Route path="/identities"><MainLayout><Identities /></MainLayout></Route>
       <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
       <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
       <Route path="/integrations"><MainLayout><Integrations /></MainLayout></Route>

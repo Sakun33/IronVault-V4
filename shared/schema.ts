@@ -345,7 +345,96 @@ export const passwordEntrySchema = z.object({
     password: z.string(),
     changedAt: z.string(),
   })).optional(),
+  // TOTP secret for 2FA. Accepts either a raw base32 secret or a full
+  // `otpauth://` URI; the consumer (totp util) extracts the secret param.
+  totp: z.string().optional(),
 });
+
+// Credit / debit card entries stored in IndexedDB (client-side only).
+export const creditCardSchema = z.object({
+  id: z.string(),
+  cardName: z.string().min(1, 'Card name is required'),
+  cardholderName: z.string().min(1, 'Cardholder name is required'),
+  cardNumber: z.string().min(12, 'Card number must be at least 12 digits'),
+  // Two-digit month + two/four-digit year, stored as separate strings to
+  // sidestep timezone/Date parsing pain when round-tripping through JSON.
+  expiryMonth: z.string().min(1),
+  expiryYear: z.string().min(2),
+  cvv: z.string().optional(),
+  brand: z.enum([
+    'visa', 'mastercard', 'amex', 'discover', 'rupay', 'diners', 'jcb', 'unionpay', 'other',
+  ]).default('other'),
+  type: z.enum(['credit', 'debit', 'prepaid']).default('credit'),
+  // Hex tile color for the visual card. Picker lives in the add/edit modal.
+  color: z.string().default('#1f2937'),
+  pin: z.string().optional(),
+  notes: z.string().optional(),
+  billingZip: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+// Identity entries — driver's licence, passport, SSN, etc. All fields are
+// optional except a title because identities vary wildly by jurisdiction.
+export const identitySchema = z.object({
+  id: z.string(),
+  title: z.string().min(1, 'Title is required'),
+  type: z.enum([
+    'passport', 'driver_license', 'national_id', 'ssn', 'tax_id',
+    'address', 'contact', 'other',
+  ]).default('other'),
+  firstName: z.string().optional(),
+  middleName: z.string().optional(),
+  lastName: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  gender: z.string().optional(),
+  // Document fields. Sensitive ones (number) are masked in card view.
+  documentNumber: z.string().optional(),
+  issuingCountry: z.string().optional(),
+  issueDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  // Address fields
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
+  // Contact fields
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+export type CreditCard = z.infer<typeof creditCardSchema>;
+export type Identity = z.infer<typeof identitySchema>;
+
+export const CREDIT_CARD_BRANDS = [
+  { value: 'visa',       label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'amex',       label: 'American Express' },
+  { value: 'discover',   label: 'Discover' },
+  { value: 'rupay',      label: 'RuPay' },
+  { value: 'diners',     label: 'Diners Club' },
+  { value: 'jcb',        label: 'JCB' },
+  { value: 'unionpay',   label: 'UnionPay' },
+  { value: 'other',      label: 'Other' },
+] as const;
+
+export const IDENTITY_TYPES = [
+  { value: 'passport',        label: 'Passport' },
+  { value: 'driver_license',  label: "Driver's Licence" },
+  { value: 'national_id',     label: 'National ID' },
+  { value: 'ssn',             label: 'Social Security' },
+  { value: 'tax_id',          label: 'Tax ID' },
+  { value: 'address',         label: 'Address' },
+  { value: 'contact',         label: 'Contact' },
+  { value: 'other',           label: 'Other' },
+] as const;
 
 // Subscription entries stored in IndexedDB (client-side only)
 export const subscriptionEntrySchema = z.object({

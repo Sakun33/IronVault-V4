@@ -39,6 +39,7 @@ const blankForm = () => ({
   password: '',
   category: '',
   notes: '',
+  totp: '',
 });
 
 export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPasswordModalProps) {
@@ -63,6 +64,7 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
           password: editingPassword.password || (!editingPassword.id ? generateDefaultPassword() : ''),
           category: editingPassword.category || '',
           notes: editingPassword.notes || '',
+          totp: editingPassword.totp || '',
         });
       } else {
         setFormData({
@@ -304,6 +306,23 @@ export function AddPasswordModal({ open, onOpenChange, editingPassword }: AddPas
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="totp">TOTP Secret (Optional)</Label>
+            <Input
+              id="totp"
+              placeholder="Base32 secret or otpauth:// URI"
+              value={formData.totp}
+              onChange={(e) => setFormData(prev => ({ ...prev, totp: e.target.value }))}
+              autoComplete="off"
+              spellCheck={false}
+              data-testid="input-totp"
+              className="font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Paste from the QR code's setup screen. IronVault generates the 6-digit code when you open this entry.
+            </p>
           </div>
 
           <div className="space-y-2">

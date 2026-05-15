@@ -563,7 +563,7 @@ export class VaultStorage {
         const collectionKeys = [
           'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
           'bankStatements', 'bankTransactions', 'investments', 'investmentGoals',
-          'apiKeys',
+          'apiKeys', 'creditCards', 'identities',
         ];
         const hasAnyCollection = collectionKeys.some(k => Array.isArray((payload as any)[k]));
         if (!hasAnyCollection) {
@@ -635,6 +635,7 @@ export class VaultStorage {
     const [
       passwords, subscriptions, notes, expenses, reminders,
       bankStatements, bankTransactions, investments, investmentGoals, apiKeys,
+      creditCards, identities,
     ] = await Promise.all([
       this.getAllPasswords(),
       this.getAllSubscriptions(),
@@ -646,6 +647,8 @@ export class VaultStorage {
       this.getAllInvestments(),
       this.getAllInvestmentGoals(),
       this.getAllApiKeys(),
+      this.getAllCreditCards(),
+      this.getAllIdentities(),
     ]);
     return {
       passwords: passwords.length,
@@ -658,6 +661,8 @@ export class VaultStorage {
       investments: investments.length,
       investmentGoals: investmentGoals.length,
       apiKeys: apiKeys.length,
+      creditCards: creditCards.length,
+      identities: identities.length,
     };
   }
 
@@ -1059,6 +1064,62 @@ export class VaultStorage {
     });
   }
 
+  // Credit Card methods — encrypted_data with store='creditCards' (mirrors apiKeys).
+  async saveCreditCard(card: any): Promise<void> {
+    await this.encryptAndStore('creditCards', card);
+  }
+
+  async getCreditCard(id: string): Promise<any | undefined> {
+    return this.decryptAndRetrieve('creditCards', id);
+  }
+
+  async getAllCreditCards(): Promise<any[]> {
+    return this.getAllEncrypted('creditCards');
+  }
+
+  async deleteCreditCard(id: string): Promise<void> {
+    this.assertVaultSelected();
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => {
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  // Identity methods — encrypted_data with store='identities'.
+  async saveIdentity(identity: any): Promise<void> {
+    await this.encryptAndStore('identities', identity);
+  }
+
+  async getIdentity(id: string): Promise<any | undefined> {
+    return this.decryptAndRetrieve('identities', id);
+  }
+
+  async getAllIdentities(): Promise<any[]> {
+    return this.getAllEncrypted('identities');
+  }
+
+  async deleteIdentity(id: string): Promise<void> {
+    this.assertVaultSelected();
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = transaction.objectStore('encrypted_data');
+      const request = store.delete(id);
+      request.onsuccess = () => {
+        window.dispatchEvent(new CustomEvent('vault:item:saved'));
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Export vault data
   // CRITICAL: every store must be read in parallel and the entire export must
   // fail if ANY store read throws. A silently-empty array for a store would
@@ -1077,6 +1138,8 @@ export class VaultStorage {
       investments,
       investmentGoals,
       apiKeys,
+      creditCards,
+      identities,
       metadata,
     ] = await Promise.all([
       this.getAllPasswords(),
@@ -1089,6 +1152,8 @@ export class VaultStorage {
       this.getAllInvestments(),
       this.getAllInvestmentGoals(),
       this.getAllApiKeys(),
+      this.getAllCreditCards(),
+      this.getAllIdentities(),
       this.getMetadata(),
     ]);
 
@@ -1103,9 +1168,11 @@ export class VaultStorage {
       investments,
       investmentGoals,
       apiKeys,
+      creditCards,
+      identities,
       metadata,
       exportedAt: new Date(),
-      version: 3, // v3: includes apiKeys round-trip
+      version: 4, // v4: adds creditCards + identities
     };
 
     const salt = CryptoService.generateSalt();
@@ -1259,6 +1326,8 @@ export class VaultStorage {
         ...(importData.bankStatements ?? []).map((s: any) => this.saveBankStatement(s)),
         ...(importData.bankTransactions ?? []).map((t: any) => this.saveBankTransaction(t)),
         ...(importData.apiKeys ?? []).map((k: any) => this.saveApiKey(k)),
+        ...(importData.creditCards ?? []).map((c: any) => this.saveCreditCard(c)),
+        ...(importData.identities ?? []).map((i: any) => this.saveIdentity(i)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);

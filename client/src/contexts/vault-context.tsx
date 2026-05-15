@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal } from '@shared/schema';
+import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity } from '@shared/schema';
 import { vaultStorage } from '@/lib/storage';
 import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
 import { useAuth } from './auth-context';
@@ -108,6 +108,16 @@ interface VaultContextType {
   updateApiKey: (id: string, updates: any) => Promise<void>;
   deleteApiKey: (id: string) => Promise<void>;
   bulkDeleteApiKeys: (ids: string[]) => Promise<number>;
+  // Credit Cards CRUD
+  creditCards: CreditCard[];
+  addCreditCard: (card: Omit<CreditCard, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateCreditCard: (id: string, updates: Partial<CreditCard>) => Promise<void>;
+  deleteCreditCard: (id: string) => Promise<void>;
+  // Identities CRUD
+  identities: Identity[];
+  addIdentity: (identity: Omit<Identity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateIdentity: (id: string, updates: Partial<Identity>) => Promise<void>;
+  deleteIdentity: (id: string) => Promise<void>;
   importBankStatementsFromCSV: (csvContent: string, currency?: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -168,6 +178,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [investmentGoals, setInvestmentGoals] = useState<InvestmentGoal[]>([]);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [identities, setIdentities] = useState<Identity[]>([]);
   // Splitwise-style entries live in a separate IDB store and a separate hook
   // (use-shared-expenses). Mirror just the count here so the sidebar/badge
   // counts in stats.totalExpenses reflect both legacy + shared entries
@@ -203,6 +215,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setBankTransactions([]);
       setInvestments([]);
       setInvestmentGoals([]);
+      setCreditCards([]);
+      setIdentities([]);
       setSharedExpensesCount(0);
     }
   }, [isUnlocked]);
@@ -511,7 +525,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
       // Always refresh data to ensure we have the latest from storage
 
-      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData, sharedExpensesData] = await Promise.all([
+      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData, creditCardsData, identitiesData, sharedExpensesData] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
         vaultStorage.getAllNotes(),
@@ -522,6 +536,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllInvestments(),
         vaultStorage.getAllInvestmentGoals(),
         vaultStorage.getAllApiKeys(),
+        vaultStorage.getAllCreditCards().catch(() => [] as any[]),
+        vaultStorage.getAllIdentities().catch(() => [] as any[]),
         vaultStorage.getAllSharedExpenses().catch(() => [] as any[]),
       ]);
 
@@ -537,6 +553,8 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInvestments(investmentsData.map(hydrateDates));
       setInvestmentGoals(investmentGoalsData.map(hydrateDates));
       setApiKeys(apiKeysData.map(hydrateDates));
+      setCreditCards(creditCardsData.map(hydrateDates));
+      setIdentities(identitiesData.map(hydrateDates));
       setSharedExpensesCount(sharedExpensesData.length);
 
     } catch (error) {
@@ -1042,6 +1060,64 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
+  // ── Credit Cards CRUD ──────────────────────────────────────────────────
+  const addCreditCard = async (card: Omit<CreditCard, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newCard: CreditCard = {
+      ...card,
+      id: crypto.randomUUID(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as CreditCard;
+    await vaultStorage.saveCreditCard(newCard);
+    setCreditCards(prev => [...prev, newCard]);
+    addLog('Add Card', 'system', `Added card "${newCard.cardName}"`);
+    pushToCloud();
+  };
+
+  const updateCreditCard = async (id: string, updates: Partial<CreditCard>) => {
+    const existing = creditCards.find(c => c.id === id);
+    if (!existing) return;
+    const updated: CreditCard = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveCreditCard(updated);
+    setCreditCards(prev => prev.map(c => c.id === id ? updated : c));
+    pushToCloud();
+  };
+
+  const deleteCreditCard = async (id: string) => {
+    await vaultStorage.deleteCreditCard(id);
+    setCreditCards(prev => prev.filter(c => c.id !== id));
+    pushToCloud();
+  };
+
+  // ── Identities CRUD ────────────────────────────────────────────────────
+  const addIdentity = async (identity: Omit<Identity, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newIdentity: Identity = {
+      ...identity,
+      id: crypto.randomUUID(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Identity;
+    await vaultStorage.saveIdentity(newIdentity);
+    setIdentities(prev => [...prev, newIdentity]);
+    addLog('Add Identity', 'system', `Added identity "${newIdentity.title}"`);
+    pushToCloud();
+  };
+
+  const updateIdentity = async (id: string, updates: Partial<Identity>) => {
+    const existing = identities.find(i => i.id === id);
+    if (!existing) return;
+    const updated: Identity = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveIdentity(updated);
+    setIdentities(prev => prev.map(i => i.id === id ? updated : i));
+    pushToCloud();
+  };
+
+  const deleteIdentity = async (id: string) => {
+    await vaultStorage.deleteIdentity(id);
+    setIdentities(prev => prev.filter(i => i.id !== id));
+    pushToCloud();
+  };
+
   const importBankStatementsFromCSV = async (csvContent: string, currency?: string) => {
     try {
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent, currency);
@@ -1457,6 +1533,14 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     updateApiKey,
     deleteApiKey: deleteApiKeyFromVault,
     bulkDeleteApiKeys,
+    creditCards,
+    addCreditCard,
+    updateCreditCard,
+    deleteCreditCard,
+    identities,
+    addIdentity,
+    updateIdentity,
+    deleteIdentity,
     importBankStatementsFromCSV,
     exportVault,
     importVault,

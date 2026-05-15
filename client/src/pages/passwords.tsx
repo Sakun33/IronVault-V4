@@ -26,6 +26,103 @@ import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
 import { copyToClipboardSecure } from '@/native/clipboard';
+import { generateTotp, totpTimeRemaining } from '@/lib/totp';
+
+// Renders the live 6-digit TOTP code with a 30s countdown. Pulled out into
+// its own component so the detail-modal IIFE doesn't need to host its own
+// hooks (illegal — IIFEs aren't React components and break the rules-of-hooks).
+function TotpRow({
+  secret,
+  onCopy,
+  copied,
+}: {
+  secret: string;
+  onCopy: (code: string) => void;
+  copied: boolean;
+}) {
+  const [code, setCode] = useState<string | null>(() => generateTotp(secret));
+  const [remaining, setRemaining] = useState<number>(() => totpTimeRemaining());
+
+  useEffect(() => {
+    setCode(generateTotp(secret));
+    setRemaining(totpTimeRemaining());
+    const t = setInterval(() => {
+      const r = totpTimeRemaining();
+      setRemaining(r);
+      // Refresh the code when the period rolls over.
+      if (r >= 29) setCode(generateTotp(secret));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [secret]);
+
+  if (!code) {
+    return (
+      <div className="rounded-xl bg-muted/50 px-4 py-3" data-testid="totp-invalid">
+        <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Authenticator code</div>
+        <div className="text-[12px] text-destructive">Invalid TOTP secret — couldn't generate a code.</div>
+      </div>
+    );
+  }
+
+  const pct = Math.max(0, Math.min(100, (remaining / 30) * 100));
+  const formatted = `${code.slice(0, 3)} ${code.slice(3)}`;
+  const lowTime = remaining <= 5;
+
+  return (
+    <div className="rounded-xl bg-muted/50 px-4 py-3" data-testid="totp-section">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">
+            Authenticator code
+          </div>
+          <div
+            className={`font-mono text-xl tracking-widest tabular-nums ${lowTime ? 'text-red-500' : 'text-foreground'}`}
+            data-testid="totp-code"
+          >
+            {formatted}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="relative w-7 h-7" aria-hidden="true">
+            <svg viewBox="0 0 36 36" className="w-7 h-7">
+              <circle
+                cx="18" cy="18" r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                className="text-muted-foreground/20"
+              />
+              <circle
+                cx="18" cy="18" r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeDasharray={`${(pct / 100) * 87.96} 87.96`}
+                strokeLinecap="round"
+                transform="rotate(-90 18 18)"
+                className={lowTime ? 'text-red-500' : 'text-primary'}
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] tabular-nums">
+              {remaining}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onCopy(code)}
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+            aria-label="Copy authenticator code"
+            data-testid="copy-totp"
+          >
+            {copied
+              ? <CheckCircle size={15} className="text-primary" />
+              : <Copy size={15} className="text-muted-foreground" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Passwords() {
   const { passwords, deletePassword, bulkDeletePasswords, updatePassword, isLoading } = useVault();
@@ -844,6 +941,15 @@ export default function Passwords() {
                     </button>
                   </div>
                 </div>
+
+                {/* Authenticator (TOTP) — only if a secret was saved */}
+                {pw.totp && (
+                  <TotpRow
+                    secret={pw.totp}
+                    copied={copiedId === `${pw.id}-totp`}
+                    onCopy={(c) => copyToClipboard(c, `${pw.id}-totp`, 'Authenticator code')}
+                  />
+                )}
 
                 {/* URL */}
                 {pw.url && (() => {
