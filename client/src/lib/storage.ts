@@ -684,6 +684,7 @@ export class VaultStorage {
         payload.passwords, payload.subscriptions, payload.notes, payload.expenses,
         payload.reminders, payload.bankStatements, payload.bankTransactions,
         payload.investments, payload.investmentGoals, payload.apiKeys,
+        payload.creditCards, payload.identities,
       ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
       return lengths.reduce((a, b) => a + b, 0);
     } catch {

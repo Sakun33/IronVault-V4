@@ -114,7 +114,12 @@ const DialogBody = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 py-4 space-y-4",
+      // Bottom padding on mobile clears the bottom tab bar (~60px) + the
+      // device safe-area inset so save/submit buttons inside any dialog
+      // body never sit underneath the fixed bottom nav on iOS/Android.
+      // Desktop falls back to a normal py-4 since the tab bar is hidden.
+      "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 pt-4 space-y-4",
+      "pb-[calc(env(safe-area-inset-bottom)+5rem)] sm:pb-4",
       className
     )}
     {...props}
