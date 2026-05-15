@@ -38,23 +38,31 @@ test.describe('notes page', () => {
   });
 
   test('blank note opens the editor with title input + toolbar', async ({ page }) => {
-    await page.locator('[data-testid="button-new-note-header"]').first().click();
+    // The button is `disabled={upgradeBlocked}` (notes.tsx:1215), which is
+    // briefly true during initial plan hydration. Without this wait the
+    // first click can hit the still-disabled button and silently no-op,
+    // leaving the editor closed and the test failing for missing title.
+    const newBtn = page.locator('[data-testid="button-new-note-header"]').first();
+    await expect(newBtn).toBeEnabled({ timeout: 15_000 });
+    await newBtn.click();
     // If a dropdown showed, click "Blank Note"; otherwise the editor
     // is already opening from the direct-create button.
     const dropdownBlank = page.locator('[data-testid="menu-item-blank-note"]').first();
     if (await dropdownBlank.count() > 0) await dropdownBlank.click().catch(() => {});
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
-    await expect(title).toBeVisible({ timeout: 10_000 });
+    await expect(title).toBeVisible({ timeout: 15_000 });
     const bold = page.locator('button[aria-label*="Bold" i]').first();
     await expect(bold).toBeVisible();
   });
 
   test('typing title persists when Done clicked', async ({ page }) => {
-    await page.locator('[data-testid="button-new-note-header"]').first().click();
+    const newBtn = page.locator('[data-testid="button-new-note-header"]').first();
+    await expect(newBtn).toBeEnabled({ timeout: 15_000 });
+    await newBtn.click();
     const dropdownBlank = page.locator('[data-testid="menu-item-blank-note"]').first();
     if (await dropdownBlank.count() > 0) await dropdownBlank.click().catch(() => {});
     const title = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
-    await expect(title).toBeVisible();
+    await expect(title).toBeVisible({ timeout: 15_000 });
     const stamp = `e2e-${Date.now()}`;
     await title.fill(stamp);
     const done = page.locator('[data-testid="button-editor-done"], button:has-text("Done")').first();
