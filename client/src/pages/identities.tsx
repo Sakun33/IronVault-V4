@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/use-subscription';
+import { FeaturePreview } from '@/components/feature-preview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,9 +16,54 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, Search, UserCircle, Mail, Phone, MapPin, FileText as FileTextIcon } from 'lucide-react';
+import {
+  Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, Search, UserCircle, Mail,
+  Phone, MapPin, FileText as FileTextIcon, Building2, Sparkles,
+} from 'lucide-react';
 import { IDENTITY_TYPES, type Identity } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
+
+// Identity-type → visual treatment. Personal=violet, Work=blue, Custom=emerald.
+// `tile` powers the gradient on each card; `ring` and `text` tint the type pill.
+type IdentityTypeKey = 'personal' | 'work' | 'custom';
+const TYPE_THEME: Record<IdentityTypeKey, {
+  tile: string;
+  ring: string;
+  text: string;
+  badgeBg: string;
+  label: string;
+  icon: typeof UserCircle;
+}> = {
+  personal: {
+    tile:    'from-violet-600/90 via-purple-600/85 to-fuchsia-600/80',
+    ring:    'ring-violet-400/30',
+    text:    'text-violet-300',
+    badgeBg: 'bg-violet-500/15',
+    label:   'Personal',
+    icon:    UserCircle,
+  },
+  work: {
+    tile:    'from-blue-600/90 via-sky-600/85 to-cyan-600/80',
+    ring:    'ring-blue-400/30',
+    text:    'text-blue-300',
+    badgeBg: 'bg-blue-500/15',
+    label:   'Work',
+    icon:    Building2,
+  },
+  custom: {
+    tile:    'from-emerald-600/90 via-teal-600/85 to-cyan-600/80',
+    ring:    'ring-emerald-400/30',
+    text:    'text-emerald-300',
+    badgeBg: 'bg-emerald-500/15',
+    label:   'Custom',
+    icon:    Sparkles,
+  },
+};
+
+function resolveTheme(t: string | undefined): typeof TYPE_THEME[IdentityTypeKey] {
+  const key = (t as IdentityTypeKey) || 'personal';
+  return TYPE_THEME[key] ?? TYPE_THEME.custom;
+}
 
 function maskMiddle(value: string | undefined): string {
   if (!value) return '—';
@@ -28,20 +76,9 @@ function fullName(i: Identity): string {
   return [i.firstName, i.middleName, i.lastName].filter(Boolean).join(' ') || i.title;
 }
 
-const TYPE_ICONS: Record<string, typeof UserCircle> = {
-  passport: UserCircle,
-  driver_license: UserCircle,
-  national_id: UserCircle,
-  ssn: FileTextIcon,
-  tax_id: FileTextIcon,
-  address: MapPin,
-  contact: Phone,
-  other: UserCircle,
-};
-
 const blank = (): Omit<Identity, 'id' | 'createdAt' | 'updatedAt'> => ({
   title: '',
-  type: 'other',
+  type: 'personal',
   firstName: '',
   middleName: '',
   lastName: '',
@@ -65,6 +102,7 @@ const blank = (): Omit<Identity, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function Identities() {
   const { identities, addIdentity, updateIdentity, deleteIdentity } = useVault();
   const { toast } = useToast();
+  const { isPro, isLoading: planLoading } = useSubscription();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -85,6 +123,24 @@ export default function Identities() {
       (i.email || '').toLowerCase().includes(q)
     );
   }, [identities, searchQuery]);
+
+  // Free-plan soft paywall. The teams.tsx / credit-cards.tsx pattern: render
+  // FeaturePreview instead of the CRUD surface for free users. Guard placed
+  // AFTER hooks so the hook order stays stable across renders.
+  if (!planLoading && !isPro) {
+    return (
+      <FeaturePreview
+        feature="Identities"
+        description="Store passports, licences, addresses, and contact details in one encrypted vault — categorized Personal, Work, or Custom."
+        bullets={[
+          'Glassmorphism cards grouped by Personal / Work / Custom',
+          'Sensitive fields masked by default with reveal + copy controls',
+          'Document numbers, addresses, and contact info all in one place',
+        ]}
+        mock="api-keys"
+      />
+    );
+  }
 
   const openAdd = () => {
     setEditing(null);
@@ -173,53 +229,14 @@ export default function Identities() {
     }
   };
 
-  // Sensitive field row used in the detail modal. Reveal / copy controls live
-  // in here so they apply consistently to document number, SSN, etc.
-  const SensitiveRow = ({ id, label, value }: { id: string; label: string; value: string | undefined }) => {
-    if (!value) return null;
-    const isVisible = revealed.has(id);
-    return (
-      <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
-          <div className="font-mono text-[14px] truncate">{isVisible ? value : maskMiddle(value)}</div>
-        </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <button type="button" onClick={() => toggleReveal(id)} className="p-1.5 rounded-lg hover:bg-muted">
-            {isVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-          </button>
-          <button type="button" onClick={() => copy(value, id, label)} className="p-1.5 rounded-lg hover:bg-muted">
-            {copiedKey === id ? <CheckCircle size={15} className="text-primary" /> : <Copy size={15} className="text-muted-foreground" />}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const PlainRow = ({ id, label, value, icon: Icon }: { id: string; label: string; value: string | undefined; icon?: typeof Mail }) => {
-    if (!value) return null;
-    return (
-      <div className="rounded-xl bg-muted/50 px-4 py-3 flex items-center justify-between gap-2">
-        <div className="min-w-0 flex items-start gap-2">
-          {Icon && <Icon size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />}
-          <div className="min-w-0">
-            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
-            <div className="text-[14px] truncate">{value}</div>
-          </div>
-        </div>
-        <button type="button" onClick={() => copy(value, id, label)} className="p-1.5 rounded-lg hover:bg-muted flex-shrink-0">
-          {copiedKey === id ? <CheckCircle size={15} className="text-primary" /> : <Copy size={15} className="text-muted-foreground" />}
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Identities</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{identities.length} {identities.length === 1 ? 'identity' : 'identities'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {identities.length} {identities.length === 1 ? 'identity' : 'identities'}
+          </p>
         </div>
         <Button onClick={openAdd} size="sm" className="rounded-xl" data-testid="add-identity-button">
           <Plus className="w-4 h-4 mr-1" />
@@ -243,7 +260,7 @@ export default function Identities() {
           <UserCircle className="w-10 h-10 mx-auto text-muted-foreground/60" />
           <h3 className="mt-3 text-sm font-semibold">No identities yet</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Store passports, licences, addresses, and other ID documents securely.
+            Store passports, licences, addresses, and contacts categorized by Personal, Work, or Custom.
           </p>
           <Button onClick={openAdd} size="sm" className="mt-4 rounded-xl">
             <Plus className="w-4 h-4 mr-1" />
@@ -251,102 +268,163 @@ export default function Identities() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <motion.div
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+        >
           {filtered.map(i => {
-            const Icon = TYPE_ICONS[i.type] || UserCircle;
-            const typeLabel = IDENTITY_TYPES.find(t => t.value === i.type)?.label ?? 'Other';
+            const theme = resolveTheme(i.type);
+            const Icon = theme.icon;
             return (
-              <button
+              <motion.button
                 key={i.id}
                 type="button"
+                variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                 onClick={() => setDetail(i)}
-                className="text-left rounded-2xl border border-border bg-card hover:bg-accent/30 transition-colors p-4 flex items-start gap-3"
+                className={`relative text-left rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-white/20 ring-1 ${theme.ring} p-4 transition-colors overflow-hidden group`}
                 data-testid={`identity-${i.id}`}
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/15 to-violet-500/15 ring-1 ring-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-5 h-5 text-indigo-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">{i.title}</div>
-                  <div className="text-xs text-muted-foreground truncate">{fullName(i)}</div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{typeLabel}</span>
-                    {i.documentNumber && <span className="font-mono text-[11px] text-muted-foreground">{maskMiddle(i.documentNumber)}</span>}
+                {/* Brand gradient corner accent */}
+                <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full bg-gradient-to-br ${theme.tile} opacity-30 blur-2xl pointer-events-none`} />
+                <div className="relative flex items-start gap-3">
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${theme.tile} flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/20`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate text-foreground">{i.title}</div>
+                    <div className="text-xs text-muted-foreground truncate">{fullName(i)}</div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium`}>
+                        {theme.label}
+                      </span>
+                      {i.documentNumber && (
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          {maskMiddle(i.documentNumber)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </button>
+              </motion.button>
             );
           })}
-        </div>
+        </motion.div>
       )}
 
       {/* Detail modal */}
-      {detail && (
-        <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="truncate">{detail.title}</DialogTitle>
-            </DialogHeader>
-            <DialogBody className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/15 to-violet-500/15 ring-1 ring-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                  {(() => {
-                    const Icon = TYPE_ICONS[detail.type] || UserCircle;
-                    return <Icon className="w-6 h-6 text-indigo-500" />;
-                  })()}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{fullName(detail)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {IDENTITY_TYPES.find(t => t.value === detail.type)?.label}
+      {detail && (() => {
+        const theme = resolveTheme(detail.type);
+        const Icon = theme.icon;
+        // Are any of the document fields present? Drives whether the Documents
+        // section renders.
+        const hasDocs = !!(detail.documentNumber || detail.issuingCountry || detail.issueDate || detail.expiryDate);
+        const hasAddress = !!(detail.addressLine1 || detail.city || detail.country || detail.postalCode);
+        const hasContact = !!(detail.email || detail.phone);
+        const hasPersonal = !!(detail.firstName || detail.lastName || detail.middleName || detail.dateOfBirth || detail.gender);
+        return (
+          <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null); }}>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${theme.tile} flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/20`}>
+                    <Icon className="w-5 h-5 text-white" />
                   </div>
+                  <span className="truncate flex-1">{detail.title}</span>
+                  <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium flex-shrink-0`}>
+                    {theme.label}
+                  </span>
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="space-y-4">
+                {hasPersonal && (
+                  <Section title="Personal Info">
+                    <PlainRow id={`${detail.id}-name`} label="Full name" value={fullName(detail)} icon={UserCircle} copy={copy} copiedKey={copiedKey} />
+                    <PlainRow id={`${detail.id}-dob`}  label="Date of birth" value={detail.dateOfBirth} copy={copy} copiedKey={copiedKey} />
+                    <PlainRow id={`${detail.id}-gender`} label="Gender" value={detail.gender} copy={copy} copiedKey={copiedKey} />
+                  </Section>
+                )}
+
+                {hasContact && (
+                  <Section title="Contact">
+                    <PlainRow id={`${detail.id}-email`} label="Email" value={detail.email} icon={Mail} copy={copy} copiedKey={copiedKey} />
+                    <PlainRow id={`${detail.id}-phone`} label="Phone" value={detail.phone} icon={Phone} copy={copy} copiedKey={copiedKey} />
+                  </Section>
+                )}
+
+                {hasAddress && (
+                  <Section title="Address">
+                    <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 backdrop-blur-sm">
+                      <div className="flex items-start gap-2">
+                        <MapPin size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                            Postal address
+                          </div>
+                          <div className="text-[14px] whitespace-pre-line">
+                            {[
+                              detail.addressLine1,
+                              detail.addressLine2,
+                              [detail.city, detail.state, detail.postalCode].filter(Boolean).join(', '),
+                              detail.country,
+                            ].filter(Boolean).join('\n')}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const formatted = [
+                              detail.addressLine1, detail.addressLine2,
+                              [detail.city, detail.state, detail.postalCode].filter(Boolean).join(', '),
+                              detail.country,
+                            ].filter(Boolean).join(', ');
+                            copy(formatted, `${detail.id}-addr`, 'Address');
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+                          aria-label="Copy address"
+                        >
+                          {copiedKey === `${detail.id}-addr`
+                            ? <CheckCircle size={15} className="text-primary" />
+                            : <Copy size={15} className="text-muted-foreground" />}
+                        </button>
+                      </div>
+                    </div>
+                  </Section>
+                )}
+
+                {hasDocs && (
+                  <Section title="Documents">
+                    <SensitiveRow id={`${detail.id}-docnum`} label="Document number" value={detail.documentNumber} revealed={revealed} toggleReveal={toggleReveal} copy={copy} copiedKey={copiedKey} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <PlainRow id={`${detail.id}-issuer`} label="Issuer" value={detail.issuingCountry} copy={copy} copiedKey={copiedKey} compact />
+                      <PlainRow id={`${detail.id}-issue`}  label="Issued" value={detail.issueDate} copy={copy} copiedKey={copiedKey} compact />
+                    </div>
+                    <PlainRow id={`${detail.id}-expiry`} label="Expires" value={detail.expiryDate} copy={copy} copiedKey={copiedKey} />
+                  </Section>
+                )}
+
+                {detail.notes && (
+                  <Section title="Notes">
+                    <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 backdrop-blur-sm">
+                      <div className="text-[14px] whitespace-pre-wrap">{detail.notes}</div>
+                    </div>
+                  </Section>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => openEdit(detail)} data-testid={`edit-identity-${detail.id}`}>
+                    <Edit size={14} className="mr-1.5" /> Edit
+                  </Button>
+                  <Button variant="outline" className="flex-1 rounded-xl text-destructive border-destructive/30" onClick={() => setDeleteId(detail.id)} data-testid={`delete-identity-${detail.id}`}>
+                    <Trash2 size={14} className="mr-1.5" /> Delete
+                  </Button>
                 </div>
-              </div>
-
-              <SensitiveRow id={`${detail.id}-docnum`} label="Document Number" value={detail.documentNumber} />
-              <PlainRow id={`${detail.id}-dob`} label="Date of Birth" value={detail.dateOfBirth} />
-              <PlainRow id={`${detail.id}-issuer`} label="Issuing Country" value={detail.issuingCountry} />
-              <div className="grid grid-cols-2 gap-2">
-                <PlainRow id={`${detail.id}-issue`} label="Issue Date" value={detail.issueDate} />
-                <PlainRow id={`${detail.id}-expiry`} label="Expiry Date" value={detail.expiryDate} />
-              </div>
-
-              <PlainRow id={`${detail.id}-email`} label="Email" value={detail.email} icon={Mail} />
-              <PlainRow id={`${detail.id}-phone`} label="Phone" value={detail.phone} icon={Phone} />
-
-              {(detail.addressLine1 || detail.city) && (
-                <div className="rounded-xl bg-muted/50 px-4 py-3">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Address</div>
-                  <div className="text-[14px] whitespace-pre-line">
-                    {[
-                      detail.addressLine1,
-                      detail.addressLine2,
-                      [detail.city, detail.state, detail.postalCode].filter(Boolean).join(', '),
-                      detail.country,
-                    ].filter(Boolean).join('\n')}
-                  </div>
-                </div>
-              )}
-
-              {detail.notes && (
-                <div className="rounded-xl bg-muted/50 px-4 py-3">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Notes</div>
-                  <div className="text-[14px] whitespace-pre-wrap">{detail.notes}</div>
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => openEdit(detail)} data-testid={`edit-identity-${detail.id}`}>
-                  <Edit size={14} className="mr-1.5" /> Edit
-                </Button>
-                <Button variant="outline" className="flex-1 rounded-xl text-destructive border-destructive/30" onClick={() => setDeleteId(detail.id)} data-testid={`delete-identity-${detail.id}`}>
-                  <Trash2 size={14} className="mr-1.5" /> Delete
-                </Button>
-              </div>
-            </DialogBody>
-          </DialogContent>
-        </Dialog>
-      )}
+              </DialogBody>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Add/Edit modal */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
@@ -355,85 +433,92 @@ export default function Identities() {
             <DialogTitle>{editing ? 'Edit Identity' : 'Add Identity'}</DialogTitle>
           </DialogHeader>
           <DialogBody>
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="id-title">Title *</Label>
-                <Input id="id-title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="My Passport" data-testid="input-identity-title" />
+                <Input
+                  id="id-title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g. Home, Office, Visa Application"
+                  data-testid="input-identity-title"
+                />
               </div>
+
+              {/* Type picker — three big tinted tiles match the card visual */}
               <div className="space-y-1.5">
                 <Label>Type</Label>
-                <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as any })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {IDENTITY_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1.5">
-                  <Label>First Name</Label>
-                  <Input value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Middle</Label>
-                  <Input value={formData.middleName} onChange={(e) => setFormData({ ...formData, middleName: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Last Name</Label>
-                  <Input value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label>Date of Birth</Label>
-                  <Input type="date" value={formData.dateOfBirth} onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Gender</Label>
-                  <Input value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} />
+                <div className="grid grid-cols-3 gap-2">
+                  {IDENTITY_TYPES.map(t => {
+                    const theme = resolveTheme(t.value);
+                    const Icon = theme.icon;
+                    const active = formData.type === t.value;
+                    return (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, type: t.value })}
+                        aria-pressed={active}
+                        className={`relative rounded-xl border p-3 text-left transition-all overflow-hidden ${active ? `border-white/30 bg-gradient-to-br ${theme.tile} text-white shadow-lg` : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                        data-testid={`identity-type-${t.value}`}
+                      >
+                        <Icon className={`w-5 h-5 mb-1 ${active ? 'text-white' : 'text-muted-foreground'}`} />
+                        <div className={`text-xs font-semibold ${active ? 'text-white' : 'text-foreground'}`}>{t.label}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+
+              <FormSection title="Personal Info">
+                <div className="grid grid-cols-3 gap-2">
+                  <FormField label="First Name" value={formData.firstName} onChange={(v) => setFormData({ ...formData, firstName: v })} />
+                  <FormField label="Middle"     value={formData.middleName} onChange={(v) => setFormData({ ...formData, middleName: v })} />
+                  <FormField label="Last Name"  value={formData.lastName}   onChange={(v) => setFormData({ ...formData, lastName: v })} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField label="Date of Birth" type="date" value={formData.dateOfBirth} onChange={(v) => setFormData({ ...formData, dateOfBirth: v })} />
+                  <FormField label="Gender" value={formData.gender} onChange={(v) => setFormData({ ...formData, gender: v })} />
+                </div>
+              </FormSection>
+
+              <FormSection title="Contact">
+                <FormField label="Email" type="email" value={formData.email} onChange={(v) => setFormData({ ...formData, email: v })} />
+                <FormField label="Phone" value={formData.phone} onChange={(v) => setFormData({ ...formData, phone: v })} />
+              </FormSection>
+
+              <FormSection title="Address">
+                <FormField label="Address line 1" value={formData.addressLine1} onChange={(v) => setFormData({ ...formData, addressLine1: v })} />
+                <FormField label="Address line 2" value={formData.addressLine2} onChange={(v) => setFormData({ ...formData, addressLine2: v })} />
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField label="City"   value={formData.city}   onChange={(v) => setFormData({ ...formData, city: v })} />
+                  <FormField label="State"  value={formData.state}  onChange={(v) => setFormData({ ...formData, state: v })} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField label="Postal code" value={formData.postalCode} onChange={(v) => setFormData({ ...formData, postalCode: v })} />
+                  <FormField label="Country"     value={formData.country}    onChange={(v) => setFormData({ ...formData, country: v })} />
+                </div>
+              </FormSection>
+
+              <FormSection title="Documents">
+                <FormField label="Document number" value={formData.documentNumber} onChange={(v) => setFormData({ ...formData, documentNumber: v })} mono autoComplete="off" />
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField label="Issuer / Country" value={formData.issuingCountry} onChange={(v) => setFormData({ ...formData, issuingCountry: v })} />
+                  <FormField label="Issue date" type="date" value={formData.issueDate} onChange={(v) => setFormData({ ...formData, issueDate: v })} />
+                </div>
+                <FormField label="Expiry date" type="date" value={formData.expiryDate} onChange={(v) => setFormData({ ...formData, expiryDate: v })} />
+              </FormSection>
+
               <div className="space-y-1.5">
-                <Label>Document Number</Label>
-                <Input value={formData.documentNumber} onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })} className="font-mono" autoComplete="off" />
+                <Label htmlFor="id-notes">Notes</Label>
+                <Textarea id="id-notes" rows={2} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label>Issuing Country</Label>
-                  <Input value={formData.issuingCountry} onChange={(e) => setFormData({ ...formData, issuingCountry: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Expiry Date</Label>
-                  <Input type="date" value={formData.expiryDate} onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Address line 1</Label>
-                <Input value={formData.addressLine1} onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} placeholder="City" />
-                <Input value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} placeholder="State" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input value={formData.postalCode} onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })} placeholder="Postal code" />
-                <Input value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} placeholder="Country" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Textarea rows={2} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
-              </div>
+
               <div className="flex gap-2 pt-1">
                 <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={() => setShowAddModal(false)}>Cancel</Button>
-                <Button type="submit" className="flex-1 rounded-xl" data-testid="save-identity-button">{editing ? 'Save' : 'Add Identity'}</Button>
+                <Button type="submit" className="flex-1 rounded-xl" data-testid="save-identity-button">
+                  {editing ? 'Save' : 'Add Identity'}
+                </Button>
               </div>
             </form>
           </DialogBody>
@@ -452,6 +537,135 @@ export default function Identities() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── Sub-components (defined outside the page component so React doesn't
+// remount the whole subtree on every parent state change) ──────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium px-1">{title}</div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium border-t border-white/5 pt-3">
+        {title}
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function FormField({
+  label, value, onChange, type, mono, autoComplete,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (v: string) => void;
+  type?: string;
+  mono?: boolean;
+  autoComplete?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type={type ?? 'text'}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className={mono ? 'font-mono' : undefined}
+        autoComplete={autoComplete}
+      />
+    </div>
+  );
+}
+
+function PlainRow({
+  id, label, value, icon: Icon, copy, copiedKey, compact,
+}: {
+  id: string;
+  label: string;
+  value: string | undefined;
+  icon?: typeof Mail;
+  copy: (text: string, key: string, label: string) => void;
+  copiedKey: string | null;
+  compact?: boolean;
+}) {
+  if (!value) return null;
+  return (
+    <div className={`rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm flex items-center justify-between gap-2 ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+      <div className="min-w-0 flex items-start gap-2">
+        {Icon && <Icon size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />}
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
+          <div className="text-[14px] truncate">{value}</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => copy(value, id, label)}
+        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+        aria-label={`Copy ${label}`}
+      >
+        {copiedKey === id
+          ? <CheckCircle size={15} className="text-primary" />
+          : <Copy size={15} className="text-muted-foreground" />}
+      </button>
+    </div>
+  );
+}
+
+function SensitiveRow({
+  id, label, value, revealed, toggleReveal, copy, copiedKey,
+}: {
+  id: string;
+  label: string;
+  value: string | undefined;
+  revealed: Set<string>;
+  toggleReveal: (key: string) => void;
+  copy: (text: string, key: string, label: string) => void;
+  copiedKey: string | null;
+}) {
+  if (!value) return null;
+  const isVisible = revealed.has(id);
+  return (
+    <div className="rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm px-4 py-3 flex items-center justify-between gap-2">
+      <div className="min-w-0 flex items-start gap-2">
+        <FileTextIcon size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
+          <div className="font-mono text-[14px] truncate">{isVisible ? value : maskMiddle(value)}</div>
+        </div>
+      </div>
+      <div className="flex gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => toggleReveal(id)}
+          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          aria-pressed={isVisible}
+          aria-label={isVisible ? `Hide ${label}` : `Show ${label}`}
+        >
+          {isVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy(value, id, label)}
+          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          aria-label={`Copy ${label}`}
+        >
+          {copiedKey === id
+            ? <CheckCircle size={15} className="text-primary" />
+            : <Copy size={15} className="text-muted-foreground" />}
+        </button>
+      </div>
     </div>
   );
 }

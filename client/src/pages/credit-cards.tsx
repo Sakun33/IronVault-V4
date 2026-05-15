@@ -16,6 +16,8 @@ import {
 import { Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, CreditCard as CardIcon, Search } from 'lucide-react';
 import { CREDIT_CARD_BRANDS, type CreditCard } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
+import { useSubscription } from '@/hooks/use-subscription';
+import { FeaturePreview } from '@/components/feature-preview';
 
 const BRAND_GRADIENTS: Record<string, string> = {
   visa:       'from-blue-700 via-blue-600 to-blue-500',
@@ -61,6 +63,26 @@ const blank = (): Omit<CreditCard, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function CreditCards() {
   const { creditCards, addCreditCard, updateCreditCard, deleteCreditCard } = useVault();
   const { toast } = useToast();
+  const { isPro, isLoading: planLoading } = useSubscription();
+
+  // Free-plan paywall — render the soft preview instead of a working CRUD
+  // surface. License-context may still be loading on first paint; we keep
+  // the page blank in that gap rather than flashing the paywall to a paid
+  // user (matches the teams.tsx pattern).
+  if (!planLoading && !isPro) {
+    return (
+      <FeaturePreview
+        feature="Credit & Debit Cards"
+        description="Store cards securely with brand-coloured tiles, masked numbers, and one-tap copy for checkout."
+        bullets={[
+          'Visual gradient tiles — instantly spot the right card',
+          'Reveal/copy card number, CVV, and PIN with 30s clipboard auto-clear',
+          'Sync encrypted across all your devices',
+        ]}
+        mock="api-keys"
+      />
+    );
+  }
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);

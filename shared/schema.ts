@@ -270,6 +270,8 @@ export const planCapabilities = {
     maxSubscriptions: 10,
     maxNotes: 10,
     maxReminders: 3,
+    maxCreditCards: 0,
+    maxIdentities: 0,
     documentsEnabled: false,
     bankStatementsEnabled: false,
     analyticsEnabled: false,
@@ -281,6 +283,8 @@ export const planCapabilities = {
     maxSubscriptions: -1,
     maxNotes: -1,
     maxReminders: -1,
+    maxCreditCards: -1,
+    maxIdentities: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -294,6 +298,8 @@ export const planCapabilities = {
     maxSubscriptions: -1,
     maxNotes: -1,
     maxReminders: -1,
+    maxCreditCards: -1,
+    maxIdentities: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -305,6 +311,8 @@ export const planCapabilities = {
     maxSubscriptions: -1,
     maxNotes: -1,
     maxReminders: -1,
+    maxCreditCards: -1,
+    maxIdentities: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -316,6 +324,8 @@ export const planCapabilities = {
     maxSubscriptions: -1,
     maxNotes: -1,
     maxReminders: -1,
+    maxCreditCards: -1,
+    maxIdentities: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -375,15 +385,17 @@ export const creditCardSchema = z.object({
   updatedAt: z.date().default(() => new Date()),
 });
 
-// Identity entries — driver's licence, passport, SSN, etc. All fields are
-// optional except a title because identities vary wildly by jurisdiction.
+// Identity entries — a full personal-info record (name, address, contact,
+// optional documents). Each identity is tagged Personal / Work / Custom for
+// visual grouping; individual document fields (passport, SSN, licence) live
+// inside the identity rather than being separate identity types.
 export const identitySchema = z.object({
   id: z.string(),
   title: z.string().min(1, 'Title is required'),
-  type: z.enum([
-    'passport', 'driver_license', 'national_id', 'ssn', 'tax_id',
-    'address', 'contact', 'other',
-  ]).default('other'),
+  // Accept any string so legacy records (passport/driver_license/etc.) from
+  // an earlier schema revision still parse. The UI only treats personal /
+  // work / custom specially; anything else falls back to the custom tile.
+  type: z.string().default('personal'),
   firstName: z.string().optional(),
   middleName: z.string().optional(),
   lastName: z.string().optional(),
@@ -426,14 +438,9 @@ export const CREDIT_CARD_BRANDS = [
 ] as const;
 
 export const IDENTITY_TYPES = [
-  { value: 'passport',        label: 'Passport' },
-  { value: 'driver_license',  label: "Driver's Licence" },
-  { value: 'national_id',     label: 'National ID' },
-  { value: 'ssn',             label: 'Social Security' },
-  { value: 'tax_id',          label: 'Tax ID' },
-  { value: 'address',         label: 'Address' },
-  { value: 'contact',         label: 'Contact' },
-  { value: 'other',           label: 'Other' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'work',     label: 'Work' },
+  { value: 'custom',   label: 'Custom' },
 ] as const;
 
 // Subscription entries stored in IndexedDB (client-side only)

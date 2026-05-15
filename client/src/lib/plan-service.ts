@@ -46,6 +46,12 @@ const FREE_LIMITS: Record<string, number> = {
   reminders: 10,
   investments: 0,
   bankStatements: 0,
+  // Whole-feature paywalls — Free users get the soft-paywall preview, not a
+  // working CRUD surface. Mirrors the apiKeys / expenses / bankStatements
+  // pattern above so plan-service.getLimit() returns 0 for any caller
+  // that asks for headroom on these.
+  creditCards: 0,
+  identities: 0,
   vaults: 1,
   storageMB: 50,
   goals: 3,
