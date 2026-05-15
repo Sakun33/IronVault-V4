@@ -59,18 +59,28 @@ test.describe('profile page', () => {
     const securityTab = page.getByRole('tab', { name: /security/i }).first();
     if (await securityTab.count() > 0) await securityTab.click();
     await page.waitForTimeout(500);
-    const trigger = page.getByRole('button', { name: /change.*master password|master password.*change/i }).first();
+    // The card's heading reads "Change Master Passcode" (not Password) and
+    // the button itself only renders the word "Change" — match by testid
+    // (profile.tsx:2452) with a label-based fallback for legacy renders.
+    const trigger = page.locator(
+      '[data-testid="button-open-change-master-password"], button:near(:text("Change Master Passcode"))',
+    ).first();
     if (await trigger.count() === 0) test.skip(true, 'change-master-password trigger not present');
-    await expect(trigger).toBeVisible();
+    await trigger.scrollIntoViewIfNeeded().catch(() => {});
+    await expect(trigger).toBeVisible({ timeout: 10_000 });
   });
 
   test('account deletion entry-point exists', async ({ page }) => {
-    const dangerTab = page.getByRole('tab', { name: /security|data|account/i }).first();
-    if (await dangerTab.count() > 0) await dangerTab.click();
-    await page.waitForTimeout(500);
+    // Tab list order: Overview, Vaults, Subscription, Data, Support, Security.
+    // .first() with /security|data|account/ picked "Data" — Delete Account
+    // lives in the Security tab's "Data Management" card (profile.tsx:2892).
+    const securityTab = page.getByRole('tab', { name: /^security$/i }).first();
+    if (await securityTab.count() > 0) await securityTab.click();
+    await page.waitForTimeout(1000);
     const deleteBtn = page.getByRole('button', { name: /delete account|remove account/i }).first();
     if (await deleteBtn.count() === 0) test.skip(true, 'no delete-account button surfaced');
-    await expect(deleteBtn).toBeVisible();
+    await deleteBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await expect(deleteBtn).toBeVisible({ timeout: 10_000 });
   });
 
   test('no horizontal overflow', async ({ page }) => {
