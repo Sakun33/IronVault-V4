@@ -25,8 +25,12 @@ test.describe('security — input fuzzing', () => {
     const headerBtn = page.locator('[data-testid="button-new-note-header"]').first();
     if (await headerBtn.count() === 0) test.skip(true, 'header New Note button not present on this layout');
     await headerBtn.click();
-    await page.locator('[data-testid="menu-item-blank-note"]').click();
+    // Desktop 2-pane layout opens the editor directly; legacy layout
+    // surfaces a Blank-Note dropdown item — handle either.
+    const dropdownBlank = page.locator('[data-testid="menu-item-blank-note"]').first();
+    if (await dropdownBlank.count() > 0) await dropdownBlank.click().catch(() => {});
     const titleInput = page.locator('input[aria-label="Note title"], input[placeholder*="Untitled" i]').first();
+    await expect(titleInput).toBeVisible({ timeout: 10_000 });
     await titleInput.fill('<img src=x onerror=alert(1)> e2e-xss');
     await page.waitForTimeout(1500);
     expect(alertFired).toBe(false);

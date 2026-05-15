@@ -30,8 +30,12 @@ test.describe('expenses page', () => {
   });
 
   test('add expense button opens the form', async ({ page }) => {
+    // Scope to <main> — the global "Quick Add" button in the header has
+    // a lucide-plus icon and DOM-matches before the page-level add
+    // button. Without `main`, .first() picks the offscreen Quick Add and
+    // hangs waiting for it to be visible.
     const addBtn = page.locator(
-      '[data-testid="button-add-expense-header"], [data-testid="button-add-first-expense"], button:has-text("Add expense"), button[aria-label*="Add" i]:has-text("Expense"), button:has(svg.lucide-plus)',
+      'main [data-testid="button-add-expense-header"], main [data-testid="button-add-first-expense"], main button:has-text("Add expense"), main button[aria-label*="Add" i]:has-text("Expense")',
     ).first();
     await addBtn.click();
     const dialog = page.locator('[role="dialog"]:has-text("expense"), [data-testid="add-expense-modal"]').first();
@@ -41,7 +45,7 @@ test.describe('expenses page', () => {
 
   test('add expense form has title + amount + split selector', async ({ page }) => {
     const addBtn = page.locator(
-      '[data-testid="button-add-expense-header"], [data-testid="button-add-first-expense"], button:has-text("Add expense")',
+      'main [data-testid="button-add-expense-header"], main [data-testid="button-add-first-expense"], main button:has-text("Add expense")',
     ).first();
     if (await addBtn.count() === 0) test.skip(true, 'no add expense entry visible here');
     await addBtn.click();
