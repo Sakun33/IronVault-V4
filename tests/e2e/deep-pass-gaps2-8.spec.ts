@@ -253,9 +253,25 @@ test.describe('GAP 7: Error States', () => {
       await vaultPw.fill('wrongpassword123!');
       await page.keyboard.press('Enter');
       await page.waitForTimeout(1500);
-      const bodyText = await page.locator('body').textContent();
-      const showsError = bodyText.includes('incorrect') || bodyText.includes('wrong') || bodyText.includes('Invalid') || bodyText.includes('error') || bodyText.includes('Error');
-      const notUnlocked = !bodyText.includes('Dashboard') && !bodyText.includes('Passwords') && !bodyText.includes('vault');
+      const bodyText = (await page.locator('body').textContent()) ?? '';
+      const showsError = /incorrect|wrong|invalid|error/i.test(bodyText);
+      // "notUnlocked" means: we're still on the vault picker, NOT in the
+      // authenticated shell. The picker page legitimately contains the word
+      // "vault" everywhere ("Your Vaults", "Cloud Vaults", "Unlock Vault"),
+      // so we can't grep for that. Detect the still-locked state by the
+      // continued presence of the master-password input + the absence of
+      // post-unlock-only chrome (sidebar Dashboard / quick-actions row).
+      const stillOnPicker = await page
+        .locator('input[data-testid="input-unlock-password"], input[placeholder*="Master password" i]')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const unlockedShell = await page
+        .locator('[data-testid="dashboard-greeting"], nav a[href="/passwords"], main:has-text("Quick Actions")')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const notUnlocked = stillOnPicker && !unlockedShell;
       expect(showsError || notUnlocked, 'Wrong vault password should show error or not unlock').toBeTruthy();
     }
   });
