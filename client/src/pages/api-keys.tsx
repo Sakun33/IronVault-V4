@@ -25,6 +25,7 @@ import { ListSkeleton } from '@/components/list-skeleton';
 import { ViewToggle } from '@/components/view-toggle';
 import { SwipeRow, type SwipeAction } from '@/components/ios';
 import { scheduleCredentialExpiryNotification } from '@/native/notifications';
+import { PageHero } from '@/components/page-hero';
 
 interface APIKey {
   id: string;
@@ -394,44 +395,23 @@ export default function APIKeys() {
   // ── Locked screen ──────────────────────────────────────────────────────────
   if (!isUnlocked) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 24 }}
-          className="w-full max-w-sm"
-        >
-          <Card className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-md border border-white/10">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10" />
-            <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full bg-emerald-500/20 blur-3xl" />
-            <CardHeader className="relative pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Shield className="w-5 h-5 text-emerald-300" /> API Keys Vault
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="relative space-y-4">
-              <div className="text-center space-y-2 py-2">
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_24px_-4px_rgba(16,185,129,0.5)]">
-                  <Lock className="w-7 h-7 text-emerald-300" />
-                </div>
-                <h3 className="font-semibold text-white">Vault Locked</h3>
-                <p className="text-sm text-white/60">Verify your identity to access API keys</p>
-              </div>
-              <Button
-                onClick={() => setShowVerifyModal(true)}
-                className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold shadow-[0_0_20px_-4px_rgba(16,185,129,0.5)] border-0"
-              >
-                <Lock className="w-4 h-4 mr-2" /> Unlock Vault
-              </Button>
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-white/5 border border-white/10">
-                <AlertCircle className="w-4 h-4 text-emerald-300 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-white/60">
-                  API keys are encrypted and require your master password or biometrics. The vault auto-locks after 5 minutes.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+      <>
+        <PageHero
+          icon={Key}
+          title="API Keys"
+          subtitle="Encrypted credentials, ready when you are. Verify your identity to unlock."
+          badges={[
+            { icon: <Lock className="w-3 h-3" />,         label: 'AES-256' },
+            { icon: <ShieldCheck className="w-3 h-3" />,  label: 'Master password gated' },
+            { icon: <Cloud className="w-3 h-3" />,        label: 'Cloud synced' },
+          ]}
+          cta={{
+            label: 'Unlock with Master Password',
+            icon: Lock,
+            onClick: () => setShowVerifyModal(true),
+            testId: 'api-keys-unlock-cta',
+          }}
+        />
         <VerifyAccessModal
           open={showVerifyModal}
           onOpenChange={setShowVerifyModal}
@@ -439,7 +419,7 @@ export default function APIKeys() {
           title="Unlock API Keys"
           description="Enter your master password or use biometrics to access your API keys."
         />
-      </div>
+      </>
     );
   }
 

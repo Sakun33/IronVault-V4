@@ -49,8 +49,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Link } from 'wouter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { securitySettingsService, AUTO_LOCK_OPTIONS, type AutoLockInterval } from '@/lib/security/security-settings';
+import { useAuth } from '@/contexts/auth-context';
+import { usePlan } from '@/lib/plan-service';
+import { ProfileCard } from '@/components/profile-card';
 
 export default function SettingsPage() {
+  const { accountEmail } = useAuth();
+  const plan = usePlan();
+  const planLabel = plan.tier === 'free' ? 'FREE' : plan.tier.toUpperCase().replace('PRO_FAMILY_MEMBER', 'FAMILY');
   const [analyticsEnabled, setAnalyticsEnabled] = useState(
     () => localStorage.getItem('ironvault-analytics-enabled') !== 'false'
   );
@@ -226,7 +232,20 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Page header — bold title + muted subtitle (HealthBridge pattern). */}
+      <div className="px-1 pt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Settings</h1>
+        <p className="text-sm text-white/50 mt-1">Manage your account, security, and app preferences.</p>
+      </div>
+
+      {/* Profile card — avatar + email + plan badge */}
+      <ProfileCard
+        email={accountEmail}
+        name={accountEmail ? accountEmail.split('@')[0] : null}
+        plan={planLabel}
+      />
+
       {/* Clear Data Confirmation Dialog */}
       <Dialog open={showClearDataDialog} onOpenChange={setShowClearDataDialog}>
         <DialogContent className="sm:max-w-md" data-testid="dialog-clear-data">
