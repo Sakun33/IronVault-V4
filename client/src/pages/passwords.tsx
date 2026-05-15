@@ -714,7 +714,7 @@ export default function Passwords() {
             )}
           </motion.div>
         ) : filteredPasswords.length > 0 ? (
-          <Card className={`rounded-2xl shadow-sm border-0 bg-transparent overflow-visible space-y-2 ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+          <Card className={`rounded-2xl shadow-sm border-0 bg-transparent overflow-visible space-y-3 ${selection.isSelectionMode ? 'pb-20' : ''}`}>
             <motion.div
               variants={{
                 hidden: {},
@@ -777,7 +777,7 @@ export default function Passwords() {
                       else openDetail(password);
                     }}
                     onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(password.id); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/[0.08] hover:border-white/20 active:bg-white/10 transition-colors min-h-[60px] rounded-2xl ${checked ? 'ring-2 ring-emerald-400/40 border-emerald-400/40' : ''}`}
+                    className={`w-full flex items-center gap-3 px-4 py-4 text-left bg-black/[0.03] dark:bg-white/5 backdrop-blur-md border border-black/[0.08] dark:border-white/10 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] hover:border-black/[0.12] dark:hover:border-white/20 active:bg-black/[0.07] dark:active:bg-white/10 transition-colors min-h-[76px] rounded-2xl ${checked ? 'ring-2 ring-emerald-400/40 border-emerald-400/40' : ''}`}
                   >
                     {selection.isSelectionMode && (
                       <SelectionCheckbox checked={checked} onChange={() => selection.toggle(password.id)} label={`Select ${password.name}`} />

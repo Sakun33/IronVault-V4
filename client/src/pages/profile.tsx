@@ -1420,7 +1420,7 @@ export default function Profile() {
       </Dialog>
 
       {/* Profile Overview */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -1516,7 +1516,7 @@ export default function Profile() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
+            <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <Lock className="w-5 h-5 text-primary" />
@@ -1527,7 +1527,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
+            <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-green-500" />
@@ -1538,7 +1538,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
+            <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-purple-500" />
@@ -1549,7 +1549,7 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
+            <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none bg-card hover:shadow-md transition-all duration-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5 text-orange-500" />
@@ -1589,7 +1589,7 @@ export default function Profile() {
           </div>
 
           {/* Recent Activity */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
@@ -1633,7 +1633,7 @@ export default function Profile() {
         {/* Subscription Tab */}
         <TabsContent value="subscription" className="space-y-6">
           {/* Current Subscription */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Crown className="w-5 h-5" />
@@ -1852,7 +1852,7 @@ export default function Profile() {
           )}
 
           {/* Account Information Card */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Wallet className="w-5 h-5" />
@@ -1894,7 +1894,7 @@ export default function Profile() {
             </CardContent>
           </Card>
           {/* Family Invites Card — visible to all users (send requires pro/family/lifetime) */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
@@ -2028,7 +2028,7 @@ export default function Profile() {
           </Card>
 
           {/* Export Options */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Download className="w-5 h-5" />
@@ -2094,7 +2094,7 @@ export default function Profile() {
           </Card>
 
           {/* Backup & Restore */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HardDrive className="w-5 h-5" />
@@ -2148,7 +2148,7 @@ export default function Profile() {
         {/* Support Tab */}
         <TabsContent value="support" className="space-y-6">
           {/* Quick Help */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="w-5 h-5" />
@@ -2220,7 +2220,7 @@ export default function Profile() {
           </Card>
 
           {/* Admin Requests */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
@@ -2283,7 +2283,7 @@ export default function Profile() {
           </Card>
 
           {/* Support Tickets */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -2331,7 +2331,7 @@ export default function Profile() {
           </Card>
 
           {/* Help Resources */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="w-5 h-5" />
@@ -2376,7 +2376,7 @@ export default function Profile() {
         {/* Security Tab */}
         <TabsContent value="security" className="space-y-6">
           {/* Account Information */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5" />
@@ -2451,7 +2451,7 @@ export default function Profile() {
           </Card>
 
           {/* Master Passcode Management */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Key className="w-5 h-5" />
@@ -2611,7 +2611,7 @@ export default function Profile() {
           />
 
           {/* Security Settings */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5" />
@@ -2641,7 +2641,7 @@ export default function Profile() {
           </Card>
 
           {/* Data & Privacy */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="w-5 h-5" />
@@ -2676,7 +2676,7 @@ export default function Profile() {
           </Card>
 
           {/* Browser Extension */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Chrome className="w-5 h-5" />
@@ -2741,7 +2741,7 @@ export default function Profile() {
           </Card>
 
           {/* Active Sessions (Feature 5) */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none" data-testid="card-active-sessions">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none" data-testid="card-active-sessions">
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="flex items-center gap-2">
@@ -2807,7 +2807,7 @@ export default function Profile() {
           </Card>
 
           {/* Activity Log (Feature 6) */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none" data-testid="card-activity-log">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none" data-testid="card-activity-log">
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="flex items-center gap-2">
@@ -2880,7 +2880,7 @@ export default function Profile() {
           </Card>
 
           {/* Data Management */}
-          <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+          <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="w-5 h-5" />

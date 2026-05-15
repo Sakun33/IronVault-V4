@@ -235,8 +235,8 @@ export default function SettingsPage() {
     <div className="space-y-5">
       {/* Page header — bold title + muted subtitle (HealthBridge pattern). */}
       <div className="px-1 pt-1">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Settings</h1>
-        <p className="text-sm text-white/50 mt-1">Manage your account, security, and app preferences.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account, security, and app preferences.</p>
       </div>
 
       {/* Profile card — avatar + email + plan badge */}
@@ -330,9 +330,9 @@ export default function SettingsPage() {
       </div>
 
       {/* Theme */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Palette className="w-5 h-5" />
             Theme
           </CardTitle>
@@ -367,9 +367,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Accessibility — font size / app size */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none" data-testid="card-accessibility">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none" data-testid="card-accessibility">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Type className="w-5 h-5" />
             Accessibility
           </CardTitle>
@@ -386,9 +386,9 @@ export default function SettingsPage() {
       <TravelModeCard />
 
       {/* Security — auto-lock & lock-on-background */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Shield className="w-5 h-5" />
             Security
           </CardTitle>
@@ -461,9 +461,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Privacy & Analytics */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <BarChart3 className="w-5 h-5" />
             Privacy & Analytics
           </CardTitle>
@@ -538,9 +538,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Support & Feedback */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <LifeBuoy className="w-5 h-5" />
             Support & Feedback
           </CardTitle>
@@ -576,9 +576,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Vault Backup */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Shield className="w-5 h-5" />
             Vault Backup
           </CardTitle>
@@ -611,9 +611,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Integrations & Emergency Access */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Webhook className="w-5 h-5" />
             Integrations & Sharing
           </CardTitle>
@@ -638,9 +638,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Import Passwords */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Upload className="w-5 h-5" />
             Import Passwords
           </CardTitle>
@@ -661,9 +661,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Data Management */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Database className="w-5 h-5" />
             Data Management
           </CardTitle>
@@ -725,9 +725,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Browser Extension */}
-      <Card id="browser-extension" className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none scroll-mt-24" data-testid="card-browser-extension">
+      <Card id="browser-extension" className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none scroll-mt-24" data-testid="card-browser-extension">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Monitor className="w-5 h-5" />
             Browser Extension
           </CardTitle>
@@ -822,9 +822,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Advanced Settings */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Settings className="w-5 h-5" />
             Advanced Settings
           </CardTitle>
@@ -883,9 +883,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Security Information */}
-      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
+      <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50 font-semibold">
+          <CardTitle className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             <Shield className="w-5 h-5" />
             Security Information
           </CardTitle>

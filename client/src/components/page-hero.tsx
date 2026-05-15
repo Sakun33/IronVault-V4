@@ -106,9 +106,9 @@ export function PageHero({
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2">{title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">{title}</h1>
         {subtitle && (
-          <p className="text-sm text-white/60 mb-6 max-w-sm mx-auto leading-relaxed">{subtitle}</p>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto leading-relaxed">{subtitle}</p>
         )}
 
         {badges.length > 0 && (
@@ -116,7 +116,7 @@ export function PageHero({
             {badges.map((b, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-[11px] font-medium text-white/70"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/[0.05] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/10 text-[11px] font-medium text-foreground/70"
               >
                 {b.icon}
                 {b.label}

@@ -88,6 +88,19 @@ export default function ExpensesPage() {
     [sx.expenses, sx.settlements],
   );
   const summary = useMemo(() => summarizeBalances(balances), [balances]);
+  // Total paid by the vault owner — sums every expense where paidBy is
+  // 'self'. Powers the third summary card when there are no shared
+  // splits (legacy users only see personal expenses, which legitimately
+  // contribute $0 to the You owe / You're owed balance vector — they'd
+  // see a perpetual ₹0.00 net otherwise). Falls back to net when there
+  // *are* balances since that's the more useful number then.
+  const totalPaidBySelf = useMemo(() => {
+    const t = sx.expenses
+      .filter(e => (e.paidBy || 'self') === 'self')
+      .reduce((s, e) => s + (e.amount || 0), 0);
+    return Math.round(t * 100) / 100;
+  }, [sx.expenses]);
+  const hasBalances = summary.youOwe > 0 || summary.youAreOwed > 0;
 
   // Allow listings to be auto-scoped to a group via the openGroupId state.
   const visibleExpenses = sx.expenses;
@@ -147,14 +160,14 @@ export default function ExpensesPage() {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white truncate">Expenses</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">Expenses</h1>
             {sx.expenses.length > 0 && (
               <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
                 {sx.expenses.length}
               </span>
             )}
           </div>
-          <p className="text-sm text-white/50 mt-0.5">Split, track, and settle shared spending across groups and contacts.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Split, track, and settle shared spending across groups and contacts.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -193,13 +206,24 @@ export default function ExpensesPage() {
           tone="positive"
           currency={displayCurrency}
         />
-        <SummaryCard
-          label="Net"
-          amount={summary.net}
-          tone={summary.net >= 0 ? 'positive' : 'negative'}
-          currency={displayCurrency}
-          showSign
-        />
+        {hasBalances ? (
+          <SummaryCard
+            label="Net"
+            amount={summary.net}
+            tone={summary.net >= 0 ? 'positive' : 'negative'}
+            currency={displayCurrency}
+            showSign
+          />
+        ) : (
+          // Fall back to a useful spending metric when no one owes anyone —
+          // surfaces the user's own spending instead of a perpetual ₹0.00 Net.
+          <SummaryCard
+            label="You paid"
+            amount={totalPaidBySelf}
+            tone="neutral"
+            currency={displayCurrency}
+          />
+        )}
       </div>
 
       {/* Tabs */}
@@ -648,7 +672,7 @@ function ExpenseRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onView(); }
       }}
-      className="group flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.12] transition-colors cursor-pointer min-h-[60px]"
+      className="group flex items-center gap-3 px-4 py-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.08] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] hover:border-black/[0.12] dark:hover:border-white/[0.12] transition-colors cursor-pointer min-h-[60px]"
     >
       <CategoryDot category={expense.category} />
       <div className="flex-1 min-w-0">

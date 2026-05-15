@@ -48,8 +48,8 @@ export function ProfileCard({ email, name, plan, onClick }: ProfileCardProps) {
       <Comp
         {...compProps}
         className={
-          'w-full flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] ' +
-          (onClick ? 'hover:bg-white/[0.07] transition-colors text-left' : '')
+          'w-full flex items-center gap-4 p-4 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.08] ' +
+          (onClick ? 'hover:bg-black/[0.05] dark:hover:bg-white/[0.07] transition-colors text-left' : '')
         }
       >
         <div className="relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-xl font-bold shadow-[0_0_24px_-6px_rgba(16,185,129,0.6)] flex-shrink-0">
@@ -57,7 +57,7 @@ export function ProfileCard({ email, name, plan, onClick }: ProfileCardProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[15px] font-semibold text-white truncate">{fallbackName}</span>
+            <span className="text-[15px] font-semibold text-foreground truncate">{fallbackName}</span>
             {plan && (
               <span
                 className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 ${theme.bg} ${theme.text} ${theme.ring}`}
@@ -68,10 +68,10 @@ export function ProfileCard({ email, name, plan, onClick }: ProfileCardProps) {
             )}
           </div>
           {email && (
-            <div className="text-[12px] text-white/50 truncate mt-0.5">{email}</div>
+            <div className="text-[12px] text-muted-foreground truncate mt-0.5">{email}</div>
           )}
         </div>
-        {onClick && <ChevronRight className="w-5 h-5 text-white/30 flex-shrink-0" />}
+        {onClick && <ChevronRight className="w-5 h-5 text-muted-foreground/50 flex-shrink-0" />}
       </Comp>
     </motion.div>
   );

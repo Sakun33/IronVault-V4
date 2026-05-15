@@ -28,21 +28,21 @@ export function SectionCard({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-[11px] uppercase tracking-[0.18em] text-white/40 font-semibold flex items-center gap-1.5">
+        <h2 className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold flex items-center gap-1.5">
           {Icon && <Icon className="w-3 h-3" />}
           {title}
         </h2>
-        {trailing && <div className="text-[11px] text-white/40">{trailing}</div>}
+        {trailing && <div className="text-[11px] text-muted-foreground/60">{trailing}</div>}
       </div>
       <div
         className={
-          'rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] overflow-hidden divide-y divide-white/[0.06] ' +
+          'rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.08] overflow-hidden divide-y divide-black/[0.06] dark:divide-white/[0.06] ' +
           (className ?? '')
         }
       >
         {children}
       </div>
-      {footer && <div className="text-[11px] text-white/40 px-1">{footer}</div>}
+      {footer && <div className="text-[11px] text-muted-foreground/60 px-1">{footer}</div>}
     </section>
   );
 }
@@ -96,9 +96,9 @@ export function SettingRow({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium text-white truncate">{title}</div>
+        <div className="text-[14px] font-medium text-foreground truncate">{title}</div>
         {description && (
-          <div className="text-[12px] text-white/50 truncate">{description}</div>
+          <div className="text-[12px] text-muted-foreground truncate">{description}</div>
         )}
       </div>
       {trailing && <div className="flex-shrink-0">{trailing}</div>}

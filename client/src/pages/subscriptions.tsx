@@ -793,11 +793,12 @@ export default function Subscriptions() {
                 })}
               </motion.div>
             ) : filteredSubscriptions.length > 0 ? (
-              <div className={`rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden ${selection.isSelectionMode ? 'pb-20' : ''}`}>
+              <div className={`bg-transparent ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 <motion.div
                   variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
                   initial="hidden"
                   animate="show"
+                  className="space-y-3"
                 >
                   {filteredSubscriptions.map((subscription, idx) => {
                     const renewalDate = effectiveNextBilling(subscription);
@@ -831,7 +832,7 @@ export default function Subscriptions() {
                         key={subscription.id}
                         actions={swipeActions}
                         disabled={selection.isSelectionMode}
-                        className={idx < filteredSubscriptions.length - 1 ? 'border-b border-white/[0.06]' : ''}
+                        className="rounded-2xl overflow-hidden"
                       >
                         <motion.button
                           variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
@@ -843,7 +844,7 @@ export default function Subscriptions() {
                             else setDetailSub(subscription);
                           }}
                           onContextMenu={(e) => { e.preventDefault(); selection.enterSelectionMode(subscription.id); }}
-                          className={`w-full relative flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors min-h-[64px] ${checked ? 'bg-emerald-500/10' : ''}`}
+                          className={`w-full relative flex items-center gap-3 px-4 py-4 text-left rounded-2xl bg-black/[0.03] dark:bg-white/5 backdrop-blur-md border border-black/[0.08] dark:border-white/10 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] hover:border-black/[0.12] dark:hover:border-white/[0.18] active:bg-black/[0.06] dark:active:bg-white/[0.10] transition-colors min-h-[76px] ${checked ? 'ring-2 ring-emerald-400/40 border-emerald-400/40' : ''}`}
                         >
                           <span className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-gradient-to-b ${styl.chip} opacity-80`} />
                           {selection.isSelectionMode && (
