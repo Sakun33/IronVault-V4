@@ -18,11 +18,12 @@ test.describe('subscriptions page', () => {
   });
 
   test('add button surfaces the create-subscription form', async ({ page }) => {
+    // subscriptions.tsx:467 — header "+ Add" button has no testid, only
+    // the icon + text. Match the icon-bearing button inside main.
     const addBtn = page.locator(
-      '[data-testid="button-add-subscription"], button:has-text("Add Subscription"), button[aria-label*="Add" i]:has-text("Subscription")',
+      '[data-testid="button-add-subscription"], main button:has-text("Add Your First Subscription"), main button:has(svg.lucide-plus):has-text("Add"), main button:has-text("Add Subscription")',
     ).first();
     if (await addBtn.count() === 0) {
-      // Mobile FAB might be the only entry-point.
       const fab = page.locator('[data-testid="button-add-subscription-fab"]').first();
       if (await fab.count() === 0) test.skip(true, 'no add button on this viewport');
       await fab.click();
