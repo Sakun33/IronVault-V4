@@ -551,14 +551,17 @@ function AllTab({
               <p className="text-sm font-semibold">{relativeDateLabel(day)}</p>
               <p className="text-xs text-muted-foreground">{formatAmount(dayTotal, dayCurrency)}</p>
             </div>
-            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
-              {items.map((e, i) => (
+            {/* Glass-tile list — each expense gets its own rounded-2xl
+                glass card instead of being stitched together with dividers,
+                matching the Cards/Identities/Passwords visual rhythm. */}
+            <div className="space-y-2">
+              {items.map((e) => (
                 <ExpenseRow
                   key={e.id}
                   expense={e}
                   contacts={contacts}
                   groups={groups}
-                  divider={i < items.length - 1}
+                  divider={false}
                   onView={() => onViewExpense(e)}
                   onEdit={() => onEditExpense(e)}
                   onDelete={() => onDeleteExpense(e)}
@@ -632,7 +635,7 @@ function ExpenseRow({
   ];
 
   return (
-    <SwipeRow actions={swipeActions} className={divider ? 'border-b border-border/40' : ''}>
+    <SwipeRow actions={swipeActions} className="rounded-2xl overflow-hidden">
     <div
       data-testid={`expense-row-${expense.id}`}
       role="button"
@@ -645,7 +648,7 @@ function ExpenseRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onView(); }
       }}
-      className={`group flex items-center gap-3 px-4 py-3 bg-card hover:bg-accent/40 transition-colors cursor-pointer min-h-[60px]`}
+      className="group flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.12] transition-colors cursor-pointer min-h-[60px]"
     >
       <CategoryDot category={expense.category} />
       <div className="flex-1 min-w-0">

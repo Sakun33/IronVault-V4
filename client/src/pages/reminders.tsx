@@ -503,9 +503,24 @@ export default function Reminders() {
         onAction: () => handleDelete(reminder),
       },
     ];
+    // Urgency accent — red for overdue, amber for due within 3 days,
+    // green for everything else. Completed items use a neutral slate so
+    // they don't keep shouting in red after being checked off.
+    const dueAt = new Date(reminder.dueDate);
+    const now = new Date();
+    const msPerDay = 86_400_000;
+    const daysToDue = (dueAt.getTime() - now.getTime()) / msPerDay;
+    let urgencyClass = 'border-l-4 border-l-emerald-500/70';
+    if (reminder.isCompleted) {
+      urgencyClass = 'border-l-4 border-l-slate-500/40';
+    } else if (dueAt < now) {
+      urgencyClass = 'border-l-4 border-l-red-500/80';
+    } else if (daysToDue <= 3) {
+      urgencyClass = 'border-l-4 border-l-amber-500/80';
+    }
     return (
     <SwipeRow key={reminder.id} actions={swipeActions} className="rounded-2xl">
-    <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={`${reminder.isCompleted ? 'opacity-60' : ''} cursor-pointer hover:border-emerald-500/40 transition-colors`} data-testid={`card-reminder-${reminder.id}`}>
+    <BrandCard key={reminder.id} name={reminder.category || reminder.title} brandColor={priorityBrandColor(reminder.priority)} className={`${reminder.isCompleted ? 'opacity-60' : ''} ${urgencyClass} cursor-pointer hover:border-emerald-500/40 transition-colors`} data-testid={`card-reminder-${reminder.id}`}>
       <CardContent
         className="p-4"
         role="button"
