@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Share2, Globe, LayoutTemplate, Mail, CreditCard, Smartphone, ShoppingBag, Building2, CheckCircle, Lock, ChevronRight, CheckSquare, LayoutGrid, List as ListIcon, History, Star } from 'lucide-react';
 import { useVault } from '@/contexts/vault-context';
 import { useToast } from '@/hooks/use-toast';
 import { PASSWORD_CATEGORIES } from '@shared/schema';
@@ -25,9 +25,10 @@ import { ViewToggle } from '@/components/view-toggle';
 import { useMultiSelect } from '@/hooks/use-multi-select';
 import { SelectionBar, SelectionCheckbox } from '@/components/selection-bar';
 import { formatDistanceToNow } from 'date-fns';
+import { copyToClipboardSecure } from '@/native/clipboard';
 
 export default function Passwords() {
-  const { passwords, deletePassword, bulkDeletePasswords, isLoading } = useVault();
+  const { passwords, deletePassword, bulkDeletePasswords, updatePassword, isLoading } = useVault();
   const { toast } = useToast();
   const plan = usePlan();
   const isPro = plan.isPaid;
@@ -52,6 +53,7 @@ export default function Passwords() {
     return param === 'weak' || param === 'medium' || param === 'strong' ? param : null;
   };
   const [strengthFilter, setStrengthFilter] = useState<string>(() => readStrengthParam() ?? 'all');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   useEffect(() => {
     const next = readStrengthParam();
     if (next) setStrengthFilter(next);
@@ -187,7 +189,7 @@ export default function Passwords() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const filteredPasswords = useMemo(() => {
-    return passwords.filter(password => {
+    const filtered = passwords.filter(password => {
       const q = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === '' ||
         (password.name ?? '').toLowerCase().includes(q) ||
@@ -202,16 +204,19 @@ export default function Passwords() {
         (strengthFilter === 'medium' && level === 'medium') ||
         (strengthFilter === 'strong' && level === 'strong') ||
         (strengthFilter === 'very-strong' && level === 'very-strong');
-      return matchesSearch && matchesCategory && matchesStrength;
+      const matchesFavorite = !favoritesOnly || !!password.isFavorite;
+      return matchesSearch && matchesCategory && matchesStrength && matchesFavorite;
     });
-  }, [passwords, searchQuery, categoryFilter, strengthFilter, strengthCache]);
+    // Stable sort: favorites first, otherwise preserve incoming order.
+    return filtered.slice().sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
+  }, [passwords, searchQuery, categoryFilter, strengthFilter, favoritesOnly, strengthCache]);
 
   // Reset the window whenever the filter set changes — without this the user
   // could be looking at the 5th page of the previous filter when they apply
   // a new one.
   useEffect(() => {
     setWindowSize(WINDOW_PAGE);
-  }, [searchQuery, categoryFilter, strengthFilter, viewMode]);
+  }, [searchQuery, categoryFilter, strengthFilter, favoritesOnly, viewMode]);
 
   // IntersectionObserver — load the next page when the sentinel approaches
   // the viewport. 600px rootMargin keeps scrolling smooth.
@@ -249,14 +254,17 @@ export default function Passwords() {
   };
 
   const copyToClipboard = async (text: string, key: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    // copyToClipboardSecure handles the 30s auto-clear timer + native
+    // Capacitor clipboard fallback. It already shows its own bottom toast,
+    // so we suppress that and keep the existing top-right toast UX.
+    const ok = await copyToClipboardSecure(text, { showToast: false });
+    if (ok) {
       void hapticSuccess();
       setCopiedId(key);
-      toast({ variant: 'success', title: "Copied", description: `${label} copied to clipboard` });
+      toast({ variant: 'success', title: 'Copied', description: `${label} copied — clears in 30s` });
       setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast({ title: "Error", description: `Failed to copy ${label}`, variant: "destructive" });
+    } else {
+      toast({ title: 'Error', description: `Failed to copy ${label}`, variant: 'destructive' });
     }
   };
 
@@ -471,6 +479,18 @@ export default function Passwords() {
                 <SelectItem value="very-strong">Very Strong</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              variant={favoritesOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFavoritesOnly(v => !v)}
+              className="rounded-xl flex-shrink-0 px-3 h-9"
+              aria-pressed={favoritesOnly}
+              data-testid="passwords-favorites-toggle"
+              title={favoritesOnly ? 'Showing favorites only' : 'Show favorites only'}
+            >
+              <Star className={`w-4 h-4 ${favoritesOnly ? 'fill-current' : ''}`} />
+            </Button>
             <ViewToggle view={viewMode} onChange={setViewMode} className="flex-shrink-0" />
           </div>
         </div>
@@ -756,7 +776,21 @@ export default function Passwords() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
                   <Favicon url={pw.url} name={pw.name} className="w-9 h-9 rounded-lg flex-shrink-0" />
-                  <span className="truncate">{pw.name}</span>
+                  <span className="truncate flex-1">{pw.name}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !pw.isFavorite;
+                      await updatePassword(pw.id, { isFavorite: next });
+                      setDetailPassword({ ...pw, isFavorite: next });
+                    }}
+                    className="flex-shrink-0 p-1.5 rounded-lg hover:bg-muted transition-colors"
+                    aria-pressed={!!pw.isFavorite}
+                    aria-label={pw.isFavorite ? `Unfavorite ${pw.name}` : `Favorite ${pw.name}`}
+                    data-testid={`favorite-password-${pw.id}`}
+                  >
+                    <Star size={16} className={pw.isFavorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'} />
+                  </button>
                 </DialogTitle>
               </DialogHeader>
               <DialogBody className="space-y-3">
@@ -847,6 +881,50 @@ export default function Passwords() {
                   <div className="rounded-xl bg-muted/50 px-4 py-3">
                     <div className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Notes</div>
                     <div className="text-[14px] text-foreground whitespace-pre-wrap">{pw.notes}</div>
+                  </div>
+                )}
+
+                {/* Password history — last 10 previous values with copy buttons */}
+                {Array.isArray(pw.history) && pw.history.length > 0 && (
+                  <div className="rounded-xl bg-muted/50 px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground uppercase tracking-wide">
+                      <History size={12} />
+                      Password History ({Math.min(pw.history.length, 10)})
+                    </div>
+                    <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                      {pw.history.slice(0, 10).map((h: { password: string; changedAt: string }, idx: number) => {
+                        let when = h.changedAt;
+                        try {
+                          const d = new Date(h.changedAt);
+                          if (!isNaN(d.getTime())) when = formatDistanceToNow(d, { addSuffix: true });
+                        } catch { /* keep raw string */ }
+                        return (
+                          <li
+                            key={`${pw.id}-hist-${idx}`}
+                            className="flex items-center justify-between gap-2 rounded-lg bg-background/70 px-3 py-1.5"
+                            data-testid={`password-history-${pw.id}-${idx}`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-[12px] text-foreground truncate">
+                                {'•'.repeat(Math.min(12, h.password?.length ?? 8))}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">{when}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(h.password, `${pw.id}-hist-${idx}`, 'Previous password')}
+                              className="flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
+                              aria-label={`Copy previous password ${idx + 1}`}
+                              data-testid={`copy-history-${pw.id}-${idx}`}
+                            >
+                              {copiedId === `${pw.id}-hist-${idx}`
+                                ? <CheckCircle size={13} className="text-primary" />
+                                : <Copy size={13} className="text-muted-foreground" />}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
                 )}
 

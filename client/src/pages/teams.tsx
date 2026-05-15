@@ -28,6 +28,8 @@ import {
 } from '@/components/ui/select';
 import { Users, Plus, Mail, Trash2, Database, Shield, Crown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/use-subscription';
+import { FeaturePreview } from '@/components/feature-preview';
 import {
   listTeams,
   createTeam,
@@ -43,6 +45,24 @@ import {
 
 export default function TeamsPage() {
   const { toast } = useToast();
+  const { isPro, isLoading: planLoading } = useSubscription();
+  // Free-plan paywall — gate the whole page behind the soft-paywall preview.
+  // The license context may still be loading on first paint; we render
+  // nothing rather than flashing the paywall to a paid user.
+  if (!planLoading && !isPro) {
+    return (
+      <FeaturePreview
+        feature="Teams & Shared Vaults"
+        description="Create teams, invite members, and share encrypted vaults with role-based access."
+        bullets={[
+          'Invite teammates by email with admin / member / viewer roles',
+          'Shared encrypted vaults — credentials accessible only to invited members',
+          'Audit log of team activity and member changes',
+        ]}
+        mock="api-keys"
+      />
+    );
+  }
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);

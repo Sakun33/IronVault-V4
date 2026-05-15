@@ -567,9 +567,21 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     const existing = passwords.find(p => p.id === id);
     if (!existing) return;
 
+    // Password history: if the password string itself is being changed,
+    // push the *previous* value onto the history stack (newest first) and
+    // cap at 10 entries so the encrypted blob can't grow unboundedly.
+    let nextHistory = existing.history ?? [];
+    const passwordChanged =
+      typeof updates.password === 'string' && updates.password !== existing.password;
+    if (passwordChanged && existing.password) {
+      const entry = { password: existing.password, changedAt: new Date().toISOString() };
+      nextHistory = [entry, ...nextHistory].slice(0, 10);
+    }
+
     const updated: PasswordEntry = {
       ...existing,
       ...updates,
+      history: nextHistory,
       updatedAt: new Date(),
     };
 

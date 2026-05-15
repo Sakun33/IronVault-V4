@@ -322,16 +322,17 @@ export default function APIKeys() {
       setShowVerifyModal(true);
       return;
     }
-    try {
-      await navigator.clipboard.writeText(text);
+    const { copyToClipboardSecure } = await import('@/native/clipboard');
+    const ok = await copyToClipboardSecure(text, { showToast: false });
+    if (ok) {
       setCopiedField(label);
       if (cardId) {
         setPulsedCard(cardId);
         setTimeout(() => setPulsedCard(null), 700);
       }
-      toast({ title: 'Copied', description: `${label} copied.` });
+      toast({ title: 'Copied', description: `${label} copied — clears in 30s.` });
       setTimeout(() => setCopiedField(null), 1500);
-    } catch {
+    } else {
       toast({ title: 'Error', description: 'Could not copy.', variant: 'destructive' });
     }
   };

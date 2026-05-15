@@ -23,6 +23,7 @@ import { ThemeProvider, useTheme } from "@/contexts/theme-context";
 import { LicenseProvider } from "@/contexts/license-context";
 import { VaultSelectionProvider, useVaultSelection } from "@/contexts/vault-selection-context";
 import { useSubscription } from "@/hooks/use-subscription";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { CloudSyncPill } from "@/components/cloud-sync-pill";
@@ -277,19 +278,26 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [hasSearchInteracted, setHasSearchInteracted] = useState(false);
 
-  // Cmd+K (Mac) / Ctrl+K (Win/Linux) opens the global command palette.
-  // Bound at the layout level so it works on every authenticated page.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const isMod = e.metaKey || e.ctrlKey;
-      if (isMod && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setShowCommandPalette(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // Global keyboard shortcuts. Cmd/Ctrl+K (palette) was bound here long
+  // before the other chords; the hook subsumes that handler so they all
+  // share one keydown listener.
+  //   Cmd/Ctrl+K → command palette
+  //   Cmd/Ctrl+N → quick-add menu (context-aware new item)
+  //   Cmd/Ctrl+L → lock vault (logout)
+  //   Cmd/Ctrl+G → password generator
+  //   Escape    → close topmost overlay
+  useKeyboardShortcuts({
+    onSearch: () => setShowCommandPalette(prev => !prev),
+    onNew: () => setShowQuickAdd(true),
+    onLock: () => { logout(); },
+    onGenerator: () => setShowGenerator(true),
+    onEscape: () => {
+      if (showCommandPalette) { setShowCommandPalette(false); return; }
+      if (showQuickAdd) { setShowQuickAdd(false); return; }
+      if (showSearchModal) { setShowSearchModal(false); return; }
+      if (showGenerator) { setShowGenerator(false); return; }
+    },
+  });
 
   // Collapsible sidebar — persists across reloads. Defaults to expanded.
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {

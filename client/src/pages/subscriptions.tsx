@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bell, Search, Calendar, BarChart3, Bookmark, Globe, Eye, EyeOff, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare, CalendarPlus } from 'lucide-react';
+import { Plus, Edit, Trash2, Bell, Search, Calendar, BarChart3, Bookmark, Globe, Eye, EyeOff, Copy, LayoutTemplate, Tv, Music, Cloud, Newspaper, Dumbbell, ShoppingCart, Gamepad2, BookOpen, ChevronRight, CheckSquare, CalendarPlus, Star } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { exportToCalendar, downloadICS } from '@/lib/calendar-export';
 import { useMultiSelect } from '@/hooks/use-multi-select';
@@ -58,6 +58,7 @@ export default function Subscriptions() {
   const [editingSubscription, setEditingSubscription] = useState<any>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [revealedCredentials, setRevealedCredentials] = useState<Set<string>>(new Set());
   const [copiedCredential, setCopiedCredential] = useState<string | null>(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -169,13 +170,14 @@ export default function Subscriptions() {
   };
 
   const copyCredential = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    const { copyToClipboardSecure } = await import('@/native/clipboard');
+    const ok = await copyToClipboardSecure(text, { showToast: false });
+    if (ok) {
       setCopiedCredential(label);
-      toast({ title: "Copied", description: `${label} copied to clipboard` });
+      toast({ title: 'Copied', description: `${label} copied — clears in 30s` });
       setTimeout(() => setCopiedCredential(null), 2000);
-    } catch {
-      toast({ title: "Error", description: "Failed to copy to clipboard", variant: "destructive" });
+    } else {
+      toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' });
     }
   };
 
@@ -247,7 +249,7 @@ export default function Subscriptions() {
 
   // Filter and search subscriptions
   const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter(subscription => {
+    const matches = subscriptions.filter(subscription => {
       const matchesSearch = searchQuery === '' ||
         subscription.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (subscription.plan ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -257,10 +259,15 @@ export default function Subscriptions() {
       const matchesStatus = statusFilter === 'all' ||
         (statusFilter === 'active' && subscription.isActive) ||
         (statusFilter === 'inactive' && !subscription.isActive);
+      const matchesFavorite = !favoritesOnly || !!(subscription as any).isFavorite;
 
-      return matchesSearch && matchesCategory && matchesStatus;
+      return matchesSearch && matchesCategory && matchesStatus && matchesFavorite;
     });
-  }, [subscriptions, searchQuery, categoryFilter, statusFilter]);
+    // Favorites first, otherwise preserve incoming order (stable sort).
+    return matches.slice().sort(
+      (a, b) => Number(!!(b as any).isFavorite) - Number(!!(a as any).isFavorite)
+    );
+  }, [subscriptions, searchQuery, categoryFilter, statusFilter, favoritesOnly]);
 
   const selection = useMultiSelect(filteredSubscriptions);
 
@@ -646,6 +653,20 @@ export default function Subscriptions() {
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setFavoritesOnly(v => !v)}
+                  aria-pressed={favoritesOnly}
+                  aria-label={favoritesOnly ? 'Showing favorites only' : 'Show favorites only'}
+                  data-testid="subscriptions-favorites-toggle"
+                  className={`h-11 w-11 flex items-center justify-center rounded-xl border transition-colors ${
+                    favoritesOnly
+                      ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
+                      : 'bg-white/5 border-white/10 text-white/60 hover:text-white/90'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${favoritesOnly ? 'fill-current' : ''}`} />
+                </button>
                 <ViewToggle view={viewMode} onChange={setViewMode} />
               </div>
             </div>

@@ -276,6 +276,30 @@ export const planCapabilities = {
     prioritySupportEnabled: false,
     syncEnabled: false,
   },
+  pro: {
+    maxPasswords: -1,
+    maxSubscriptions: -1,
+    maxNotes: -1,
+    maxReminders: -1,
+    documentsEnabled: true,
+    bankStatementsEnabled: true,
+    analyticsEnabled: true,
+    prioritySupportEnabled: true,
+    syncEnabled: true,
+  },
+  // Family plan inherits all Pro capabilities. Missing key caused a
+  // `Cannot read properties of undefined` crash on plan-tier lookups.
+  family: {
+    maxPasswords: -1,
+    maxSubscriptions: -1,
+    maxNotes: -1,
+    maxReminders: -1,
+    documentsEnabled: true,
+    bankStatementsEnabled: true,
+    analyticsEnabled: true,
+    prioritySupportEnabled: true,
+    syncEnabled: true,
+  },
   premium: {
     maxPasswords: -1, // unlimited
     maxSubscriptions: -1,
@@ -314,6 +338,13 @@ export const passwordEntrySchema = z.object({
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
   lastUsed: z.date().optional(),
+  isFavorite: z.boolean().optional(),
+  // Previous password versions, newest first. Capped at 10 by the writer
+  // (vault-context.updatePassword) so encrypted blob size stays bounded.
+  history: z.array(z.object({
+    password: z.string(),
+    changedAt: z.string(),
+  })).optional(),
 });
 
 // Subscription entries stored in IndexedDB (client-side only)
@@ -329,6 +360,7 @@ export const subscriptionEntrySchema = z.object({
   category: z.string().optional(),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
+  isFavorite: z.boolean().optional(),
   // Enhanced fields
   subscriptionType: z.enum(["streaming", "software", "cloud", "gaming", "news", "fitness", "productivity", "security", "education", "other"]).default("other"),
   credentials: z.object({
@@ -352,6 +384,7 @@ export const noteEntrySchema = z.object({
   notebook: z.string().default("Default"), // Organization folder/notebook
   tags: z.array(z.string()).default([]), // Tags for filtering/searching
   isPinned: z.boolean().default(false),
+  isFavorite: z.boolean().optional(),
   // Optional per-note accent. One of the design-system swatches
   // ('emerald'|'violet'|'amber'|'rose'|'sky'|'slate') — when omitted the UI
   // falls back to the notebook's color. Adding as optional is forward and
