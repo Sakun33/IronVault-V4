@@ -52,6 +52,10 @@ import {
 import { AddInvestmentModal } from '@/components/add-investment-modal';
 import { EditInvestmentModal } from '@/components/edit-investment-modal';
 import { ListSkeleton } from '@/components/list-skeleton';
+import { PageHero } from '@/components/page-hero';
+// TrendingUp / Lock / Cloud / Plus / BarChart3 are all already imported from
+// the larger lucide block above; alias them locally for the hero usage only.
+import { TrendingUp as TrendingUpIcon, Lock as LockIcon, Cloud as CloudIcon, Plus as PlusIcon } from 'lucide-react';
 
 export default function Investments() {
   const { isLoading: licenseLoading } = useSubscription();
@@ -96,6 +100,9 @@ export default function Investments() {
     const [deleteTargetInvestment, setDeleteTargetInvestment] = useState<{ id: string; name: string } | null>(null);
     const [deleteTargetGoal, setDeleteTargetGoal] = useState<{ id: string; name: string } | null>(null);
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+    // Controlled state for the AddInvestmentModal so the empty-state hero CTA
+    // can trigger it from a different render branch than the header button.
+    const [addInvOpen, setAddInvOpen] = useState(false);
 
     // Calculate portfolio analytics
     const portfolioAnalytics = useMemo(() => {
@@ -497,6 +504,34 @@ export default function Investments() {
 
 
     if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="Investments" />;
+
+    // Empty state — premium hero. Only when the portfolio is truly empty
+    // (no investments) and the user isn't filtering. We still mount the
+    // AddInvestmentModal so the hero CTA can open it.
+    if (!isLoading && investments.length === 0) {
+      return (
+        <>
+          <PageHero
+            icon={BarChart3}
+            title="Investment Tracker"
+            subtitle="Track FDs, mutual funds, stocks, and crypto in one encrypted portfolio view."
+            badges={[
+              { icon: <LockIcon className="w-3 h-3" />,        label: 'AES-256' },
+              { icon: <TrendingUpIcon className="w-3 h-3" />,  label: 'Performance' },
+              { icon: <CloudIcon className="w-3 h-3" />,       label: 'Cross-device' },
+            ]}
+            cta={{ label: 'Add Investment', icon: PlusIcon, onClick: () => setAddInvOpen(true), testId: 'investments-empty-cta' }}
+            accent="amber"
+          />
+          <AddInvestmentModal
+            onInvestmentAdded={handleInvestmentAdded}
+            open={addInvOpen}
+            onOpenChange={setAddInvOpen}
+            hideTrigger
+          />
+        </>
+      );
+    }
 
     return (
       <div className="space-y-6">

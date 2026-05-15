@@ -143,11 +143,18 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Expenses</h1>
-          <p className="text-sm text-muted-foreground">Split, track, and settle.</p>
+      {/* Header — premium title with item count badge + muted subtitle */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white truncate">Expenses</h1>
+            {sx.expenses.length > 0 && (
+              <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
+                {sx.expenses.length}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-white/50 mt-0.5">Split, track, and settle shared spending across groups and contacts.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button

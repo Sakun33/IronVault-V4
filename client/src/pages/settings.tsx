@@ -330,7 +330,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Theme */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Palette className="w-5 h-5" />
@@ -367,7 +367,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Accessibility — font size / app size */}
-      <Card className="rounded-2xl shadow-sm border-border/50" data-testid="card-accessibility">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none" data-testid="card-accessibility">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Type className="w-5 h-5" />
@@ -386,7 +386,7 @@ export default function SettingsPage() {
       <TravelModeCard />
 
       {/* Security — auto-lock & lock-on-background */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
@@ -461,7 +461,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Privacy & Analytics */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5" />
@@ -538,7 +538,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Support & Feedback */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <LifeBuoy className="w-5 h-5" />
@@ -576,7 +576,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Vault Backup */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
@@ -611,7 +611,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Integrations & Emergency Access */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Webhook className="w-5 h-5" />
@@ -638,7 +638,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Import Passwords */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
@@ -661,7 +661,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Data Management */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="w-5 h-5" />
@@ -725,7 +725,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Browser Extension */}
-      <Card id="browser-extension" className="rounded-2xl shadow-sm border-border/50 scroll-mt-24" data-testid="card-browser-extension">
+      <Card id="browser-extension" className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none scroll-mt-24" data-testid="card-browser-extension">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Monitor className="w-5 h-5" />
@@ -822,7 +822,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Advanced Settings */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
@@ -883,7 +883,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Security Information */}
-      <Card className="rounded-2xl shadow-sm border-border/50">
+      <Card className="rounded-2xl border bg-white/[0.04] backdrop-blur-xl border-white/[0.08] shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />

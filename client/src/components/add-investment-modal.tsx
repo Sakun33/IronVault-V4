@@ -13,15 +13,28 @@ import { INVESTMENT_TYPES } from '@shared/schema';
 
 interface AddInvestmentModalProps {
   onInvestmentAdded?: () => void;
+  /** Optional controlled-open. When provided, the component skips its
+      internal trigger button and uses these props as the modal state. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the built-in "Add Investment" trigger button — useful when an
+      external CTA (e.g. PageHero) controls open via open/onOpenChange. */
+  hideTrigger?: boolean;
 }
 
-export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProps) {
+export function AddInvestmentModal({ onInvestmentAdded, open, onOpenChange, hideTrigger }: AddInvestmentModalProps) {
   const { addInvestment } = useVault();
   const { currency: appCurrency, currencies, getCurrencySymbol } = useCurrency();
   const { addLog } = useLogging();
   const { toast } = useToast();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const controlled = typeof open === 'boolean';
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlled ? open! : internalOpen;
+  const setIsOpen = (next: boolean) => {
+    if (controlled) onOpenChange?.(next);
+    else setInternalOpen(next);
+  };
   const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -116,6 +129,9 @@ export function AddInvestmentModal({ onInvestmentAdded }: AddInvestmentModalProp
   };
 
   if (!isOpen) {
+    // Hide internal trigger when the parent owns the open state — caller
+    // is providing their own button / hero CTA.
+    if (hideTrigger || controlled) return null;
     return (
       <Button onClick={() => setIsOpen(true)} className="flex items-center gap-2">
         <Plus className="w-4 h-4" />

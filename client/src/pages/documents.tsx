@@ -1,6 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { FeaturePreview } from '@/components/feature-preview';
+import { PageHero } from '@/components/page-hero';
+// FileSearch is the only icon not already imported from the larger lucide
+// import block below — Lock/Cloud/Upload are reused from there.
+import { FileSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BrandCard } from '@/components/brand-card';
 import { SwipeRow } from '@/components/ios';
@@ -803,6 +807,26 @@ export default function Documents() {
       mock="documents"
     />
   );
+
+  // Premium empty state — only when the vault has zero documents AND the
+  // user isn't filtering (search/folder). Once anything exists the regular
+  // list UI takes over below.
+  if (!isInitialLoading && documents.length === 0 && !searchQuery) {
+    return (
+      <PageHero
+        icon={FileSearch}
+        title="Document Vault"
+        subtitle="Secure, encrypted document storage — IDs, receipts, contracts, all offline-first."
+        badges={[
+          { icon: <Lock className="w-3 h-3" />,       label: 'AES-256' },
+          { icon: <FileSearch className="w-3 h-3" />, label: 'OCR search' },
+          { icon: <Cloud className="w-3 h-3" />,      label: 'Cross-device' },
+        ]}
+        cta={{ label: 'Upload Document', icon: UploadIcon, onClick: handleUpload, testId: 'documents-empty-cta' }}
+        accent="sky"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 overflow-x-hidden">

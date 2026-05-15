@@ -32,6 +32,8 @@ import {
   CheckCircle,
   Clock
 } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
+import { Lock as LockPill, Cloud as CloudPill, Building2 as BankIcon } from 'lucide-react';
 import { useCurrency } from '@/contexts/currency-context';
 import { useLogging } from '@/contexts/logging-context';
 import { useVault } from '@/contexts/vault-context';
@@ -282,6 +284,24 @@ export default function BankStatements() {
   };
 
   if (!licenseLoading && !plan.isPaid) return <UpgradeGate feature="Bank Statements" />;
+
+  // Empty state — premium hero before any data exists.
+  if (!isLoading && statements.length === 0 && transactions.length === 0) {
+    return (
+      <PageHero
+        icon={BankIcon}
+        title="Bank Statements"
+        subtitle="Import CSV statements, auto-categorize transactions, and track every account in one place."
+        badges={[
+          { icon: <LockPill className="w-3 h-3" />,  label: 'AES-256' },
+          { icon: <Upload className="w-3 h-3" />,    label: 'CSV import' },
+          { icon: <CloudPill className="w-3 h-3" />, label: 'Cross-device' },
+        ]}
+        cta={{ label: 'Import CSV', icon: Upload, onClick: handleImportStatement, testId: 'bank-statements-empty-cta' }}
+        accent="emerald"
+      />
+    );
+  }
 
   return (
     <div className="p-4 space-y-6 overflow-x-hidden">

@@ -1577,9 +1577,10 @@ function GridView({ notes, activeId, query, selection, onOpen, onContextMenu, on
               onTouchStart={(e) => onLongPressStart(note, e)}
               onTouchEnd={onLongPressCancel}
               onTouchMove={onLongPressCancel}
-              className={`relative text-left rounded-xl border bg-white/[0.03] backdrop-blur-sm hover:bg-white/[0.06] hover:shadow-sm transition-all duration-200 p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-white/[0.08]'}`}
+              className={`relative text-left rounded-2xl border bg-white/[0.04] backdrop-blur-xl hover:bg-white/[0.07] transition-colors duration-200 p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 overflow-hidden ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-white/[0.08]'}`}
             >
-              {accent && <span aria-hidden className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r" style={{ background: accent }} />}
+              {/* Notebook color accent — 4px left rail, full height of the card. */}
+              {accent && <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ background: accent }} />}
               <div className="flex items-start gap-2 mb-1.5">
                 <h3 data-testid={`note-title-${note.id}`} className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 flex-1 break-words">
                   {query ? highlightSnippet(note.title || 'Untitled', query) : (note.title || 'Untitled')}

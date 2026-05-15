@@ -50,6 +50,9 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isPast, isThisWeek, startOfDay, addDays, addWeeks, addMonths } from 'date-fns';
+import { PageHero } from '@/components/page-hero';
+// BellRing is already imported above; alias Lock/Cloud locally.
+import { Lock as LockBadge, Cloud as CloudBadge } from 'lucide-react';
 import { ListSkeleton } from '@/components/list-skeleton';
 import { SwipeRow } from '@/components/ios';
 
@@ -626,6 +629,25 @@ export default function Reminders() {
     </SwipeRow>
     );
   };
+
+  // Empty state — premium hero before any reminders exist. We render
+  // outside the normal page chrome so the hero takes the full viewport.
+  if (!isLoading && reminders.length === 0) {
+    return (
+      <PageHero
+        icon={BellRing}
+        title="Smart Reminders"
+        subtitle="Never miss a renewal, payment, expiry, or appointment again."
+        badges={[
+          { icon: <LockBadge className="w-3 h-3" />,   label: 'AES-256' },
+          { icon: <Bell className="w-3 h-3" />,        label: 'Push alerts' },
+          { icon: <CloudBadge className="w-3 h-3" />,  label: 'Cross-device' },
+        ]}
+        cta={{ label: 'Add Reminder', icon: Plus, onClick: () => setShowAddModal(true), testId: 'reminders-empty-cta' }}
+        accent="rose"
+      />
+    );
+  }
 
   return (
     <div className="space-y-5 overflow-x-hidden">
