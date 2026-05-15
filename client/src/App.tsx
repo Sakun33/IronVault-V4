@@ -1,3 +1,10 @@
+// React import MUST be the first import in this file.
+// Vite's CJS interop compiles `import React from "react"` to `const React = ...`
+// at the physical location of the import statement (not hoisted). The
+// `React.lazy()` calls below (LandingPage, Dashboard, etc.) run at module-init
+// time and would hit the TDZ if this import appeared after them — breaking
+// the entire app in dev mode.
+import React, { useState, useEffect, useCallback } from "react";
 import { Switch, Route, Link, useLocation } from "wouter";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { makeSlideUp } from "@/lib/design-system";
@@ -121,7 +128,6 @@ import {
 import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
-import React, { useState, useEffect, useCallback } from "react";
 // ── Modal/dialog components — these only render when their `open` state
 // flips true. Lazy-importing them keeps the dialog code (and any heavy
 // sub-deps they pull in) OUT of the main bundle that loads on first
