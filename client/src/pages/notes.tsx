@@ -1577,10 +1577,23 @@ function GridView({ notes, activeId, query, selection, onOpen, onContextMenu, on
               onTouchStart={(e) => onLongPressStart(note, e)}
               onTouchEnd={onLongPressCancel}
               onTouchMove={onLongPressCancel}
-              className={`relative text-left rounded-2xl border bg-white/[0.04] backdrop-blur-xl hover:bg-white/[0.07] transition-colors duration-200 p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 overflow-hidden ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-white/[0.08]'}`}
+              className={`relative text-left rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.07] transition-colors duration-200 p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 overflow-hidden ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-black/[0.08] dark:border-white/[0.08]'}`}
             >
-              {/* Notebook color accent — 4px left rail, full height of the card. */}
-              {accent && <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ background: accent }} />}
+              {/* Notebook color accent — 4px left rail + a soft gradient
+                  wash from the rail color into transparent so the card
+                  reads as a coloured "page" rather than a black tile with
+                  a stripe. The gradient sits BEHIND the content (z-0). */}
+              {accent && (
+                <>
+                  <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ background: accent }} />
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-15"
+                    style={{ background: `linear-gradient(90deg, ${accent}33 0%, transparent 60%)` }}
+                  />
+                </>
+              )}
+              <div className="relative z-[1] flex flex-col h-full">
               <div className="flex items-start gap-2 mb-1.5">
                 <h3 data-testid={`note-title-${note.id}`} className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 flex-1 break-words">
                   {query ? highlightSnippet(note.title || 'Untitled', query) : (note.title || 'Untitled')}
@@ -1602,6 +1615,7 @@ function GridView({ notes, activeId, query, selection, onOpen, onContextMenu, on
               )}
               <div className="mt-auto pt-3 text-[11px] text-muted-foreground/55">
                 {timeAgoShort(note.updatedAt)}
+              </div>
               </div>
             </motion.button>
           );

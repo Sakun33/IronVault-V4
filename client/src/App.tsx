@@ -515,16 +515,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <CloudSyncPill vaultId={activeVault?.id ?? null} compact />
           </div>
 
-          {/* Right: Search | Quick Add | Overflow ⋮ */}
+          {/* Right: Quick Add | Notifications | Overflow ⋮
+              Global Search removed — each section has its own scoped search,
+              and Cmd/Ctrl+K still opens the command palette for power users. */}
           <div className="flex items-center gap-0.5 flex-shrink-0 overflow-visible">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowSearchModal(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Search" aria-label="Search">
-                  <Search className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Search</TooltipContent>
-            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => setShowQuickAdd(true)} className="h-9 w-9 rounded-xl flex-shrink-0" title="Quick Add" aria-label="Quick Add">

@@ -5,7 +5,7 @@ import { useSharedExpenses } from "@/hooks/use-shared-expenses";
 import {
   Lock, FileText, DollarSign, Bell, Plus, AlertTriangle,
   Clock, Upload, Shield, RefreshCw,
-  ChevronRight, CreditCard, Activity, Key, TrendingUp, TrendingDown,
+  ChevronRight, CreditCard, Activity, Key, KeyRound, TrendingUp, TrendingDown,
   Sparkles, ShieldAlert, ShieldCheck, ArrowRight, Search,
   Wallet, Repeat, BookOpen, Check,
 } from "lucide-react";
@@ -49,17 +49,27 @@ function getGreeting(): string {
 }
 
 function getUserName(accountEmail: string | null): string {
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  const firstName = (name: string): string => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return parts[0] ? cap(parts[0]) : '';
+  };
+  // Strip digits + punctuation from an email prefix as an absolute last
+  // resort. "saketsuman1312" → "Saketsuman" (without the digits) is a
+  // friendlier fallback than "Saketsuman1312".
   const namifyEmail = (email: string): string => {
-    // BUG-25: don't strip digits from usernames like "saketsuman1312".
-    const prefix = email.split('@')[0].replace(/[._-]/g, ' ').trim();
-    if (!prefix) return '';
-    return prefix.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const raw = email.split('@')[0];
+    const cleaned = raw.replace(/[._-]+/g, ' ').replace(/\d+/g, ' ').trim();
+    if (!cleaned) return '';
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    return parts[0] ? cap(parts[0]) : '';
   };
   const isEmailPrefix = (name: string, email: string | null): boolean => {
     if (!email) return false;
     return name.toLowerCase() === email.split('@')[0].toLowerCase();
   };
   try {
+    // 1) customerProfile (most authoritative — set during signup).
     const cp = JSON.parse(localStorage.getItem('customerProfile') || '{}');
     const profileMatchesAccount =
       accountEmail &&
@@ -68,18 +78,30 @@ function getUserName(accountEmail: string | null): string {
     if (profileMatchesAccount) {
       const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
       if (fullName && !fullName.includes('@') && !isEmailPrefix(fullName, accountEmail)) {
-        return fullName.split(' ')[0];
+        return firstName(fullName);
       }
     }
-    if (accountEmail) return namifyEmail(accountEmail);
+    // 2) iv_account_session (set on login; carries the user-provided name).
     const session = localStorage.getItem('iv_account_session');
     if (session) {
-      const { email, name } = JSON.parse(session);
-      if (name && typeof name === 'string' && !name.includes('@') && !isEmailPrefix(name, email)) {
-        return name.split(' ')[0];
-      }
-      if (email) return namifyEmail(email);
+      try {
+        const { email, name } = JSON.parse(session);
+        if (name && typeof name === 'string' && !name.includes('@') && !isEmailPrefix(name, email)) {
+          return firstName(name);
+        }
+      } catch { /* ignore */ }
     }
+    // 3) Plain `iv_account` blob (alternate storage key in some flows).
+    const acct = localStorage.getItem('iv_account');
+    if (acct) {
+      try {
+        const a = JSON.parse(acct);
+        const n = (a.fullName || a.full_name || a.name || a.displayName || '').trim();
+        if (n && !n.includes('@')) return firstName(n);
+      } catch { /* ignore */ }
+    }
+    // 4) Last resort — email prefix without digits.
+    if (accountEmail) return namifyEmail(accountEmail);
   } catch { /* ignore */ }
   return '';
 }
@@ -593,11 +615,15 @@ export default function Dashboard() {
       return isNaN(d.getTime()) ? new Date(0) : d;
     };
     const items = [
-      ...passwords.map(p => ({ id: p.id, text: p.name ?? 'Password', action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: safeDate(p.updatedAt || p.createdAt), href: '/passwords' })),
-      ...notes.map(n => ({ id: n.id, text: n.title ?? 'Note', action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: safeDate(n.updatedAt || n.createdAt), href: '/notes' })),
-      ...expenses.map(e => ({ id: e.id, text: e.description || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: safeDate((e as any).updatedAt || e.date || e.createdAt), href: '/expenses' })),
-      ...reminders.map(r => ({ id: r.id, text: r.title ?? 'Reminder', action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: safeDate(r.updatedAt || r.createdAt), href: '/reminders' })),
-      ...subscriptions.map(s => ({ id: s.id, text: s.name ?? 'Subscription', action: 'Subscription', icon: CreditCard, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: safeDate(s.updatedAt || s.createdAt), href: '/subscriptions' })),
+      // Each section's deep-link uses `?openId=<id>` so the destination page
+      // can pick up the specific item and open its detail/editor view. Notes
+      // was rendering blank because the href was bare `/notes` — the openId
+      // handler had no parameter to consume.
+      ...passwords.map(p => ({ id: p.id, text: p.name ?? 'Password', action: 'Password', icon: Lock, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-500/10', timestamp: safeDate(p.updatedAt || p.createdAt), href: `/passwords?openId=${encodeURIComponent(p.id)}` })),
+      ...notes.map(n => ({ id: n.id, text: n.title ?? 'Note', action: 'Note', icon: FileText, iconColor: 'text-amber-500', iconBg: 'bg-amber-500/10', timestamp: safeDate(n.updatedAt || n.createdAt), href: `/notes?openId=${encodeURIComponent(n.id)}` })),
+      ...expenses.map(e => ({ id: e.id, text: (e as any).description || (e as any).title || e.category || 'Expense', action: 'Expense', icon: DollarSign, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-500/10', timestamp: safeDate((e as any).updatedAt || e.date || e.createdAt), href: `/expenses?openId=${encodeURIComponent(e.id)}` })),
+      ...reminders.map(r => ({ id: r.id, text: r.title ?? 'Reminder', action: 'Reminder', icon: Bell, iconColor: 'text-orange-500', iconBg: 'bg-orange-500/10', timestamp: safeDate(r.updatedAt || r.createdAt), href: `/reminders?openId=${encodeURIComponent(r.id)}` })),
+      ...subscriptions.map(s => ({ id: s.id, text: s.name ?? 'Subscription', action: 'Subscription', icon: CreditCard, iconColor: 'text-purple-500', iconBg: 'bg-purple-500/10', timestamp: safeDate(s.updatedAt || s.createdAt), href: `/subscriptions?openId=${encodeURIComponent(s.id)}` })),
     ];
     return items
       .filter(item => !normalizedSearch || (item.text ?? '').toLowerCase().includes(normalizedSearch))
@@ -937,7 +963,11 @@ export default function Dashboard() {
             { label: 'Add Password', icon: Lock,        href: '/passwords?action=add', tone: 'indigo'  as StatTone },
             { label: 'New Note',     icon: FileText,    href: '/notes?action=add',     tone: 'amber'   as StatTone },
             { label: 'Log Expense',  icon: DollarSign,  href: '/expenses?action=add',  tone: 'emerald' as StatTone },
-            { label: 'Generator',    icon: Key,                                        tone: 'cyan'    as StatTone, onClick: openPasswordGenerator },
+            // KeyRound has a chunkier glyph than Key — visually matches the
+            // other Quick Action icons (Lock / FileText / DollarSign) which
+            // already have heavier strokes. Also bumped icon size from 18 →
+            // 20 (w-5 h-5) across the row for better legibility.
+            { label: 'Generator',    icon: KeyRound,                                   tone: 'cyan'    as StatTone, onClick: openPasswordGenerator },
           ] as Array<{ label: string; icon: React.ElementType; tone: StatTone; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, tone, onClick }) => {
             const inner = (
               <motion.div
@@ -949,7 +979,7 @@ export default function Dashboard() {
                 className={`glass-card card-${tone} ring-tint-${tone} flex flex-col items-center justify-center gap-1.5 px-2 py-3.5 cursor-pointer h-full min-h-[88px]`}
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 stat-glow-${tone} shadow-[0_6px_20px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15`}>
-                  <Icon className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
+                  <Icon className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-[11px] sm:text-xs font-semibold text-foreground text-center leading-tight">{label}</span>
               </motion.div>

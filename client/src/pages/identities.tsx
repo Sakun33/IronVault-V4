@@ -18,8 +18,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, Search, UserCircle, Mail,
-  Phone, MapPin, FileText as FileTextIcon, Building2, Sparkles,
+  Phone, MapPin, FileText as FileTextIcon, Building2, Sparkles, Lock, Cloud, ShieldCheck,
 } from 'lucide-react';
+import { VerifyAccessModal } from '@/components/verify-access-modal';
+import { PageHero } from '@/components/page-hero';
 import { IDENTITY_TYPES, type Identity } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 
@@ -32,6 +34,7 @@ const TYPE_THEME: Record<IdentityTypeKey, {
   text: string;
   badgeBg: string;
   label: string;
+  emoji: string;
   icon: typeof UserCircle;
 }> = {
   personal: {
@@ -40,6 +43,7 @@ const TYPE_THEME: Record<IdentityTypeKey, {
     text:    'text-violet-300',
     badgeBg: 'bg-violet-500/15',
     label:   'Personal',
+    emoji:   '👤',
     icon:    UserCircle,
   },
   work: {
@@ -48,6 +52,7 @@ const TYPE_THEME: Record<IdentityTypeKey, {
     text:    'text-blue-300',
     badgeBg: 'bg-blue-500/15',
     label:   'Work',
+    emoji:   '💼',
     icon:    Building2,
   },
   custom: {
@@ -56,6 +61,7 @@ const TYPE_THEME: Record<IdentityTypeKey, {
     text:    'text-emerald-300',
     badgeBg: 'bg-emerald-500/15',
     label:   'Custom',
+    emoji:   '⭐',
     icon:    Sparkles,
   },
 };
@@ -112,6 +118,11 @@ export default function Identities() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<Identity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // Master-password gate — same pattern as /cards and /api-keys. Identity
+  // document numbers (passport / SSN / driver's licence) are sensitive
+  // enough to warrant a re-verification step on top of the vault unlock.
+  const [isVerified, setIsVerified] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -139,6 +150,34 @@ export default function Identities() {
         ]}
         mock="api-keys"
       />
+    );
+  }
+
+  // Master-password gate — re-verify before document numbers + addresses
+  // render, even when the vault itself is unlocked.
+  if (!isVerified) {
+    return (
+      <>
+        <PageHero
+          icon={UserCircle}
+          title="Identities"
+          subtitle="Passports, licences, and personal documents — verify your identity to unlock."
+          badges={[
+            { icon: <Lock className="w-3 h-3" />,        label: 'AES-256' },
+            { icon: <ShieldCheck className="w-3 h-3" />, label: 'Master password gated' },
+            { icon: <Cloud className="w-3 h-3" />,       label: 'Cloud synced' },
+          ]}
+          cta={{ label: 'Unlock with Master Password', icon: Lock, onClick: () => setShowVerifyModal(true), testId: 'identities-unlock-cta' }}
+          accent="violet"
+        />
+        <VerifyAccessModal
+          open={showVerifyModal}
+          onOpenChange={setShowVerifyModal}
+          onVerified={() => setIsVerified(true)}
+          title="Unlock Identities"
+          description="Enter your master password or use biometrics to view your saved identities."
+        />
+      </>
     );
   }
 
@@ -306,7 +345,8 @@ export default function Identities() {
                       <div className="font-semibold truncate text-foreground">{i.title}</div>
                       <div className="text-xs text-muted-foreground truncate">{fullName(i)}</div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium`}>
+                        <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium inline-flex items-center gap-1`}>
+                          <span aria-hidden>{theme.emoji}</span>
                           {theme.label}
                         </span>
                         {i.documentNumber && (
@@ -343,7 +383,8 @@ export default function Identities() {
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <span className="truncate flex-1">{detail.title}</span>
-                  <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium flex-shrink-0`}>
+                  <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${theme.badgeBg} ${theme.text} font-medium flex-shrink-0 inline-flex items-center gap-1`}>
+                    <span aria-hidden>{theme.emoji}</span>
                     {theme.label}
                   </span>
                 </DialogTitle>

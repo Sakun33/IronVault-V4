@@ -13,11 +13,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, CreditCard as CardIcon, Search } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, CheckCircle, CreditCard as CardIcon, Search, Lock, Cloud, ShieldCheck } from 'lucide-react';
 import { CREDIT_CARD_BRANDS, type CreditCard } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 import { useSubscription } from '@/hooks/use-subscription';
 import { FeaturePreview } from '@/components/feature-preview';
+import { PageHero } from '@/components/page-hero';
+import { VerifyAccessModal } from '@/components/verify-access-modal';
 
 const BRAND_GRADIENTS: Record<string, string> = {
   visa:       'from-blue-700 via-blue-600 to-blue-500',
@@ -29,6 +31,22 @@ const BRAND_GRADIENTS: Record<string, string> = {
   jcb:        'from-indigo-700 via-purple-600 to-fuchsia-500',
   unionpay:   'from-red-700 via-rose-600 to-pink-500',
   other:      'from-gray-800 via-gray-700 to-gray-600',
+};
+
+// Compact brand glyph — recognizable wordmark substitute for each
+// network. Avoids shipping logo SVGs (which carry trademark risk + extra
+// bundle weight) while still letting users distinguish brands at a
+// glance. Falls back to a generic 💳 for 'other' / unknown brands.
+const BRAND_GLYPH: Record<string, string> = {
+  visa:       'VISA',
+  mastercard: '●●',
+  amex:       'AMEX',
+  discover:   'DISC',
+  rupay:      'RuPay',
+  diners:     'DC',
+  jcb:        'JCB',
+  unionpay:   'UP',
+  other:      '💳',
 };
 
 const DEFAULT_COLORS = ['#1f2937', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444'];
@@ -92,6 +110,11 @@ export default function CreditCards() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<CreditCard | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // Master-password gate — same pattern as /api-keys. Cards carry the most
+  // sensitive vault data (full PAN + CVV + PIN) so we re-verify identity
+  // before rendering the list, even if the vault itself is unlocked.
+  const [isVerified, setIsVerified] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -102,6 +125,34 @@ export default function CreditCards() {
       (c.brand || '').toLowerCase().includes(q)
     );
   }, [creditCards, searchQuery]);
+
+  // Master-password gate — re-verify before PAN/CVV/PIN values render,
+  // even when the vault is unlocked. Mirrors /api-keys.
+  // Placed after all hooks so the hook order stays stable across renders.
+  if (!isVerified) {
+    return (
+      <>
+        <PageHero
+          icon={CardIcon}
+          title="Cards"
+          subtitle="Encrypted card numbers, CVVs, and PINs. Verify your identity to unlock."
+          badges={[
+            { icon: <Lock className="w-3 h-3" />,        label: 'AES-256' },
+            { icon: <ShieldCheck className="w-3 h-3" />, label: 'Master password gated' },
+            { icon: <Cloud className="w-3 h-3" />,       label: 'Cloud synced' },
+          ]}
+          cta={{ label: 'Unlock with Master Password', icon: Lock, onClick: () => setShowVerifyModal(true), testId: 'cards-unlock-cta' }}
+        />
+        <VerifyAccessModal
+          open={showVerifyModal}
+          onOpenChange={setShowVerifyModal}
+          onVerified={() => setIsVerified(true)}
+          title="Unlock Cards"
+          description="Enter your master password or use biometrics to view your saved cards."
+        />
+      </>
+    );
+  }
 
   const openAdd = () => {
     setEditing(null);
@@ -236,7 +287,16 @@ export default function CreditCards() {
                 <div className="absolute inset-0 p-4 flex flex-col justify-between">
                   <div className="flex items-start justify-between">
                     <div className="text-[11px] uppercase tracking-widest opacity-80">{card.type}</div>
-                    <div className="text-xs font-semibold uppercase opacity-90">{card.brand}</div>
+                    {/* Brand glyph — bold wordmark in the top-right so the
+                        card is instantly recognizable across networks. */}
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[18px] leading-none font-black italic tracking-tight drop-shadow">
+                        {BRAND_GLYPH[card.brand] ?? BRAND_GLYPH.other}
+                      </span>
+                      <span className="text-[9px] uppercase tracking-widest opacity-70">
+                        {card.brand}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <div className="font-mono text-base tracking-widest mb-2">
