@@ -1,738 +1,197 @@
 {
+  "$schema": "ironvault-seed-v1",
+  "generatedAt": "2026-05-15T18:00:00.000Z",
+  "description": "Comprehensive realistic seed data for an IronVault power user (May 2026). Covers every section with varied, plausible content including TOTP, history, brand metadata, and Indian-context entries.",
+
   "passwords": [
-    {
-      "id": "pwd-gmail",
-      "name": "Gmail Account",
-      "url": "https://gmail.com",
-      "username": "john.doe@gmail.com",
-      "password": "SecurePass123!",
-      "notes": "Primary email account for work and personal use",
-      "tags": [
-        "email",
-        "google",
-        "primary"
-      ],
-      "isFavorite": true,
-      "lastModified": "2024-01-15T00:00:00.000Z",
-      "createdAt": "2024-01-15T00:00:00.000Z",
-      "updatedAt": "2024-01-15T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-bank-america",
-      "name": "Bank of America",
-      "url": "https://bankofamerica.com",
-      "username": "j.doe@email.com",
-      "password": "BankSecure#2024",
-      "notes": "Primary checking and savings account",
-      "tags": [
-        "banking",
-        "financial",
-        "primary"
-      ],
-      "isFavorite": true,
-      "lastModified": "2024-01-20T00:00:00.000Z",
-      "createdAt": "2024-01-20T00:00:00.000Z",
-      "updatedAt": "2024-01-20T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-netflix",
-      "name": "Netflix Premium",
-      "url": "https://netflix.com",
-      "username": "john.doe@gmail.com",
-      "password": "StreamPass789#",
-      "notes": "Family streaming subscription with 4K support",
-      "tags": [
-        "entertainment",
-        "streaming",
-        "family"
-      ],
-      "isFavorite": false,
-      "lastModified": "2024-02-01T00:00:00.000Z",
-      "createdAt": "2024-02-01T00:00:00.000Z",
-      "updatedAt": "2024-02-01T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-spotify",
-      "name": "Spotify Premium",
-      "url": "https://spotify.com",
-      "username": "john.doe.music@gmail.com",
-      "password": "MusicLover2024!",
-      "notes": "Ad-free music streaming service",
-      "tags": [
-        "music",
-        "streaming",
-        "entertainment"
-      ],
-      "isFavorite": false,
-      "lastModified": "2024-02-05T00:00:00.000Z",
-      "createdAt": "2024-02-05T00:00:00.000Z",
-      "updatedAt": "2024-02-05T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-github",
-      "name": "GitHub",
-      "url": "https://github.com",
-      "username": "john-doe-dev",
-      "password": "GitSecureDev@1",
-      "notes": "Development repositories and project management",
-      "tags": [
-        "development",
-        "code",
-        "git"
-      ],
-      "isFavorite": true,
-      "lastModified": "2024-01-10T00:00:00.000Z",
-      "createdAt": "2024-01-10T00:00:00.000Z",
-      "updatedAt": "2024-01-10T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-amazon",
-      "name": "Amazon Prime",
-      "url": "https://amazon.com",
-      "username": "john.doe@gmail.com",
-      "password": "PrimeShopping#2024",
-      "notes": "Amazon Prime membership for shopping and streaming",
-      "tags": [
-        "shopping",
-        "entertainment",
-        "prime"
-      ],
-      "isFavorite": false,
-      "lastModified": "2024-02-10T00:00:00.000Z",
-      "createdAt": "2024-02-10T00:00:00.000Z",
-      "updatedAt": "2024-02-10T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-linkedin",
-      "name": "LinkedIn",
-      "url": "https://linkedin.com",
-      "username": "john.doe.pro@gmail.com",
-      "password": "LinkedInPro#2024",
-      "notes": "Professional networking and career development",
-      "tags": [
-        "social",
-        "career",
-        "professional"
-      ],
-      "isFavorite": false,
-      "lastModified": "2024-01-25T00:00:00.000Z",
-      "createdAt": "2024-01-25T00:00:00.000Z",
-      "updatedAt": "2024-01-25T00:00:00.000Z"
-    },
-    {
-      "id": "pwd-adobe",
-      "name": "Adobe Creative Cloud",
-      "url": "https://adobe.com",
-      "username": "john.doe@design.com",
-      "password": "DesignSuite#2024",
-      "notes": "Creative software suite for design work",
-      "tags": [
-        "design",
-        "software",
-        "creative"
-      ],
-      "isFavorite": false,
-      "lastModified": "2024-02-15T00:00:00.000Z",
-      "createdAt": "2024-02-15T00:00:00.000Z",
-      "updatedAt": "2024-02-15T00:00:00.000Z"
-    }
+    { "id": "pw-google",     "name": "Google",            "url": "https://accounts.google.com",   "username": "saket.suman@gmail.com",         "password": "K9$gT2vN!pX7mQ4rL@wB",   "category": "Email",          "isFavorite": true,  "tags": ["primary","2fa"],   "totp": "otpauth://totp/Google:saket.suman@gmail.com?secret=JBSWY3DPEHPK3PXPGOOGLE&issuer=Google",                          "history": [{"password":"K9$gT2vN!pX7mQ4rL","changedAt":"2025-11-12T10:14:00.000Z"}], "notes": "Primary Google account. Recovery phone updated Apr 2026.", "createdAt": "2018-03-04T08:11:00.000Z", "updatedAt": "2026-04-22T14:02:00.000Z" },
+    { "id": "pw-apple",      "name": "Apple ID",          "url": "https://appleid.apple.com",     "username": "saket.suman@icloud.com",        "password": "Pq3#Jx9LmRt7$Vw2BkN",     "category": "Other",          "isFavorite": true,  "tags": ["primary","2fa"],                                                                                                                                                                                  "notes": "Recovery key stored in identities section.",                "createdAt": "2017-08-19T12:30:00.000Z", "updatedAt": "2026-03-08T18:44:00.000Z" },
+    { "id": "pw-microsoft",  "name": "Microsoft Account", "url": "https://login.microsoftonline.com","username":"saket.suman@outlook.com",      "password": "Wx7@Hb4NpQ!2ZmK9rTcL",    "category": "Email",          "tags": ["work"],            "notes": "Used for Office 365 + Xbox.",                                                                                                                                                                                                              "createdAt": "2019-01-10T09:00:00.000Z", "updatedAt": "2026-02-14T11:21:00.000Z" },
+    { "id": "pw-amazon",     "name": "Amazon",            "url": "https://amazon.in",             "username": "saket.suman@gmail.com",         "password": "Rx8$Mk3HpL!7VnQ9wTjZ",    "category": "Shopping",       "isFavorite": true,  "tags": ["payments-saved"],                                                                                                                                                                                       "notes": "Prime member since 2019.",                                  "createdAt": "2019-04-11T15:22:00.000Z", "updatedAt": "2026-01-30T20:09:00.000Z" },
+    { "id": "pw-facebook",   "name": "Facebook",          "url": "https://facebook.com",          "username": "saket.suman@gmail.com",         "password": "Tn4#Zp9Bq!6XmL2vRsW",     "category": "Social Media",   "tags": ["legacy"],                                                                                                                                                                                                "notes": "",                                                          "createdAt": "2015-06-21T16:40:00.000Z", "updatedAt": "2025-12-04T07:55:00.000Z" },
+    { "id": "pw-instagram",  "name": "Instagram",         "url": "https://instagram.com",         "username": "saketsuman",                    "password": "Vy5@Lc2Gr!8WnK4hSdM",     "category": "Social Media",   "isFavorite": true,                                                                                                                                                                                                                                                       "createdAt": "2017-02-08T19:11:00.000Z", "updatedAt": "2026-04-30T22:37:00.000Z" },
+    { "id": "pw-twitter",    "name": "X (Twitter)",       "url": "https://x.com",                 "username": "@saketsuman",                   "password": "Bk6#Dp1Yn!4QvL7rTjU",     "category": "Social Media",                                                                                                                                                                                                                                                                                            "createdAt": "2018-09-14T13:25:00.000Z", "updatedAt": "2026-03-19T10:08:00.000Z" },
+    { "id": "pw-linkedin",   "name": "LinkedIn",          "url": "https://linkedin.com",          "username": "saket.suman@gmail.com",         "password": "Hf7$Zq3Mp!9XwK2vRdP",     "category": "Work",           "isFavorite": true,                                                                                                                                                                                          "notes": "Premium subscription active.",                              "createdAt": "2016-11-30T08:45:00.000Z", "updatedAt": "2026-04-10T16:50:00.000Z" },
+    { "id": "pw-github",     "name": "GitHub",            "url": "https://github.com",            "username": "saketsuman",                    "password": "Mn8#Wj2Vk!5BqL9rTzC",     "category": "Work",           "isFavorite": true,  "tags": ["dev","2fa"],       "totp": "otpauth://totp/GitHub:saketsuman?secret=GITHUB7X4YK9LMNPQRS&issuer=GitHub",                                                                                                              "notes": "Pro account. SSH keys rotated quarterly.",                  "createdAt": "2017-04-22T11:12:00.000Z", "updatedAt": "2026-04-28T09:33:00.000Z" },
+    { "id": "pw-gitlab",     "name": "GitLab",            "url": "https://gitlab.com",            "username": "saketsuman",                    "password": "Cv9$Nh4Lp!7XtR3wSjQ",     "category": "Work",           "tags": ["dev"],                                                                                                                                                                                                                                                                       "createdAt": "2019-07-18T14:18:00.000Z", "updatedAt": "2026-02-25T13:14:00.000Z" },
+    { "id": "pw-netflix",    "name": "Netflix",           "url": "https://netflix.com",           "username": "saket.suman@gmail.com",         "password": "Df1#Bm6Tr!2ZqL5vKxN",     "category": "Entertainment",  "tags": ["family-plan"],                                                                                                                                                                                                                                                                "createdAt": "2020-02-29T18:00:00.000Z", "updatedAt": "2026-03-12T19:42:00.000Z" },
+    { "id": "pw-spotify",    "name": "Spotify",           "url": "https://spotify.com",           "username": "saket.suman@gmail.com",         "password": "Eg2#Nv7Sw!3YkH4rPbT",     "category": "Entertainment",                                                                                                                                                                                                                                                                                            "createdAt": "2019-10-14T20:31:00.000Z", "updatedAt": "2026-01-08T12:20:00.000Z" },
+    { "id": "pw-disney",     "name": "Disney+ Hotstar",   "url": "https://hotstar.com",           "username": "saket.suman@gmail.com",         "password": "Fh3#Pw8Bx!4QmJ6uLcM",     "category": "Entertainment",                                                                                                                                                                                                                                                                                            "createdAt": "2020-11-02T10:55:00.000Z", "updatedAt": "2026-04-15T08:11:00.000Z" },
+    { "id": "pw-ytpremium",  "name": "YouTube Premium",   "url": "https://youtube.com/premium",   "username": "saket.suman@gmail.com",         "password": "Gj4#Cy9Rz!5XnK7vLdN",     "category": "Entertainment",                                                                                                                                                                                                                                                                                            "createdAt": "2021-01-22T17:14:00.000Z", "updatedAt": "2025-09-30T11:00:00.000Z" },
+    { "id": "pw-applemusic", "name": "Apple Music",       "url": "https://music.apple.com",       "username": "saket.suman@icloud.com",        "password": "Hk5#Dz2Sa!6YtM8wPbV",     "category": "Entertainment",                                                                                                                                                                                                                                                                                            "createdAt": "2022-04-03T09:42:00.000Z", "updatedAt": "2026-03-01T14:55:00.000Z" },
+    { "id": "pw-hdfc",       "name": "HDFC Bank",         "url": "https://netbanking.hdfcbank.com","username":"saketsuman1312",                "password": "Jl6#Eb3Tx!7ZvN9xQcW",     "category": "Finance",        "isFavorite": true,  "tags": ["banking"],                                                                                                                                                                                          "notes": "Customer ID: 88412****",                                    "createdAt": "2016-08-01T11:00:00.000Z", "updatedAt": "2026-05-04T19:21:00.000Z" },
+    { "id": "pw-paypal",     "name": "PayPal",            "url": "https://paypal.com",            "username": "saket.suman@gmail.com",         "password": "Km7#Fc4Uz!8AwO1yReX",     "category": "Finance",        "isFavorite": true,  "totp": "otpauth://totp/PayPal:saket.suman@gmail.com?secret=PAYPAL2KSEC4FXYZ8H9LM&issuer=PayPal",                                                                                                              "notes": "Linked to HDFC Visa.",                                      "createdAt": "2017-05-29T13:32:00.000Z", "updatedAt": "2026-04-02T10:45:00.000Z" },
+    { "id": "pw-coinbase",   "name": "Coinbase",          "url": "https://coinbase.com",          "username": "saket.suman@gmail.com",         "password": "Ln8#Gd5Vy!9BxP2zSfY",     "category": "Finance",        "tags": ["crypto","2fa"],    "totp": "otpauth://totp/Coinbase:saket.suman@gmail.com?secret=COINBASE6X7YZ4LMNPQR&issuer=Coinbase",                                                                                                                                                       "createdAt": "2021-03-17T22:08:00.000Z", "updatedAt": "2026-02-09T18:30:00.000Z" },
+    { "id": "pw-robinhood",  "name": "Robinhood",         "url": "https://robinhood.com",         "username": "saket.suman@gmail.com",         "password": "Mo9#He6Wx!1CyQ3aTgZ",     "category": "Finance",        "tags": ["stocks"],                                                                                                                                                                                                                                                                       "createdAt": "2022-06-08T15:11:00.000Z", "updatedAt": "2025-12-22T09:40:00.000Z" },
+    { "id": "pw-aws",        "name": "AWS Console",       "url": "https://console.aws.amazon.com","username": "saket.suman@gmail.com",         "password": "Np1#If7Xw!2DzR4bUhA",     "category": "Work",           "isFavorite": true,  "tags": ["dev","2fa","root"],"totp": "otpauth://totp/AWS:saket.suman@gmail.com?secret=AWSROOT3KX7Y4LMNPQR&issuer=AWS",                                                                                                                                                       "createdAt": "2018-12-04T16:24:00.000Z", "updatedAt": "2026-05-01T07:22:00.000Z" },
+    { "id": "pw-vercel",     "name": "Vercel",            "url": "https://vercel.com",            "username": "saketsuman",                    "password": "Oq2#Jg8Yz!3EaS5cVhB",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2022-09-12T11:30:00.000Z", "updatedAt": "2026-04-18T13:09:00.000Z" },
+    { "id": "pw-cloudflare", "name": "Cloudflare",        "url": "https://dash.cloudflare.com",   "username": "saket.suman@gmail.com",         "password": "Pr3#Kh9Za!4FbT6dWiC",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2021-11-08T20:14:00.000Z", "updatedAt": "2026-03-25T16:38:00.000Z" },
+    { "id": "pw-do",         "name": "DigitalOcean",      "url": "https://cloud.digitalocean.com","username": "saket.suman@gmail.com",         "password": "Qs4#Lj1Ab!5GcU7eXjD",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2020-05-19T08:55:00.000Z", "updatedAt": "2025-10-11T15:12:00.000Z" },
+    { "id": "pw-slack",      "name": "Slack",             "url": "https://slack.com",             "username": "saket.suman@company.io",        "password": "Rt5#Mk2Bc!6HdV8fYkE",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2019-08-02T10:08:00.000Z", "updatedAt": "2026-04-09T14:45:00.000Z" },
+    { "id": "pw-discord",    "name": "Discord",           "url": "https://discord.com",           "username": "saketsuman#1312",               "password": "Su6#Nl3Cd!7IeW9gZlF",     "category": "Social Media",                                                                                                                                                                                                                                                                                             "createdAt": "2020-03-18T19:40:00.000Z", "updatedAt": "2026-02-28T20:15:00.000Z" },
+    { "id": "pw-notion",     "name": "Notion",            "url": "https://notion.so",             "username": "saket.suman@gmail.com",         "password": "Tv7#Om4De!8JfX1hAmG",     "category": "Work",           "isFavorite": true,                                                                                                                                                                                                                                                                       "createdAt": "2021-07-25T12:21:00.000Z", "updatedAt": "2026-05-06T09:18:00.000Z" },
+    { "id": "pw-figma",      "name": "Figma",             "url": "https://figma.com",             "username": "saket.suman@gmail.com",         "password": "Uw8#Pn5Ef!9KgY2iBnH",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2022-02-14T17:33:00.000Z", "updatedAt": "2026-04-21T11:50:00.000Z" },
+    { "id": "pw-adobe",      "name": "Adobe Creative Cloud","url":"https://account.adobe.com",     "username": "saket.suman@gmail.com",         "password": "Vx9#Qo6Fg!1LhZ3jCoI",     "category": "Work",                                                                                                                                                                                                                                                                                                     "createdAt": "2020-12-05T14:09:00.000Z", "updatedAt": "2025-11-19T08:28:00.000Z" },
+    { "id": "pw-uber",       "name": "Uber",              "url": "https://uber.com",              "username": "+919876543210",                 "password": "Wy1#Rp7Gh!2MiA4kDpJ",     "category": "Personal",                                                                                                                                                                                                                                                                                                 "createdAt": "2018-04-30T16:15:00.000Z", "updatedAt": "2026-01-12T18:55:00.000Z" }
   ],
-  "subscriptions": [
-    {
-      "id": "sub-netflix",
-      "name": "Netflix Premium",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "monthly",
-      "nextBillingDate": "2024-04-15T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Entertainment",
-      "notes": "Family plan with 4K streaming and multiple screens",
-      "isActive": true,
-      "createdAt": "2024-01-15T00:00:00.000Z",
-      "updatedAt": "2024-01-15T00:00:00.000Z"
-    },
-    {
-      "id": "sub-spotify",
-      "name": "Spotify Premium",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "monthly",
-      "nextBillingDate": "2024-04-10T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Music",
-      "notes": "Ad-free music streaming with offline downloads",
-      "isActive": true,
-      "createdAt": "2024-01-10T00:00:00.000Z",
-      "updatedAt": "2024-01-10T00:00:00.000Z"
-    },
-    {
-      "id": "sub-adobe",
-      "name": "Adobe Creative Cloud",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "monthly",
-      "nextBillingDate": "2024-04-01T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Software",
-      "notes": "All apps plan including Photoshop, Illustrator, Premiere Pro",
-      "isActive": true,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "sub-amazon",
-      "name": "Amazon Prime",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "monthly",
-      "nextBillingDate": "2024-04-05T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Shopping",
-      "notes": "Prime membership with free shipping and Prime Video",
-      "isActive": true,
-      "createdAt": "2024-01-05T00:00:00.000Z",
-      "updatedAt": "2024-01-05T00:00:00.000Z"
-    },
-    {
-      "id": "sub-microsoft",
-      "name": "Microsoft 365 Family",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "monthly",
-      "nextBillingDate": "2024-04-20T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Software",
-      "notes": "Office apps and 1TB OneDrive cloud storage",
-      "isActive": true,
-      "createdAt": "2024-01-20T00:00:00.000Z",
-      "updatedAt": "2024-01-20T00:00:00.000Z"
-    },
-    {
-      "id": "sub-dropbox",
-      "name": "Dropbox Plus",
-      "plan": "Basic",
-      "cost": 9.99,
-      "currency": "USD",
-      "billingCycle": "yearly",
-      "nextBillingDate": "2025-03-01T00:00:00.000Z",
-      "reminderDays": 7,
-      "category": "Cloud Storage",
-      "notes": "2TB cloud storage with file synchronization",
-      "isActive": true,
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    }
-  ],
+
   "notes": [
-    {
-      "id": "note-investment",
-      "title": "Investment Strategy 2024",
-      "content": "# Investment Strategy for 2024\n\n## Goals\n- Maximize retirement contributions\n- Diversify portfolio across asset classes\n- Maintain emergency fund\n- Achieve 10% annual returns\n\n## Asset Allocation\n- 60% Stocks (US and International)\n- 25% Bonds\n- 10% Real Estate\n- 5% Cryptocurrency\n\n## Key Principles\n1. **Dollar-cost averaging** for regular investments\n2. **Rebalancing** quarterly\n3. **Tax-loss harvesting** when appropriate\n4. **Long-term focus** - avoid market timing\n\n*Review quarterly and adjust based on market conditions*",
-      "notebook": "Financial Planning",
-      "tags": [
-        "investment",
-        "strategy",
-        "2024",
-        "retirement"
-      ],
-      "isPinned": true,
-      "noteType": "rich",
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "note-security",
-      "title": "Password Security Checklist",
-      "content": "### Password Security Checklist\n\n- [x] Use unique passwords for each service\n- [x] Use a password manager (SecureVault!)\n- [ ] Enable Two-Factor Authentication (2FA) everywhere possible\n- [ ] Change critical passwords every 6-12 months\n- [ ] Avoid public Wi-Fi for sensitive transactions\n- [ ] Regular security audits\n- [ ] Monitor for data breaches\n\n### Best Practices\n- Minimum 12 characters\n- Mix of letters, numbers, symbols\n- No personal information\n- Different password for each account",
-      "notebook": "Security",
-      "tags": [
-        "security",
-        "checklist",
-        "passwords",
-        "2fa"
-      ],
-      "isPinned": true,
-      "noteType": "rich",
-      "createdAt": "2024-01-15T00:00:00.000Z",
-      "updatedAt": "2024-01-15T00:00:00.000Z"
-    },
-    {
-      "id": "note-budget",
-      "title": "Monthly Budget Template",
-      "content": "## Monthly Budget - March 2024\n\n### Income\n- Salary: $7,500\n- Freelance: $800\n- Investment Returns: $200\n- **Total Income: $8,500**\n\n### Fixed Expenses\n- Rent: $2,000\n- Utilities: $200\n- Insurance: $150\n- **Total Fixed: $2,350**\n\n### Variable Expenses\n- Groceries: $600\n- Transportation: $400\n- Subscriptions: $120\n- Entertainment: $300\n- **Total Variable: $1,420**\n\n### Savings Goals\n- Emergency Fund: $1,000\n- Retirement: $2,000\n- House Fund: $1,500\n- Vacation Fund: $500\n- **Total Savings: $5,000**\n\n### Summary\n- Total Expenses: $3,770\n- Total Savings: $5,000\n- **Remaining: -$270**\n\n*Need to reduce variable expenses by $270*",
-      "notebook": "Finance",
-      "tags": [
-        "budget",
-        "monthly",
-        "expenses",
-        "savings"
-      ],
-      "isPinned": false,
-      "noteType": "rich",
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    },
-    {
-      "id": "note-travel",
-      "title": "Europe Trip Planning",
-      "content": "# Europe Trip Planning - Summer 2024\n\n## Destinations\n1. **Paris, France** (5 days)\n   - Eiffel Tower, Louvre, Notre-Dame\n   - Budget: $1,500\n\n2. **Rome, Italy** (4 days)\n   - Colosseum, Vatican, Trevi Fountain\n   - Budget: $1,200\n\n3. **Barcelona, Spain** (3 days)\n   - Sagrada Familia, Park Güell, Gothic Quarter\n   - Budget: $900\n\n## Total Budget: $4,800\n- Flights: $1,200\n- Hotels: $1,800\n- Food: $800\n- Activities: $600\n- Transportation: $400\n\n## Preparation Checklist\n- [ ] Book flights\n- [ ] Reserve hotels\n- [ ] Get travel insurance\n- [ ] Apply for visas if needed\n- [ ] Plan daily itineraries\n- [ ] Learn basic phrases\n\n*Trip dates: June 15-27, 2024*",
-      "notebook": "Travel",
-      "tags": [
-        "travel",
-        "europe",
-        "planning",
-        "vacation"
-      ],
-      "isPinned": false,
-      "noteType": "rich",
-      "createdAt": "2024-02-20T00:00:00.000Z",
-      "updatedAt": "2024-02-20T00:00:00.000Z"
-    }
+    { "id": "nt-q2-okrs",     "title": "Q2 2026 OKRs",                "content": "<h2>Objectives</h2><ul><li>Ship v4.3 with TOTP + Cards + Identities</li><li>Reach 75+ Lighthouse Performance on mobile</li><li>Complete 286 security findings</li></ul><h3>Key Results</h3><ol><li>>=80% test coverage on api/index.ts</li><li>P95 vault unlock <2.5s</li><li>Zero P0 incidents</li></ol>", "notebook": "Work",     "tags": ["okrs","planning"], "isPinned": true,  "isFavorite": true, "color": "emerald", "createdAt": "2026-04-01T09:00:00.000Z", "updatedAt": "2026-05-08T11:24:00.000Z" },
+    { "id": "nt-sprint-23",   "title": "Sprint 23 — Retrospective",   "content": "<h3>What went well</h3><p>Glassmorphism overhaul shipped on time; community feedback positive.</p><h3>What didn't</h3><p>Dialog body padding regressed twice — need a visual snapshot test.</p><h3>Actions</h3><ul><li>Add Playwright a11y axe checks to CI</li><li>Bump tsc target to ES2022</li></ul>",                                                                                                                                                                                                                                                                  "notebook": "Work",     "tags": ["retro","sprint"],  "isPinned": false, "color": "sky",     "createdAt": "2026-05-04T17:30:00.000Z", "updatedAt": "2026-05-06T10:12:00.000Z" },
+    { "id": "nt-meeting-cto", "title": "1:1 with CTO — May 12",       "content": "<ul><li>Discussed AWS bill (₹38k/mo) — investigate Cloudflare R2 migration</li><li>Headcount: opening for senior backend</li><li>Roadmap alignment: identity + cards rollout</li></ul>",                                                                                                                                                                                                                                                                                                                                                                                                  "notebook": "Work",     "tags": ["1:1"],             "isPinned": false, "color": "violet",  "createdAt": "2026-05-12T15:00:00.000Z", "updatedAt": "2026-05-12T15:42:00.000Z" },
+    { "id": "nt-snippets",    "title": "Useful TS snippets",          "content": "<pre><code>// Type-safe object keys\nconst keys = &lt;T extends object&gt;(o: T) =&gt; Object.keys(o) as Array&lt;keyof T&gt;;\n\n// Branded primitive\ntype UserId = string &amp; { __brand: 'UserId' };</code></pre>",                                                                                                                                                                                                                                                                                                                                              "notebook": "Work",     "tags": ["typescript","ref"],"isPinned": true,                       "color": "emerald", "createdAt": "2025-09-14T14:20:00.000Z", "updatedAt": "2026-04-22T08:55:00.000Z" },
+    { "id": "nt-recipe-rajma","title": "Mom's Rajma Recipe",          "content": "<p>Soak rajma overnight. Pressure cook with salt + bay leaf, 6 whistles.</p><p>Saute onion+ginger+garlic, add tomato puree, cumin, coriander, garam masala, kasuri methi. Add cooked rajma + reserved water. Simmer 20 min.</p><p>Serve with jeera rice and onion rings.</p>",                                                                                                                                                                                                                                                                                                "notebook": "Personal", "tags": ["recipe","family"], "isPinned": true,                       "color": "amber",   "createdAt": "2024-12-25T19:00:00.000Z", "updatedAt": "2026-02-14T13:30:00.000Z" },
+    { "id": "nt-travel-japan","title": "Japan Trip — Oct 2026 Plan",  "content": "<h3>Itinerary</h3><ul><li>Tokyo (5n) — Asakusa, Shibuya, Akihabara</li><li>Kyoto (3n) — Fushimi Inari, Arashiyama</li><li>Osaka (2n) — Dotonbori, USJ</li></ul><h3>Bookings</h3><p>JAL flight ₹68,000 RT · Hotel via Booking</p>",                                                                                                                                                                                                                                                                                                                                                  "notebook": "Personal", "tags": ["travel","2026"],   "isPinned": true,  "isFavorite": true, "color": "rose",    "createdAt": "2026-03-08T16:42:00.000Z", "updatedAt": "2026-05-09T20:18:00.000Z" },
+    { "id": "nt-gift-ideas",  "title": "Gift Ideas — Birthdays 2026", "content": "<ul><li>Mom (Jun 14) — wireless earbuds</li><li>Dad (Aug 22) — Kindle Paperwhite</li><li>Sis (Nov 03) — Nykaa voucher + book</li></ul>",                                                                                                                                                                                                                                                                                                                                                                                                                                          "notebook": "Personal", "tags": ["gifts","family"],                                          "color": "violet",  "createdAt": "2026-01-15T11:18:00.000Z", "updatedAt": "2026-04-30T17:45:00.000Z" },
+    { "id": "nt-books-2026",  "title": "Reading list 2026",           "content": "<ol><li>Project Hail Mary — Andy Weir ✅</li><li>Sapiens — Yuval Noah Harari ✅</li><li>The Pragmatic Programmer (re-read) — in progress</li><li>Tomorrow, and Tomorrow, and Tomorrow — queued</li><li>Atomic Habits — queued</li></ol>",                                                                                                                                                                                                                                                                                                                                          "notebook": "Personal", "tags": ["books"],                                                   "color": "sky",     "createdAt": "2026-01-02T10:00:00.000Z", "updatedAt": "2026-04-28T22:00:00.000Z" },
+    { "id": "nt-app-idea",    "title": "App idea: Encrypted journal", "content": "<p>End-to-end encrypted daily journal. Markdown editor, mood tracking, photo attachments. PWA-first.</p><p>Differentiation: passwordless via passkey + zero-knowledge backups (mirror IronVault patterns).</p>",                                                                                                                                                                                                                                                                                                                                                                  "notebook": "Ideas",    "tags": ["product","idea"],                                          "color": "emerald", "createdAt": "2026-04-04T23:14:00.000Z", "updatedAt": "2026-04-04T23:14:00.000Z" },
+    { "id": "nt-side-saas",   "title": "Side project: SaaS landing kit","content": "<p>Tailwind + shadcn templates with built-in pricing, auth, billing. Sell on Gumroad ₹2,499/license.</p>",                                                                                                                                                                                                                                                                                                                                                                                                                                                              "notebook": "Ideas",    "tags": ["saas","income"],                                           "color": "amber",   "createdAt": "2026-02-20T19:55:00.000Z", "updatedAt": "2026-03-11T08:42:00.000Z" },
+    { "id": "nt-tax-prep",    "title": "ITR Filing 2025-26 prep",     "content": "<h3>Documents needed</h3><ul><li>Form 16 (employer)</li><li>Form 16A (HDFC interest)</li><li>Capital gains statement (Zerodha)</li><li>Rent receipts (₹35k/mo)</li></ul><h3>Deductions</h3><p>80C: ₹1.5L (PPF + ELSS) · 80D: ₹50k (health insurance) · HRA</p>",                                                                                                                                                                                                                                                                                                                "notebook": "Finance",  "tags": ["tax","fy26"],      "isPinned": true,                       "color": "rose",    "createdAt": "2026-04-15T14:20:00.000Z", "updatedAt": "2026-05-10T09:33:00.000Z" },
+    { "id": "nt-investment",  "title": "Portfolio rebalance May 2026","content": "<p>Current split: 60% equity / 25% debt / 10% gold / 5% crypto.</p><p>Action: trim TCS overweight (+5%), add Parag Parikh Flexi Cap SIP (₹15k/mo).</p>",                                                                                                                                                                                                                                                                                                                                                                                                                       "notebook": "Finance",  "tags": ["investing"],                                               "color": "emerald", "createdAt": "2026-05-01T08:30:00.000Z", "updatedAt": "2026-05-13T11:50:00.000Z" },
+    { "id": "nt-emergency",   "title": "Emergency contacts",          "content": "<table><tr><td>Mom</td><td>+91 98xxx 11111</td></tr><tr><td>Dad</td><td>+91 98xxx 22222</td></tr><tr><td>Family doctor (Dr. Rao)</td><td>+91 90xxx 33333</td></tr><tr><td>Building security</td><td>+91 80xxx 44444</td></tr></table>",                                                                                                                                                                                                                                                                                                                                          "notebook": "Personal", "tags": ["emergency"],       "isPinned": true,                       "color": "rose",    "createdAt": "2024-06-12T16:00:00.000Z", "updatedAt": "2025-11-08T19:20:00.000Z" },
+    { "id": "nt-wifi",        "title": "Home WiFi setup",             "content": "<p>SSID: <code>Suman_5G</code> · WPA3 · channel 36</p><p>Router: ASUS RT-AX86U · Firmware 3.0.0.4.388</p><p>Guest network: <code>Suman_Guest</code> (rotating password monthly)</p>",                                                                                                                                                                                                                                                                                                                                                                                            "notebook": "Personal", "tags": ["network","home"],                                          "color": "sky",     "createdAt": "2025-03-22T20:00:00.000Z", "updatedAt": "2026-04-01T07:15:00.000Z" },
+    { "id": "nt-meeting-pm",  "title": "Product sync — May 13",       "content": "<p>Discussed: TOTP rollout metrics (12% adoption first week), upcoming Cards launch positioning.</p><p>Action items:</p><ul><li>Saket: write blog post for Cards launch</li><li>PM: schedule beta-tester session</li></ul>",                                                                                                                                                                                                                                                                                                                                                       "notebook": "Work",     "tags": ["meeting","pm"],                                            "color": "violet",  "createdAt": "2026-05-13T16:00:00.000Z", "updatedAt": "2026-05-13T16:42:00.000Z" },
+    { "id": "nt-shortcuts",   "title": "Keyboard shortcuts cheatsheet","content": "<ul><li><kbd>⌘K</kbd> — Search</li><li><kbd>⌘N</kbd> — New item</li><li><kbd>⌘L</kbd> — Lock vault</li><li><kbd>⌘G</kbd> — Generator</li></ul>",                                                                                                                                                                                                                                                                                                                                                                                                                          "notebook": "Personal", "tags": ["ref"],                                                     "color": "amber",   "createdAt": "2026-05-08T13:00:00.000Z", "updatedAt": "2026-05-08T13:00:00.000Z" },
+    { "id": "nt-wedding",     "title": "Friend's wedding — Jul 11",   "content": "<p>Anand & Priya · Bangalore · Goldfinch Hotel · Jul 11–12.</p><p>Gift idea: experience voucher (Le Méridien spa) ₹6,000.</p>",                                                                                                                                                                                                                                                                                                                                                                                                                                                  "notebook": "Personal", "tags": ["events","2026"],                                           "color": "rose",    "createdAt": "2026-04-25T10:30:00.000Z", "updatedAt": "2026-04-25T10:30:00.000Z" }
   ],
+
+  "subscriptions": [
+    { "id": "sub-netflix",   "name": "Netflix",            "plan": "Premium 4K",    "cost": 649,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-28", "reminderDays": 3, "category": "Streaming",     "subscriptionType": "streaming",    "platformLink": "https://netflix.com",          "credentials": {"email":"saket.suman@gmail.com"}, "isActive": true,  "isFavorite": true, "autoRenew": true,  "notes": "Family plan",                                                                            "createdAt": "2020-02-29T18:00:00.000Z", "updatedAt": "2026-04-28T07:00:00.000Z" },
+    { "id": "sub-spotify",   "name": "Spotify",            "plan": "Individual",    "cost": 119,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-22", "reminderDays": 3, "category": "Music",         "subscriptionType": "streaming",    "platformLink": "https://spotify.com",          "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2019-10-14T20:00:00.000Z", "updatedAt": "2026-04-22T09:30:00.000Z" },
+    { "id": "sub-ytpremium", "name": "YouTube Premium",    "plan": "Individual",    "cost": 139,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-30", "reminderDays": 3, "category": "Streaming",     "subscriptionType": "streaming",    "platformLink": "https://youtube.com/premium",  "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2021-01-22T17:00:00.000Z", "updatedAt": "2026-04-30T10:00:00.000Z" },
+    { "id": "sub-disney",    "name": "Disney+ Hotstar",    "plan": "Super",         "cost": 299,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-15", "reminderDays": 7, "category": "Streaming",     "subscriptionType": "streaming",    "platformLink": "https://hotstar.com",          "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2020-11-02T10:00:00.000Z", "updatedAt": "2026-05-15T11:00:00.000Z" },
+    { "id": "sub-applemusic","name": "Apple Music",        "plan": "Individual",    "cost": 99,     "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-25", "reminderDays": 3, "category": "Music",         "subscriptionType": "streaming",    "platformLink": "https://music.apple.com",      "isActive": false, "autoRenew": false, "notes": "Cancelled — keeping for now to compare",                                                                                                                              "createdAt": "2022-04-03T09:00:00.000Z", "updatedAt": "2026-04-25T14:11:00.000Z" },
+    { "id": "sub-adobe",     "name": "Adobe Creative Cloud","plan":"All Apps",       "cost": 4899,   "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-29", "reminderDays": 7, "category": "Software",      "subscriptionType": "productivity", "platformLink": "https://adobe.com",            "isActive": true,  "autoRenew": true,  "notes": "Includes 100GB cloud storage",                                                                                                                                          "createdAt": "2020-12-05T14:00:00.000Z", "updatedAt": "2026-04-29T16:00:00.000Z" },
+    { "id": "sub-figma",     "name": "Figma",              "plan": "Professional",  "cost": 900,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-04", "reminderDays": 3, "category": "Software",      "subscriptionType": "productivity", "platformLink": "https://figma.com",            "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2022-02-14T17:00:00.000Z", "updatedAt": "2026-05-04T10:00:00.000Z" },
+    { "id": "sub-github",    "name": "GitHub Pro",         "plan": "Pro",           "cost": 260,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-22", "reminderDays": 5, "category": "Software",      "subscriptionType": "productivity", "platformLink": "https://github.com",           "isActive": true,  "isFavorite": true, "autoRenew": true,                                                                                                                                              "createdAt": "2018-04-01T11:00:00.000Z", "updatedAt": "2026-04-22T08:00:00.000Z" },
+    { "id": "sub-notion",    "name": "Notion Plus",        "plan": "Plus",          "cost": 600,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-25", "reminderDays": 3, "category": "Software",      "subscriptionType": "productivity", "platformLink": "https://notion.so",            "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2021-07-25T12:00:00.000Z", "updatedAt": "2026-04-25T13:00:00.000Z" },
+    { "id": "sub-icloud",    "name": "iCloud+",            "plan": "200GB",         "cost": 75,     "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-29", "reminderDays": 3, "category": "Cloud Storage", "subscriptionType": "cloud",        "platformLink": "https://icloud.com",           "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2018-09-10T09:00:00.000Z", "updatedAt": "2026-04-29T11:30:00.000Z" },
+    { "id": "sub-googleone", "name": "Google One",         "plan": "200GB",         "cost": 130,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-02", "reminderDays": 3, "category": "Cloud Storage", "subscriptionType": "cloud",        "platformLink": "https://one.google.com",       "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2019-03-18T15:00:00.000Z", "updatedAt": "2026-05-02T14:00:00.000Z" },
+    { "id": "sub-1password", "name": "1Password",          "plan": "Individual",    "cost": 250,    "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-08", "reminderDays": 5, "category": "Software",      "subscriptionType": "security",     "platformLink": "https://1password.com",        "isActive": false, "autoRenew": false, "notes": "Migrated to IronVault — cancelling next renewal",                                                                                                                     "createdAt": "2020-08-21T09:00:00.000Z", "updatedAt": "2026-05-08T10:00:00.000Z" },
+    { "id": "sub-gym",       "name": "Cult.fit Gym",       "plan": "Live Pro",      "cost": 2500,   "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-01", "reminderDays": 5, "category": "Health & Fitness","subscriptionType":"fitness",     "platformLink": "https://cult.fit",             "isActive": true,  "autoRenew": true,  "notes": "Indiranagar branch · check-in via app",                                                                                                                                  "createdAt": "2024-11-12T10:00:00.000Z", "updatedAt": "2026-05-01T17:30:00.000Z" },
+    { "id": "sub-carins",    "name": "Acko Car Insurance", "plan": "Comprehensive", "cost": 15000,  "currency": "INR", "billingCycle": "yearly",  "nextBillingDate": "2026-09-14", "reminderDays": 14,"category": "Insurance",     "subscriptionType": "other",        "platformLink": "https://acko.com",             "isActive": true,  "autoRenew": false, "notes": "Maruti Baleno BLR-01-AB-1234 · IDV ₹6.2L",                                                                                                                              "createdAt": "2023-09-14T12:00:00.000Z", "updatedAt": "2025-09-14T18:00:00.000Z" },
+    { "id": "sub-healthins", "name": "Star Health Insurance","plan":"Family Floater 10L","cost":25000,"currency":"INR","billingCycle":"yearly", "nextBillingDate": "2026-08-02", "reminderDays": 21,"category": "Insurance",     "subscriptionType": "other",        "platformLink": "https://starhealth.in",        "isActive": true,  "autoRenew": false, "notes": "Self + parents covered · Policy #SHI4567XX",                                                                                                                            "createdAt": "2024-08-02T14:00:00.000Z", "updatedAt": "2025-08-02T19:00:00.000Z" },
+    { "id": "sub-vercel",    "name": "Vercel Pro",         "plan": "Pro",           "cost": 1800,   "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-05-25", "reminderDays": 3, "category": "Software",      "subscriptionType": "cloud",        "platformLink": "https://vercel.com",           "isActive": true,  "autoRenew": true,  "notes": "Personal team · 3 sites",                                                                                                                                               "createdAt": "2024-01-30T11:00:00.000Z", "updatedAt": "2026-04-25T08:30:00.000Z" },
+    { "id": "sub-cf",        "name": "Cloudflare Pro",     "plan": "Pro",           "cost": 1700,   "currency": "INR", "billingCycle": "monthly", "nextBillingDate": "2026-06-12", "reminderDays": 3, "category": "Software",      "subscriptionType": "cloud",        "platformLink": "https://cloudflare.com",       "isActive": true,  "autoRenew": true,                                                                                                                                                              "createdAt": "2023-06-12T16:00:00.000Z", "updatedAt": "2026-05-12T09:00:00.000Z" }
+  ],
+
   "expenses": [
-    {
-      "id": "exp-groceries",
-      "description": "Whole Foods - Weekly Groceries",
-      "amount": 125.5,
-      "category": "Food & Dining",
-      "date": "2024-03-01T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "groceries",
-        "food",
-        "weekly"
-      ],
-      "isRecurring": true,
-      "recurringFrequency": "weekly",
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    },
-    {
-      "id": "exp-gas",
-      "description": "Shell Gas Station",
-      "amount": 45,
-      "category": "Transportation",
-      "date": "2024-03-02T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "gas",
-        "fuel",
-        "car"
-      ],
-      "isRecurring": false,
-      "createdAt": "2024-03-02T00:00:00.000Z",
-      "updatedAt": "2024-03-02T00:00:00.000Z"
-    },
-    {
-      "id": "exp-coffee",
-      "description": "Starbucks - Morning Coffee",
-      "amount": 5.75,
-      "category": "Food & Dining",
-      "date": "2024-03-03T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "coffee",
-        "beverage",
-        "morning"
-      ],
-      "isRecurring": false,
-      "createdAt": "2024-03-03T00:00:00.000Z",
-      "updatedAt": "2024-03-03T00:00:00.000Z"
-    },
-    {
-      "id": "exp-electric",
-      "description": "Con Edison - Electric Bill",
-      "amount": 85.2,
-      "category": "Utilities",
-      "date": "2024-03-05T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "electricity",
-        "utilities",
-        "monthly"
-      ],
-      "isRecurring": true,
-      "recurringFrequency": "monthly",
-      "createdAt": "2024-03-05T00:00:00.000Z",
-      "updatedAt": "2024-03-05T00:00:00.000Z"
-    },
-    {
-      "id": "exp-restaurant",
-      "description": "Italian Restaurant - Date Night",
-      "amount": 75,
-      "category": "Food & Dining",
-      "date": "2024-03-06T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "restaurant",
-        "dining",
-        "date"
-      ],
-      "isRecurring": false,
-      "createdAt": "2024-03-06T00:00:00.000Z",
-      "updatedAt": "2024-03-06T00:00:00.000Z"
-    },
-    {
-      "id": "exp-gym",
-      "description": "Planet Fitness - Monthly Membership",
-      "amount": 24.99,
-      "category": "Health & Fitness",
-      "date": "2024-03-01T00:00:00.000Z",
-      "currency": "USD",
-      "tags": [
-        "gym",
-        "fitness",
-        "membership"
-      ],
-      "isRecurring": true,
-      "recurringFrequency": "monthly",
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    }
+    { "id": "ex-grocery-1",  "title": "BigBasket weekly grocery",      "amount": 4250,  "currency": "INR", "category": "Groceries",     "date": "2026-05-13", "tags": ["weekly"],            "notes": "Vegetables + fruits + staples",                                                       "isRecurring": false, "createdAt": "2026-05-13T19:00:00.000Z", "updatedAt": "2026-05-13T19:00:00.000Z" },
+    { "id": "ex-zomato-1",   "title": "Zomato — Truffles",             "amount": 1180,  "currency": "INR", "category": "Food & Dining", "date": "2026-05-14", "tags": ["dinner"],            "notes": "Date night",                                                                          "isRecurring": false, "createdAt": "2026-05-14T21:18:00.000Z", "updatedAt": "2026-05-14T21:18:00.000Z" },
+    { "id": "ex-fuel-1",     "title": "Fuel — Indian Oil",             "amount": 2200,  "currency": "INR", "category": "Transportation","date": "2026-05-12", "tags": ["car"],               "notes": "Half tank",                                                                           "isRecurring": false, "createdAt": "2026-05-12T08:30:00.000Z", "updatedAt": "2026-05-12T08:30:00.000Z" },
+    { "id": "ex-electric-1", "title": "BESCOM electricity bill",       "amount": 3850,  "currency": "INR", "category": "Bills & Utilities","date":"2026-05-08","tags": ["monthly","utility"],"notes": "Apr 2026 cycle · 412 units",                                                            "isRecurring": true,  "recurringFrequency": "monthly", "nextDueDate": "2026-06-08", "createdAt": "2026-05-08T11:30:00.000Z", "updatedAt": "2026-05-08T11:30:00.000Z" },
+    { "id": "ex-internet-1", "title": "ACT Fibernet broadband",        "amount": 1199,  "currency": "INR", "category": "Bills & Utilities","date":"2026-05-05","tags": ["monthly","utility"],"notes": "150 Mbps unlimited",                                                                  "isRecurring": true,  "recurringFrequency": "monthly", "nextDueDate": "2026-06-05", "createdAt": "2026-05-05T09:00:00.000Z", "updatedAt": "2026-05-05T09:00:00.000Z" },
+    { "id": "ex-mobile-1",   "title": "Airtel postpaid",               "amount": 599,   "currency": "INR", "category": "Bills & Utilities","date":"2026-05-03","tags": ["monthly"],          "notes": "299 plan + Airtel Xstream",                                                            "isRecurring": true,  "recurringFrequency": "monthly", "nextDueDate": "2026-06-03", "createdAt": "2026-05-03T18:00:00.000Z", "updatedAt": "2026-05-03T18:00:00.000Z" },
+    { "id": "ex-uber-1",     "title": "Uber to airport",               "amount": 540,   "currency": "INR", "category": "Transportation","date": "2026-05-11", "tags": ["uber","travel"],     "notes": "BLR airport · 04:30 pickup",                                                          "isRecurring": false, "createdAt": "2026-05-11T05:42:00.000Z", "updatedAt": "2026-05-11T05:42:00.000Z" },
+    { "id": "ex-amazon-1",   "title": "Amazon — wireless mouse",       "amount": 1899,  "currency": "INR", "category": "Shopping",      "date": "2026-05-09", "tags": ["work","tech"],       "notes": "Logitech MX Anywhere 3S",                                                             "isRecurring": false, "createdAt": "2026-05-09T16:24:00.000Z", "updatedAt": "2026-05-09T16:24:00.000Z" },
+    { "id": "ex-medical-1",  "title": "Apollo Pharmacy",               "amount": 728,   "currency": "INR", "category": "Healthcare",    "date": "2026-05-07", "tags": ["medicine"],          "notes": "Vitamin D3 + paracetamol",                                                            "isRecurring": false, "createdAt": "2026-05-07T20:11:00.000Z", "updatedAt": "2026-05-07T20:11:00.000Z" },
+    { "id": "ex-clothing-1", "title": "Myntra — running shoes",        "amount": 5499,  "currency": "INR", "category": "Shopping",      "date": "2026-05-06", "tags": ["fitness","clothing"],"notes": "ASICS Gel-Nimbus",                                                                    "isRecurring": false, "createdAt": "2026-05-06T22:00:00.000Z", "updatedAt": "2026-05-06T22:00:00.000Z" },
+    { "id": "ex-grocery-2",  "title": "Reliance Smart — bulk groceries","amount":3120, "currency": "INR", "category": "Groceries",     "date": "2026-05-04", "tags": ["bulk"],              "notes": "Rice + dal + atta · monthly stock-up",                                                "isRecurring": false, "createdAt": "2026-05-04T11:30:00.000Z", "updatedAt": "2026-05-04T11:30:00.000Z" },
+    { "id": "ex-zomato-2",   "title": "Swiggy — biryani night",        "amount": 880,   "currency": "INR", "category": "Food & Dining", "date": "2026-05-02", "tags": ["weekend"],           "notes": "Mandi Express · double",                                                              "isRecurring": false, "createdAt": "2026-05-02T20:50:00.000Z", "updatedAt": "2026-05-02T20:50:00.000Z" },
+    { "id": "ex-rent-1",     "title": "Apartment rent — May 2026",     "amount": 35000, "currency": "INR", "category": "Bills & Utilities","date":"2026-05-01","tags": ["rent","monthly"],   "notes": "2BHK · Indiranagar",                                                                  "isRecurring": true,  "recurringFrequency": "monthly", "nextDueDate": "2026-06-01", "createdAt": "2026-05-01T10:00:00.000Z", "updatedAt": "2026-05-01T10:00:00.000Z" },
+    { "id": "ex-coffee-1",   "title": "Third Wave Coffee",             "amount": 380,   "currency": "INR", "category": "Food & Dining", "date": "2026-05-13", "tags": ["coffee"],            "notes": "Cortado + croissant",                                                                 "isRecurring": false, "createdAt": "2026-05-13T10:18:00.000Z", "updatedAt": "2026-05-13T10:18:00.000Z" },
+    { "id": "ex-ola-1",      "title": "Ola — meeting commute",         "amount": 215,   "currency": "INR", "category": "Transportation","date": "2026-05-13", "tags": ["work"],              "notes": "Cubbon Park → Whitefield",                                                            "isRecurring": false, "createdAt": "2026-05-13T13:55:00.000Z", "updatedAt": "2026-05-13T13:55:00.000Z" },
+    { "id": "ex-gift-1",     "title": "Mom's mother's day gift",       "amount": 2599,  "currency": "INR", "category": "Gifts & Donations","date":"2026-05-10","tags": ["family","gift"],    "notes": "Saree + chocolate hamper",                                                            "isRecurring": false, "createdAt": "2026-05-10T15:20:00.000Z", "updatedAt": "2026-05-10T15:20:00.000Z" },
+    { "id": "ex-movie-1",    "title": "PVR — Avatar 3 IMAX",           "amount": 1240,  "currency": "INR", "category": "Entertainment", "date": "2026-04-29", "tags": ["movie"],             "notes": "2 tickets · IMAX premium",                                                            "isRecurring": false, "createdAt": "2026-04-29T19:00:00.000Z", "updatedAt": "2026-04-29T19:00:00.000Z" },
+    { "id": "ex-domain-1",   "title": "GoDaddy — domain renewal",      "amount": 1199,  "currency": "INR", "category": "Business",      "date": "2026-04-27", "tags": ["domain","business"], "notes": "saketsuman.in · 1yr",                                                                 "isRecurring": false, "createdAt": "2026-04-27T11:08:00.000Z", "updatedAt": "2026-04-27T11:08:00.000Z" },
+    { "id": "ex-haircut-1",  "title": "Salon — haircut + beard",       "amount": 850,   "currency": "INR", "category": "Personal Care", "date": "2026-04-26", "tags": ["grooming"],          "notes": "Truefitt & Hill",                                                                     "isRecurring": false, "createdAt": "2026-04-26T17:00:00.000Z", "updatedAt": "2026-04-26T17:00:00.000Z" },
+    { "id": "ex-train-1",    "title": "IRCTC — Bangalore → Hyderabad", "amount": 1850,  "currency": "INR", "category": "Travel",        "date": "2026-04-22", "tags": ["travel","work"],     "notes": "Tier 2AC · client visit",                                                             "isRecurring": false, "createdAt": "2026-04-22T08:30:00.000Z", "updatedAt": "2026-04-22T08:30:00.000Z" },
+    { "id": "ex-amazon-2",   "title": "Amazon — kitchen scale",        "amount": 1099,  "currency": "INR", "category": "Home & Garden", "date": "2026-04-20", "tags": ["home"],              "notes": "Inalsa digital · 5kg",                                                                "isRecurring": false, "createdAt": "2026-04-20T14:42:00.000Z", "updatedAt": "2026-04-20T14:42:00.000Z" },
+    { "id": "ex-gas-1",      "title": "Indane LPG cylinder refill",    "amount": 950,   "currency": "INR", "category": "Bills & Utilities","date":"2026-04-18","tags": ["utility"],          "notes": "14.2 kg subsidized",                                                                  "isRecurring": false, "createdAt": "2026-04-18T11:00:00.000Z", "updatedAt": "2026-04-18T11:00:00.000Z" }
   ],
-  "investments": [
-    {
-      "id": "inv-aapl",
-      "name": "Apple Inc. (AAPL)",
-      "type": "stocks",
-      "amount": 5000,
-      "currentValue": 5500,
-      "purchaseDate": "2024-01-15T00:00:00.000Z",
-      "currency": "USD",
-      "notes": "Tech stock - long term hold, strong fundamentals",
-      "performance": {
-        "dailyChange": 2.5,
-        "totalReturn": 10,
-        "annualizedReturn": 12.5
-      },
-      "createdAt": "2024-01-15T00:00:00.000Z",
-      "updatedAt": "2024-01-15T00:00:00.000Z"
-    },
-    {
-      "id": "inv-sp500",
-      "name": "S&P 500 Index Fund (VOO)",
-      "type": "mutual_funds",
-      "amount": 10000,
-      "currentValue": 10800,
-      "purchaseDate": "2023-06-01T00:00:00.000Z",
-      "currency": "USD",
-      "notes": "Diversified index fund tracking S&P 500",
-      "performance": {
-        "dailyChange": 1.2,
-        "totalReturn": 8,
-        "annualizedReturn": 9.5
-      },
-      "createdAt": "2023-06-01T00:00:00.000Z",
-      "updatedAt": "2023-06-01T00:00:00.000Z"
-    },
-    {
-      "id": "inv-btc",
-      "name": "Bitcoin (BTC)",
-      "type": "crypto",
-      "amount": 2000,
-      "currentValue": 2500,
-      "purchaseDate": "2024-02-01T00:00:00.000Z",
-      "currency": "USD",
-      "notes": "Cryptocurrency investment - high risk, high reward",
-      "performance": {
-        "dailyChange": 5.8,
-        "totalReturn": 25,
-        "annualizedReturn": 30
-      },
-      "createdAt": "2024-02-01T00:00:00.000Z",
-      "updatedAt": "2024-02-01T00:00:00.000Z"
-    },
-    {
-      "id": "inv-tsla",
-      "name": "Tesla Inc. (TSLA)",
-      "type": "stocks",
-      "amount": 3000,
-      "currentValue": 2800,
-      "purchaseDate": "2024-04-10T00:00:00.000Z",
-      "currency": "USD",
-      "notes": "Electric vehicle manufacturer - volatile stock",
-      "performance": {
-        "dailyChange": -1.5,
-        "totalReturn": -6.67,
-        "annualizedReturn": -8
-      },
-      "createdAt": "2024-04-10T00:00:00.000Z",
-      "updatedAt": "2024-04-10T00:00:00.000Z"
-    },
-    {
-      "id": "inv-bond-fund",
-      "name": "Vanguard Total Bond Market Index Fund",
-      "type": "bonds",
-      "amount": 7000,
-      "currentValue": 7100,
-      "purchaseDate": "2023-03-01T00:00:00.000Z",
-      "currency": "USD",
-      "notes": "Low-risk bond fund for portfolio stability",
-      "performance": {
-        "dailyChange": 0.1,
-        "totalReturn": 1.43,
-        "annualizedReturn": 1.7
-      },
-      "createdAt": "2023-03-01T00:00:00.000Z",
-      "updatedAt": "2023-03-01T00:00:00.000Z"
-    }
-  ],
-  "investmentGoals": [
-    {
-      "id": "goal-retirement",
-      "name": "Retirement Fund",
-      "category": "retirement",
-      "targetAmount": 1000000,
-      "currentAmount": 150000,
-      "targetDate": "2045-12-31T00:00:00.000Z",
-      "currency": "USD",
-      "priority": "high",
-      "monthlyContribution": 2000,
-      "notes": "Target: $1M by age 65 for comfortable retirement",
-      "isAchieved": false,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "goal-house",
-      "name": "House Down Payment",
-      "category": "home_purchase",
-      "targetAmount": 100000,
-      "currentAmount": 30000,
-      "targetDate": "2028-06-01T00:00:00.000Z",
-      "currency": "USD",
-      "priority": "high",
-      "monthlyContribution": 1500,
-      "notes": "Saving for first home down payment",
-      "isAchieved": false,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "goal-emergency",
-      "name": "Emergency Fund",
-      "category": "emergency_fund",
-      "targetAmount": 50000,
-      "currentAmount": 45000,
-      "targetDate": "2025-01-01T00:00:00.000Z",
-      "currency": "USD",
-      "priority": "medium",
-      "monthlyContribution": 1000,
-      "notes": "6 months of living expenses for emergencies",
-      "isAchieved": false,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "goal-vacation",
-      "name": "Europe Vacation",
-      "category": "vacation",
-      "targetAmount": 15000,
-      "currentAmount": 12000,
-      "targetDate": "2024-09-01T00:00:00.000Z",
-      "currency": "USD",
-      "priority": "low",
-      "monthlyContribution": 500,
-      "notes": "Summer trip to Europe",
-      "isAchieved": false,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "goal-education",
-      "name": "Children Education Fund",
-      "category": "education",
-      "targetAmount": 200000,
-      "currentAmount": 25000,
-      "targetDate": "2040-09-01T00:00:00.000Z",
-      "currency": "USD",
-      "priority": "medium",
-      "monthlyContribution": 800,
-      "notes": "College fund for future children",
-      "isAchieved": false,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ],
-  "bankTransactions": [
-    {
-      "id": "bt-salary",
-      "date": "2024-03-01T00:00:00.000Z",
-      "description": "Salary Deposit - Tech Corp",
-      "amount": 7500,
-      "type": "credit",
-      "category": "income",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    },
-    {
-      "id": "bt-rent",
-      "date": "2024-03-01T00:00:00.000Z",
-      "description": "Rent Payment",
-      "amount": -2000,
-      "type": "debit",
-      "category": "housing",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-01T00:00:00.000Z",
-      "updatedAt": "2024-03-01T00:00:00.000Z"
-    },
-    {
-      "id": "bt-groceries",
-      "date": "2024-03-02T00:00:00.000Z",
-      "description": "Whole Foods Market",
-      "amount": -125.5,
-      "type": "debit",
-      "category": "groceries",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-02T00:00:00.000Z",
-      "updatedAt": "2024-03-02T00:00:00.000Z"
-    },
-    {
-      "id": "bt-gas",
-      "date": "2024-03-03T00:00:00.000Z",
-      "description": "Shell Gas Station",
-      "amount": -45,
-      "type": "debit",
-      "category": "transportation",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-03T00:00:00.000Z",
-      "updatedAt": "2024-03-03T00:00:00.000Z"
-    },
-    {
-      "id": "bt-electric",
-      "date": "2024-03-05T00:00:00.000Z",
-      "description": "Con Edison Electric",
-      "amount": -85.2,
-      "type": "debit",
-      "category": "utilities",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-05T00:00:00.000Z",
-      "updatedAt": "2024-03-05T00:00:00.000Z"
-    },
-    {
-      "id": "bt-restaurant",
-      "date": "2024-03-06T00:00:00.000Z",
-      "description": "Bella Vista Italian Restaurant",
-      "amount": -75,
-      "type": "debit",
-      "category": "dining",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-06T00:00:00.000Z",
-      "updatedAt": "2024-03-06T00:00:00.000Z"
-    },
-    {
-      "id": "bt-freelance",
-      "date": "2024-03-10T00:00:00.000Z",
-      "description": "Freelance Web Development",
-      "amount": 800,
-      "type": "credit",
-      "category": "income",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-10T00:00:00.000Z",
-      "updatedAt": "2024-03-10T00:00:00.000Z"
-    },
-    {
-      "id": "bt-gym",
-      "date": "2024-03-15T00:00:00.000Z",
-      "description": "Planet Fitness Membership",
-      "amount": -24.99,
-      "type": "debit",
-      "category": "healthcare",
-      "currency": "USD",
-      "accountId": "checking-1",
-      "createdAt": "2024-03-15T00:00:00.000Z",
-      "updatedAt": "2024-03-15T00:00:00.000Z"
-    }
-  ],
+
   "reminders": [
-    {
-      "id": "reminder-taxes",
-      "title": "File Tax Returns",
-      "description": "Complete and file 2023 tax returns before April 15th",
-      "dueDate": "2024-04-15T00:00:00.000Z",
-      "priority": "high",
-      "isCompleted": false,
-      "tags": [
-        "taxes",
-        "deadline",
-        "financial"
-      ],
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "reminder-insurance",
-      "title": "Renew Car Insurance",
-      "description": "Review and renew car insurance policy",
-      "dueDate": "2024-04-20T00:00:00.000Z",
-      "priority": "medium",
-      "isCompleted": false,
-      "tags": [
-        "insurance",
-        "car",
-        "renewal"
-      ],
-      "createdAt": "2024-01-15T00:00:00.000Z",
-      "updatedAt": "2024-01-15T00:00:00.000Z"
-    },
-    {
-      "id": "reminder-dentist",
-      "title": "Dental Checkup",
-      "description": "Schedule and attend routine dental cleaning",
-      "dueDate": "2024-04-25T00:00:00.000Z",
-      "priority": "medium",
-      "isCompleted": false,
-      "tags": [
-        "health",
-        "dental",
-        "checkup"
-      ],
-      "createdAt": "2024-02-01T00:00:00.000Z",
-      "updatedAt": "2024-02-01T00:00:00.000Z"
-    },
-    {
-      "id": "reminder-birthday",
-      "title": "Mom's Birthday",
-      "description": "Buy gift and card for mom's birthday",
-      "dueDate": "2024-05-10T00:00:00.000Z",
-      "priority": "high",
-      "isCompleted": false,
-      "tags": [
-        "birthday",
-        "family",
-        "gift"
-      ],
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    },
-    {
-      "id": "reminder-vacation",
-      "title": "Book Europe Trip",
-      "description": "Finalize hotel bookings for Europe vacation",
-      "dueDate": "2024-03-20T00:00:00.000Z",
-      "priority": "medium",
-      "isCompleted": false,
-      "tags": [
-        "travel",
-        "vacation",
-        "booking"
-      ],
-      "createdAt": "2024-02-20T00:00:00.000Z",
-      "updatedAt": "2024-02-20T00:00:00.000Z"
-    }
+    { "id": "rm-passport",  "title": "Passport renewal",                "description": "Current passport expires Aug 2026 — start renewal 2 months prior. Carry old passport, address proof, photos.", "dueDate": "2026-06-15T10:00:00.000Z", "dueTime": "10:00", "priority": "high",   "category": "Travel",       "isCompleted": false, "color": "#ef4444", "notificationEnabled": true, "alarmEnabled": true,  "alertMinutesBefore": 1440, "preAlertEnabled": true,  "isRecurring": false, "tags": ["important"],   "createdAt": "2026-04-01T08:00:00.000Z", "updatedAt": "2026-04-01T08:00:00.000Z" },
+    { "id": "rm-visa",      "title": "Schengen visa for Italy trip",    "description": "Apply 4-6 weeks before Sep travel. Documents: passport, ITR, salary slips, hotel booking.",                       "dueDate": "2026-07-20T11:00:00.000Z", "dueTime": "11:00", "priority": "high",   "category": "Travel",       "isCompleted": false, "color": "#f59e0b", "notificationEnabled": true, "alarmEnabled": false,                                                          "isRecurring": false, "tags": ["travel"],      "createdAt": "2026-04-15T14:00:00.000Z", "updatedAt": "2026-04-15T14:00:00.000Z" },
+    { "id": "rm-carins",    "title": "Car insurance renewal",           "description": "Acko comprehensive — renew before Sep 14 to avoid lapse. Compare quotes from Acko, Digit, Bajaj Allianz.",       "dueDate": "2026-09-01T09:00:00.000Z", "dueTime": "09:00", "priority": "high",   "category": "Bills & Payments","isCompleted": false, "color": "#f59e0b", "notificationEnabled": true,                                                                                                "isRecurring": true,  "recurringFrequency": "yearly", "subscriptionId": "sub-carins", "tags": ["insurance"], "createdAt": "2025-09-15T10:00:00.000Z", "updatedAt": "2026-04-12T11:00:00.000Z" },
+    { "id": "rm-mom-bday",  "title": "Mom's birthday",                  "description": "Order cake from Truffles, pick up flowers, video-call before dinner.",                                            "dueDate": "2026-06-14T07:00:00.000Z", "dueTime": "07:00", "priority": "urgent", "category": "Birthdays",    "isCompleted": false, "color": "#ec4899", "notificationEnabled": true, "alarmEnabled": true,  "alertMinutesBefore": 60,   "preAlertEnabled": true,  "isRecurring": true, "recurringFrequency": "yearly", "tags": ["family"], "createdAt": "2024-06-14T07:00:00.000Z", "updatedAt": "2026-05-01T08:00:00.000Z" },
+    { "id": "rm-anniv",     "title": "Wedding anniversary",             "description": "Plan a getaway to Coorg — book by mid-October.",                                                                  "dueDate": "2026-12-08T08:00:00.000Z", "dueTime": "08:00", "priority": "high",   "category": "Personal",     "isCompleted": false, "color": "#ec4899", "notificationEnabled": true,                                                                                                "isRecurring": true,  "recurringFrequency": "yearly", "tags": ["love"],     "createdAt": "2023-12-08T08:00:00.000Z", "updatedAt": "2025-12-09T18:00:00.000Z" },
+    { "id": "rm-wedding",   "title": "Friend's wedding — Anand & Priya","description": "Goldfinch Hotel Bangalore. Sangeet on Jul 11 evening, ceremony Jul 12 morning.",                                  "dueDate": "2026-07-11T18:00:00.000Z", "dueTime": "18:00", "priority": "medium", "category": "Events",       "isCompleted": false, "color": "#a855f7", "notificationEnabled": true,                                                                                                "isRecurring": false, "tags": ["events"],      "createdAt": "2026-04-25T10:00:00.000Z", "updatedAt": "2026-04-25T10:00:00.000Z" },
+    { "id": "rm-carservice","title": "Car service",                     "description": "Maruti Baleno · 30,000 km service due. Schedule at Sai Service or NEXA.",                                         "dueDate": "2026-06-05T10:00:00.000Z", "dueTime": "10:00", "priority": "medium", "category": "Maintenance",  "isCompleted": false, "color": "#3b82f6", "notificationEnabled": true,                                                                                                "isRecurring": false, "tags": ["car"],         "createdAt": "2026-04-10T11:30:00.000Z", "updatedAt": "2026-04-10T11:30:00.000Z" },
+    { "id": "rm-checkup",   "title": "Annual health checkup",           "description": "Full body panel at Manipal Hospital. Fasting 12h required. Cardio + lipid + thyroid + vitamin D.",                "dueDate": "2026-08-22T07:30:00.000Z", "dueTime": "07:30", "priority": "medium", "category": "Healthcare",   "isCompleted": false, "color": "#22c55e", "notificationEnabled": true,                                                                                                "isRecurring": true,  "recurringFrequency": "yearly", "tags": ["health"],   "createdAt": "2025-08-22T07:30:00.000Z", "updatedAt": "2025-08-22T08:00:00.000Z" },
+    { "id": "rm-tax",       "title": "ITR filing deadline (FY2025-26)", "description": "File before Jul 31 to avoid late fee. Documents collated in 'ITR Filing 2025-26 prep' note.",                    "dueDate": "2026-07-25T10:00:00.000Z", "dueTime": "10:00", "priority": "urgent", "category": "Tasks",        "isCompleted": false, "color": "#ef4444", "notificationEnabled": true, "alarmEnabled": true,  "alertMinutesBefore": 4320, "preAlertEnabled": true,  "isRecurring": true, "recurringFrequency": "yearly", "tags": ["tax","finance"], "createdAt": "2024-07-25T10:00:00.000Z", "updatedAt": "2026-04-15T15:00:00.000Z" },
+    { "id": "rm-sip",       "title": "Monthly SIP — Parag Parikh",      "description": "₹15,000 auto-debit on the 5th. Confirm balance day before.",                                                       "dueDate": "2026-06-04T20:00:00.000Z", "dueTime": "20:00", "priority": "low",    "category": "Bills & Payments","isCompleted": false, "color": "#10b981", "notificationEnabled": true,                                                                                                "isRecurring": true,  "recurringFrequency": "monthly", "tags": ["sip","investing"], "createdAt": "2025-01-05T19:00:00.000Z", "updatedAt": "2026-05-04T20:30:00.000Z" },
+    { "id": "rm-aadhaar",   "title": "Aadhaar biometric update",        "description": "Update biometrics every 10 years — last updated Jul 2016. UIDAI seva kendra.",                                    "dueDate": "2026-07-01T09:00:00.000Z", "dueTime": "09:00", "priority": "low",    "category": "Tasks",        "isCompleted": false, "color": "#6366f1", "notificationEnabled": true,                                                                                                "isRecurring": false, "tags": ["id"],          "createdAt": "2026-04-30T18:00:00.000Z", "updatedAt": "2026-04-30T18:00:00.000Z" }
+  ],
+
+  "apiKeys": [
+    { "id": "ak-stripe-live", "name": "Stripe Production",      "service": "Stripe",      "apiKey": "sk_DEMO_live_FAKE_51M8XYZabcdefghij1234567890ABCDEFGHIJKLMNOP",       "apiSecret": "whsec_a1B2c3D4e5F6g7H8i9J0kLmNoPqRsTuVwXyZ", "environment": "production", "category": "Payment",       "endpoint": "https://api.stripe.com",         "tags": ["billing","prod"],   "expiresAt": null,                                  "lastUsed": "2026-05-13T14:22:00.000Z", "notes": "Owner: billing@company.io. Restricted to webhook + payment_intents.", "createdAt": "2024-03-12T09:00:00.000Z", "updatedAt": "2026-05-13T14:22:00.000Z" },
+    { "id": "ak-stripe-test", "name": "Stripe Test",            "service": "Stripe",      "apiKey": "sk_DEMO_test_FAKE_51M8XYZqrstuvwxyz0987654321ZYXWVUTSRQPONML",       "apiSecret": "whsec_x9Y8w7V6u5T4s3R2q1POnMlKjIhGfEdCbA0", "environment": "staging",    "category": "Payment",       "endpoint": "https://api.stripe.com",         "tags": ["dev"],              "expiresAt": null,                                  "lastUsed": "2026-05-12T11:08:00.000Z",                                                                                              "createdAt": "2024-03-12T09:00:00.000Z", "updatedAt": "2026-05-12T11:08:00.000Z" },
+    { "id": "ak-aws-iam",     "name": "AWS — Deploy IAM user",  "service": "AWS",         "apiKey": "AKIA_DEMO_FAKE_KEY_NOT_REAL",                                                          "apiSecret": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  "environment": "production", "category": "Cloud",         "endpoint": "https://iam.amazonaws.com",      "tags": ["ci","deploy"],      "expiresAt": "2026-09-30T23:59:59.000Z",            "lastUsed": "2026-05-15T07:11:00.000Z", "notes": "Limited to S3 + CloudFront invalidations.",                                "createdAt": "2024-09-30T09:00:00.000Z", "updatedAt": "2026-05-15T07:11:00.000Z" },
+    { "id": "ak-gmaps",       "name": "Google Maps Platform",   "service": "Google",      "apiKey": "AIzaSyB-X9Y0Z1abcdefghijklmnopqrstuvwxyz12",                                  "apiSecret": null,                                       "environment": "production", "category": "Other",         "endpoint": "https://maps.googleapis.com",    "tags": ["maps","prod"],      "expiresAt": null,                                  "lastUsed": "2026-04-30T18:42:00.000Z", "notes": "Restricted to *.ironvault.app referrer.",                                  "createdAt": "2024-12-04T11:30:00.000Z", "updatedAt": "2026-04-30T18:42:00.000Z" },
+    { "id": "ak-openai",      "name": "OpenAI API",             "service": "OpenAI",      "apiKey": "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRST",          "apiSecret": null,                                       "environment": "production", "category": "Other",         "endpoint": "https://api.openai.com/v1",      "tags": ["ai"],               "expiresAt": null,                                  "lastUsed": "2026-05-14T22:17:00.000Z", "notes": "Per-month spend cap ₹4,000.",                                              "createdAt": "2024-08-22T20:00:00.000Z", "updatedAt": "2026-05-14T22:17:00.000Z" },
+    { "id": "ak-razorpay",    "name": "Razorpay Live",          "service": "Razorpay",    "apiKey": "rzp_live_aBcDeFgHiJkLmN",                                                      "apiSecret": "0pQrStUvWxYz1234567890AbCdEfGh",            "environment": "production", "category": "Payment",       "endpoint": "https://api.razorpay.com/v1",    "tags": ["upi","prod"],       "expiresAt": null,                                  "lastUsed": "2026-05-15T09:33:00.000Z", "notes": "Restricted to /orders + /webhooks.",                                       "createdAt": "2025-01-04T15:00:00.000Z", "updatedAt": "2026-05-15T09:33:00.000Z" },
+    { "id": "ak-twilio",      "name": "Twilio (SMS + voice)",   "service": "Twilio",      "apiKey": "AC1234567890abcdefghijklmnopqrstuv",                                            "apiSecret": "your_auth_token_AbCdEfGhIjKlMnOpQrStUv",   "environment": "production", "category": "Other",         "endpoint": "https://api.twilio.com",         "tags": ["sms","otp"],        "expiresAt": null,                                  "lastUsed": "2026-05-15T08:18:00.000Z", "notes": "From: +14155551234.",                                                       "createdAt": "2024-11-20T12:00:00.000Z", "updatedAt": "2026-05-15T08:18:00.000Z" },
+    { "id": "ak-sendgrid",    "name": "SendGrid (txn email)",   "service": "SendGrid",    "apiKey": "SG.aBcDeFgHiJkLmNoPqRsTuVwX.yZ0123456789AbCdEfGhIjKlMnOpQrStUvWxYz",   "apiSecret": null,                                       "environment": "production", "category": "Other",         "endpoint": "https://api.sendgrid.com/v3",    "tags": ["email"],            "expiresAt": null,                                  "lastUsed": "2026-05-14T16:50:00.000Z", "notes": "Verified sender: noreply@ironvault.app.",                                  "createdAt": "2024-06-18T10:30:00.000Z", "updatedAt": "2026-05-14T16:50:00.000Z" },
+    { "id": "ak-firebase",    "name": "Firebase Web SDK",       "service": "Firebase",    "apiKey": "AIzaSyDeFgHiJkLmNoPqRsTuVwXyZ0123456789",                                       "apiSecret": null,                                       "environment": "production", "category": "Cloud",         "endpoint": "https://firebase.googleapis.com","tags": ["push"],             "expiresAt": null,                                  "lastUsed": "2026-05-13T20:09:00.000Z",                                                                                              "createdAt": "2024-04-15T14:00:00.000Z", "updatedAt": "2026-05-13T20:09:00.000Z" }
+  ],
+
+  "creditCards": [
+    { "id": "cc-hdfc-regalia",  "cardName": "HDFC Regalia Gold",        "cardholderName": "SAKET SUMAN", "cardNumber": "4536123456781234", "expiryMonth": "08", "expiryYear": "2028", "cvv": "428", "brand": "visa",       "type": "credit", "color": "#1a1a2e", "pin": "4521", "billingZip": "560038", "isFavorite": true,  "notes": "Primary travel card · 10x rewards on dining + travel.",     "createdAt": "2024-08-04T11:30:00.000Z", "updatedAt": "2026-05-04T18:20:00.000Z" },
+    { "id": "cc-sbi-click",     "cardName": "SBI SimplyCLICK",          "cardholderName": "SAKET SUMAN", "cardNumber": "5253102233445566", "expiryMonth": "11", "expiryYear": "2027", "cvv": "812", "brand": "mastercard", "type": "credit", "color": "#1e40af", "pin": "9034", "billingZip": "560038", "notes": "10x rewards on Amazon, Cleartrip, Bookmyshow.",                                                       "createdAt": "2023-11-12T16:00:00.000Z", "updatedAt": "2026-04-22T13:15:00.000Z" },
+    { "id": "cc-icici-amzn",    "cardName": "ICICI Amazon Pay",         "cardholderName": "SAKET SUMAN", "cardNumber": "4147202020203030", "expiryMonth": "04", "expiryYear": "2029", "cvv": "367", "brand": "visa",       "type": "credit", "color": "#ea580c", "pin": "5612", "billingZip": "560038",                       "notes": "5% on Amazon · 2% on bills.",                                                                          "createdAt": "2024-04-18T10:00:00.000Z", "updatedAt": "2026-05-09T16:30:00.000Z" },
+    { "id": "cc-amex-platinum", "cardName": "Amex Platinum Travel",     "cardholderName": "SAKET SUMAN", "cardNumber": "374512345678901",   "expiryMonth": "06", "expiryYear": "2028", "cvv": "1234","brand": "amex",       "type": "credit", "color": "#0f172a", "pin": "8893", "billingZip": "560038", "isFavorite": true,  "notes": "Annual fee ₹5,000 · 10k MR on ₹40k qtr spend.",             "createdAt": "2024-06-22T15:00:00.000Z", "updatedAt": "2026-04-29T20:14:00.000Z" },
+    { "id": "cc-axis-flipkart", "cardName": "Axis Flipkart Card",       "cardholderName": "SAKET SUMAN", "cardNumber": "5189442200448855", "expiryMonth": "01", "expiryYear": "2030", "cvv": "519", "brand": "mastercard", "type": "credit", "color": "#0ea5e9", "pin": "2247", "billingZip": "560038",                       "notes": "5% Flipkart, 4% Myntra/Swiggy/Cleartrip.",                                                            "createdAt": "2025-01-30T17:00:00.000Z", "updatedAt": "2026-05-06T22:00:00.000Z" },
+    { "id": "cc-rupay-pf",      "cardName": "RuPay Platinum Debit",     "cardholderName": "SAKET SUMAN", "cardNumber": "6079801122334455", "expiryMonth": "12", "expiryYear": "2027", "cvv": "742", "brand": "rupay",      "type": "debit",  "color": "#16a34a", "pin": "1947", "billingZip": "560038",                       "notes": "HDFC Savings linked · UPI primary.",                                                                  "createdAt": "2022-12-08T13:00:00.000Z", "updatedAt": "2025-12-08T13:00:00.000Z" }
+  ],
+
+  "identities": [
+    { "id": "id-personal",  "title": "Personal",      "type": "personal", "firstName": "Saket",  "middleName": "",         "lastName": "Suman",  "dateOfBirth": "1992-12-13", "gender": "Male",       "documentNumber": "1234-5678-9012",        "issuingCountry": "India", "issueDate": "2013-04-22", "expiryDate": "",           "addressLine1": "Flat 12B, Whispering Heights", "addressLine2": "12th Main Road, HAL 2nd Stage", "city": "Bangalore", "state": "Karnataka",  "postalCode": "560038", "country": "India", "email": "saket.suman@gmail.com", "phone": "+91 98765 43210", "isFavorite": true,  "notes": "Aadhaar (xxxx-xxxx-9012) · PAN: ABCPS1234D · Passport: P9876543 (expires 2026-08-14) · DL: KA-01-20130012345 (valid 2033-04-21)", "createdAt": "2024-06-12T11:00:00.000Z", "updatedAt": "2026-05-10T14:30:00.000Z" },
+    { "id": "id-work",      "title": "Work",          "type": "work",     "firstName": "Saket",  "middleName": "",         "lastName": "Suman",  "dateOfBirth": "",           "gender": "",           "documentNumber": "EMP-2024-1138",           "issuingCountry": "India", "issueDate": "2024-01-08", "expiryDate": "",           "addressLine1": "Acme Cloud Pvt Ltd, 7th Floor", "addressLine2": "Manyata Embassy Business Park",  "city": "Bangalore", "state": "Karnataka",  "postalCode": "560045", "country": "India", "email": "saket.suman@acme-cloud.io", "phone": "+91 80 4567 8900", "notes": "Job title: Senior Software Engineer · Manager: Anand Rao · Onboarding badge #1138.",                                                                                                                                                                                                                                  "createdAt": "2024-01-08T09:00:00.000Z", "updatedAt": "2026-04-15T17:45:00.000Z" },
+    { "id": "id-spouse",    "title": "Spouse — Priya","type": "personal", "firstName": "Priya",  "middleName": "",         "lastName": "Suman",  "dateOfBirth": "1994-03-29", "gender": "Female",     "documentNumber": "9988-7766-5544",        "issuingCountry": "India", "issueDate": "2014-07-10", "expiryDate": "",           "addressLine1": "Flat 12B, Whispering Heights", "addressLine2": "12th Main Road, HAL 2nd Stage", "city": "Bangalore", "state": "Karnataka",  "postalCode": "560038", "country": "India", "email": "priya.suman@gmail.com",     "phone": "+91 99887 76655", "notes": "Aadhaar (xxxx-xxxx-5544) · PAN: BNZPS7654E · Passport: Q1234567 (expires 2029-02-11).",                                                                                                                                                                                                                                                  "createdAt": "2024-06-12T11:30:00.000Z", "updatedAt": "2026-04-04T20:11:00.000Z" },
+    { "id": "id-emergency", "title": "Emergency — Mom","type": "custom",  "firstName": "Sunita", "middleName": "",         "lastName": "Suman",  "dateOfBirth": "1968-09-04", "gender": "Female",     "documentNumber": "",                       "issuingCountry": "India", "issueDate": "",           "expiryDate": "",           "addressLine1": "House 42, Sector 7",            "addressLine2": "Near Indira Park",                "city": "Patna",     "state": "Bihar",      "postalCode": "800013", "country": "India", "email": "sunita.suman@yahoo.in",     "phone": "+91 98xxx 11111", "notes": "Blood group: B+ · Allergies: penicillin · Insurance: Star Health policy SHI4567XX.",                                                                                                                                                                                                                                                  "createdAt": "2024-06-12T11:45:00.000Z", "updatedAt": "2025-11-08T19:20:00.000Z" }
+  ],
+
+  "investments": [
+    { "id": "inv-fd-sbi",     "name": "SBI 1-Year FD",                 "type": "fixed_deposit", "institution": "State Bank of India", "ticker": null,    "purchaseDate": "2025-12-15", "purchasePrice": 500000, "quantity": 1,      "currentPrice": null,    "currentValue": 533750,  "currency": "INR", "interestRate": 6.75, "maturityDate": "2026-12-15", "fees": 0, "tags": ["safe","short-term"], "notes": "Cumulative FD · auto-renewal off",                                            "isActive": true, "createdAt": "2025-12-15T11:00:00.000Z", "updatedAt": "2026-05-15T07:00:00.000Z" },
+    { "id": "inv-fd-hdfc",    "name": "HDFC 2-Year FD",                "type": "fixed_deposit", "institution": "HDFC Bank",           "ticker": null,    "purchaseDate": "2025-04-01", "purchasePrice": 300000, "quantity": 1,      "currentPrice": null,    "currentValue": 322425,  "currency": "INR", "interestRate": 7.10, "maturityDate": "2027-04-01", "fees": 0, "tags": ["safe"],              "notes": "Senior citizen rate via mom's account",                                       "isActive": true, "createdAt": "2025-04-01T10:00:00.000Z", "updatedAt": "2026-05-15T07:00:00.000Z" },
+    { "id": "inv-mf-hdfc-mc", "name": "HDFC Mid-Cap Opportunities",    "type": "mutual_fund",   "institution": "HDFC AMC",            "ticker": "HDFC-MC","purchaseDate": "2023-06-12", "purchasePrice": 180000, "quantity": 2654.32,"currentPrice": 92.41,   "currentValue": 245321,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 1200, "tags": ["sip","equity"],     "notes": "SIP ₹10k/mo · DIRECT growth",                                                  "isActive": true, "createdAt": "2023-06-12T09:00:00.000Z", "updatedAt": "2026-05-13T18:00:00.000Z" },
+    { "id": "inv-mf-sbi-bc",  "name": "SBI Bluechip Fund",             "type": "mutual_fund",   "institution": "SBI Mutual Fund",     "ticker": "SBI-BC","purchaseDate": "2022-01-08", "purchasePrice": 240000, "quantity": 4128.56,"currentPrice": 71.88,   "currentValue": 296762,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 1800, "tags": ["sip","equity"],     "notes": "SIP ₹5k/mo · large cap",                                                       "isActive": true, "createdAt": "2022-01-08T09:00:00.000Z", "updatedAt": "2026-05-13T18:00:00.000Z" },
+    { "id": "inv-mf-axis",    "name": "Axis Flexi Cap",                "type": "mutual_fund",   "institution": "Axis MF",             "ticker": "AXIS-FC","purchaseDate": "2024-09-20", "purchasePrice": 100000, "quantity": 1842.10,"currentPrice": 60.55,   "currentValue": 111538,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 700,  "tags": ["sip"],              "notes": "Lump sum + monthly top-up ₹3k",                                                "isActive": true, "createdAt": "2024-09-20T09:00:00.000Z", "updatedAt": "2026-05-13T18:00:00.000Z" },
+    { "id": "inv-mf-pp",      "name": "Parag Parikh Flexi Cap",        "type": "mutual_fund",   "institution": "PPFAS",               "ticker": "PP-FC", "purchaseDate": "2024-04-18", "purchasePrice": 150000, "quantity": 2056.84,"currentPrice": 82.32,   "currentValue": 169318,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 950,  "tags": ["sip"],              "notes": "DIRECT growth · core SIP ₹15k/mo from Jun 2026",                              "isActive": true, "createdAt": "2024-04-18T09:00:00.000Z", "updatedAt": "2026-05-13T18:00:00.000Z" },
+    { "id": "inv-stk-rel",    "name": "Reliance Industries",           "type": "stocks",        "institution": "Zerodha",             "ticker": "RELIANCE","purchaseDate":"2023-08-30", "purchasePrice": 245000, "quantity": 95,     "currentPrice": 2918.40, "currentValue": 277248,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 240,  "tags": ["bluechip"],         "notes": "Avg buy ₹2,579",                                                              "isActive": true, "createdAt": "2023-08-30T09:30:00.000Z", "updatedAt": "2026-05-15T15:30:00.000Z" },
+    { "id": "inv-stk-tcs",    "name": "TCS",                           "type": "stocks",        "institution": "Zerodha",             "ticker": "TCS",   "purchaseDate": "2022-05-04", "purchasePrice": 280000, "quantity": 75,     "currentPrice": 3982.10, "currentValue": 298658,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 280,  "tags": ["it","bluechip"],    "notes": "Avg buy ₹3,733",                                                              "isActive": true, "createdAt": "2022-05-04T09:30:00.000Z", "updatedAt": "2026-05-15T15:30:00.000Z" },
+    { "id": "inv-crypto-btc", "name": "Bitcoin",                       "type": "crypto",        "institution": "Coinbase",            "ticker": "BTC",   "purchaseDate": "2024-02-12", "purchasePrice": 125000, "quantity": 0.05,   "currentPrice": 5800000, "currentValue": 290000,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 380,  "tags": ["crypto"],           "notes": "DCA buys · cold-storage backup with hardware wallet",                          "isActive": true, "createdAt": "2024-02-12T20:00:00.000Z", "updatedAt": "2026-05-15T16:00:00.000Z" },
+    { "id": "inv-crypto-eth", "name": "Ethereum",                      "type": "crypto",        "institution": "Coinbase",            "ticker": "ETH",   "purchaseDate": "2024-06-18", "purchasePrice": 220000, "quantity": 1.2,    "currentPrice": 248000,  "currentValue": 297600,  "currency": "INR", "interestRate": null,  "maturityDate": null,         "fees": 410,  "tags": ["crypto"],           "notes": "Held in Coinbase Vault",                                                       "isActive": true, "createdAt": "2024-06-18T20:00:00.000Z", "updatedAt": "2026-05-15T16:00:00.000Z" }
+  ],
+
+  "bankStatements": [
+    { "id": "bs-hdfc-apr26", "bankName": "HDFC Bank",         "accountName": "Saket Suman", "accountNumber": "XXXXXX****1234", "statementPeriod": {"startDate": "2026-04-01", "endDate": "2026-04-30"}, "currency": "INR", "openingBalance": 184320.50, "closingBalance": 192450.18, "totalCredits": 165000.00, "totalDebits": 156870.32, "transactionCount": 18, "fileName": "HDFC_Apr2026.csv",       "fileType": "csv", "importDate": "2026-05-02T10:00:00.000Z", "createdAt": "2026-05-02T10:00:00.000Z", "updatedAt": "2026-05-02T10:00:00.000Z" },
+    { "id": "bs-sbi-apr26",  "bankName": "State Bank of India","accountName": "Saket Suman", "accountNumber": "XXXXXX****5678", "statementPeriod": {"startDate": "2026-04-01", "endDate": "2026-04-30"}, "currency": "INR", "openingBalance": 42180.00,  "closingBalance": 51420.55,  "totalCredits": 95000.00,  "totalDebits": 85759.45,  "transactionCount": 12, "fileName": "SBI_Salary_Apr2026.csv", "fileType": "csv", "importDate": "2026-05-03T11:30:00.000Z", "createdAt": "2026-05-03T11:30:00.000Z", "updatedAt": "2026-05-03T11:30:00.000Z" },
+    { "id": "bs-hdfc-mar26", "bankName": "HDFC Bank",         "accountName": "Saket Suman", "accountNumber": "XXXXXX****1234", "statementPeriod": {"startDate": "2026-03-01", "endDate": "2026-03-31"}, "currency": "INR", "openingBalance": 198750.20, "closingBalance": 184320.50, "totalCredits": 158000.00, "totalDebits": 172429.70, "transactionCount": 16, "fileName": "HDFC_Mar2026.csv",       "fileType": "csv", "importDate": "2026-04-02T09:30:00.000Z", "createdAt": "2026-04-02T09:30:00.000Z", "updatedAt": "2026-04-02T09:30:00.000Z" }
+  ],
+
+  "bankTransactions": [
+    { "id": "tx-h-1",  "statementId": "bs-hdfc-apr26", "date": "2026-04-01", "description": "Salary credit — ACME CLOUD PVT LTD",   "amount":  155000.00, "currency": "INR", "transactionType": "credit", "category": "Income",          "subcategory": "Salary",         "balance": 339320.50, "merchant": "Acme Cloud", "isRecurring": true,  "recurringPattern": "monthly", "tags": [],                   "notes": "Apr 2026 net pay",                  "createdAt": "2026-05-02T10:00:01.000Z", "updatedAt": "2026-05-02T10:00:01.000Z" },
+    { "id": "tx-h-2",  "statementId": "bs-hdfc-apr26", "date": "2026-04-01", "description": "ACH DR — INDIANA RENT 2BHK INDIRA",   "amount":  -35000.00, "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Rent",           "balance": 304320.50, "merchant": "Landlord",   "isRecurring": true,  "recurringPattern": "monthly", "tags": ["rent"],             "notes": "May 2026 rent (paid Apr 30 batch)","createdAt": "2026-05-02T10:00:02.000Z", "updatedAt": "2026-05-02T10:00:02.000Z" },
+    { "id": "tx-h-3",  "statementId": "bs-hdfc-apr26", "date": "2026-04-03", "description": "UPI/AIRTEL POSTPAID/8123456789",       "amount":   -599.00,  "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Phone",          "balance": 303721.50, "merchant": "Airtel",     "isRecurring": true,  "recurringPattern": "monthly", "tags": [],                                                                                          "createdAt": "2026-05-02T10:00:03.000Z", "updatedAt": "2026-05-02T10:00:03.000Z" },
+    { "id": "tx-h-4",  "statementId": "bs-hdfc-apr26", "date": "2026-04-05", "description": "ACH DR — ACT FIBERNET",                "amount":  -1199.00,  "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Internet",       "balance": 302522.50, "merchant": "ACT",        "isRecurring": true,  "recurringPattern": "monthly", "tags": [],                                                                                          "createdAt": "2026-05-02T10:00:04.000Z", "updatedAt": "2026-05-02T10:00:04.000Z" },
+    { "id": "tx-h-5",  "statementId": "bs-hdfc-apr26", "date": "2026-04-05", "description": "ACH DR — PARAG PARIKH SIP",            "amount": -15000.00,  "currency": "INR", "transactionType": "debit",  "category": "Investments",     "subcategory": "Mutual Funds",  "balance": 287522.50, "merchant": "PPFAS",      "isRecurring": true,  "recurringPattern": "monthly", "tags": ["sip"],              "notes": "Auto-debit SIP",                    "createdAt": "2026-05-02T10:00:05.000Z", "updatedAt": "2026-05-02T10:00:05.000Z" },
+    { "id": "tx-h-6",  "statementId": "bs-hdfc-apr26", "date": "2026-04-08", "description": "BESCOM ELECTRICITY",                   "amount":  -3850.00,  "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Electricity",   "balance": 283672.50, "merchant": "BESCOM",     "isRecurring": true,  "recurringPattern": "monthly", "tags": [],                                                                                          "createdAt": "2026-05-02T10:00:06.000Z", "updatedAt": "2026-05-02T10:00:06.000Z" },
+    { "id": "tx-h-7",  "statementId": "bs-hdfc-apr26", "date": "2026-04-09", "description": "POS/AMAZON.IN/ELECTRONICS",            "amount":  -1899.00,  "currency": "INR", "transactionType": "debit",  "category": "Shopping",        "subcategory": "Electronics",   "balance": 281773.50, "merchant": "Amazon",     "isRecurring": false,                                "tags": ["work"],                                                                                                                              "createdAt": "2026-05-02T10:00:07.000Z", "updatedAt": "2026-05-02T10:00:07.000Z" },
+    { "id": "tx-h-8",  "statementId": "bs-hdfc-apr26", "date": "2026-04-12", "description": "POS/INDIAN OIL/FUEL",                  "amount":  -2200.00,  "currency": "INR", "transactionType": "debit",  "category": "Transportation",  "subcategory": "Gas",           "balance": 279573.50, "merchant": "Indian Oil", "isRecurring": false,                                "tags": ["car"],                                                                                                                               "createdAt": "2026-05-02T10:00:08.000Z", "updatedAt": "2026-05-02T10:00:08.000Z" },
+    { "id": "tx-h-9",  "statementId": "bs-hdfc-apr26", "date": "2026-04-13", "description": "POS/BIGBASKET/GROCERY",                "amount":  -4250.00,  "currency": "INR", "transactionType": "debit",  "category": "Food & Dining",   "subcategory": "Groceries",     "balance": 275323.50, "merchant": "BigBasket",  "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:09.000Z", "updatedAt": "2026-05-02T10:00:09.000Z" },
+    { "id": "tx-h-10", "statementId": "bs-hdfc-apr26", "date": "2026-04-15", "description": "UPI/SWIGGY ORDER",                     "amount":   -880.00,  "currency": "INR", "transactionType": "debit",  "category": "Food & Dining",   "subcategory": "Restaurants",   "balance": 274443.50, "merchant": "Swiggy",     "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:10.000Z", "updatedAt": "2026-05-02T10:00:10.000Z" },
+    { "id": "tx-h-11", "statementId": "bs-hdfc-apr26", "date": "2026-04-18", "description": "INDANE LPG REFILL",                    "amount":   -950.00,  "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Gas",           "balance": 273493.50, "merchant": "Indane",     "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:11.000Z", "updatedAt": "2026-05-02T10:00:11.000Z" },
+    { "id": "tx-h-12", "statementId": "bs-hdfc-apr26", "date": "2026-04-20", "description": "POS/AMAZON.IN/HOME",                   "amount":  -1099.00,  "currency": "INR", "transactionType": "debit",  "category": "Shopping",        "subcategory": "Home",          "balance": 272394.50, "merchant": "Amazon",     "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:12.000Z", "updatedAt": "2026-05-02T10:00:12.000Z" },
+    { "id": "tx-h-13", "statementId": "bs-hdfc-apr26", "date": "2026-04-22", "description": "IRCTC TRAIN BOOKING",                  "amount":  -1850.00,  "currency": "INR", "transactionType": "debit",  "category": "Travel",          "subcategory": "Train",         "balance": 270544.50, "merchant": "IRCTC",      "isRecurring": false,                                "tags": ["work"],                                                                                                                              "createdAt": "2026-05-02T10:00:13.000Z", "updatedAt": "2026-05-02T10:00:13.000Z" },
+    { "id": "tx-h-14", "statementId": "bs-hdfc-apr26", "date": "2026-04-22", "description": "INTEREST CREDIT — SAVINGS",            "amount":   1280.00,  "currency": "INR", "transactionType": "credit", "category": "Income",          "subcategory": "Interest",      "balance": 271824.50, "merchant": "HDFC",       "isRecurring": true,  "recurringPattern": "quarterly","tags": [],                                                                                          "createdAt": "2026-05-02T10:00:14.000Z", "updatedAt": "2026-05-02T10:00:14.000Z" },
+    { "id": "tx-h-15", "statementId": "bs-hdfc-apr26", "date": "2026-04-26", "description": "POS/TRUEFITT & HILL/SALON",            "amount":   -850.00,  "currency": "INR", "transactionType": "debit",  "category": "Personal Care",   "subcategory": "Hair",          "balance": 270974.50, "merchant": "Truefitt",   "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:15.000Z", "updatedAt": "2026-05-02T10:00:15.000Z" },
+    { "id": "tx-h-16", "statementId": "bs-hdfc-apr26", "date": "2026-04-27", "description": "GODADDY DOMAIN RENEWAL",               "amount":  -1199.00,  "currency": "INR", "transactionType": "debit",  "category": "Business",        "subcategory": "Other",         "balance": 269775.50, "merchant": "GoDaddy",    "isRecurring": false,                                "tags": ["business"],                                                                                                                          "createdAt": "2026-05-02T10:00:16.000Z", "updatedAt": "2026-05-02T10:00:16.000Z" },
+    { "id": "tx-h-17", "statementId": "bs-hdfc-apr26", "date": "2026-04-29", "description": "POS/PVR CINEMAS/MOVIE",                "amount":  -1240.00,  "currency": "INR", "transactionType": "debit",  "category": "Entertainment",   "subcategory": "Movies",        "balance": 268535.50, "merchant": "PVR",        "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-02T10:00:17.000Z", "updatedAt": "2026-05-02T10:00:17.000Z" },
+    { "id": "tx-h-18", "statementId": "bs-hdfc-apr26", "date": "2026-04-30", "description": "ACH DR — HDFC CC AUTOPAY",             "amount": -76085.32,  "currency": "INR", "transactionType": "debit",  "category": "Bills & Utilities","subcategory": "Other",         "balance": 192450.18, "merchant": "HDFC CC",    "isRecurring": true,  "recurringPattern": "monthly", "tags": ["card"],             "notes": "Apr 2026 statement settlement",      "createdAt": "2026-05-02T10:00:18.000Z", "updatedAt": "2026-05-02T10:00:18.000Z" },
+
+    { "id": "tx-s-1",  "statementId": "bs-sbi-apr26",  "date": "2026-04-01", "description": "Salary credit (variable bonus)",       "amount":  95000.00,  "currency": "INR", "transactionType": "credit", "category": "Income",          "subcategory": "Salary",         "balance": 137180.00, "merchant": "Acme Cloud", "isRecurring": false,                                "tags": ["bonus"],                                                                                                                             "createdAt": "2026-05-03T11:30:01.000Z", "updatedAt": "2026-05-03T11:30:01.000Z" },
+    { "id": "tx-s-2",  "statementId": "bs-sbi-apr26",  "date": "2026-04-02", "description": "NEFT to ICICI MF — SBI Bluechip SIP",  "amount":  -5000.00,  "currency": "INR", "transactionType": "debit",  "category": "Investments",     "subcategory": "Mutual Funds",  "balance": 132180.00, "merchant": "SBI MF",     "isRecurring": true,  "recurringPattern": "monthly", "tags": ["sip"],                                                                                                                "createdAt": "2026-05-03T11:30:02.000Z", "updatedAt": "2026-05-03T11:30:02.000Z" },
+    { "id": "tx-s-3",  "statementId": "bs-sbi-apr26",  "date": "2026-04-04", "description": "POS/CULT.FIT/INDIRANAGAR",             "amount":  -2500.00,  "currency": "INR", "transactionType": "debit",  "category": "Healthcare",      "subcategory": "Other",         "balance": 129680.00, "merchant": "Cult.fit",   "isRecurring": true,  "recurringPattern": "monthly", "tags": ["fitness"],                                                                                                            "createdAt": "2026-05-03T11:30:03.000Z", "updatedAt": "2026-05-03T11:30:03.000Z" },
+    { "id": "tx-s-4",  "statementId": "bs-sbi-apr26",  "date": "2026-04-06", "description": "POS/APOLLO PHARMACY",                  "amount":   -728.00,  "currency": "INR", "transactionType": "debit",  "category": "Healthcare",      "subcategory": "Pharmacy",      "balance": 128952.00, "merchant": "Apollo",     "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-03T11:30:04.000Z", "updatedAt": "2026-05-03T11:30:04.000Z" },
+    { "id": "tx-s-5",  "statementId": "bs-sbi-apr26",  "date": "2026-04-08", "description": "UPI/MYNTRA/ASICS SHOES",               "amount":  -5499.00,  "currency": "INR", "transactionType": "debit",  "category": "Shopping",        "subcategory": "Clothing",      "balance": 123453.00, "merchant": "Myntra",     "isRecurring": false,                                "tags": ["fitness"],                                                                                                                           "createdAt": "2026-05-03T11:30:05.000Z", "updatedAt": "2026-05-03T11:30:05.000Z" },
+    { "id": "tx-s-6",  "statementId": "bs-sbi-apr26",  "date": "2026-04-10", "description": "POS/THIRD WAVE COFFEE",                "amount":   -380.00,  "currency": "INR", "transactionType": "debit",  "category": "Food & Dining",   "subcategory": "Coffee",        "balance": 123073.00, "merchant": "Third Wave", "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-03T11:30:06.000Z", "updatedAt": "2026-05-03T11:30:06.000Z" },
+    { "id": "tx-s-7",  "statementId": "bs-sbi-apr26",  "date": "2026-04-11", "description": "UBER PAYMENT",                          "amount":   -540.00,  "currency": "INR", "transactionType": "debit",  "category": "Transportation",  "subcategory": "Rideshare",     "balance": 122533.00, "merchant": "Uber",       "isRecurring": false,                                "tags": ["travel"],                                                                                                                            "createdAt": "2026-05-03T11:30:07.000Z", "updatedAt": "2026-05-03T11:30:07.000Z" },
+    { "id": "tx-s-8",  "statementId": "bs-sbi-apr26",  "date": "2026-04-13", "description": "OLA PAYMENT",                           "amount":   -215.00,  "currency": "INR", "transactionType": "debit",  "category": "Transportation",  "subcategory": "Rideshare",     "balance": 122318.00, "merchant": "Ola",        "isRecurring": false,                                "tags": ["work"],                                                                                                                              "createdAt": "2026-05-03T11:30:08.000Z", "updatedAt": "2026-05-03T11:30:08.000Z" },
+    { "id": "tx-s-9",  "statementId": "bs-sbi-apr26",  "date": "2026-04-14", "description": "POS/TRUFFLES/RESTAURANT",              "amount":  -1180.00,  "currency": "INR", "transactionType": "debit",  "category": "Food & Dining",   "subcategory": "Restaurants",   "balance": 121138.00, "merchant": "Truffles",   "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-03T11:30:09.000Z", "updatedAt": "2026-05-03T11:30:09.000Z" },
+    { "id": "tx-s-10", "statementId": "bs-sbi-apr26",  "date": "2026-04-22", "description": "INTEREST CREDIT — SAVINGS",            "amount":    180.00,  "currency": "INR", "transactionType": "credit", "category": "Income",          "subcategory": "Interest",      "balance": 121318.00, "merchant": "SBI",        "isRecurring": true,  "recurringPattern": "quarterly", "tags": [],                                                                                                                "createdAt": "2026-05-03T11:30:10.000Z", "updatedAt": "2026-05-03T11:30:10.000Z" },
+    { "id": "tx-s-11", "statementId": "bs-sbi-apr26",  "date": "2026-04-29", "description": "ATM WITHDRAWAL HSR LAYOUT",            "amount": -10000.00,  "currency": "INR", "transactionType": "debit",  "category": "ATM Withdrawal",  "subcategory": "Cash",          "balance": 111318.00, "merchant": "SBI ATM",    "isRecurring": false,                                "tags": [],                                                                                                                                    "createdAt": "2026-05-03T11:30:11.000Z", "updatedAt": "2026-05-03T11:30:11.000Z" },
+    { "id": "tx-s-12", "statementId": "bs-sbi-apr26",  "date": "2026-04-30", "description": "TRANSFER OUT — TO HDFC SAVINGS",        "amount": -59897.45,  "currency": "INR", "transactionType": "transfer","category": "Transfer",        "subcategory": "Between Accounts","balance": 51420.55, "merchant": "Self",       "isRecurring": false,                                "tags": ["transfer"],                                                                                                                          "createdAt": "2026-05-03T11:30:12.000Z", "updatedAt": "2026-05-03T11:30:12.000Z" }
   ]
 }
