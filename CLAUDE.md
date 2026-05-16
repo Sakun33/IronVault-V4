@@ -89,12 +89,26 @@ IronVault is a zero-knowledge encrypted vault app for passwords, finances, notes
 - JWT TDZ fix: JWT_SECRET must be declared at top of handler before any endpoint
 
 ## Current State (May 2026)
-- **v4.2.0** released on GitHub (2026-05-08)
-- 160+ security fixes applied (carried from v4.1.0)
+- **v4.3.0** released on GitHub (2026-05-16)
+- 171+ security fixes applied (160 carried from v4.1.0 + 11 new in v4.3.0)
 - 5-phase UI overhaul complete (glassmorphism, Motion animations, premium design)
 - Lighthouse mobile: Performance **75+** (was 57), Accessibility 97, SEO 100
-- Playwright test suite: 12 spec files, 900+ tests, growing pass rate
+- Playwright test suite: 12 spec files, 1000+ tests (104+ new E2E tests in v4.3.0)
 - iOS + Android native apps shipping via Capacitor 7
+- Git tags: `v4.3.0`, `v4.2.1-stable`
+- Service worker: `v3.48.0`
+
+### v4.3.0 Highlights
+- **TOTP authenticator codes** — built-in 2FA code generator with live OTP rotation, QR import, and per-account secrets
+- **Credit cards** — full card vault section with masked PAN, CVV reveal gating, expiry tracking, and issuer logos
+- **Identities** — store personal identity records (name, DOB, government IDs, addresses, phones) alongside passwords
+- **Password history** — per-credential version history with revert; never lose a rotated password
+- **Favorites** — pin any item across sections; dedicated Favorites view with cross-section grouping
+- **Keyboard shortcuts** — global hotkeys for navigation, search, new item, save; discoverable cheat sheet overlay
+- **Clipboard auto-clear** — copied secrets are wiped from clipboard after configurable timeout (default 30s)
+- **Premium glassmorphism UI overhaul** — refined glass tokens, hero empty states, premium card design across all vault sections
+- **Seed data JSON** — `client/public/comprehensive-realistic-data.json` (158 items across 11 sections) for demos and Playwright fixtures
+- **11 new security fixes** and **104+ new E2E tests** covering the new sections and shortcuts
 
 ### v4.2.0 Highlights
 - **Google Sign-In** — OAuth 2.0 on web, iOS, and Android via `@capgo/capacitor-social-login` (Google Cloud project: `citric-bee-495700-v6`)
