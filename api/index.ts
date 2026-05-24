@@ -1284,7 +1284,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS shared_links (
           id TEXT PRIMARY KEY,
-          owner_user_id INTEGER REFERENCES crm_users(id) ON DELETE CASCADE,
+          owner_user_id UUID REFERENCES crm_users(id) ON DELETE CASCADE,
           owner_email TEXT,
           encrypted_payload TEXT NOT NULL,
           iv TEXT NOT NULL,
@@ -1313,10 +1313,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   async function ensurePasskeyTable(): Promise<void> {
     if (_passkeyTableEnsured) return;
     try {
+      // crm_users.id is UUID — the FK column type MUST match or Postgres
+      // refuses to create the table. v1 of these tables incorrectly used
+      // INTEGER and silently failed inside the try/catch, which is what was
+      // causing every passkey endpoint to return 500 after the static-import
+      // fix.
       await db.query(`
         CREATE TABLE IF NOT EXISTS passkey_credentials (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER NOT NULL REFERENCES crm_users(id) ON DELETE CASCADE,
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES crm_users(id) ON DELETE CASCADE,
           credential_id TEXT UNIQUE NOT NULL,
           public_key BYTEA NOT NULL,
           counter BIGINT NOT NULL DEFAULT 0,
@@ -1330,7 +1335,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS passkey_challenges (
           challenge TEXT PRIMARY KEY,
-          user_id INTEGER,
+          user_id UUID,
           email TEXT,
           purpose TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
