@@ -73,6 +73,10 @@ const DarkWebMonitor = React.lazy(() => import("@/pages/dark-web-monitor"));
 const FamilyDashboard = React.lazy(() => import("@/pages/family-dashboard"));
 const DigitalWill = React.lazy(() => import("@/pages/digital-will"));
 const SmartFormFiller = React.lazy(() => import("@/pages/smart-form-filler"));
+const PhishingShield = React.lazy(() => import("@/pages/phishing-shield"));
+const CoupleVault = React.lazy(() => import("@/pages/couple-vault"));
+const BreachTimeline = React.lazy(() => import("@/pages/breach-timeline"));
+const ShareRedeem = React.lazy(() => import("@/pages/share-redeem"));
 const Profile = React.lazy(() => import("@/pages/profile"));
 const Settings = React.lazy(() => import("@/pages/settings"));
 const Integrations = React.lazy(() => import("@/pages/integrations"));
@@ -139,7 +143,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2 } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2, Clock } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -463,6 +467,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'dark-web', label: 'Dark Web Monitor', icon: ShieldAlert, href: '/dark-web', group: 'tools' },
     { id: 'digital-will', label: 'Digital Will', icon: Heart, href: '/digital-will', group: 'account' },
     { id: 'form-filler', label: 'Form Filler', icon: Wand2, href: '/form-filler', group: 'tools' },
+    { id: 'phishing', label: 'Phishing Shield', icon: ShieldCheck, href: '/phishing', group: 'tools' },
+    { id: 'breach-timeline', label: 'Breach Timeline', icon: Clock, href: '/breach-timeline', group: 'tools' },
+    { id: 'couple', label: "Couple's Vault", icon: Heart, href: '/couple', group: 'account' },
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
@@ -1338,6 +1345,10 @@ function Router() {
             <Route path="/auth/reset-password" component={ResetPasswordPage} />
             <Route path="/auth/verify" component={VerifyEmailPage} />
             <Route path="/login" component={Login} />
+            {/* Share-redeem is intentionally public — the link recipient may
+                not have an IronVault account at all. The blob is E2E encrypted
+                with a key in the URL fragment, so no auth gating is needed. */}
+            <Route path="/share/:id" component={ShareRedeem} />
             {PUBLIC_INFO_ROUTES}
             {/* Catch-all → landing */}
             <Route component={LandingPage} />
@@ -1430,6 +1441,13 @@ function Router() {
       <Route path="/family"><MainLayout><FamilyDashboard /></MainLayout></Route>
       <Route path="/digital-will"><MainLayout><DigitalWill /></MainLayout></Route>
       <Route path="/form-filler"><MainLayout><SmartFormFiller /></MainLayout></Route>
+      <Route path="/phishing"><MainLayout><PhishingShield /></MainLayout></Route>
+      <Route path="/breach-timeline"><MainLayout><BreachTimeline /></MainLayout></Route>
+      <Route path="/couple"><MainLayout><CoupleVault /></MainLayout></Route>
+      {/* Share-redeem renders with its own minimal layout (no sidebar) so an
+          authenticated user opening a share link sees the same clean view
+          a logged-out recipient would. */}
+      <Route path="/share/:id" component={ShareRedeem} />
       <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
       <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
       <Route path="/integrations"><MainLayout><Integrations /></MainLayout></Route>

@@ -524,6 +524,48 @@ export default function SecurityHealth() {
         <BreachScanCard passwords={passwords} />
       </motion.div>
 
+      {/* Detailed score breakdown — per-category bars so the user understands
+          where their points come from and where the gaps are. */}
+      <motion.div
+        variants={fadeUp}
+        className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl p-4"
+        data-testid="security-breakdown"
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          </div>
+          <h2 className="text-sm font-semibold text-foreground">Score breakdown</h2>
+          <span className="ml-auto text-xs text-muted-foreground">{breakdown.totalScore}/100</span>
+        </div>
+        <ul className="space-y-3">
+          {([
+            ['passwordStrength',        'Password strength'],
+            ['uniquePasswords',         'Password reuse'],
+            ['twoFactorEnabled',        '2FA coverage'],
+            ['recentlyChanged',         'Password freshness'],
+            ['masterPasswordStrength',  'Master password'],
+            ['autoLockEnabled',         'Auto-lock'],
+          ] as const).map(([key, label]) => {
+            const cat = breakdown.categories[key];
+            const pct = Math.round((cat.score / cat.max) * 100);
+            const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+            return (
+              <li key={key}>
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{cat.score}/{cat.max}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                  <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">{cat.detail}</p>
+              </li>
+            );
+          })}
+        </ul>
+      </motion.div>
+
       {/* Tips card (collapsible) */}
       {breakdown.tips.length > 0 && (
         <motion.div

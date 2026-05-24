@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity, CryptoWallet, WifiPassword, SoftwareLicense, InsurancePolicy, TaxDocument, QrCode, SecureBookmark, FamilyMember, DigitalWill } from '@shared/schema';
+import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity, CryptoWallet, WifiPassword, SoftwareLicense, InsurancePolicy, TaxDocument, QrCode, SecureBookmark, FamilyMember, DigitalWill, CoupleVault } from '@shared/schema';
 import { vaultStorage } from '@/lib/storage';
 import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
 import { useAuth } from './auth-context';
@@ -155,6 +155,9 @@ interface VaultContextType {
   digitalWill: DigitalWill | null;
   saveDigitalWill: (data: Omit<DigitalWill, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   clearDigitalWill: () => Promise<void>;
+  coupleVault: CoupleVault | null;
+  saveCoupleVault: (data: Omit<CoupleVault, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  clearCoupleVault: () => Promise<void>;
   importBankStatementsFromCSV: (csvContent: string, currency?: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -226,6 +229,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [secureBookmarks, setSecureBookmarks] = useState<SecureBookmark[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [digitalWill, setDigitalWillState] = useState<DigitalWill | null>(null);
+  const [coupleVault, setCoupleVaultState] = useState<CoupleVault | null>(null);
   // Splitwise-style entries live in a separate IDB store and a separate hook
   // (use-shared-expenses). Mirror just the count here so the sidebar/badge
   // counts in stats.totalExpenses reflect both legacy + shared entries
@@ -272,6 +276,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setSecureBookmarks([]);
       setFamilyMembers([]);
       setDigitalWillState(null);
+      setCoupleVaultState(null);
       setSharedExpensesCount(0);
       // Wipe AutoFill creds + reset widget to "locked" state on every lock
       // event so a shoulder-surfer can't pull stats / credentials off the
@@ -600,7 +605,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         apiKeysData, creditCardsData, identitiesData, sharedExpensesData,
         cryptoWalletsData, wifiPasswordsData, softwareLicensesData,
         insurancePoliciesData, taxDocumentsData, qrCodesData,
-        secureBookmarksData, familyMembersData, digitalWillData,
+        secureBookmarksData, familyMembersData, digitalWillData, coupleVaultData,
       ] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
@@ -624,6 +629,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllSecureBookmarks().catch(() => [] as any[]),
         vaultStorage.getAllFamilyMembers().catch(() => [] as any[]),
         vaultStorage.getDigitalWill().catch(() => undefined),
+        vaultStorage.getCoupleVault().catch(() => undefined),
       ]);
 
 
@@ -649,6 +655,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setSecureBookmarks(secureBookmarksData.map(hydrateDates));
       setFamilyMembers(familyMembersData.map(hydrateDates));
       setDigitalWillState(digitalWillData ? hydrateDates(digitalWillData) : null);
+      setCoupleVaultState(coupleVaultData ? hydrateDates(coupleVaultData) : null);
       setSharedExpensesCount(sharedExpensesData.length);
 
     } catch (error) {
@@ -1409,6 +1416,27 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
+  // ── Couple's Vault (singleton) ──────────────────────────────────────────
+  const saveCoupleVault = async (data: Omit<CoupleVault, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const existing = coupleVault;
+    const next: CoupleVault = {
+      ...data,
+      id: 'singleton',
+      createdAt: existing?.createdAt ?? new Date(),
+      updatedAt: new Date(),
+    } as CoupleVault;
+    await vaultStorage.saveCoupleVault(next);
+    setCoupleVaultState(next);
+    addLog('Update Couple Vault', 'security', `${next.status} pairing with ${next.partnerEmail} (${next.sharedSections.length} section${next.sharedSections.length === 1 ? '' : 's'})`);
+    pushToCloud();
+  };
+  const clearCoupleVault = async () => {
+    await vaultStorage.deleteCoupleVault();
+    setCoupleVaultState(null);
+    addLog('Unpair Couple Vault', 'security', 'Cleared partner pairing');
+    pushToCloud();
+  };
+
   const importBankStatementsFromCSV = async (csvContent: string, currency?: string) => {
     try {
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent, currency);
@@ -1867,6 +1895,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     digitalWill,
     saveDigitalWill,
     clearDigitalWill,
+    coupleVault,
+    saveCoupleVault,
+    clearCoupleVault,
     importBankStatementsFromCSV,
     exportVault,
     importVault,

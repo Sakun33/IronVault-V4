@@ -706,6 +706,7 @@ export class VaultStorage {
         payload.cryptoWallets, payload.wifiPasswords, payload.softwareLicenses,
         payload.insurancePolicies, payload.taxDocuments, payload.qrCodes,
         payload.secureBookmarks, payload.familyMembers, payload.digitalWill,
+        payload.coupleVault,
       ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
       return lengths.reduce((a, b) => a + b, 0);
     } catch {
@@ -1201,6 +1202,12 @@ export class VaultStorage {
   async getDigitalWill(): Promise<any | undefined> { return this.decryptAndRetrieve('digitalWill', 'singleton'); }
   async deleteDigitalWill(): Promise<void> { return this.deleteEncryptedById('singleton'); }
 
+  // Couple's Vault — same singleton pattern as digitalWill. Reads return
+  // the singleton record or undefined.
+  async saveCoupleVault(item: any): Promise<void> { await this.encryptAndStore('coupleVault', { ...item, id: 'singleton' }); }
+  async getCoupleVault(): Promise<any | undefined> { return this.decryptAndRetrieve('coupleVault', 'singleton'); }
+  async deleteCoupleVault(): Promise<void> { return this.deleteEncryptedById('singleton'); }
+
   /** Shared deletion helper for every encrypted_data-backed section. */
   private deleteEncryptedById(id: string): Promise<void> {
     this.assertVaultSelected();
@@ -1243,6 +1250,7 @@ export class VaultStorage {
       secureBookmarks,
       familyMembers,
       digitalWill,
+      coupleVault,
       metadata,
     ] = await Promise.all([
       this.getAllPasswords(),
@@ -1266,6 +1274,7 @@ export class VaultStorage {
       this.getAllSecureBookmarks(),
       this.getAllFamilyMembers(),
       this.getDigitalWill().catch(() => undefined),
+      this.getCoupleVault().catch(() => undefined),
       this.getMetadata(),
     ]);
 
@@ -1291,9 +1300,10 @@ export class VaultStorage {
       secureBookmarks,
       familyMembers,
       digitalWill: digitalWill ? [digitalWill] : [],
+      coupleVault: coupleVault ? [coupleVault] : [],
       metadata,
       exportedAt: new Date(),
-      version: 6, // v6: adds bookmarks / family / digital will
+      version: 7, // v7: adds coupleVault singleton
     };
 
     const salt = CryptoService.generateSalt();
@@ -1458,6 +1468,7 @@ export class VaultStorage {
         ...(importData.secureBookmarks ?? []).map((b: any) => this.saveSecureBookmark(b)),
         ...(importData.familyMembers ?? []).map((m: any) => this.saveFamilyMember(m)),
         ...(importData.digitalWill ?? []).map((w: any) => this.saveDigitalWill(w)),
+        ...(importData.coupleVault ?? []).map((c: any) => this.saveCoupleVault(c)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);

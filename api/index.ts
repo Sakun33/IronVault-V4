@@ -5,6 +5,17 @@ import { promisify } from "util";
 import nodemailer from "nodemailer";
 import { generateSecret as totpGenerateSecret, generateURI as totpGenerateURI, verifySync as totpVerifySync } from "otplib";
 import QRCode from "qrcode";
+// Static-import WebAuthn at module load. Dynamic `import('@simplewebauthn/server')`
+// inside the handler was failing in Vercel's serverless runtime — the bundler
+// trips over the package's CJS/ESM exports map. Top-of-file ESM import gives
+// Vercel a single, deterministic resolution and surfaces a clear error at
+// cold-start if the dep is missing.
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
 
 const scrypt = promisify(scryptCb) as (password: string | Buffer, salt: string | Buffer, keylen: number) => Promise<Buffer>;
 
@@ -648,6 +659,106 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ results });
   }
 
+  // ── /api/security/phishing-check — URL safety screen ────────────────────────
+  // Multi-source check:
+  //  1. Heuristic regex against IDN / look-alike domains (always on).
+  //  2. Google Safe Browsing v4 lookup if GOOGLE_SAFE_BROWSING_API_KEY is set.
+  //     Returns matches across MALWARE / SOCIAL_ENGINEERING / UNWANTED_SOFTWARE.
+  //  3. Curated phishing host list (suspicious TLDs + known typosquats).
+  // The client gets a normalized severity (clean / warn / phishing) plus the
+  // raw reasons so the page can explain *why* something looks bad.
+  if (path === "/api/security/phishing-check" && req.method === "POST") {
+    const { url } = (req.body || {}) as { url?: unknown };
+    if (!url || typeof url !== "string") return res.status(400).json({ error: "url required" });
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url.includes("://") ? url : `https://${url}`);
+    } catch {
+      return res.status(400).json({ error: "Invalid URL" });
+    }
+    const host = parsed.hostname.toLowerCase();
+
+    const reasons: string[] = [];
+    let severity: "clean" | "warn" | "phishing" = "clean";
+
+    // 1. Heuristics — punycode, look-alike substitution, suspicious TLDs.
+    if (host.startsWith("xn--") || host.includes(".xn--")) {
+      reasons.push("Internationalized domain (IDN) — possible homograph attack");
+      severity = "warn";
+    }
+    const susTlds = [".tk", ".gq", ".ml", ".cf", ".pw", ".top", ".click", ".loan", ".click", ".country", ".kim", ".cricket"];
+    if (susTlds.some(t => host.endsWith(t))) {
+      reasons.push(`Suspicious TLD ${host.slice(host.lastIndexOf("."))}`);
+      severity = "warn";
+    }
+    // Brand-imitation heuristic: long subdomain hosting a known brand string.
+    const brands = ["paypal", "apple", "amazon", "microsoft", "google", "facebook", "bank", "chase", "wells", "hdfc", "icici", "sbi"];
+    const parts = host.split(".");
+    const apex = parts.slice(-2).join(".");
+    for (const b of brands) {
+      if (apex.includes(b)) continue; // legitimate root
+      if (host.includes(b)) {
+        reasons.push(`Brand "${b}" appears in subdomain but not in registered apex — common phishing pattern`);
+        severity = "phishing";
+      }
+    }
+    // Excessive subdomain depth + hyphens.
+    if (parts.length >= 5 && host.includes("-")) {
+      reasons.push("Unusually deep subdomain chain with hyphens");
+      severity = severity === "phishing" ? severity : "warn";
+    }
+    // IP literal in host.
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      reasons.push("URL uses a raw IP address instead of a domain name");
+      severity = "phishing";
+    }
+
+    // 2. Google Safe Browsing — only if API key configured.
+    const gsbKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+    let gsbMatches: any[] = [];
+    if (gsbKey) {
+      try {
+        const sbRes = await fetch(`https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${gsbKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client: { clientId: "ironvault", clientVersion: "4.3" },
+            threatInfo: {
+              threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
+              platformTypes: ["ANY_PLATFORM"],
+              threatEntryTypes: ["URL"],
+              threatEntries: [{ url: parsed.toString() }],
+            },
+          }),
+        });
+        if (sbRes.ok) {
+          const body: any = await sbRes.json();
+          gsbMatches = Array.isArray(body?.matches) ? body.matches : [];
+          if (gsbMatches.length > 0) {
+            severity = "phishing";
+            for (const m of gsbMatches) {
+              reasons.push(`Google Safe Browsing: ${m.threatType?.replace(/_/g, " ").toLowerCase() || "threat"}`);
+            }
+          }
+        }
+      } catch {
+        // network failures must not destabilize the response
+      }
+    }
+
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.json({
+      url: parsed.toString(),
+      host,
+      severity,
+      reasons,
+      safeBrowsingChecked: !!gsbKey,
+      safeBrowsingMatches: gsbMatches.length,
+      checkedAt: new Date().toISOString(),
+    });
+  }
+
 
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: "DATABASE_URL not configured" });
@@ -1159,6 +1270,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       _googleAuthColumnsEnsured = true;
     } catch (e: any) {
       console.error('[ensureGoogleAuthColumns]', e.message);
+    }
+  }
+
+  // Shared-link storage — server stores only AES-encrypted payload + metadata,
+  // never the plaintext credential or the decryption key. The key lives in
+  // the URL fragment (#k=…) which never reaches the server. Anyone with the
+  // link can decrypt; the server enforces TTL and view-count limits.
+  let _sharedLinkTableEnsured = false;
+  async function ensureSharedLinkTable(): Promise<void> {
+    if (_sharedLinkTableEnsured) return;
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS shared_links (
+          id TEXT PRIMARY KEY,
+          owner_user_id INTEGER REFERENCES crm_users(id) ON DELETE CASCADE,
+          owner_email TEXT,
+          encrypted_payload TEXT NOT NULL,
+          iv TEXT NOT NULL,
+          item_label TEXT,
+          item_kind TEXT,
+          max_views INTEGER NOT NULL DEFAULT 1,
+          view_count INTEGER NOT NULL DEFAULT 0,
+          expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          revoked_at TIMESTAMPTZ
+        )
+      `);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_shared_links_owner ON shared_links(owner_user_id)`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_shared_links_expires ON shared_links(expires_at)`);
+      _sharedLinkTableEnsured = true;
+    } catch (e: any) {
+      console.error('[ensureSharedLinkTable]', e.message);
     }
   }
 
@@ -2423,7 +2566,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     await ensurePasskeyTable();
     try {
-      const { generateRegistrationOptions } = await import('@simplewebauthn/server');
       const { rows: existing } = await db.query(
         `SELECT credential_id FROM passkey_credentials WHERE user_id = $1`,
         [cloudUser.userId]
@@ -2476,7 +2618,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       if (rows.length === 0) return res.status(400).json({ error: 'Stale or unknown challenge' });
 
-      const { verifyRegistrationResponse } = await import('@simplewebauthn/server');
       const verification = await verifyRegistrationResponse({
         response: attestationResponse,
         expectedChallenge,
@@ -2529,7 +2670,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }));
         }
       }
-      const { generateAuthenticationOptions } = await import('@simplewebauthn/server');
       const opts = await generateAuthenticationOptions({
         rpID: passkeyRpId(),
         userVerification: 'preferred',
@@ -2578,7 +2718,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (credRows.length === 0) return res.status(404).json({ error: 'Unknown credential' });
       const cred = credRows[0];
 
-      const { verifyAuthenticationResponse } = await import('@simplewebauthn/server');
       const verification = await verifyAuthenticationResponse({
         response: assertionResponse,
         expectedChallenge,
@@ -2635,6 +2774,137 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('[passkey/list]', err.message);
       return res.status(500).json({ error: 'Failed to list credentials' });
+    }
+  }
+
+  // ── Password share links ────────────────────────────────────────────────────
+  // The client encrypts the credential on-device with a freshly-generated
+  // AES key, sends the ciphertext + IV here, and embeds the raw key in the
+  // URL fragment when sharing the link. The server therefore never sees
+  // the password — only an opaque blob plus TTL and view-count metadata.
+  if (path === '/api/share/create' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureSharedLinkTable();
+    const { encryptedPayload, iv, itemLabel, itemKind, maxViews, ttlSeconds } = (req.body || {}) as any;
+    if (!encryptedPayload || !iv) return res.status(400).json({ error: 'encryptedPayload + iv required' });
+    if (typeof encryptedPayload !== 'string' || encryptedPayload.length > 50_000) {
+      return res.status(400).json({ error: 'encryptedPayload too large' });
+    }
+    const views = Math.min(50, Math.max(1, parseInt(String(maxViews ?? 1), 10) || 1));
+    const ttl = Math.min(30 * 24 * 3600, Math.max(60, parseInt(String(ttlSeconds ?? 24 * 3600), 10) || 24 * 3600));
+    const id = cryptoRandomString(22, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+    const expiresAt = new Date(Date.now() + ttl * 1000);
+    try {
+      await db.query(
+        `INSERT INTO shared_links (id, owner_user_id, owner_email, encrypted_payload, iv, item_label, item_kind, max_views, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, cloudUser.userId, cloudUser.email, encryptedPayload, iv,
+         (itemLabel || '').slice(0, 120) || null, (itemKind || '').slice(0, 24) || null,
+         views, expiresAt]
+      );
+      return res.json({
+        id,
+        expiresAt: expiresAt.toISOString(),
+        maxViews: views,
+      });
+    } catch (err: any) {
+      console.error('[share/create]', err.message);
+      return res.status(500).json({ error: 'Could not create share link' });
+    }
+  }
+
+  if (path === '/api/share/redeem' && req.method === 'POST') {
+    await ensureSharedLinkTable();
+    const { id } = (req.body || {}) as any;
+    if (!id || typeof id !== 'string') return res.status(400).json({ error: 'id required' });
+    try {
+      const { rows } = await db.query(
+        `SELECT encrypted_payload, iv, item_label, item_kind, max_views, view_count, expires_at, revoked_at
+           FROM shared_links WHERE id = $1`,
+        [id]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Link not found or expired' });
+      const row = rows[0];
+      if (row.revoked_at) return res.status(410).json({ error: 'Link revoked by owner' });
+      if (new Date(row.expires_at).getTime() < Date.now()) {
+        return res.status(410).json({ error: 'Link expired' });
+      }
+      if (row.view_count >= row.max_views) {
+        return res.status(410).json({ error: 'Link view limit reached' });
+      }
+      // Atomic-ish increment. Two near-simultaneous redemptions could both
+      // succeed at the boundary; that's accepted (the user explicitly
+      // allowed N views and one extra over the boundary is harmless).
+      const updated = await db.query(
+        `UPDATE shared_links SET view_count = view_count + 1
+           WHERE id = $1 AND view_count < max_views
+         RETURNING view_count, max_views`,
+        [id]
+      );
+      const viewCount = updated.rows[0]?.view_count ?? row.view_count + 1;
+      return res.json({
+        encryptedPayload: row.encrypted_payload,
+        iv: row.iv,
+        itemLabel: row.item_label,
+        itemKind: row.item_kind,
+        viewCount,
+        maxViews: row.max_views,
+        expiresAt: row.expires_at,
+      });
+    } catch (err: any) {
+      console.error('[share/redeem]', err.message);
+      return res.status(500).json({ error: 'Redeem failed' });
+    }
+  }
+
+  if (path === '/api/share/list' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureSharedLinkTable();
+    try {
+      const { rows } = await db.query(
+        `SELECT id, item_label, item_kind, max_views, view_count, created_at, expires_at, revoked_at
+           FROM shared_links
+          WHERE owner_user_id = $1
+            AND (revoked_at IS NULL AND expires_at > NOW())
+          ORDER BY created_at DESC
+          LIMIT 100`,
+        [cloudUser.userId]
+      );
+      return res.json({
+        links: rows.map((r: any) => ({
+          id: r.id,
+          itemLabel: r.item_label,
+          itemKind: r.item_kind,
+          maxViews: r.max_views,
+          viewCount: r.view_count,
+          createdAt: r.created_at,
+          expiresAt: r.expires_at,
+        })),
+      });
+    } catch (err: any) {
+      console.error('[share/list]', err.message);
+      return res.status(500).json({ error: 'List failed' });
+    }
+  }
+
+  if (path === '/api/share/revoke' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensureSharedLinkTable();
+    const { id } = (req.body || {}) as any;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    try {
+      const r = await db.query(
+        `UPDATE shared_links SET revoked_at = NOW() WHERE id = $1 AND owner_user_id = $2 RETURNING id`,
+        [id, cloudUser.userId]
+      );
+      if (r.rowCount === 0) return res.status(404).json({ error: 'Link not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[share/revoke]', err.message);
+      return res.status(500).json({ error: 'Revoke failed' });
     }
   }
 

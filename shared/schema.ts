@@ -676,6 +676,32 @@ export const digitalWillSchema = z.object({
 export type DigitalWillBeneficiary = z.infer<typeof digitalWillBeneficiarySchema>;
 export type DigitalWill = z.infer<typeof digitalWillSchema>;
 
+// Couple's Vault — pair-share with one partner. `sharedSections` lists the
+// vault sections shared with them (passwords/cards/subscriptions/etc).
+// Backend pairing rolls out separately; this schema keeps device-local
+// state so the UI works offline today.
+export const coupleVaultSchema = z.object({
+  id: z.string().default('singleton'),
+  partnerEmail: z.string().email('Valid email required'),
+  partnerName: z.string().min(1, 'Partner name required'),
+  partnerAvatarUrl: z.string().optional(),
+  sharedSections: z.array(z.enum([
+    'passwords', 'cards', 'subscriptions', 'notes', 'reminders',
+    'wifi', 'documents', 'identities', 'crypto',
+  ])).default([]),
+  /** IDs of individual items the user explicitly marked private (override the section share). */
+  privateItemIds: z.array(z.string()).default([]),
+  /** IDs of individual items the user explicitly marked shared (override the section share). */
+  sharedItemIds: z.array(z.string()).default([]),
+  status: z.enum(['invited', 'active', 'paused']).default('invited'),
+  sharedAt: z.string(),
+  pausedAt: z.string().optional(),
+  message: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type CoupleVault = z.infer<typeof coupleVaultSchema>;
+
 export const CREDIT_CARD_BRANDS = [
   { value: 'visa',       label: 'Visa' },
   { value: 'mastercard', label: 'Mastercard' },
