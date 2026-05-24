@@ -636,6 +636,7 @@ export class VaultStorage {
       passwords, subscriptions, notes, expenses, reminders,
       bankStatements, bankTransactions, investments, investmentGoals, apiKeys,
       creditCards, identities,
+      cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes,
     ] = await Promise.all([
       this.getAllPasswords(),
       this.getAllSubscriptions(),
@@ -649,6 +650,12 @@ export class VaultStorage {
       this.getAllApiKeys(),
       this.getAllCreditCards(),
       this.getAllIdentities(),
+      this.getAllCryptoWallets(),
+      this.getAllWifiPasswords(),
+      this.getAllSoftwareLicenses(),
+      this.getAllInsurancePolicies(),
+      this.getAllTaxDocuments(),
+      this.getAllQrCodes(),
     ]);
     return {
       passwords: passwords.length,
@@ -663,6 +670,12 @@ export class VaultStorage {
       apiKeys: apiKeys.length,
       creditCards: creditCards.length,
       identities: identities.length,
+      cryptoWallets: cryptoWallets.length,
+      wifiPasswords: wifiPasswords.length,
+      softwareLicenses: softwareLicenses.length,
+      insurancePolicies: insurancePolicies.length,
+      taxDocuments: taxDocuments.length,
+      qrCodes: qrCodes.length,
     };
   }
 
@@ -685,6 +698,8 @@ export class VaultStorage {
         payload.reminders, payload.bankStatements, payload.bankTransactions,
         payload.investments, payload.investmentGoals, payload.apiKeys,
         payload.creditCards, payload.identities,
+        payload.cryptoWallets, payload.wifiPasswords, payload.softwareLicenses,
+        payload.insurancePolicies, payload.taxDocuments, payload.qrCodes,
       ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
       return lengths.reduce((a, b) => a + b, 0);
     } catch {
@@ -1121,6 +1136,60 @@ export class VaultStorage {
     });
   }
 
+  // ── New vault sections (v4.4.0) — all share `encrypted_data` with a
+  // store-name discriminator, same as creditCards / identities / apiKeys.
+  // Add/Update/Delete go through the standard encryptAndStore path so the
+  // existing cloud-sync / verification helpers pick them up for free.
+
+  // Crypto wallets
+  async saveCryptoWallet(wallet: any): Promise<void> { await this.encryptAndStore('cryptoWallets', wallet); }
+  async getCryptoWallet(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('cryptoWallets', id); }
+  async getAllCryptoWallets(): Promise<any[]> { return this.getAllEncrypted('cryptoWallets'); }
+  async deleteCryptoWallet(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Wi-Fi passwords
+  async saveWifiPassword(item: any): Promise<void> { await this.encryptAndStore('wifiPasswords', item); }
+  async getWifiPassword(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('wifiPasswords', id); }
+  async getAllWifiPasswords(): Promise<any[]> { return this.getAllEncrypted('wifiPasswords'); }
+  async deleteWifiPassword(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Software licenses
+  async saveSoftwareLicense(item: any): Promise<void> { await this.encryptAndStore('softwareLicenses', item); }
+  async getSoftwareLicense(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('softwareLicenses', id); }
+  async getAllSoftwareLicenses(): Promise<any[]> { return this.getAllEncrypted('softwareLicenses'); }
+  async deleteSoftwareLicense(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Insurance policies
+  async saveInsurancePolicy(item: any): Promise<void> { await this.encryptAndStore('insurancePolicies', item); }
+  async getInsurancePolicy(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('insurancePolicies', id); }
+  async getAllInsurancePolicies(): Promise<any[]> { return this.getAllEncrypted('insurancePolicies'); }
+  async deleteInsurancePolicy(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Tax documents
+  async saveTaxDocument(item: any): Promise<void> { await this.encryptAndStore('taxDocuments', item); }
+  async getTaxDocument(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('taxDocuments', id); }
+  async getAllTaxDocuments(): Promise<any[]> { return this.getAllEncrypted('taxDocuments'); }
+  async deleteTaxDocument(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // QR codes
+  async saveQrCode(item: any): Promise<void> { await this.encryptAndStore('qrCodes', item); }
+  async getQrCode(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('qrCodes', id); }
+  async getAllQrCodes(): Promise<any[]> { return this.getAllEncrypted('qrCodes'); }
+  async deleteQrCode(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  /** Shared deletion helper for every encrypted_data-backed section. */
+  private deleteEncryptedById(id: string): Promise<void> {
+    this.assertVaultSelected();
+    if (!this.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(['encrypted_data'], 'readwrite');
+      const store = tx.objectStore('encrypted_data');
+      const req = store.delete(id);
+      req.onsuccess = () => { window.dispatchEvent(new CustomEvent('vault:item:saved')); resolve(); };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   // Export vault data
   // CRITICAL: every store must be read in parallel and the entire export must
   // fail if ANY store read throws. A silently-empty array for a store would
@@ -1141,6 +1210,12 @@ export class VaultStorage {
       apiKeys,
       creditCards,
       identities,
+      cryptoWallets,
+      wifiPasswords,
+      softwareLicenses,
+      insurancePolicies,
+      taxDocuments,
+      qrCodes,
       metadata,
     ] = await Promise.all([
       this.getAllPasswords(),
@@ -1155,6 +1230,12 @@ export class VaultStorage {
       this.getAllApiKeys(),
       this.getAllCreditCards(),
       this.getAllIdentities(),
+      this.getAllCryptoWallets(),
+      this.getAllWifiPasswords(),
+      this.getAllSoftwareLicenses(),
+      this.getAllInsurancePolicies(),
+      this.getAllTaxDocuments(),
+      this.getAllQrCodes(),
       this.getMetadata(),
     ]);
 
@@ -1171,9 +1252,15 @@ export class VaultStorage {
       apiKeys,
       creditCards,
       identities,
+      cryptoWallets,
+      wifiPasswords,
+      softwareLicenses,
+      insurancePolicies,
+      taxDocuments,
+      qrCodes,
       metadata,
       exportedAt: new Date(),
-      version: 4, // v4: adds creditCards + identities
+      version: 5, // v5: adds crypto / wifi / licenses / insurance / tax / qr
     };
 
     const salt = CryptoService.generateSalt();
@@ -1329,6 +1416,12 @@ export class VaultStorage {
         ...(importData.apiKeys ?? []).map((k: any) => this.saveApiKey(k)),
         ...(importData.creditCards ?? []).map((c: any) => this.saveCreditCard(c)),
         ...(importData.identities ?? []).map((i: any) => this.saveIdentity(i)),
+        ...(importData.cryptoWallets ?? []).map((w: any) => this.saveCryptoWallet(w)),
+        ...(importData.wifiPasswords ?? []).map((w: any) => this.saveWifiPassword(w)),
+        ...(importData.softwareLicenses ?? []).map((l: any) => this.saveSoftwareLicense(l)),
+        ...(importData.insurancePolicies ?? []).map((p: any) => this.saveInsurancePolicy(p)),
+        ...(importData.taxDocuments ?? []).map((d: any) => this.saveTaxDocument(d)),
+        ...(importData.qrCodes ?? []).map((q: any) => this.saveQrCode(q)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);

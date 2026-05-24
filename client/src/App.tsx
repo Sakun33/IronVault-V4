@@ -62,6 +62,12 @@ const Documents = React.lazy(() => import("@/pages/documents"));
 const APIKeys = React.lazy(() => import("@/pages/api-keys"));
 const CreditCards = React.lazy(() => import("@/pages/credit-cards"));
 const Identities = React.lazy(() => import("@/pages/identities"));
+const CryptoVault = React.lazy(() => import("@/pages/crypto-vault"));
+const WifiPasswords = React.lazy(() => import("@/pages/wifi-passwords"));
+const SoftwareLicenses = React.lazy(() => import("@/pages/software-licenses"));
+const InsuranceVault = React.lazy(() => import("@/pages/insurance-vault"));
+const TaxDocuments = React.lazy(() => import("@/pages/tax-documents"));
+const QRVault = React.lazy(() => import("@/pages/qr-vault"));
 const Profile = React.lazy(() => import("@/pages/profile"));
 const Settings = React.lazy(() => import("@/pages/settings"));
 const Integrations = React.lazy(() => import("@/pages/integrations"));
@@ -128,7 +134,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -165,7 +171,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const slideUp = makeSlideUp(reducedMotion);
   const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
   const notificationUserId = accountEmail || 'guest';
-  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders, creditCards, identities } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders, creditCards, identities, cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
@@ -441,6 +447,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'api-keys', label: 'API Keys', icon: Shield, href: '/api-keys', group: 'vault' },
     { id: 'cards', label: 'Cards', icon: CardIcon, href: '/cards', group: 'vault' },
     { id: 'identities', label: 'Identities', icon: UserCircle, href: '/identities', group: 'vault' },
+    { id: 'wifi', label: 'Wi-Fi', icon: Wifi, href: '/wifi', group: 'vault' },
+    { id: 'crypto', label: 'Crypto', icon: Bitcoin, href: '/crypto', group: 'vault' },
+    { id: 'licenses', label: 'Licenses', icon: KeyRound, href: '/licenses', group: 'vault' },
+    { id: 'insurance', label: 'Insurance', icon: ShieldCheck, href: '/insurance', group: 'finance' },
+    { id: 'tax', label: 'Tax Docs', icon: Calculator, href: '/tax', group: 'finance' },
+    { id: 'qr', label: 'QR Vault', icon: QrCodeIcon, href: '/qr', group: 'tools' },
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
@@ -1146,6 +1158,24 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 subtitle: [i.firstName, i.lastName].filter(Boolean).join(' ') || undefined,
                 href: `/identities?openId=${encodeURIComponent(i.id)}`,
               })),
+            cryptoWallets: (cryptoWallets ?? [])
+              .filter(w => w.name?.toLowerCase()?.includes(q) || w.walletAddress?.toLowerCase()?.includes(q) || w.exchangeName?.toLowerCase()?.includes(q))
+              .map(w => ({ id: w.id, type: 'crypto' as const, title: w.name, subtitle: w.walletType?.toUpperCase(), href: '/crypto' })),
+            wifiPasswords: (wifiPasswords ?? [])
+              .filter(w => w.networkName?.toLowerCase()?.includes(q) || w.location?.toLowerCase()?.includes(q))
+              .map(w => ({ id: w.id, type: 'wifi' as const, title: w.networkName, subtitle: w.location || w.securityType, href: '/wifi' })),
+            softwareLicenses: (softwareLicenses ?? [])
+              .filter(l => l.softwareName?.toLowerCase()?.includes(q) || l.vendor?.toLowerCase()?.includes(q))
+              .map(l => ({ id: l.id, type: 'license' as const, title: l.softwareName, subtitle: l.vendor || l.version, href: '/licenses' })),
+            insurancePolicies: (insurancePolicies ?? [])
+              .filter(p => p.policyName?.toLowerCase()?.includes(q) || p.insurer?.toLowerCase()?.includes(q) || p.policyNumber?.toLowerCase()?.includes(q))
+              .map(p => ({ id: p.id, type: 'insurance' as const, title: p.policyName, subtitle: p.insurer, href: '/insurance' })),
+            taxDocuments: (taxDocuments ?? [])
+              .filter(d => d.documentName?.toLowerCase()?.includes(q) || d.financialYear?.toLowerCase()?.includes(q) || d.panNumber?.toLowerCase()?.includes(q))
+              .map(d => ({ id: d.id, type: 'tax' as const, title: d.documentName, subtitle: `FY ${d.financialYear}`, href: '/tax' })),
+            qrCodes: (qrCodes ?? [])
+              .filter(qr => qr.name?.toLowerCase()?.includes(q) || qr.qrData?.toLowerCase()?.includes(q))
+              .map(qr => ({ id: qr.id, type: 'qr' as const, title: qr.name, subtitle: qr.category, href: '/qr' })),
           };
         })()}
       />
@@ -1373,6 +1403,12 @@ function Router() {
       <Route path="/api-keys"><MainLayout><APIKeys /></MainLayout></Route>
       <Route path="/cards"><MainLayout><CreditCards /></MainLayout></Route>
       <Route path="/identities"><MainLayout><Identities /></MainLayout></Route>
+      <Route path="/crypto"><MainLayout><CryptoVault /></MainLayout></Route>
+      <Route path="/wifi"><MainLayout><WifiPasswords /></MainLayout></Route>
+      <Route path="/licenses"><MainLayout><SoftwareLicenses /></MainLayout></Route>
+      <Route path="/insurance"><MainLayout><InsuranceVault /></MainLayout></Route>
+      <Route path="/tax"><MainLayout><TaxDocuments /></MainLayout></Route>
+      <Route path="/qr"><MainLayout><QRVault /></MainLayout></Route>
       <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
       <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
       <Route path="/integrations"><MainLayout><Integrations /></MainLayout></Route>

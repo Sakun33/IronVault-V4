@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity } from '@shared/schema';
+import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity, CryptoWallet, WifiPassword, SoftwareLicense, InsurancePolicy, TaxDocument, QrCode } from '@shared/schema';
 import { vaultStorage } from '@/lib/storage';
 import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
 import { useAuth } from './auth-context';
@@ -120,6 +120,30 @@ interface VaultContextType {
   addIdentity: (identity: Omit<Identity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateIdentity: (id: string, updates: Partial<Identity>) => Promise<void>;
   deleteIdentity: (id: string) => Promise<void>;
+  cryptoWallets: CryptoWallet[];
+  addCryptoWallet: (item: Omit<CryptoWallet, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateCryptoWallet: (id: string, updates: Partial<CryptoWallet>) => Promise<void>;
+  deleteCryptoWallet: (id: string) => Promise<void>;
+  wifiPasswords: WifiPassword[];
+  addWifiPassword: (item: Omit<WifiPassword, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateWifiPassword: (id: string, updates: Partial<WifiPassword>) => Promise<void>;
+  deleteWifiPassword: (id: string) => Promise<void>;
+  softwareLicenses: SoftwareLicense[];
+  addSoftwareLicense: (item: Omit<SoftwareLicense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateSoftwareLicense: (id: string, updates: Partial<SoftwareLicense>) => Promise<void>;
+  deleteSoftwareLicense: (id: string) => Promise<void>;
+  insurancePolicies: InsurancePolicy[];
+  addInsurancePolicy: (item: Omit<InsurancePolicy, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateInsurancePolicy: (id: string, updates: Partial<InsurancePolicy>) => Promise<void>;
+  deleteInsurancePolicy: (id: string) => Promise<void>;
+  taxDocuments: TaxDocument[];
+  addTaxDocument: (item: Omit<TaxDocument, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateTaxDocument: (id: string, updates: Partial<TaxDocument>) => Promise<void>;
+  deleteTaxDocument: (id: string) => Promise<void>;
+  qrCodes: QrCode[];
+  addQrCode: (item: Omit<QrCode, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateQrCode: (id: string, updates: Partial<QrCode>) => Promise<void>;
+  deleteQrCode: (id: string) => Promise<void>;
   importBankStatementsFromCSV: (csvContent: string, currency?: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -182,6 +206,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [identities, setIdentities] = useState<Identity[]>([]);
+  const [cryptoWallets, setCryptoWallets] = useState<CryptoWallet[]>([]);
+  const [wifiPasswords, setWifiPasswords] = useState<WifiPassword[]>([]);
+  const [softwareLicenses, setSoftwareLicenses] = useState<SoftwareLicense[]>([]);
+  const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([]);
+  const [taxDocuments, setTaxDocuments] = useState<TaxDocument[]>([]);
+  const [qrCodes, setQrCodes] = useState<QrCode[]>([]);
   // Splitwise-style entries live in a separate IDB store and a separate hook
   // (use-shared-expenses). Mirror just the count here so the sidebar/badge
   // counts in stats.totalExpenses reflect both legacy + shared entries
@@ -219,6 +249,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInvestmentGoals([]);
       setCreditCards([]);
       setIdentities([]);
+      setCryptoWallets([]);
+      setWifiPasswords([]);
+      setSoftwareLicenses([]);
+      setInsurancePolicies([]);
+      setTaxDocuments([]);
+      setQrCodes([]);
       setSharedExpensesCount(0);
       // Wipe AutoFill creds + reset widget to "locked" state on every lock
       // event so a shoulder-surfer can't pull stats / credentials off the
@@ -541,7 +577,13 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
 
       // Always refresh data to ensure we have the latest from storage
 
-      const [passwordsData, subscriptionsData, notesData, expensesData, remindersData, bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData, apiKeysData, creditCardsData, identitiesData, sharedExpensesData] = await Promise.all([
+      const [
+        passwordsData, subscriptionsData, notesData, expensesData, remindersData,
+        bankStatementsData, bankTransactionsData, investmentsData, investmentGoalsData,
+        apiKeysData, creditCardsData, identitiesData, sharedExpensesData,
+        cryptoWalletsData, wifiPasswordsData, softwareLicensesData,
+        insurancePoliciesData, taxDocumentsData, qrCodesData,
+      ] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
         vaultStorage.getAllNotes(),
@@ -555,6 +597,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllCreditCards().catch(() => [] as any[]),
         vaultStorage.getAllIdentities().catch(() => [] as any[]),
         vaultStorage.getAllSharedExpenses().catch(() => [] as any[]),
+        vaultStorage.getAllCryptoWallets().catch(() => [] as any[]),
+        vaultStorage.getAllWifiPasswords().catch(() => [] as any[]),
+        vaultStorage.getAllSoftwareLicenses().catch(() => [] as any[]),
+        vaultStorage.getAllInsurancePolicies().catch(() => [] as any[]),
+        vaultStorage.getAllTaxDocuments().catch(() => [] as any[]),
+        vaultStorage.getAllQrCodes().catch(() => [] as any[]),
       ]);
 
 
@@ -571,6 +619,12 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setApiKeys(apiKeysData.map(hydrateDates));
       setCreditCards(creditCardsData.map(hydrateDates));
       setIdentities(identitiesData.map(hydrateDates));
+      setCryptoWallets(cryptoWalletsData.map(hydrateDates));
+      setWifiPasswords(wifiPasswordsData.map(hydrateDates));
+      setSoftwareLicenses(softwareLicensesData.map(hydrateDates));
+      setInsurancePolicies(insurancePoliciesData.map(hydrateDates));
+      setTaxDocuments(taxDocumentsData.map(hydrateDates));
+      setQrCodes(qrCodesData.map(hydrateDates));
       setSharedExpensesCount(sharedExpensesData.length);
 
     } catch (error) {
@@ -1134,6 +1188,138 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
+  // ── Crypto Wallets CRUD ─────────────────────────────────────────────────
+  const addCryptoWallet = async (item: Omit<CryptoWallet, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: CryptoWallet = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as CryptoWallet;
+    await vaultStorage.saveCryptoWallet(next);
+    setCryptoWallets(prev => [...prev, next]);
+    addLog('Add Crypto Wallet', 'system', `Added wallet "${next.name}"`);
+    pushToCloud();
+  };
+  const updateCryptoWallet = async (id: string, updates: Partial<CryptoWallet>) => {
+    const existing = cryptoWallets.find(w => w.id === id);
+    if (!existing) return;
+    const updated: CryptoWallet = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveCryptoWallet(updated);
+    setCryptoWallets(prev => prev.map(w => w.id === id ? updated : w));
+    pushToCloud();
+  };
+  const deleteCryptoWallet = async (id: string) => {
+    await vaultStorage.deleteCryptoWallet(id);
+    setCryptoWallets(prev => prev.filter(w => w.id !== id));
+    pushToCloud();
+  };
+
+  // ── Wi-Fi Passwords CRUD ────────────────────────────────────────────────
+  const addWifiPassword = async (item: Omit<WifiPassword, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: WifiPassword = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as WifiPassword;
+    await vaultStorage.saveWifiPassword(next);
+    setWifiPasswords(prev => [...prev, next]);
+    addLog('Add Wi-Fi', 'system', `Added network "${next.networkName}"`);
+    pushToCloud();
+  };
+  const updateWifiPassword = async (id: string, updates: Partial<WifiPassword>) => {
+    const existing = wifiPasswords.find(w => w.id === id);
+    if (!existing) return;
+    const updated: WifiPassword = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveWifiPassword(updated);
+    setWifiPasswords(prev => prev.map(w => w.id === id ? updated : w));
+    pushToCloud();
+  };
+  const deleteWifiPassword = async (id: string) => {
+    await vaultStorage.deleteWifiPassword(id);
+    setWifiPasswords(prev => prev.filter(w => w.id !== id));
+    pushToCloud();
+  };
+
+  // ── Software Licenses CRUD ──────────────────────────────────────────────
+  const addSoftwareLicense = async (item: Omit<SoftwareLicense, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: SoftwareLicense = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as SoftwareLicense;
+    await vaultStorage.saveSoftwareLicense(next);
+    setSoftwareLicenses(prev => [...prev, next]);
+    addLog('Add License', 'system', `Added license "${next.softwareName}"`);
+    pushToCloud();
+  };
+  const updateSoftwareLicense = async (id: string, updates: Partial<SoftwareLicense>) => {
+    const existing = softwareLicenses.find(l => l.id === id);
+    if (!existing) return;
+    const updated: SoftwareLicense = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveSoftwareLicense(updated);
+    setSoftwareLicenses(prev => prev.map(l => l.id === id ? updated : l));
+    pushToCloud();
+  };
+  const deleteSoftwareLicense = async (id: string) => {
+    await vaultStorage.deleteSoftwareLicense(id);
+    setSoftwareLicenses(prev => prev.filter(l => l.id !== id));
+    pushToCloud();
+  };
+
+  // ── Insurance Policies CRUD ─────────────────────────────────────────────
+  const addInsurancePolicy = async (item: Omit<InsurancePolicy, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: InsurancePolicy = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as InsurancePolicy;
+    await vaultStorage.saveInsurancePolicy(next);
+    setInsurancePolicies(prev => [...prev, next]);
+    addLog('Add Insurance', 'system', `Added policy "${next.policyName}"`);
+    pushToCloud();
+  };
+  const updateInsurancePolicy = async (id: string, updates: Partial<InsurancePolicy>) => {
+    const existing = insurancePolicies.find(p => p.id === id);
+    if (!existing) return;
+    const updated: InsurancePolicy = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveInsurancePolicy(updated);
+    setInsurancePolicies(prev => prev.map(p => p.id === id ? updated : p));
+    pushToCloud();
+  };
+  const deleteInsurancePolicy = async (id: string) => {
+    await vaultStorage.deleteInsurancePolicy(id);
+    setInsurancePolicies(prev => prev.filter(p => p.id !== id));
+    pushToCloud();
+  };
+
+  // ── Tax Documents CRUD ──────────────────────────────────────────────────
+  const addTaxDocument = async (item: Omit<TaxDocument, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: TaxDocument = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as TaxDocument;
+    await vaultStorage.saveTaxDocument(next);
+    setTaxDocuments(prev => [...prev, next]);
+    addLog('Add Tax Doc', 'system', `Added "${next.documentName}"`);
+    pushToCloud();
+  };
+  const updateTaxDocument = async (id: string, updates: Partial<TaxDocument>) => {
+    const existing = taxDocuments.find(d => d.id === id);
+    if (!existing) return;
+    const updated: TaxDocument = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveTaxDocument(updated);
+    setTaxDocuments(prev => prev.map(d => d.id === id ? updated : d));
+    pushToCloud();
+  };
+  const deleteTaxDocument = async (id: string) => {
+    await vaultStorage.deleteTaxDocument(id);
+    setTaxDocuments(prev => prev.filter(d => d.id !== id));
+    pushToCloud();
+  };
+
+  // ── QR Vault CRUD ───────────────────────────────────────────────────────
+  const addQrCode = async (item: Omit<QrCode, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: QrCode = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as QrCode;
+    await vaultStorage.saveQrCode(next);
+    setQrCodes(prev => [...prev, next]);
+    addLog('Add QR', 'system', `Added QR "${next.name}"`);
+    pushToCloud();
+  };
+  const updateQrCode = async (id: string, updates: Partial<QrCode>) => {
+    const existing = qrCodes.find(q => q.id === id);
+    if (!existing) return;
+    const updated: QrCode = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveQrCode(updated);
+    setQrCodes(prev => prev.map(q => q.id === id ? updated : q));
+    pushToCloud();
+  };
+  const deleteQrCode = async (id: string) => {
+    await vaultStorage.deleteQrCode(id);
+    setQrCodes(prev => prev.filter(q => q.id !== id));
+    pushToCloud();
+  };
+
   const importBankStatementsFromCSV = async (csvContent: string, currency?: string) => {
     try {
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent, currency);
@@ -1557,6 +1743,30 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addIdentity,
     updateIdentity,
     deleteIdentity,
+    cryptoWallets,
+    addCryptoWallet,
+    updateCryptoWallet,
+    deleteCryptoWallet,
+    wifiPasswords,
+    addWifiPassword,
+    updateWifiPassword,
+    deleteWifiPassword,
+    softwareLicenses,
+    addSoftwareLicense,
+    updateSoftwareLicense,
+    deleteSoftwareLicense,
+    insurancePolicies,
+    addInsurancePolicy,
+    updateInsurancePolicy,
+    deleteInsurancePolicy,
+    taxDocuments,
+    addTaxDocument,
+    updateTaxDocument,
+    deleteTaxDocument,
+    qrCodes,
+    addQrCode,
+    updateQrCode,
+    deleteQrCode,
     importBankStatementsFromCSV,
     exportVault,
     importVault,

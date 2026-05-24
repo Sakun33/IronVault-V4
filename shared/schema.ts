@@ -272,6 +272,12 @@ export const planCapabilities = {
     maxReminders: 3,
     maxCreditCards: 0,
     maxIdentities: 0,
+    maxCryptoWallets: 0,
+    maxWifiPasswords: 5,
+    maxSoftwareLicenses: 5,
+    maxInsurancePolicies: 0,
+    maxTaxDocuments: 0,
+    maxQrCodes: 3,
     documentsEnabled: false,
     bankStatementsEnabled: false,
     analyticsEnabled: false,
@@ -285,6 +291,12 @@ export const planCapabilities = {
     maxReminders: -1,
     maxCreditCards: -1,
     maxIdentities: -1,
+    maxCryptoWallets: -1,
+    maxWifiPasswords: -1,
+    maxSoftwareLicenses: -1,
+    maxInsurancePolicies: -1,
+    maxTaxDocuments: -1,
+    maxQrCodes: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -300,6 +312,12 @@ export const planCapabilities = {
     maxReminders: -1,
     maxCreditCards: -1,
     maxIdentities: -1,
+    maxCryptoWallets: -1,
+    maxWifiPasswords: -1,
+    maxSoftwareLicenses: -1,
+    maxInsurancePolicies: -1,
+    maxTaxDocuments: -1,
+    maxQrCodes: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -313,6 +331,12 @@ export const planCapabilities = {
     maxReminders: -1,
     maxCreditCards: -1,
     maxIdentities: -1,
+    maxCryptoWallets: -1,
+    maxWifiPasswords: -1,
+    maxSoftwareLicenses: -1,
+    maxInsurancePolicies: -1,
+    maxTaxDocuments: -1,
+    maxQrCodes: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -326,6 +350,12 @@ export const planCapabilities = {
     maxReminders: -1,
     maxCreditCards: -1,
     maxIdentities: -1,
+    maxCryptoWallets: -1,
+    maxWifiPasswords: -1,
+    maxSoftwareLicenses: -1,
+    maxInsurancePolicies: -1,
+    maxTaxDocuments: -1,
+    maxQrCodes: -1,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -424,6 +454,125 @@ export const identitySchema = z.object({
 
 export type CreditCard = z.infer<typeof creditCardSchema>;
 export type Identity = z.infer<typeof identitySchema>;
+
+// ── New vault sections (v4.4.0): Crypto, Wi-Fi, Licenses, Insurance, Tax, QR ──
+
+// Crypto / blockchain wallet — seed phrase + private key are masked in
+// list view, revealed only after master-password re-prompt (same pattern
+// as API Keys).
+export const cryptoWalletSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Wallet name is required'),
+  walletType: z.enum(['bitcoin', 'ethereum', 'solana', 'polygon', 'other']).default('other'),
+  walletAddress: z.string().optional(),
+  seedPhrase: z.string().optional(),
+  privateKey: z.string().optional(),
+  publicKey: z.string().optional(),
+  network: z.string().optional(),
+  exchangeName: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type CryptoWallet = z.infer<typeof cryptoWalletSchema>;
+
+// Wi-Fi credential — `securityType` drives the QR-code format. SSIDs with
+// special characters (` ; , : \ "`) are escaped when the QR is generated.
+export const wifiPasswordSchema = z.object({
+  id: z.string(),
+  networkName: z.string().min(1, 'Network name (SSID) is required'),
+  password: z.string(),
+  securityType: z.enum(['WPA2', 'WPA3', 'WEP', 'Open', 'other']).default('WPA2'),
+  location: z.string().optional(),
+  router: z.string().optional(),
+  frequency: z.enum(['2.4GHz', '5GHz', 'Both']).optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type WifiPassword = z.infer<typeof wifiPasswordSchema>;
+
+// Software license — license key masked by default; expiry countdown
+// surfaced in card view.
+export const softwareLicenseSchema = z.object({
+  id: z.string(),
+  softwareName: z.string().min(1, 'Software name is required'),
+  licenseKey: z.string().min(1, 'License key is required'),
+  version: z.string().optional(),
+  purchaseDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  licensedTo: z.string().optional(),
+  seats: z.number().optional(),
+  platform: z.enum(['windows', 'mac', 'linux', 'android', 'ios', 'web', 'all']).optional(),
+  vendor: z.string().optional(),
+  purchaseUrl: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type SoftwareLicense = z.infer<typeof softwareLicenseSchema>;
+
+// Insurance policy — premium + renewal countdown surfaced in card view.
+export const insurancePolicySchema = z.object({
+  id: z.string(),
+  policyName: z.string().min(1, 'Policy name is required'),
+  insurer: z.string().min(1, 'Insurer is required'),
+  policyNumber: z.string().min(1, 'Policy number is required'),
+  policyType: z.enum(['health', 'life', 'car', 'home', 'travel', 'term', 'other']).default('other'),
+  premium: z.number().nonnegative(),
+  premiumFrequency: z.enum(['monthly', 'quarterly', 'half-yearly', 'yearly']).default('yearly'),
+  sumInsured: z.number().optional(),
+  startDate: z.string(),
+  expiryDate: z.string(),
+  nominees: z.string().optional(),
+  agentName: z.string().optional(),
+  agentPhone: z.string().optional(),
+  claimProcess: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type InsurancePolicy = z.infer<typeof insurancePolicySchema>;
+
+// Tax document — organised by financial year; documentType drives the
+// badge color in card view.
+export const taxDocumentSchema = z.object({
+  id: z.string(),
+  documentName: z.string().min(1, 'Document name is required'),
+  documentType: z.enum(['form16', 'itr', 'tds', 'investment_proof', '80c', '80d', 'hra', 'other']).default('other'),
+  financialYear: z.string().min(1, 'Financial year is required'),
+  assessmentYear: z.string().optional(),
+  amount: z.number().optional(),
+  panNumber: z.string().optional(),
+  filedDate: z.string().optional(),
+  acknowledgementNumber: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type TaxDocument = z.infer<typeof taxDocumentSchema>;
+
+// QR vault entry — `qrData` is the raw payload the QR encodes; `imageData`
+// optionally caches a pre-rendered base64 PNG so the lock-screen surface
+// doesn't have to re-render at every wake.
+export const qrCodeSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Name is required'),
+  category: z.enum(['boarding_pass', 'event_ticket', 'payment', 'wifi', 'url', 'contact', 'other']).default('other'),
+  qrData: z.string().min(1, 'QR content is required'),
+  imageData: z.string().optional(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type QrCode = z.infer<typeof qrCodeSchema>;
 
 export const CREDIT_CARD_BRANDS = [
   { value: 'visa',       label: 'Visa' },

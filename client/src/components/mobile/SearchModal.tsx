@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell, CreditCard, UserCircle } from 'lucide-react';
+import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell, CreditCard, UserCircle, Bitcoin, Wifi, KeyRound, ShieldCheck, Calculator, QrCode as QrCodeIcon } from 'lucide-react';
 import { useLocation } from 'wouter';
 
 interface SearchResult {
   id: string;
-  type: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'card' | 'identity';
+  type: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'card' | 'identity'
+      | 'crypto' | 'wifi' | 'license' | 'insurance' | 'tax' | 'qr';
   title: string;
   subtitle?: string;
   href: string;
@@ -26,6 +27,12 @@ interface SearchModalProps {
     reminders?: SearchResult[];
     creditCards?: SearchResult[];
     identities?: SearchResult[];
+    cryptoWallets?: SearchResult[];
+    wifiPasswords?: SearchResult[];
+    softwareLicenses?: SearchResult[];
+    insurancePolicies?: SearchResult[];
+    taxDocuments?: SearchResult[];
+    qrCodes?: SearchResult[];
   };
   recentSearches?: string[];
   onClearRecentSearches?: () => void;
@@ -40,6 +47,12 @@ const typeConfig = {
   reminder: { icon: Bell, label: 'Reminders', color: 'text-foreground' },
   card: { icon: CreditCard, label: 'Cards', color: 'text-sky-300' },
   identity: { icon: UserCircle, label: 'Identities', color: 'text-violet-300' },
+  crypto: { icon: Bitcoin, label: 'Crypto', color: 'text-amber-300' },
+  wifi: { icon: Wifi, label: 'Wi-Fi', color: 'text-sky-300' },
+  license: { icon: KeyRound, label: 'Licenses', color: 'text-violet-300' },
+  insurance: { icon: ShieldCheck, label: 'Insurance', color: 'text-emerald-300' },
+  tax: { icon: Calculator, label: 'Tax Docs', color: 'text-amber-300' },
+  qr: { icon: QrCodeIcon, label: 'QR Vault', color: 'text-violet-300' },
 };
 
 function SearchModalInner({
@@ -110,6 +123,12 @@ function SearchModalInner({
     reminder: results.reminders?.length ?? 0,
     card: results.creditCards?.length ?? 0,
     identity: results.identities?.length ?? 0,
+    crypto: results.cryptoWallets?.length ?? 0,
+    wifi: results.wifiPasswords?.length ?? 0,
+    license: results.softwareLicenses?.length ?? 0,
+    insurance: results.insurancePolicies?.length ?? 0,
+    tax: results.taxDocuments?.length ?? 0,
+    qr: results.qrCodes?.length ?? 0,
   };
 
   if (!open) return null;
