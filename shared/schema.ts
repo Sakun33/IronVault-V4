@@ -278,6 +278,11 @@ export const planCapabilities = {
     maxInsurancePolicies: 0,
     maxTaxDocuments: 0,
     maxQrCodes: 3,
+    maxSecureBookmarks: 25,
+    maxFamilyMembers: 0,
+    digitalWillEnabled: false,
+    darkWebMonitorEnabled: false,
+    passkeyEnabled: true,
     documentsEnabled: false,
     bankStatementsEnabled: false,
     analyticsEnabled: false,
@@ -297,6 +302,11 @@ export const planCapabilities = {
     maxInsurancePolicies: -1,
     maxTaxDocuments: -1,
     maxQrCodes: -1,
+    maxSecureBookmarks: -1,
+    maxFamilyMembers: 5,
+    digitalWillEnabled: true,
+    darkWebMonitorEnabled: true,
+    passkeyEnabled: true,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -318,6 +328,11 @@ export const planCapabilities = {
     maxInsurancePolicies: -1,
     maxTaxDocuments: -1,
     maxQrCodes: -1,
+    maxSecureBookmarks: -1,
+    maxFamilyMembers: 10,
+    digitalWillEnabled: true,
+    darkWebMonitorEnabled: true,
+    passkeyEnabled: true,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -337,6 +352,11 @@ export const planCapabilities = {
     maxInsurancePolicies: -1,
     maxTaxDocuments: -1,
     maxQrCodes: -1,
+    maxSecureBookmarks: -1,
+    maxFamilyMembers: 10,
+    digitalWillEnabled: true,
+    darkWebMonitorEnabled: true,
+    passkeyEnabled: true,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -356,6 +376,11 @@ export const planCapabilities = {
     maxInsurancePolicies: -1,
     maxTaxDocuments: -1,
     maxQrCodes: -1,
+    maxSecureBookmarks: -1,
+    maxFamilyMembers: 10,
+    digitalWillEnabled: true,
+    darkWebMonitorEnabled: true,
+    passkeyEnabled: true,
     documentsEnabled: true,
     bankStatementsEnabled: true,
     analyticsEnabled: true,
@@ -573,6 +598,83 @@ export const qrCodeSchema = z.object({
   updatedAt: z.date().default(() => new Date()),
 });
 export type QrCode = z.infer<typeof qrCodeSchema>;
+
+// ── New vault sections (v4.4.1): Bookmarks, Family, Digital Will ──────────────
+
+// Secure bookmark — URL + optional auto-login link to a password entry.
+// When opened from the bookmarks page on a device with the Chrome extension
+// installed, the extension picks up the linked password and autofills.
+export const secureBookmarkSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1, 'Title is required'),
+  url: z.string().url('Valid URL required'),
+  category: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  icon: z.string().optional(),
+  autoLogin: z.boolean().default(false),
+  linkedPasswordId: z.string().optional(),
+  notes: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type SecureBookmark = z.infer<typeof secureBookmarkSchema>;
+
+// Family member — local-first record of who the family-vault owner has
+// invited / shares with. Backend sync of permissions arrives via the
+// /api/family/* endpoints; this schema stores the device-local cache so
+// the dashboard renders instantly offline.
+export const familyMemberSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Valid email required'),
+  role: z.enum(['admin', 'adult', 'child']).default('adult'),
+  sharedVaults: z.array(z.string()).default([]),
+  permissions: z.object({
+    canViewPasswords: z.boolean().default(true),
+    canEditPasswords: z.boolean().default(false),
+    canAddItems: z.boolean().default(true),
+    canDeleteItems: z.boolean().default(false),
+    canExport: z.boolean().default(false),
+  }).default({
+    canViewPasswords: true,
+    canEditPasswords: false,
+    canAddItems: true,
+    canDeleteItems: false,
+    canExport: false,
+  }),
+  status: z.enum(['invited', 'active', 'suspended']).default('invited'),
+  joinedAt: z.string(),
+  lastActive: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type FamilyMember = z.infer<typeof familyMemberSchema>;
+
+// Digital will / secure inheritance — single settings record per vault.
+// `id` is always the string 'singleton' so writes are idempotent.
+// `lastCheckinAt` powers the dead-man's-switch countdown; backend cron
+// (added in a follow-up) compares it against `inactivityPeriodDays`.
+export const digitalWillBeneficiarySchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Valid email required'),
+  relationship: z.string().optional(),
+  accessLevel: z.enum(['full', 'passwords_only', 'documents_only', 'selected']).default('full'),
+  selectedVaultIds: z.array(z.string()).optional(),
+});
+export const digitalWillSchema = z.object({
+  id: z.string().default('singleton'),
+  isActive: z.boolean().default(false),
+  inactivityPeriodDays: z.number().int().positive().default(30),
+  lastCheckinAt: z.string(),
+  beneficiaries: z.array(digitalWillBeneficiarySchema).default([]),
+  personalMessage: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+export type DigitalWillBeneficiary = z.infer<typeof digitalWillBeneficiarySchema>;
+export type DigitalWill = z.infer<typeof digitalWillSchema>;
 
 export const CREDIT_CARD_BRANDS = [
   { value: 'visa',       label: 'Visa' },

@@ -1162,6 +1162,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Passkey storage — one row per credential. Multiple credentials per user
+  // allowed (one per device). `credential_id` is the WebAuthn-issued ID
+  // (base64url), `public_key` is the cose-encoded key bytes, `counter` is the
+  // authenticator signature counter (used to detect cloned authenticators).
+  let _passkeyTableEnsured = false;
+  async function ensurePasskeyTable(): Promise<void> {
+    if (_passkeyTableEnsured) return;
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS passkey_credentials (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES crm_users(id) ON DELETE CASCADE,
+          credential_id TEXT UNIQUE NOT NULL,
+          public_key BYTEA NOT NULL,
+          counter BIGINT NOT NULL DEFAULT 0,
+          transports TEXT,
+          device_label TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_used_at TIMESTAMPTZ
+        )
+      `);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_passkey_user_id ON passkey_credentials(user_id)`);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS passkey_challenges (
+          challenge TEXT PRIMARY KEY,
+          user_id INTEGER,
+          email TEXT,
+          purpose TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      _passkeyTableEnsured = true;
+    } catch (e: any) {
+      console.error('[ensurePasskeyTable]', e.message);
+    }
+  }
+
+  function passkeyRpId(): string {
+    // The RP ID for WebAuthn must match the eTLD+1 of the site (or be a
+    // suffix of it). Hard-coded to ironvault.app so a deploy preview URL
+    // doesn't accidentally try to mint credentials bound to a vercel.app
+    // hostname users will never come back to.
+    return process.env.PASSKEY_RP_ID || 'ironvault.app';
+  }
+  function passkeyOrigin(): string[] {
+    const env = process.env.PASSKEY_ORIGIN;
+    if (env) return env.split(',').map(s => s.trim()).filter(Boolean);
+    return ['https://www.ironvault.app', 'https://ironvault.app'];
+  }
+
   // Backfill the apple_id column for Sign in with Apple. Same memoized pattern
   // as ensureGoogleAuthColumns. Called from /api/auth/apple.
   let _appleAuthColumnsEnsured = false;
@@ -2354,6 +2404,255 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('auth/apple error:', err.message);
       return res.status(500).json({ error: 'Apple sign-in failed' });
+    }
+  }
+
+  // ── Passkey (FIDO2/WebAuthn) ────────────────────────────────────────────────
+  // Four endpoints implement the standard two-step ceremony:
+  //   1. /register-options — server generates a challenge + relying-party info
+  //   2. /register         — server verifies the attestation, stores credential
+  //   3. /authenticate-options — server generates challenge for an existing cred
+  //   4. /authenticate     — server verifies the assertion, issues cloud JWT
+  //
+  // Credentials live in `passkey_credentials`; transient challenges live in
+  // `passkey_challenges` keyed on the challenge itself (deleted after use).
+  // Challenge GC: rows older than 10 minutes are stale and ignored.
+
+  if (path === '/api/auth/passkey/register-options' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensurePasskeyTable();
+    try {
+      const { generateRegistrationOptions } = await import('@simplewebauthn/server');
+      const { rows: existing } = await db.query(
+        `SELECT credential_id FROM passkey_credentials WHERE user_id = $1`,
+        [cloudUser.userId]
+      );
+      const opts = await generateRegistrationOptions({
+        rpName: 'IronVault',
+        rpID: passkeyRpId(),
+        userName: cloudUser.email,
+        userDisplayName: cloudUser.email,
+        attestationType: 'none',
+        authenticatorSelection: {
+          residentKey: 'preferred',
+          userVerification: 'preferred',
+        },
+        excludeCredentials: existing.map((r: any) => ({
+          id: r.credential_id,
+          type: 'public-key' as const,
+        })),
+      });
+      await db.query(
+        `INSERT INTO passkey_challenges (challenge, user_id, email, purpose)
+         VALUES ($1, $2, $3, 'register')
+         ON CONFLICT (challenge) DO UPDATE SET created_at = NOW()`,
+        [opts.challenge, cloudUser.userId, cloudUser.email]
+      );
+      return res.json(opts);
+    } catch (err: any) {
+      console.error('[passkey/register-options]', err.message);
+      return res.status(500).json({ error: 'Failed to generate options' });
+    }
+  }
+
+  if (path === '/api/auth/passkey/register' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensurePasskeyTable();
+    const { attestationResponse, deviceLabel } = (req.body || {}) as any;
+    if (!attestationResponse) return res.status(400).json({ error: 'attestationResponse required' });
+    try {
+      const expectedChallenge = attestationResponse?.response?.clientDataJSON
+        ? JSON.parse(Buffer.from(attestationResponse.response.clientDataJSON, 'base64url').toString()).challenge
+        : null;
+      if (!expectedChallenge) return res.status(400).json({ error: 'Malformed response' });
+
+      const { rows } = await db.query(
+        `SELECT user_id FROM passkey_challenges
+          WHERE challenge = $1 AND user_id = $2 AND purpose = 'register'
+            AND created_at > NOW() - INTERVAL '10 minutes'`,
+        [expectedChallenge, cloudUser.userId]
+      );
+      if (rows.length === 0) return res.status(400).json({ error: 'Stale or unknown challenge' });
+
+      const { verifyRegistrationResponse } = await import('@simplewebauthn/server');
+      const verification = await verifyRegistrationResponse({
+        response: attestationResponse,
+        expectedChallenge,
+        expectedOrigin: passkeyOrigin(),
+        expectedRPID: passkeyRpId(),
+      });
+      if (!verification.verified || !verification.registrationInfo) {
+        return res.status(400).json({ error: 'Verification failed' });
+      }
+      const reg = verification.registrationInfo as any;
+      const credentialId: string = reg.credential?.id || reg.credentialID;
+      const publicKey: Uint8Array = reg.credential?.publicKey || reg.credentialPublicKey;
+      const counter: number = reg.credential?.counter ?? reg.counter ?? 0;
+      const transports = Array.isArray(attestationResponse.response?.transports)
+        ? attestationResponse.response.transports.join(',')
+        : null;
+      await db.query(
+        `INSERT INTO passkey_credentials (user_id, credential_id, public_key, counter, transports, device_label)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (credential_id) DO NOTHING`,
+        [cloudUser.userId, credentialId, Buffer.from(publicKey), counter, transports, (deviceLabel || '').slice(0, 80) || null]
+      );
+      await db.query(`DELETE FROM passkey_challenges WHERE challenge = $1`, [expectedChallenge]);
+      return res.json({ success: true, credentialId });
+    } catch (err: any) {
+      console.error('[passkey/register]', err.message);
+      return res.status(500).json({ error: 'Registration failed' });
+    }
+  }
+
+  if (path === '/api/auth/passkey/authenticate-options' && req.method === 'POST') {
+    await ensurePasskeyTable();
+    const { email } = (req.body || {}) as any;
+    try {
+      let userId: string | null = null;
+      let allowCredentials: any[] = [];
+      if (email && typeof email === 'string') {
+        const e = email.toLowerCase().trim();
+        const { rows } = await db.query(`SELECT id FROM crm_users WHERE email = $1 LIMIT 1`, [e]);
+        if (rows[0]) {
+          userId = rows[0].id;
+          const { rows: creds } = await db.query(
+            `SELECT credential_id, transports FROM passkey_credentials WHERE user_id = $1`,
+            [userId]
+          );
+          allowCredentials = creds.map((r: any) => ({
+            id: r.credential_id,
+            type: 'public-key',
+            ...(r.transports ? { transports: r.transports.split(',').filter(Boolean) } : {}),
+          }));
+        }
+      }
+      const { generateAuthenticationOptions } = await import('@simplewebauthn/server');
+      const opts = await generateAuthenticationOptions({
+        rpID: passkeyRpId(),
+        userVerification: 'preferred',
+        allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
+      });
+      await db.query(
+        `INSERT INTO passkey_challenges (challenge, user_id, email, purpose)
+         VALUES ($1, $2, $3, 'authenticate')
+         ON CONFLICT (challenge) DO UPDATE SET created_at = NOW()`,
+        [opts.challenge, userId, email || null]
+      );
+      return res.json(opts);
+    } catch (err: any) {
+      console.error('[passkey/auth-options]', err.message);
+      return res.status(500).json({ error: 'Failed to generate options' });
+    }
+  }
+
+  if (path === '/api/auth/passkey/authenticate' && req.method === 'POST') {
+    await ensurePasskeyTable();
+    const { assertionResponse } = (req.body || {}) as any;
+    if (!assertionResponse) return res.status(400).json({ error: 'assertionResponse required' });
+    try {
+      const expectedChallenge = assertionResponse?.response?.clientDataJSON
+        ? JSON.parse(Buffer.from(assertionResponse.response.clientDataJSON, 'base64url').toString()).challenge
+        : null;
+      if (!expectedChallenge) return res.status(400).json({ error: 'Malformed response' });
+
+      const { rows: chalRows } = await db.query(
+        `SELECT user_id, email FROM passkey_challenges
+          WHERE challenge = $1 AND purpose = 'authenticate'
+            AND created_at > NOW() - INTERVAL '10 minutes'`,
+        [expectedChallenge]
+      );
+      if (chalRows.length === 0) return res.status(400).json({ error: 'Stale or unknown challenge' });
+
+      const credentialId: string = assertionResponse.id;
+      const { rows: credRows } = await db.query(
+        `SELECT pc.public_key, pc.counter, pc.user_id, u.email
+           FROM passkey_credentials pc
+           JOIN crm_users u ON u.id = pc.user_id
+          WHERE pc.credential_id = $1
+          LIMIT 1`,
+        [credentialId]
+      );
+      if (credRows.length === 0) return res.status(404).json({ error: 'Unknown credential' });
+      const cred = credRows[0];
+
+      const { verifyAuthenticationResponse } = await import('@simplewebauthn/server');
+      const verification = await verifyAuthenticationResponse({
+        response: assertionResponse,
+        expectedChallenge,
+        expectedOrigin: passkeyOrigin(),
+        expectedRPID: passkeyRpId(),
+        credential: {
+          id: credentialId,
+          publicKey: new Uint8Array(cred.public_key),
+          counter: Number(cred.counter),
+        },
+      });
+      if (!verification.verified) return res.status(401).json({ error: 'Verification failed' });
+
+      const newCounter = (verification.authenticationInfo as any)?.newCounter ?? Number(cred.counter) + 1;
+      await db.query(
+        `UPDATE passkey_credentials SET counter = $1, last_used_at = NOW() WHERE credential_id = $2`,
+        [newCounter, credentialId]
+      );
+      await db.query(`DELETE FROM passkey_challenges WHERE challenge = $1`, [expectedChallenge]);
+
+      const token = signCloudToken(cred.user_id, cred.email);
+      return res.json({
+        success: true,
+        token,
+        userId: cred.user_id,
+        email: cred.email,
+        authProvider: 'passkey',
+      });
+    } catch (err: any) {
+      console.error('[passkey/authenticate]', err.message);
+      return res.status(500).json({ error: 'Authentication failed' });
+    }
+  }
+
+  if (path === '/api/auth/passkey/list' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensurePasskeyTable();
+    try {
+      const { rows } = await db.query(
+        `SELECT credential_id, device_label, transports, created_at, last_used_at
+           FROM passkey_credentials WHERE user_id = $1 ORDER BY created_at DESC`,
+        [cloudUser.userId]
+      );
+      return res.json({
+        credentials: rows.map((r: any) => ({
+          credentialId: r.credential_id,
+          deviceLabel: r.device_label,
+          transports: r.transports ? r.transports.split(',').filter(Boolean) : [],
+          createdAt: r.created_at,
+          lastUsedAt: r.last_used_at,
+        })),
+      });
+    } catch (err: any) {
+      console.error('[passkey/list]', err.message);
+      return res.status(500).json({ error: 'Failed to list credentials' });
+    }
+  }
+
+  if (path === '/api/auth/passkey/delete' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    await ensurePasskeyTable();
+    const { credentialId } = (req.body || {}) as any;
+    if (!credentialId) return res.status(400).json({ error: 'credentialId required' });
+    try {
+      await db.query(
+        `DELETE FROM passkey_credentials WHERE user_id = $1 AND credential_id = $2`,
+        [cloudUser.userId, credentialId]
+      );
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[passkey/delete]', err.message);
+      return res.status(500).json({ error: 'Failed to delete' });
     }
   }
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity, CryptoWallet, WifiPassword, SoftwareLicense, InsurancePolicy, TaxDocument, QrCode } from '@shared/schema';
+import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, CreditCard, Identity, CryptoWallet, WifiPassword, SoftwareLicense, InsurancePolicy, TaxDocument, QrCode, SecureBookmark, FamilyMember, DigitalWill } from '@shared/schema';
 import { vaultStorage } from '@/lib/storage';
 import { KDFConfig as CryptoKDFConfig } from '@/lib/crypto';
 import { useAuth } from './auth-context';
@@ -144,6 +144,17 @@ interface VaultContextType {
   addQrCode: (item: Omit<QrCode, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateQrCode: (id: string, updates: Partial<QrCode>) => Promise<void>;
   deleteQrCode: (id: string) => Promise<void>;
+  secureBookmarks: SecureBookmark[];
+  addSecureBookmark: (item: Omit<SecureBookmark, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateSecureBookmark: (id: string, updates: Partial<SecureBookmark>) => Promise<void>;
+  deleteSecureBookmark: (id: string) => Promise<void>;
+  familyMembers: FamilyMember[];
+  addFamilyMember: (item: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateFamilyMember: (id: string, updates: Partial<FamilyMember>) => Promise<void>;
+  deleteFamilyMember: (id: string) => Promise<void>;
+  digitalWill: DigitalWill | null;
+  saveDigitalWill: (data: Omit<DigitalWill, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  clearDigitalWill: () => Promise<void>;
   importBankStatementsFromCSV: (csvContent: string, currency?: string) => Promise<{ statements: number; transactions: number }>;
   exportVault: (password: string) => Promise<string>;
   importVault: (data: string, password?: string) => Promise<void>;
@@ -212,6 +223,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
   const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([]);
   const [taxDocuments, setTaxDocuments] = useState<TaxDocument[]>([]);
   const [qrCodes, setQrCodes] = useState<QrCode[]>([]);
+  const [secureBookmarks, setSecureBookmarks] = useState<SecureBookmark[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [digitalWill, setDigitalWillState] = useState<DigitalWill | null>(null);
   // Splitwise-style entries live in a separate IDB store and a separate hook
   // (use-shared-expenses). Mirror just the count here so the sidebar/badge
   // counts in stats.totalExpenses reflect both legacy + shared entries
@@ -255,6 +269,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInsurancePolicies([]);
       setTaxDocuments([]);
       setQrCodes([]);
+      setSecureBookmarks([]);
+      setFamilyMembers([]);
+      setDigitalWillState(null);
       setSharedExpensesCount(0);
       // Wipe AutoFill creds + reset widget to "locked" state on every lock
       // event so a shoulder-surfer can't pull stats / credentials off the
@@ -583,6 +600,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         apiKeysData, creditCardsData, identitiesData, sharedExpensesData,
         cryptoWalletsData, wifiPasswordsData, softwareLicensesData,
         insurancePoliciesData, taxDocumentsData, qrCodesData,
+        secureBookmarksData, familyMembersData, digitalWillData,
       ] = await Promise.all([
         vaultStorage.getAllPasswords(),
         vaultStorage.getAllSubscriptions(),
@@ -603,6 +621,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
         vaultStorage.getAllInsurancePolicies().catch(() => [] as any[]),
         vaultStorage.getAllTaxDocuments().catch(() => [] as any[]),
         vaultStorage.getAllQrCodes().catch(() => [] as any[]),
+        vaultStorage.getAllSecureBookmarks().catch(() => [] as any[]),
+        vaultStorage.getAllFamilyMembers().catch(() => [] as any[]),
+        vaultStorage.getDigitalWill().catch(() => undefined),
       ]);
 
 
@@ -625,6 +646,9 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setInsurancePolicies(insurancePoliciesData.map(hydrateDates));
       setTaxDocuments(taxDocumentsData.map(hydrateDates));
       setQrCodes(qrCodesData.map(hydrateDates));
+      setSecureBookmarks(secureBookmarksData.map(hydrateDates));
+      setFamilyMembers(familyMembersData.map(hydrateDates));
+      setDigitalWillState(digitalWillData ? hydrateDates(digitalWillData) : null);
       setSharedExpensesCount(sharedExpensesData.length);
 
     } catch (error) {
@@ -1320,6 +1344,71 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     pushToCloud();
   };
 
+  // ── Secure Bookmarks CRUD ───────────────────────────────────────────────
+  const addSecureBookmark = async (item: Omit<SecureBookmark, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: SecureBookmark = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as SecureBookmark;
+    await vaultStorage.saveSecureBookmark(next);
+    setSecureBookmarks(prev => [...prev, next]);
+    addLog('Add Bookmark', 'system', `Added bookmark "${next.title}"`);
+    pushToCloud();
+  };
+  const updateSecureBookmark = async (id: string, updates: Partial<SecureBookmark>) => {
+    const existing = secureBookmarks.find(b => b.id === id);
+    if (!existing) return;
+    const updated: SecureBookmark = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveSecureBookmark(updated);
+    setSecureBookmarks(prev => prev.map(b => b.id === id ? updated : b));
+    pushToCloud();
+  };
+  const deleteSecureBookmark = async (id: string) => {
+    await vaultStorage.deleteSecureBookmark(id);
+    setSecureBookmarks(prev => prev.filter(b => b.id !== id));
+    pushToCloud();
+  };
+
+  // ── Family Members CRUD ─────────────────────────────────────────────────
+  const addFamilyMember = async (item: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const next: FamilyMember = { ...item, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() } as FamilyMember;
+    await vaultStorage.saveFamilyMember(next);
+    setFamilyMembers(prev => [...prev, next]);
+    addLog('Add Family Member', 'system', `Added member "${next.name}" (${next.email})`);
+    pushToCloud();
+  };
+  const updateFamilyMember = async (id: string, updates: Partial<FamilyMember>) => {
+    const existing = familyMembers.find(m => m.id === id);
+    if (!existing) return;
+    const updated: FamilyMember = { ...existing, ...updates, updatedAt: new Date() };
+    await vaultStorage.saveFamilyMember(updated);
+    setFamilyMembers(prev => prev.map(m => m.id === id ? updated : m));
+    pushToCloud();
+  };
+  const deleteFamilyMember = async (id: string) => {
+    await vaultStorage.deleteFamilyMember(id);
+    setFamilyMembers(prev => prev.filter(m => m.id !== id));
+    pushToCloud();
+  };
+
+  // ── Digital Will (singleton) ────────────────────────────────────────────
+  const saveDigitalWill = async (data: Omit<DigitalWill, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const existing = digitalWill;
+    const next: DigitalWill = {
+      ...data,
+      id: 'singleton',
+      createdAt: existing?.createdAt ?? new Date(),
+      updatedAt: new Date(),
+    } as DigitalWill;
+    await vaultStorage.saveDigitalWill(next);
+    setDigitalWillState(next);
+    addLog('Update Digital Will', 'security', `${next.isActive ? 'Enabled' : 'Disabled'} digital-will (${next.beneficiaries.length} beneficiar${next.beneficiaries.length === 1 ? 'y' : 'ies'})`);
+    pushToCloud();
+  };
+  const clearDigitalWill = async () => {
+    await vaultStorage.deleteDigitalWill();
+    setDigitalWillState(null);
+    addLog('Disable Digital Will', 'security', 'Cleared digital-will settings');
+    pushToCloud();
+  };
+
   const importBankStatementsFromCSV = async (csvContent: string, currency?: string) => {
     try {
       const result = await vaultStorage.importBankStatementsFromCSV(csvContent, currency);
@@ -1767,6 +1856,17 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
     addQrCode,
     updateQrCode,
     deleteQrCode,
+    secureBookmarks,
+    addSecureBookmark,
+    updateSecureBookmark,
+    deleteSecureBookmark,
+    familyMembers,
+    addFamilyMember,
+    updateFamilyMember,
+    deleteFamilyMember,
+    digitalWill,
+    saveDigitalWill,
+    clearDigitalWill,
     importBankStatementsFromCSV,
     exportVault,
     importVault,

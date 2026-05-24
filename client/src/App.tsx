@@ -68,6 +68,11 @@ const SoftwareLicenses = React.lazy(() => import("@/pages/software-licenses"));
 const InsuranceVault = React.lazy(() => import("@/pages/insurance-vault"));
 const TaxDocuments = React.lazy(() => import("@/pages/tax-documents"));
 const QRVault = React.lazy(() => import("@/pages/qr-vault"));
+const SecureBookmarks = React.lazy(() => import("@/pages/secure-bookmarks"));
+const DarkWebMonitor = React.lazy(() => import("@/pages/dark-web-monitor"));
+const FamilyDashboard = React.lazy(() => import("@/pages/family-dashboard"));
+const DigitalWill = React.lazy(() => import("@/pages/digital-will"));
+const SmartFormFiller = React.lazy(() => import("@/pages/smart-form-filler"));
 const Profile = React.lazy(() => import("@/pages/profile"));
 const Settings = React.lazy(() => import("@/pages/settings"));
 const Integrations = React.lazy(() => import("@/pages/integrations"));
@@ -134,7 +139,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2 } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -171,7 +176,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const slideUp = makeSlideUp(reducedMotion);
   const { logout, masterPassword, isUnlocked, accountEmail } = useAuth();
   const notificationUserId = accountEmail || 'guest';
-  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders, creditCards, identities, cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes } = useVault();
+  const { searchQuery, setSearchQuery, stats, isCloudSyncing, cloudSyncStatus, lastSyncError, retryCloudSync, passwords, subscriptions, notes, expenses, reminders, creditCards, identities, cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes, secureBookmarks, familyMembers } = useVault();
   const { getLimit, isPro } = useSubscription();
   const { vaults, activeVault, requestVaultSwitch } = useVaultSelection();
   const { toggleTheme, resolvedTheme } = useTheme();
@@ -453,6 +458,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'insurance', label: 'Insurance', icon: ShieldCheck, href: '/insurance', group: 'finance' },
     { id: 'tax', label: 'Tax Docs', icon: Calculator, href: '/tax', group: 'finance' },
     { id: 'qr', label: 'QR Vault', icon: QrCodeIcon, href: '/qr', group: 'tools' },
+    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark, href: '/bookmarks', group: 'vault' },
+    { id: 'family', label: 'Family', icon: Users, href: '/family', group: 'account' },
+    { id: 'dark-web', label: 'Dark Web Monitor', icon: ShieldAlert, href: '/dark-web', group: 'tools' },
+    { id: 'digital-will', label: 'Digital Will', icon: Heart, href: '/digital-will', group: 'account' },
+    { id: 'form-filler', label: 'Form Filler', icon: Wand2, href: '/form-filler', group: 'tools' },
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
@@ -1176,6 +1186,12 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             qrCodes: (qrCodes ?? [])
               .filter(qr => qr.name?.toLowerCase()?.includes(q) || qr.qrData?.toLowerCase()?.includes(q))
               .map(qr => ({ id: qr.id, type: 'qr' as const, title: qr.name, subtitle: qr.category, href: '/qr' })),
+            secureBookmarks: (secureBookmarks ?? [])
+              .filter(b => b.title?.toLowerCase()?.includes(q) || b.url?.toLowerCase()?.includes(q) || (b.tags || []).some(t => t.toLowerCase().includes(q)))
+              .map(b => ({ id: b.id, type: 'bookmark' as const, title: b.title, subtitle: b.category || b.url, href: '/bookmarks' })),
+            familyMembers: (familyMembers ?? [])
+              .filter(m => m.name?.toLowerCase()?.includes(q) || m.email?.toLowerCase()?.includes(q))
+              .map(m => ({ id: m.id, type: 'family' as const, title: m.name, subtitle: m.email, href: '/family' })),
           };
         })()}
       />
@@ -1409,6 +1425,11 @@ function Router() {
       <Route path="/insurance"><MainLayout><InsuranceVault /></MainLayout></Route>
       <Route path="/tax"><MainLayout><TaxDocuments /></MainLayout></Route>
       <Route path="/qr"><MainLayout><QRVault /></MainLayout></Route>
+      <Route path="/bookmarks"><MainLayout><SecureBookmarks /></MainLayout></Route>
+      <Route path="/dark-web"><MainLayout><DarkWebMonitor /></MainLayout></Route>
+      <Route path="/family"><MainLayout><FamilyDashboard /></MainLayout></Route>
+      <Route path="/digital-will"><MainLayout><DigitalWill /></MainLayout></Route>
+      <Route path="/form-filler"><MainLayout><SmartFormFiller /></MainLayout></Route>
       <Route path="/logging"><MainLayout><Logging /></MainLayout></Route>
       <Route path="/settings"><MainLayout><Settings /></MainLayout></Route>
       <Route path="/integrations"><MainLayout><Integrations /></MainLayout></Route>

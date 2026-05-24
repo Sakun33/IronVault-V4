@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell, CreditCard, UserCircle, Bitcoin, Wifi, KeyRound, ShieldCheck, Calculator, QrCode as QrCodeIcon } from 'lucide-react';
+import { X, Search, Clock, Key, Bookmark, BookOpen, DollarSign, Bell, CreditCard, UserCircle, Bitcoin, Wifi, KeyRound, ShieldCheck, Calculator, QrCode as QrCodeIcon, Users } from 'lucide-react';
 import { useLocation } from 'wouter';
 
 interface SearchResult {
   id: string;
   type: 'password' | 'subscription' | 'note' | 'expense' | 'reminder' | 'card' | 'identity'
-      | 'crypto' | 'wifi' | 'license' | 'insurance' | 'tax' | 'qr';
+      | 'crypto' | 'wifi' | 'license' | 'insurance' | 'tax' | 'qr'
+      | 'bookmark' | 'family';
   title: string;
   subtitle?: string;
   href: string;
@@ -33,6 +34,8 @@ interface SearchModalProps {
     insurancePolicies?: SearchResult[];
     taxDocuments?: SearchResult[];
     qrCodes?: SearchResult[];
+    secureBookmarks?: SearchResult[];
+    familyMembers?: SearchResult[];
   };
   recentSearches?: string[];
   onClearRecentSearches?: () => void;
@@ -53,6 +56,8 @@ const typeConfig = {
   insurance: { icon: ShieldCheck, label: 'Insurance', color: 'text-emerald-300' },
   tax: { icon: Calculator, label: 'Tax Docs', color: 'text-amber-300' },
   qr: { icon: QrCodeIcon, label: 'QR Vault', color: 'text-violet-300' },
+  bookmark: { icon: Bookmark, label: 'Bookmarks', color: 'text-sky-300' },
+  family: { icon: Users, label: 'Family', color: 'text-emerald-300' },
 };
 
 function SearchModalInner({
@@ -129,6 +134,8 @@ function SearchModalInner({
     insurance: results.insurancePolicies?.length ?? 0,
     tax: results.taxDocuments?.length ?? 0,
     qr: results.qrCodes?.length ?? 0,
+    bookmark: results.secureBookmarks?.length ?? 0,
+    family: results.familyMembers?.length ?? 0,
   };
 
   if (!open) return null;

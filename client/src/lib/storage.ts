@@ -637,6 +637,7 @@ export class VaultStorage {
       bankStatements, bankTransactions, investments, investmentGoals, apiKeys,
       creditCards, identities,
       cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes,
+      secureBookmarks, familyMembers,
     ] = await Promise.all([
       this.getAllPasswords(),
       this.getAllSubscriptions(),
@@ -656,6 +657,8 @@ export class VaultStorage {
       this.getAllInsurancePolicies(),
       this.getAllTaxDocuments(),
       this.getAllQrCodes(),
+      this.getAllSecureBookmarks(),
+      this.getAllFamilyMembers(),
     ]);
     return {
       passwords: passwords.length,
@@ -676,6 +679,8 @@ export class VaultStorage {
       insurancePolicies: insurancePolicies.length,
       taxDocuments: taxDocuments.length,
       qrCodes: qrCodes.length,
+      secureBookmarks: secureBookmarks.length,
+      familyMembers: familyMembers.length,
     };
   }
 
@@ -700,6 +705,7 @@ export class VaultStorage {
         payload.creditCards, payload.identities,
         payload.cryptoWallets, payload.wifiPasswords, payload.softwareLicenses,
         payload.insurancePolicies, payload.taxDocuments, payload.qrCodes,
+        payload.secureBookmarks, payload.familyMembers, payload.digitalWill,
       ].map((arr: any) => Array.isArray(arr) ? arr.length : 0);
       return lengths.reduce((a, b) => a + b, 0);
     } catch {
@@ -1177,6 +1183,24 @@ export class VaultStorage {
   async getAllQrCodes(): Promise<any[]> { return this.getAllEncrypted('qrCodes'); }
   async deleteQrCode(id: string): Promise<void> { return this.deleteEncryptedById(id); }
 
+  // Secure bookmarks
+  async saveSecureBookmark(item: any): Promise<void> { await this.encryptAndStore('secureBookmarks', item); }
+  async getSecureBookmark(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('secureBookmarks', id); }
+  async getAllSecureBookmarks(): Promise<any[]> { return this.getAllEncrypted('secureBookmarks'); }
+  async deleteSecureBookmark(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Family members
+  async saveFamilyMember(item: any): Promise<void> { await this.encryptAndStore('familyMembers', item); }
+  async getFamilyMember(id: string): Promise<any | undefined> { return this.decryptAndRetrieve('familyMembers', id); }
+  async getAllFamilyMembers(): Promise<any[]> { return this.getAllEncrypted('familyMembers'); }
+  async deleteFamilyMember(id: string): Promise<void> { return this.deleteEncryptedById(id); }
+
+  // Digital will — single-record store keyed on the literal id 'singleton'.
+  // Reads return either the singleton settings or undefined.
+  async saveDigitalWill(item: any): Promise<void> { await this.encryptAndStore('digitalWill', { ...item, id: 'singleton' }); }
+  async getDigitalWill(): Promise<any | undefined> { return this.decryptAndRetrieve('digitalWill', 'singleton'); }
+  async deleteDigitalWill(): Promise<void> { return this.deleteEncryptedById('singleton'); }
+
   /** Shared deletion helper for every encrypted_data-backed section. */
   private deleteEncryptedById(id: string): Promise<void> {
     this.assertVaultSelected();
@@ -1216,6 +1240,9 @@ export class VaultStorage {
       insurancePolicies,
       taxDocuments,
       qrCodes,
+      secureBookmarks,
+      familyMembers,
+      digitalWill,
       metadata,
     ] = await Promise.all([
       this.getAllPasswords(),
@@ -1236,6 +1263,9 @@ export class VaultStorage {
       this.getAllInsurancePolicies(),
       this.getAllTaxDocuments(),
       this.getAllQrCodes(),
+      this.getAllSecureBookmarks(),
+      this.getAllFamilyMembers(),
+      this.getDigitalWill().catch(() => undefined),
       this.getMetadata(),
     ]);
 
@@ -1258,9 +1288,12 @@ export class VaultStorage {
       insurancePolicies,
       taxDocuments,
       qrCodes,
+      secureBookmarks,
+      familyMembers,
+      digitalWill: digitalWill ? [digitalWill] : [],
       metadata,
       exportedAt: new Date(),
-      version: 5, // v5: adds crypto / wifi / licenses / insurance / tax / qr
+      version: 6, // v6: adds bookmarks / family / digital will
     };
 
     const salt = CryptoService.generateSalt();
@@ -1422,6 +1455,9 @@ export class VaultStorage {
         ...(importData.insurancePolicies ?? []).map((p: any) => this.saveInsurancePolicy(p)),
         ...(importData.taxDocuments ?? []).map((d: any) => this.saveTaxDocument(d)),
         ...(importData.qrCodes ?? []).map((q: any) => this.saveQrCode(q)),
+        ...(importData.secureBookmarks ?? []).map((b: any) => this.saveSecureBookmark(b)),
+        ...(importData.familyMembers ?? []).map((m: any) => this.saveFamilyMember(m)),
+        ...(importData.digitalWill ?? []).map((w: any) => this.saveDigitalWill(w)),
       ]);
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);

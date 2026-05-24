@@ -50,6 +50,7 @@ interface AuthContextType {
   accountLogin: (email: string, password: string) => Promise<boolean>;
   googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
   appleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
+  finalizePasskeyLogin: (result: { token: string; email: string }) => Promise<boolean>;
   verifyTwoFactor: (code: string) => Promise<boolean>;
   cancelTwoFactor: () => void;
   accountLogout: () => void;
@@ -482,6 +483,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, isNewUser: !!result.isNewUser };
   };
 
+  // Passkey login (Stage 1). The /api/auth/passkey/authenticate endpoint
+  // returns the same shape as googleLogin's result. Reuses the cross-account
+  // hygiene + session persistence path so the rest of the app is unaware
+  // which authenticator was used.
+  const finalizePasskeyLogin = async (result: { token: string; email: string }): Promise<boolean> => {
+    if (!result?.token || !result?.email) return false;
+    const normalizedEmail = result.email.toLowerCase().trim();
+
+    const previousEmail = (() => {
+      try {
+        const raw = localStorage.getItem('iv_account');
+        return raw ? (JSON.parse(raw)?.email || null) : null;
+      } catch { return null; }
+    })();
+    const userChanged = previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+    if (userChanged) {
+      clearCloudToken();
+      vaultStorage.setEncryptionKey(null as any);
+      sessionStorage.removeItem(SESSION_KEY);
+      await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
+      try { localStorage.removeItem('iv_account'); } catch { /* noop */ }
+    }
+
+    storeCloudToken(result.token);
+    saveAccountSession(normalizedEmail);
+    vaultManager.setAccountEmail(normalizedEmail);
+    clearPlanCache();
+    try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
+    addLog('Account Login', 'security', `Signed in with passkey as ${normalizedEmail}`);
+    markLoginComplete();
+    setIsAccountLoggedIn(true);
+    setAccountEmail(normalizedEmail);
+    return true;
+  };
+
   const verifyTwoFactor = async (code: string): Promise<boolean> => {
     const pending = pendingTwoFactor;
     if (!pending) return false;
@@ -741,6 +777,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accountLogin,
     googleLogin,
     appleLogin,
+    finalizePasskeyLogin,
     verifyTwoFactor,
     cancelTwoFactor,
     accountLogout,

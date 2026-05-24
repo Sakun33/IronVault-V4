@@ -60,6 +60,13 @@ import {
   type BiometricCapabilities,
 } from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
+import {
+  registerPasskey,
+  listPasskeys,
+  deletePasskey,
+  isPasskeySupported,
+  type RegisteredPasskey,
+} from '@/lib/passkey-auth';
 
 export default function SettingsPage() {
   const { accountEmail } = useAuth();
@@ -102,6 +109,10 @@ export default function SettingsPage() {
   const [bioCaps, setBioCaps] = useState<BiometricCapabilities | null>(null);
   const [bioEnrolledVaultIds, setBioEnrolledVaultIds] = useState<string[]>([]);
   const [bioBusy, setBioBusy] = useState(false);
+
+  // Passkey state — works on any modern browser with a platform authenticator.
+  const [passkeys, setPasskeys] = useState<RegisteredPasskey[]>([]);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
 
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
@@ -153,6 +164,46 @@ export default function SettingsPage() {
     window.addEventListener('focus', onFocus);
     return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
   }, []);
+
+  // Load passkeys once on mount + after every register/delete.
+  useEffect(() => {
+    if (!isPasskeySupported()) return;
+    listPasskeys().then(setPasskeys).catch(() => undefined);
+  }, []);
+
+  const reloadPasskeys = async () => {
+    setPasskeys(await listPasskeys().catch(() => [] as RegisteredPasskey[]));
+  };
+
+  const handleAddPasskey = async () => {
+    if (passkeyBusy) return;
+    setPasskeyBusy(true);
+    try {
+      const label = (typeof navigator !== 'undefined' ? navigator.platform : '') || 'This device';
+      const r = await registerPasskey(label);
+      if (!r.ok) {
+        toast({ title: 'Passkey setup failed', description: r.error, variant: 'destructive' });
+        return;
+      }
+      await reloadPasskeys();
+      toast({ title: 'Passkey added', description: 'You can now sign in with this device.', variant: 'success' });
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
+  const handleDeletePasskey = async (credentialId: string) => {
+    if (passkeyBusy) return;
+    setPasskeyBusy(true);
+    try {
+      const ok = await deletePasskey(credentialId);
+      if (!ok) { toast({ title: 'Could not remove', variant: 'destructive' }); return; }
+      await reloadPasskeys();
+      toast({ title: 'Passkey removed', variant: 'success' });
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   const handleDisableAllBiometric = async () => {
     if (bioBusy) return;
@@ -556,6 +607,54 @@ export default function SettingsPage() {
                   >
                     {bioBusy ? 'Disabling…' : 'Disable all'}
                   </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Passkey (FIDO2) — works on any modern browser. The login page
+              shows "Sign in with passkey"; this is where users register a
+              new credential and review/revoke existing ones. */}
+          {isPasskeySupported() && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <Label className="flex items-center gap-2">
+                      <Key className="w-4 h-4" /> Passkey sign-in
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Add a passkey on this device for password-less sign-in. Uses Touch ID, Face ID, Windows Hello, or your security key.
+                    </p>
+                  </div>
+                  <Button onClick={handleAddPasskey} disabled={passkeyBusy} size="sm">
+                    {passkeyBusy ? 'Working…' : 'Add passkey'}
+                  </Button>
+                </div>
+                {passkeys.length > 0 && (
+                  <div className="space-y-1.5">
+                    {passkeys.map(pk => (
+                      <div key={pk.credentialId} className="flex items-center justify-between text-xs bg-muted/30 rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{pk.deviceLabel || 'Unnamed device'}</div>
+                          <div className="text-muted-foreground">
+                            Added {new Date(pk.createdAt).toLocaleDateString()}
+                            {pk.lastUsedAt && <> · used {new Date(pk.lastUsedAt).toLocaleDateString()}</>}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive h-7 text-xs"
+                          onClick={() => handleDeletePasskey(pk.credentialId)}
+                          disabled={passkeyBusy}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </>
