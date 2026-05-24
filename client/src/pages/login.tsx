@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { GoogleSignInButton } from '@/components/google-sign-in-button';
+import { AppleSignInButton } from '@/components/apple-sign-in-button';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
@@ -383,6 +384,9 @@ export default function Login() {
               </div>
             </div>
             <GoogleSignInButton label="Continue with Google" />
+            <div className="mt-2">
+              <AppleSignInButton label="Continue with Apple" />
+            </div>
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">

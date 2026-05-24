@@ -17,7 +17,9 @@ initFontScale();
 // doesn't pay the dynamic import + initialize cost. No-op on web. Errors
 // surface again on the actual sign-in attempt with a user-visible toast.
 import { initializeGoogleAuth } from "./lib/google-auth";
+import { initializeAppleAuth } from "./lib/apple-auth";
 void initializeGoogleAuth();
+void initializeAppleAuth();
 
 // CRASH REPORTER — shows actual error on white screen instead of blank page
 function showCrash(label: string, msg: string, stack?: string) {

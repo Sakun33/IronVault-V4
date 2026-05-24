@@ -19,6 +19,7 @@ import { clearPlanCache } from '@/hooks/use-plan-features';
 import { markLoginComplete } from '@/lib/auth-fetch-interceptor';
 import { apiBase } from '@/native/platform';
 import { signInWithGoogle, googleSignOut } from '@/lib/google-auth';
+import { signInWithApple, appleSignOut } from '@/lib/apple-auth';
 
 // Server returns `{ requires2FA: true, tempToken }` when password auth succeeds
 // but the user has 2FA enabled. We surface this to the login page via
@@ -48,6 +49,7 @@ interface AuthContextType {
   logout: () => void;
   accountLogin: (email: string, password: string) => Promise<boolean>;
   googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
+  appleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
   verifyTwoFactor: (code: string) => Promise<boolean>;
   cancelTwoFactor: () => void;
   accountLogout: () => void;
@@ -438,6 +440,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, isNewUser: !!result.isNewUser };
   };
 
+  // Apple Sign-In (Stage 1). Mirrors googleLogin — Apple users likewise have
+  // no IronVault account password, so the offline-fallback path is skipped
+  // and they must be online to sign in. Master password is still required to
+  // unlock vault data, exactly the same as Google.
+  const appleLogin = async (): Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }> => {
+    const outcome = await signInWithApple();
+    if (!outcome.ok) {
+      return { ok: false, error: outcome.error };
+    }
+    const result = outcome.result;
+    if (!result || !result.token || !result.email) {
+      return { ok: false, error: 'Sign-in succeeded but the response was malformed' };
+    }
+    const normalizedEmail = result.email.toLowerCase().trim();
+
+    const previousEmail = (() => {
+      try {
+        const raw = localStorage.getItem('iv_account');
+        return raw ? (JSON.parse(raw)?.email || null) : null;
+      } catch { return null; }
+    })();
+    const userChanged = previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
+    if (userChanged) {
+      clearCloudToken();
+      vaultStorage.setEncryptionKey(null as any);
+      sessionStorage.removeItem(SESSION_KEY);
+      await vaultManager.wipeOtherAccountVaultData(normalizedEmail);
+      try { localStorage.removeItem('iv_account'); } catch { /* noop */ }
+    }
+
+    storeCloudToken(result.token);
+    saveAccountSession(normalizedEmail);
+    vaultManager.setAccountEmail(normalizedEmail);
+    clearPlanCache();
+    try { localStorage.removeItem('iv_display_name'); } catch { /* noop */ }
+    addLog('Account Login', 'security', `Signed in with Apple as ${normalizedEmail}`);
+    markLoginComplete();
+    setIsAccountLoggedIn(true);
+    setAccountEmail(normalizedEmail);
+    return { ok: true, isNewUser: !!result.isNewUser };
+  };
+
   const verifyTwoFactor = async (code: string): Promise<boolean> => {
     const pending = pendingTwoFactor;
     if (!pending) return false;
@@ -475,9 +519,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAccountSession();
     clearPlanCache();
     clearCloudToken(); // SECURITY: prevent stale token from leaking to next user
-    // Drop any cached Google session so the next sign-in shows the chooser
-    // (otherwise a different user on the same device gets auto-signed-in).
+    // Drop any cached Google / Apple session so the next sign-in shows the
+    // chooser (otherwise a different user on the same device gets
+    // auto-signed-in).
     googleSignOut().catch(() => { /* noop */ });
+    appleSignOut().catch(() => { /* noop */ });
     // Reset the centralized plan service so the next account starts as 'free'
     // until its entitlement resolves. Without this, a Pro user signing out and
     // a Free user signing in on the same device would briefly inherit Pro UI.
@@ -694,6 +740,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     accountLogin,
     googleLogin,
+    appleLogin,
     verifyTwoFactor,
     cancelTwoFactor,
     accountLogout,

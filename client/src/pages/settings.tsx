@@ -36,6 +36,7 @@ import {
   Type,
   Webhook,
   HeartHandshake,
+  Fingerprint,
 } from 'lucide-react';
 import { FontSizeSettings } from '@/components/font-size-settings';
 import TravelModeCard from '@/components/travel-mode-card';
@@ -52,6 +53,13 @@ import { securitySettingsService, AUTO_LOCK_OPTIONS, type AutoLockInterval } fro
 import { useAuth } from '@/contexts/auth-context';
 import { usePlan } from '@/lib/plan-service';
 import { ProfileCard } from '@/components/profile-card';
+import {
+  checkBiometricCapabilities,
+  getEnrolledBiometricVaults,
+  disableAllBiometric,
+  type BiometricCapabilities,
+} from '@/native/biometrics';
+import { isNativeApp } from '@/native/platform';
 
 export default function SettingsPage() {
   const { accountEmail } = useAuth();
@@ -89,7 +97,12 @@ export default function SettingsPage() {
   const [clipboardAutoClear, setClipboardAutoClear] = useState<boolean>(
     () => securitySettingsService.getSettings().clipboardAutoClear
   );
-  
+
+  // Biometric state — only meaningful on native (Capacitor) builds.
+  const [bioCaps, setBioCaps] = useState<BiometricCapabilities | null>(null);
+  const [bioEnrolledVaultIds, setBioEnrolledVaultIds] = useState<string[]>([]);
+  const [bioBusy, setBioBusy] = useState(false);
+
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const { getAnalyticsSummary, getSupportTicketStats, isAnalyticsEnabled } = useAnalytics();
@@ -116,6 +129,51 @@ export default function SettingsPage() {
   useEffect(() => {
     localStorage.setItem('ironvault-analytics-enabled', String(analyticsEnabled));
   }, [analyticsEnabled]);
+
+  // Load biometric capabilities + enrollments. Re-runs when the page mounts;
+  // re-enrollment happens from the vault-picker (BiometricSetupPrompt), so
+  // we refresh on focus to catch state changes from there.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const caps = await checkBiometricCapabilities();
+        const enrolled = isNativeApp() ? await getEnrolledBiometricVaults() : [];
+        if (cancelled) return;
+        setBioCaps(caps);
+        setBioEnrolledVaultIds(enrolled);
+      } catch {
+        if (cancelled) return;
+        setBioCaps(null);
+        setBioEnrolledVaultIds([]);
+      }
+    };
+    refresh();
+    const onFocus = () => { void refresh(); };
+    window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
+  }, []);
+
+  const handleDisableAllBiometric = async () => {
+    if (bioBusy) return;
+    setBioBusy(true);
+    try {
+      await disableAllBiometric();
+      setBioEnrolledVaultIds([]);
+      toast({
+        title: 'Biometric disabled',
+        description: 'Removed biometric unlock from all vaults on this device.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Could not disable',
+        description: err instanceof Error ? err.message : 'Try again in a moment.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBioBusy(false);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem('ironvault-support-enabled', String(supportTicketsEnabled));
@@ -457,6 +515,51 @@ export default function SettingsPage() {
               }}
             />
           </div>
+
+          {/* Biometric unlock — native-only. Enrollment happens from the
+              vault picker (BiometricSetupPrompt) right after the master
+              password is typed. From Settings you can only see status and
+              disable enrollments — re-enabling needs the master password,
+              which we don't have here. */}
+          {isNativeApp() && bioCaps?.isAvailable && (
+            <>
+              <Separator />
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <Label className="flex items-center gap-2">
+                    <Fingerprint className="w-4 h-4" />
+                    {bioCaps.biometricLabel} unlock
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {bioEnrolledVaultIds.length > 0 ? (
+                      <>
+                        Enabled for {bioEnrolledVaultIds.length} vault
+                        {bioEnrolledVaultIds.length === 1 ? '' : 's'}. Unlock
+                        with {bioCaps.biometricLabel} from the vault picker.
+                      </>
+                    ) : (
+                      <>
+                        Open a vault with your master password and you'll be
+                        offered to enable {bioCaps.biometricLabel} for next
+                        time.
+                      </>
+                    )}
+                  </p>
+                </div>
+                {bioEnrolledVaultIds.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDisableAllBiometric}
+                    disabled={bioBusy}
+                    data-testid="button-disable-all-biometric"
+                  >
+                    {bioBusy ? 'Disabling…' : 'Disable all'}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

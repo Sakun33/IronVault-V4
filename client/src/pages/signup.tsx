@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { GoogleSignInButton } from '@/components/google-sign-in-button';
+import { AppleSignInButton } from '@/components/apple-sign-in-button';
 import { useToast } from '@/hooks/use-toast';
 import { sha256 } from '@/lib/account-auth';
 import { PLANS, planPriceLabel } from '@/lib/plans';
@@ -624,6 +625,13 @@ export default function SignupPage() {
                   testId="signup-google"
                   newUserRedirect="/"
                 />
+                <div className="mt-2">
+                  <AppleSignInButton
+                    label="Sign up with Apple"
+                    testId="signup-apple"
+                    newUserRedirect="/"
+                  />
+                </div>
                 <p className="text-center text-[11px] text-muted-foreground">
                   No password needed for sign-in. You'll still set a master password to encrypt your vault.
                 </p>

@@ -1162,6 +1162,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Backfill the apple_id column for Sign in with Apple. Same memoized pattern
+  // as ensureGoogleAuthColumns. Called from /api/auth/apple.
+  let _appleAuthColumnsEnsured = false;
+  async function ensureAppleAuthColumns(): Promise<void> {
+    if (_appleAuthColumnsEnsured) return;
+    try {
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20)`);
+      await db.query(`ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(255)`);
+      await db.query(`CREATE INDEX IF NOT EXISTS idx_crm_users_apple_id ON crm_users(apple_id)`);
+      _appleAuthColumnsEnsured = true;
+    } catch (e: any) {
+      console.error('[ensureAppleAuthColumns]', e.message);
+    }
+  }
+
+  // Apple JWKS cache. Apple's signing keys rotate but rarely — caching for
+  // 24h keeps verification fast without missing rotation entirely.
+  let _appleJwksCache: { keys: any[]; fetchedAt: number } | null = null;
+  const APPLE_JWKS_TTL_MS = 24 * 60 * 60 * 1000;
+
+  async function getAppleJwks(): Promise<any[]> {
+    if (_appleJwksCache && Date.now() - _appleJwksCache.fetchedAt < APPLE_JWKS_TTL_MS) {
+      return _appleJwksCache.keys;
+    }
+    const res = await fetch('https://appleid.apple.com/auth/keys');
+    if (!res.ok) throw new Error(`Apple JWKS fetch failed: ${res.status}`);
+    const body: any = await res.json();
+    const keys = Array.isArray(body?.keys) ? body.keys : [];
+    if (keys.length === 0) throw new Error('Apple JWKS returned no keys');
+    _appleJwksCache = { keys, fetchedAt: Date.now() };
+    return keys;
+  }
+
+  // Verify an Apple-issued identity token (JWT). Returns the decoded claims on
+  // success, throws on any failure (signature, issuer, audience, expiry). The
+  // caller is responsible for re-checking sub/email against its own records.
+  async function verifyAppleIdentityToken(
+    idToken: string,
+    allowedAudiences: string[],
+  ): Promise<{ sub: string; email?: string; email_verified?: boolean | string; iss: string; aud: string; exp: number }> {
+    const parts = idToken.split('.');
+    if (parts.length !== 3) throw new Error('Malformed identity token');
+    const [headerB64, payloadB64, sigB64] = parts;
+
+    const b64urlToBuf = (s: string) => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const header = JSON.parse(b64urlToBuf(headerB64).toString());
+    const payload = JSON.parse(b64urlToBuf(payloadB64).toString());
+
+    if (header.alg !== 'RS256') throw new Error(`Unsupported alg: ${header.alg}`);
+    if (!header.kid) throw new Error('Missing kid in token header');
+
+    const keys = await getAppleJwks();
+    const jwk = keys.find((k: any) => k.kid === header.kid);
+    if (!jwk) throw new Error(`No matching JWK for kid ${header.kid}`);
+
+    // Node ≥16 can import a JWK directly into a KeyObject.
+    const { createPublicKey, createVerify } = await import('crypto');
+    const pubKey = createPublicKey({ key: jwk, format: 'jwk' });
+
+    const verifier = createVerify('RSA-SHA256');
+    verifier.update(`${headerB64}.${payloadB64}`);
+    verifier.end();
+    const sig = b64urlToBuf(sigB64);
+    const valid = verifier.verify(pubKey, sig);
+    if (!valid) throw new Error('Apple token signature invalid');
+
+    if (payload.iss !== 'https://appleid.apple.com') throw new Error('Invalid issuer');
+    if (!payload.aud || !allowedAudiences.includes(payload.aud)) {
+      throw new Error(`Invalid audience: ${payload.aud}`);
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < nowSec) throw new Error('Token expired');
+    if (!payload.sub) throw new Error('Missing sub claim');
+
+    return {
+      sub: String(payload.sub),
+      email: payload.email,
+      email_verified: payload.email_verified,
+      iss: payload.iss,
+      aud: payload.aud,
+      exp: payload.exp,
+    };
+  }
+
   // Adds UNIQUE constraints that enforce the data-shape invariants the app
   // relies on (one entitlements row per user, one cloud_vaults row per
   // (user, vault) pair). Pre-existing duplicates are coalesced first so the
@@ -2100,6 +2184,176 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err: any) {
       console.error('auth/google error:', err.message);
       return res.status(500).json({ error: 'Google sign-in failed' });
+    }
+  }
+
+  // ── POST /api/auth/apple ────────────────────────────────────────────────────
+  // Sign in / sign up with an Apple identity token. The client (web Apple JS
+  // SDK or Capacitor social-login plugin) hands us a JWT issued by Apple. We
+  // verify its signature against Apple's JWKS, validate the audience against
+  // our configured Services / Bundle IDs, then either create a new crm_users
+  // row or look up the existing one and issue our own cloud-token JWT.
+  //
+  // Apple only sends `email` and the `user.name` block on the FIRST sign-in.
+  // Subsequent sign-ins return just `sub`, so the client may pass an
+  // optional `user` payload (name fields) on first registration. The email
+  // claim inside the verified ID token is the source of truth.
+  if (path === '/api/auth/apple' && req.method === 'POST') {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+    }
+    const { idToken, platform, user: appleUserPayload } = req.body || {};
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(400).json({ error: 'idToken required' });
+    }
+    try {
+      const APPLE_CLIENT_IDS = [
+        process.env.APPLE_CLIENT_ID_WEB,
+        process.env.APPLE_CLIENT_ID_IOS,
+        process.env.APPLE_CLIENT_ID_ANDROID,
+      ].filter(Boolean) as string[];
+      if (APPLE_CLIENT_IDS.length === 0) {
+        console.error('[auth/apple] no APPLE_CLIENT_ID_* env vars configured');
+        return res.status(500).json({ error: 'Apple sign-in not configured' });
+      }
+
+      let appleClaims: Awaited<ReturnType<typeof verifyAppleIdentityToken>>;
+      try {
+        appleClaims = await verifyAppleIdentityToken(idToken, APPLE_CLIENT_IDS);
+      } catch (verErr: any) {
+        recordLoginFailure(clientIp);
+        console.error('[auth/apple] verify failed:', verErr.message);
+        return res.status(401).json({ error: 'Invalid Apple token' });
+      }
+
+      const appleSub = appleClaims.sub;
+      const tokenEmail = (appleClaims.email || '').toLowerCase().trim();
+      const tokenEmailVerified =
+        appleClaims.email_verified === true || appleClaims.email_verified === 'true';
+
+      // First-time-only display name payload from the client.
+      const givenName =
+        typeof appleUserPayload?.name?.firstName === 'string' ? appleUserPayload.name.firstName : '';
+      const familyName =
+        typeof appleUserPayload?.name?.lastName === 'string' ? appleUserPayload.name.lastName : '';
+      const composedName = `${givenName} ${familyName}`.trim();
+
+      await ensureAppleAuthColumns();
+
+      // Look up by apple_id first (handles private-relay emails that change),
+      // then fall back to email match.
+      const { rows: byApple } = await db.query(
+        `SELECT id, email, full_name, account_status FROM crm_users WHERE apple_id = $1 LIMIT 1`,
+        [appleSub]
+      );
+
+      let existingRow: any = byApple[0] || null;
+      if (!existingRow && tokenEmail) {
+        const { rows: byEmail } = await db.query(
+          `SELECT id, email, full_name, account_status FROM crm_users WHERE email = $1 LIMIT 1`,
+          [tokenEmail]
+        );
+        existingRow = byEmail[0] || null;
+      }
+
+      let userId: string;
+      let isNewUser = false;
+      let resolvedFullName = '';
+      let resolvedEmail = tokenEmail;
+
+      if (existingRow) {
+        userId = existingRow.id;
+        resolvedEmail = (existingRow.email || tokenEmail || '').toLowerCase().trim();
+        if (existingRow.account_status === 'pending_verification' && tokenEmailVerified) {
+          await db.query(
+            `UPDATE crm_users SET account_status = 'active' WHERE id = $1`,
+            [userId]
+          );
+        }
+        await db.query(
+          `UPDATE crm_users
+             SET apple_id = COALESCE(apple_id, $1),
+                 auth_provider = COALESCE(auth_provider, 'apple'),
+                 last_active_at = NOW()
+           WHERE id = $2`,
+          [appleSub, userId]
+        );
+        resolvedFullName = existingRow.full_name || composedName || (resolvedEmail.split('@')[0]) || 'Apple User';
+      } else {
+        // New user. We need an email — Apple's token always includes one on
+        // first sign-up (either the real address or a private-relay alias).
+        if (!resolvedEmail) {
+          return res.status(400).json({ error: 'Apple did not return an email on first sign-in' });
+        }
+        isNewUser = true;
+        resolvedFullName = stripHtml(composedName || resolvedEmail.split('@')[0]);
+        const { rows: newRows } = await db.query(
+          `INSERT INTO crm_users
+             (email, full_name, auth_provider, apple_id, account_status, marketing_consent, support_consent)
+           VALUES ($1, $2, 'apple', $3, 'active', true, true)
+           RETURNING id`,
+          [resolvedEmail, resolvedFullName, appleSub]
+        );
+        userId = newRows[0].id;
+
+        db.query(
+          `INSERT INTO customers (email, full_name, platform, plan_type, status, marketing_consent)
+           VALUES ($1, $2, $3, 'free', 'active', true)
+           ON CONFLICT (email) DO NOTHING`,
+          [resolvedEmail, resolvedFullName, platform || 'web']
+        ).catch(() => {});
+        db.query(
+          `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+           VALUES ($1, 'free', 'active', false, false, false) ON CONFLICT DO NOTHING`,
+          [userId]
+        ).catch(() => {});
+
+        const nameParts = resolvedFullName.split(' ');
+        createCrmContact({
+          email: resolvedEmail,
+          firstName: nameParts[0] || resolvedFullName,
+          lastName: nameParts.slice(1).join(' ') || resolvedEmail,
+          source: 'Apple Sign-In',
+          plan: 'free',
+        }).catch(() => {});
+      }
+
+      clearLoginFailures(clientIp);
+
+      const token = signCloudToken(userId, resolvedEmail);
+
+      let sessionId: string | null = null;
+      try {
+        await ensureSessionAndActivityTables();
+        const ua = (req.headers['user-agent'] as string) || '';
+        const clientKind = (req.headers['x-iv-client'] as string) || 'web';
+        const { browser, os, deviceName } = parseUserAgent(ua);
+        const ip = getClientIp(req);
+        const tokenHash = hashJwtToken(token);
+        const { rows: sessRows } = await db.query(
+          `INSERT INTO extension_sessions (user_id, device_name, browser, os, ip_address, user_agent, client_kind, jwt_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [userId, deviceName, browser, os, ip, ua, clientKind, tokenHash]
+        );
+        sessionId = sessRows[0]?.id || null;
+      } catch (e: any) {
+        console.error('[auth/apple] session register failed:', e.message);
+      }
+
+      return res.json({
+        success: true,
+        token,
+        userId,
+        email: resolvedEmail,
+        fullName: resolvedFullName,
+        isNewUser,
+        authProvider: 'apple',
+        sessionId,
+      });
+    } catch (err: any) {
+      console.error('auth/apple error:', err.message);
+      return res.status(500).json({ error: 'Apple sign-in failed' });
     }
   }
 
