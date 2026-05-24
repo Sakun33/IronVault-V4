@@ -13,10 +13,17 @@
 // Catalyst, Wear OS, watchOS companion) share the same data contract.
 
 import { Preferences } from '@capacitor/preferences';
+import {
+  bridgeSet,
+  bridgeRemove,
+  bridgeReloadWidgets,
+  WIDGET_APP_GROUP,
+} from '@/native/widget-bridge';
 
 // Shared App Group identifier — must match the entitlement on the iOS
 // widget extension target (Xcode → Signing & Capabilities → App Groups).
-const APP_GROUP = 'group.app.ironvault.shared';
+// Re-exported below under the original name for backwards compatibility.
+const APP_GROUP: string = WIDGET_APP_GROUP;
 
 const KEYS = {
   securityScore: 'iv_widget_security_score',
@@ -24,6 +31,7 @@ const KEYS = {
   upcomingRenewals: 'iv_widget_upcoming_renewals',
   breachedCount: 'iv_widget_breached_count',
   updatedAt: 'iv_widget_updated_at',
+  vaultStatus: 'iv_widget_vault_status',
 } as const;
 
 export interface WidgetSnapshot {
@@ -35,22 +43,78 @@ export interface WidgetSnapshot {
 
 /**
  * Push the latest widget snapshot to native shared storage.
- * Safe on web — Preferences falls back to localStorage where Capacitor
- * isn't running, so the call is a no-op rather than an error.
+ *
+ * Two backends are written in parallel:
+ *
+ * 1. `@capacitor/preferences` — keeps the previous (NativeStorage-prefixed)
+ *    behaviour for any web/diagnostic code that reads from it.
+ * 2. `WidgetBridge` custom plugin — writes the same keys into the App
+ *    Group UserDefaults so the iOS Widget extension can actually read
+ *    them. No-op on web / non-iOS, so callers don't need to branch.
+ *
+ * After the writes succeed we tell WidgetKit to reload all timelines so
+ * the lock-screen and home-screen widgets pick up the new values within
+ * the next render pass.
  */
 export async function publishWidgetSnapshot(snapshot: WidgetSnapshot): Promise<void> {
-  const writes: Promise<unknown>[] = [
-    Preferences.set({ key: KEYS.securityScore, value: String(snapshot.securityScore) }),
-    Preferences.set({ key: KEYS.securityLevel, value: snapshot.securityLevel }),
-    Preferences.set({ key: KEYS.upcomingRenewals, value: String(snapshot.upcomingRenewals) }),
-    Preferences.set({ key: KEYS.breachedCount, value: String(snapshot.breachedCount) }),
-    Preferences.set({ key: KEYS.updatedAt, value: String(Date.now()) }),
+  const now = String(Date.now());
+  const entries: Array<[string, string]> = [
+    [KEYS.securityScore, String(snapshot.securityScore)],
+    [KEYS.securityLevel, snapshot.securityLevel],
+    [KEYS.upcomingRenewals, String(snapshot.upcomingRenewals)],
+    [KEYS.breachedCount, String(snapshot.breachedCount)],
+    [KEYS.updatedAt, now],
+    [KEYS.vaultStatus, 'unlocked'],
   ];
+
   try {
-    await Promise.all(writes);
+    await Promise.all([
+      ...entries.map(([k, v]) => Preferences.set({ key: k, value: v })),
+      ...entries.map(([k, v]) => bridgeSet(k, v)),
+    ]);
+    await bridgeReloadWidgets();
   } catch {
     // Failing to publish to the widget should never break the app.
   }
+}
+
+/**
+ * Publish a "vault locked" snapshot. Called when the vault auto-locks or
+ * the user signs out — wipes the previous numbers from the widget so a
+ * shoulder surfer can't read stats off the lock screen.
+ */
+export async function publishLockedWidgetSnapshot(): Promise<void> {
+  const zero = '0';
+  const entries: Array<[string, string]> = [
+    [KEYS.securityScore, zero],
+    [KEYS.securityLevel, 'Locked'],
+    [KEYS.upcomingRenewals, zero],
+    [KEYS.breachedCount, zero],
+    [KEYS.updatedAt, String(Date.now())],
+    [KEYS.vaultStatus, 'locked'],
+  ];
+  try {
+    await Promise.all([
+      ...entries.map(([k, v]) => Preferences.set({ key: k, value: v })),
+      ...entries.map(([k, v]) => bridgeSet(k, v)),
+    ]);
+    await bridgeReloadWidgets();
+  } catch { /* noop */ }
+}
+
+/**
+ * Drop every widget key. Used on full account logout — wipes any residual
+ * stat the previous user wrote before a different person signs in.
+ */
+export async function clearWidgetSnapshot(): Promise<void> {
+  const keys = Object.values(KEYS);
+  try {
+    await Promise.all([
+      ...keys.map(k => Preferences.remove({ key: k }).catch(() => undefined)),
+      ...keys.map(k => bridgeRemove(k)),
+    ]);
+    await bridgeReloadWidgets();
+  } catch { /* noop */ }
 }
 
 /** Read whatever was last published. Useful for tests + diagnostics. */
@@ -76,5 +140,5 @@ export async function readWidgetSnapshot(): Promise<WidgetSnapshot & { updatedAt
   }
 }
 
-export const WIDGET_APP_GROUP = APP_GROUP;
+export { WIDGET_APP_GROUP };
 export const WIDGET_KEYS = KEYS;

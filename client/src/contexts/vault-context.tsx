@@ -9,6 +9,8 @@ import type { ParserConfig } from '@/lib/csv-parsers';
 import { isNoteEditing } from '@/lib/note-editing-guard';
 import { useSearch } from './search-context';
 import { planService } from '@/lib/plan-service';
+import { publishLockedWidgetSnapshot } from '@/lib/widget-data';
+import { publishAutoFillCredentials, clearAutoFillCredentials } from '@/lib/autofill-sync';
 
 // Date fields that need hydration from JSON strings back to Date objects after decryption
 const DATE_FIELDS = ['createdAt', 'updatedAt', 'lastUsed', 'date', 'nextBillingDate', 'expiryDate', 'dueDate', 'completedAt', 'nextReminderDate', 'nextDueDate', 'purchaseDate', 'maturityDate', 'importDate', 'achievedDate', 'targetDate'];
@@ -218,8 +220,22 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       setCreditCards([]);
       setIdentities([]);
       setSharedExpensesCount(0);
+      // Wipe AutoFill creds + reset widget to "locked" state on every lock
+      // event so a shoulder-surfer can't pull stats / credentials off the
+      // home screen after the user steps away.
+      void clearAutoFillCredentials();
+      void publishLockedWidgetSnapshot();
     }
   }, [isUnlocked]);
+
+  // Keep iOS AutoFill in sync with the live password list. Fires whenever
+  // passwords change (add/edit/delete/import) AND the vault is unlocked.
+  // Debounced via the React render cycle — bulk imports collapse into one
+  // publish call. No-op on web / Android.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    void publishAutoFillCredentials(passwords);
+  }, [isUnlocked, passwords]);
 
   // Keep the shared-expenses count in sync with writes coming from the
   // /expenses page (which owns its own state via use-shared-expenses). When
