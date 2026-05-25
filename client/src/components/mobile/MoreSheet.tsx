@@ -17,6 +17,10 @@ export interface SectionItem {
   count?: number | null;
   color?: string;
   group: 'vault' | 'finance' | 'tools' | 'account';
+  /** Marks the section as Pro — the receiving sheet may display an upgrade
+   *  badge, but routing isn't blocked here (the destination page paywall
+   *  handles gating). */
+  requiresPro?: boolean;
 }
 
 interface MoreSheetProps {

@@ -11,23 +11,28 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Search, FileText, Calculator } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, FileText, Calculator, Share2 } from 'lucide-react';
 import type { TaxDocument } from '@shared/schema';
 import { PageHero } from '@/components/page-hero';
+import { PremiumCard, PremiumIcon } from '@/components/premium-card';
+import { ShareItemModal } from '@/components/share-item-modal';
+import { FeaturePreview } from '@/components/feature-preview';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 
 const TYPE_LABEL: Record<string, string> = {
   form16: 'Form 16', itr: 'ITR', tds: 'TDS', investment_proof: 'Investment Proof',
   '80c': '80C', '80d': '80D', hra: 'HRA', other: 'Other',
 };
 const TYPE_COLOR: Record<string, string> = {
-  form16: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
-  itr:    'bg-sky-500/15 text-sky-300 border-sky-500/25',
-  tds:    'bg-violet-500/15 text-violet-300 border-violet-500/25',
-  investment_proof: 'bg-amber-500/15 text-amber-300 border-amber-500/25',
-  '80c':  'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25',
-  '80d':  'bg-rose-500/15 text-rose-300 border-rose-500/25',
-  hra:    'bg-orange-500/15 text-orange-300 border-orange-500/25',
-  other:  'bg-slate-500/15 text-slate-300 border-slate-500/25',
+  form16: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25',
+  itr:    'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/25',
+  tds:    'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/25',
+  investment_proof: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
+  '80c':  'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/25',
+  '80d':  'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25',
+  hra:    'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/25',
+  other:  'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/25',
 };
 
 function formatINR(n?: number): string {
@@ -56,11 +61,14 @@ const blank = (): Omit<TaxDocument, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function TaxDocumentsPage() {
   const { taxDocuments, addTaxDocument, updateTaxDocument, deleteTaxDocument } = useVault();
   const { toast } = useToast();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<TaxDocument | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(blank());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<TaxDocument | null>(null);
 
   // Group by financial year (newest first) for an organised view.
   const grouped = useMemo(() => {
@@ -123,6 +131,21 @@ export default function TaxDocumentsPage() {
     } finally { setConfirmDeleteId(null); }
   };
 
+  if (!licenseLoading && !plan.isPaid) {
+    return (
+      <FeaturePreview
+        feature="Tax Documents"
+        description="Form 16s, ITRs, investment proofs — organised by financial year and searchable in seconds when you need them at filing time."
+        bullets={[
+          'FY/AY grouping with auto-detection from filing dates',
+          'Encrypted PAN + acknowledgement number storage',
+          'Tracks 80C, 80D, HRA, TDS, and investment proofs',
+        ]}
+        mock="documents"
+      />
+    );
+  }
+
   if (taxDocuments.length === 0) {
     return (
       <div className="px-6 py-10 max-w-3xl mx-auto">
@@ -163,18 +186,17 @@ export default function TaxDocumentsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {docs.map(d => (
-                <div key={d.id} className="glass-card p-4 flex flex-col gap-2">
+                <PremiumCard key={d.id} accent="amber" className="p-4 flex flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-500/20 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-4 h-4 text-amber-300" />
-                      </div>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <PremiumIcon accent="amber"><FileText className="w-5 h-5" /></PremiumIcon>
                       <div className="min-w-0">
                         <div className="font-semibold truncate">{d.documentName}</div>
                         <div className="text-xs text-muted-foreground truncate">{d.assessmentYear ? `AY ${d.assessmentYear}` : `FY ${d.financialYear}`}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(d)} title="Share"><Share2 className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}><Edit className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(d.id)}><Trash2 className="w-4 h-4" /></Button>
                     </div>
@@ -189,12 +211,25 @@ export default function TaxDocumentsPage() {
                       {d.acknowledgementNumber && <div>Ack# <span className="font-mono text-foreground">{d.acknowledgementNumber}</span></div>}
                     </div>
                   )}
-                </div>
+                </PremiumCard>
               ))}
             </div>
           </div>
         ))}
       </div>
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.documentName || 'Tax document'}
+        itemKind="tax"
+        data={sharing ? {
+          documentName: sharing.documentName, documentType: sharing.documentType,
+          financialYear: sharing.financialYear, assessmentYear: sharing.assessmentYear,
+          amount: sharing.amount, panNumber: sharing.panNumber,
+          acknowledgementNumber: sharing.acknowledgementNumber, notes: sharing.notes,
+        } : {}}
+      />
 
       <AddEditDialog isOpen={isOpen} setIsOpen={setIsOpen} editing={editing} form={form} setForm={setForm} submit={submit} />
 

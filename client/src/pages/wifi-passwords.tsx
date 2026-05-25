@@ -12,14 +12,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Wifi, QrCode as QrIcon, X } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Wifi, QrCode as QrIcon, Share2 } from 'lucide-react';
 import type { WifiPassword } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 import { PageHero } from '@/components/page-hero';
+import { PremiumCard, PremiumIcon } from '@/components/premium-card';
+import { Favicon } from '@/components/favicon';
+import { ShareItemModal } from '@/components/share-item-modal';
 
 // Encode WPA/WEP credentials into the standard Wi-Fi QR payload format.
-// `;` and `,`, `"`, `:`, `\` must be backslash-escaped per the spec so
-// SSIDs/passwords containing them still scan cleanly.
 function escapeWifi(v: string): string {
   return v.replace(/[\\;,:"]/g, ch => `\\${ch}`);
 }
@@ -52,6 +53,7 @@ export default function WifiPasswordsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<WifiPassword | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [sharing, setSharing] = useState<WifiPassword | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -164,12 +166,15 @@ export default function WifiPasswordsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map(w => (
-          <div key={w.id} className="glass-card p-4 flex flex-col gap-3">
+          <PremiumCard key={w.id} accent="sky" className="p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500/30 to-cyan-500/20 border border-sky-400/30 flex items-center justify-center flex-shrink-0">
-                  <Wifi className="w-4 h-4 text-sky-300" />
-                </div>
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Router brand favicon if recognisable (eero, ASUS, Netgear…), Wi-Fi glyph fallback */}
+                {w.router ? (
+                  <Favicon name={w.router} className="w-11 h-11 rounded-2xl" />
+                ) : (
+                  <PremiumIcon accent="sky"><Wifi className="w-5 h-5" /></PremiumIcon>
+                )}
                 <div className="min-w-0">
                   <div className="font-semibold truncate">{w.networkName}</div>
                   <div className="text-xs text-muted-foreground truncate">{w.location || w.securityType}</div>
@@ -177,6 +182,7 @@ export default function WifiPasswordsPage() {
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setQrFor(w)} title="Share via QR"><QrIcon className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(w)} title="Share link"><Share2 className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)} title="Edit"><Edit className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(w.id)} title="Delete"><Trash2 className="w-4 h-4" /></Button>
               </div>
@@ -186,7 +192,7 @@ export default function WifiPasswordsPage() {
                 value={showPasswordIds.has(w.id) ? w.password : '•'.repeat(Math.min(16, w.password.length || 8))}
                 readOnly
                 type="text"
-                className="font-mono text-sm bg-black/[0.04] dark:bg-white/[0.04] border-0"
+                className="font-mono text-sm bg-black/[0.03] dark:bg-white/[0.04] border-0"
               />
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => togglePassword(w.id)} title="Reveal">
                 {showPasswordIds.has(w.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -194,10 +200,10 @@ export default function WifiPasswordsPage() {
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => copy(w.password, 'Password')} title="Copy"><Copy className="w-4 h-4" /></Button>
             </div>
             <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wider">
-              <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/25">{w.securityType}</span>
-              {w.frequency && <span className="px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/25">{w.frequency}</span>}
+              <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/25">{w.securityType}</span>
+              {w.frequency && <span className="px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/25">{w.frequency}</span>}
             </div>
-          </div>
+          </PremiumCard>
         ))}
       </div>
 
@@ -220,6 +226,14 @@ export default function WifiPasswordsPage() {
           </DialogBody>
         </DialogContent>
       </Dialog>
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.networkName || 'Wi-Fi'}
+        itemKind="wifi"
+        data={sharing ? { networkName: sharing.networkName, password: sharing.password, securityType: sharing.securityType, location: sharing.location } : {}}
+      />
 
       <AddEditDialog
         isOpen={isOpen} setIsOpen={setIsOpen} editing={editing}

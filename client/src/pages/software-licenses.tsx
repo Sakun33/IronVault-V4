@@ -11,10 +11,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, KeyRound, ExternalLink } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, KeyRound, ExternalLink, Share2 } from 'lucide-react';
 import type { SoftwareLicense } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 import { PageHero } from '@/components/page-hero';
+import { PremiumCard, PremiumIcon } from '@/components/premium-card';
+import { Favicon } from '@/components/favicon';
+import { ShareItemModal } from '@/components/share-item-modal';
+import { FeaturePreview } from '@/components/feature-preview';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 
 function maskKey(k: string): string {
   if (!k) return '';
@@ -46,12 +52,15 @@ const blank = (): Omit<SoftwareLicense, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function SoftwareLicensesPage() {
   const { softwareLicenses, addSoftwareLicense, updateSoftwareLicense, deleteSoftwareLicense } = useVault();
   const { toast } = useToast();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<SoftwareLicense | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(blank());
   const [showKeyIds, setShowKeyIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<SoftwareLicense | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -117,6 +126,21 @@ export default function SoftwareLicensesPage() {
     } finally { setConfirmDeleteId(null); }
   };
 
+  if (!licenseLoading && !plan.isPaid) {
+    return (
+      <FeaturePreview
+        feature="Software Licenses"
+        description="Never lose a license key again. Track activations, seat counts, and renewal dates across every app you own."
+        bullets={[
+          'Encrypted key storage with masked display + reveal',
+          'Renewal alerts 30 days before expiry',
+          'Vendor URL + license-holder tracking per entry',
+        ]}
+        mock="api-keys"
+      />
+    );
+  }
+
   if (softwareLicenses.length === 0) {
     return (
       <div className="px-6 py-10 max-w-3xl mx-auto">
@@ -156,13 +180,18 @@ export default function SoftwareLicensesPage() {
           const days = daysUntil(l.expiryDate);
           const expiringSoon = days !== null && days >= 0 && days <= 30;
           const expired = days !== null && days < 0;
+          // Prefer vendor domain favicon (e.g. "Sublime HQ" → sublimehq.com) and
+          // fall back to first-letter circle via the shared Favicon component.
+          const faviconUrl = l.purchaseUrl || (l.vendor ? '' : undefined);
           return (
-            <div key={l.id} className="glass-card p-4 flex flex-col gap-3">
+            <PremiumCard key={l.id} accent="violet" className="p-4 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500/30 to-fuchsia-500/20 border border-violet-400/30 flex items-center justify-center flex-shrink-0">
-                    <KeyRound className="w-4 h-4 text-violet-300" />
-                  </div>
+                <div className="flex items-center gap-3 min-w-0">
+                  {(l.vendor || l.purchaseUrl) ? (
+                    <Favicon url={faviconUrl} name={l.vendor || l.softwareName} className="w-11 h-11 rounded-2xl" />
+                  ) : (
+                    <PremiumIcon accent="violet"><KeyRound className="w-5 h-5" /></PremiumIcon>
+                  )}
                   <div className="min-w-0">
                     <div className="font-semibold truncate">{l.softwareName}</div>
                     <div className="text-xs text-muted-foreground truncate">
@@ -171,6 +200,7 @@ export default function SoftwareLicensesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(l)} title="Share"><Share2 className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(l)} title="Edit"><Edit className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(l.id)}><Trash2 className="w-4 h-4" /></Button>
                 </div>
@@ -178,7 +208,7 @@ export default function SoftwareLicensesPage() {
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">License key</div>
                 <div className="flex items-center gap-2">
-                  <code className="text-xs font-mono truncate flex-1 bg-black/[0.04] dark:bg-white/[0.04] rounded px-2 py-1.5">
+                  <code className="text-xs font-mono truncate flex-1 bg-black/[0.03] dark:bg-white/[0.04] rounded px-2 py-1.5">
                     {showKeyIds.has(l.id) ? l.licenseKey : maskKey(l.licenseKey)}
                   </code>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleKey(l.id)}>
@@ -188,22 +218,34 @@ export default function SoftwareLicensesPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wider">
-                {l.platform && <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/25">{l.platform}</span>}
-                {l.seats && <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">{l.seats} seat{l.seats === 1 ? '' : 's'}</span>}
-                {expired && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/25">Expired</span>}
-                {expiringSoon && !expired && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">Renew in {days}d</span>}
+                {l.platform && <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/25">{l.platform}</span>}
+                {l.seats && <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">{l.seats} seat{l.seats === 1 ? '' : 's'}</span>}
+                {expired && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/25">Expired</span>}
+                {expiringSoon && !expired && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25">Renew in {days}d</span>}
               </div>
               {l.purchaseUrl && (
                 <a href={l.purchaseUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
                   <ExternalLink className="w-3 h-3" /> Vendor page
                 </a>
               )}
-            </div>
+            </PremiumCard>
           );
         })}
       </div>
 
       <AddEditDialog isOpen={isOpen} setIsOpen={setIsOpen} editing={editing} form={form} setForm={setForm} submit={submit} />
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.softwareName || 'License'}
+        itemKind="license"
+        data={sharing ? {
+          softwareName: sharing.softwareName, licenseKey: sharing.licenseKey,
+          vendor: sharing.vendor, version: sharing.version, licensedTo: sharing.licensedTo,
+          purchaseUrl: sharing.purchaseUrl, notes: sharing.notes,
+        } : {}}
+      />
 
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
         <AlertDialogContent>

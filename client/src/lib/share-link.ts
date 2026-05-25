@@ -17,7 +17,7 @@ import { getCloudToken } from '@/lib/cloud-vault-sync';
 export interface SharePayload {
   /** What was shared — e.g. password name. Stored alongside the blob server-side as a label. */
   itemLabel?: string;
-  itemKind?: 'password' | 'card' | 'note' | 'wifi' | 'other';
+  itemKind?: 'password' | 'card' | 'note' | 'wifi' | 'license' | 'wallet' | 'bookmark' | 'insurance' | 'tax' | 'qr' | 'other';
   /** The actual credential. Any JSON-serialisable object — receiver sees this verbatim. */
   data: unknown;
 }

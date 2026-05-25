@@ -12,16 +12,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Search, Bookmark, ExternalLink, Link as LinkIcon, Lock } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Bookmark, ExternalLink, Lock, Share2 } from 'lucide-react';
 import type { SecureBookmark } from '@shared/schema';
 import { PageHero } from '@/components/page-hero';
-
-function favicon(url: string): string {
-  try {
-    const u = new URL(url.includes('://') ? url : `https://${url}`);
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(u.hostname)}&sz=64`;
-  } catch { return ''; }
-}
+import { PremiumCard } from '@/components/premium-card';
+import { Favicon } from '@/components/favicon';
+import { ShareItemModal } from '@/components/share-item-modal';
 
 const blank = (): Omit<SecureBookmark, 'id' | 'createdAt' | 'updatedAt'> => ({
   title: '',
@@ -43,6 +39,7 @@ export default function SecureBookmarksPage() {
   const [form, setForm] = useState(blank());
   const [tagsInput, setTagsInput] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<SecureBookmark | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -98,10 +95,6 @@ export default function SecureBookmarksPage() {
   };
 
   const openBookmark = (b: SecureBookmark) => {
-    // Bookmarks are stored encrypted in the vault but the URL itself isn't
-    // sensitive — open it in a new tab. The optional autoLogin flag is
-    // honored by the Chrome extension; on a plain web browser we just
-    // navigate. If a linked password is set, copy username for paste.
     if (b.autoLogin && b.linkedPasswordId) {
       const p = passwords.find(x => x.id === b.linkedPasswordId);
       if (p?.username) {
@@ -146,40 +139,44 @@ export default function SecureBookmarksPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {filtered.map(b => {
           const linkedPw = b.linkedPasswordId ? passwords.find(p => p.id === b.linkedPasswordId) : null;
+          let hostname = '';
+          try { hostname = new URL(b.url.includes('://') ? b.url : `https://${b.url}`).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
           return (
-            <div key={b.id} className="glass-card p-3 flex flex-col gap-2 group">
+            <PremiumCard key={b.id} accent="sky" className="p-3 flex flex-col gap-2 group">
               <button onClick={() => openBookmark(b)} className="flex flex-col items-center text-center gap-2 flex-1" title={b.url}>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500/20 to-cyan-500/10 border border-sky-400/30 flex items-center justify-center overflow-hidden">
-                  {favicon(b.url) ? (
-                    <img src={favicon(b.url)} alt="" className="w-7 h-7 rounded" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <LinkIcon className="w-5 h-5 text-sky-300" />
-                  )}
-                </div>
+                <Favicon url={b.url} name={b.title} className="w-12 h-12 rounded-2xl" />
                 <div className="min-w-0 w-full">
                   <div className="font-semibold text-xs truncate" title={b.title}>{b.title}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{new URL(b.url.includes('://') ? b.url : `https://${b.url}`).hostname.replace(/^www\./, '')}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{hostname || b.url}</div>
                 </div>
               </button>
               <div className="flex items-center justify-between gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {b.autoLogin && linkedPw && (
-                  <span title="Auto-login enabled" className="text-[10px] text-emerald-300 flex items-center gap-0.5">
+                {b.autoLogin && linkedPw ? (
+                  <span title="Auto-login enabled" className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
                     <Lock className="w-2.5 h-2.5" />
                   </span>
-                )}
-                {!b.autoLogin && <span />}
+                ) : <span />}
                 <div className="flex items-center gap-0.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openBookmark(b)} title="Open"><ExternalLink className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSharing(b)} title="Share"><Share2 className="w-3 h-3" /></Button>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(b)} title="Edit"><Edit className="w-3 h-3" /></Button>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(b.id)}><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </div>
-            </div>
+            </PremiumCard>
           );
         })}
       </div>
 
       <AddEditDialog isOpen={isOpen} setIsOpen={setIsOpen} editing={editing} form={form} setForm={setForm} tagsInput={tagsInput} setTagsInput={setTagsInput} submit={submit} passwords={passwords} />
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.title || 'Bookmark'}
+        itemKind="bookmark"
+        data={sharing ? { title: sharing.title, url: sharing.url, category: sharing.category, notes: sharing.notes } : {}}
+      />
 
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
         <AlertDialogContent>

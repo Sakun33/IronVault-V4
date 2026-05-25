@@ -12,9 +12,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Search, QrCode as QrIcon, Maximize2, Ticket, Plane, Wifi, Link as LinkIcon, User, CreditCard } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, QrCode as QrIcon, Maximize2, Ticket, Plane, Wifi, Link as LinkIcon, User, CreditCard, Share2 } from 'lucide-react';
 import type { QrCode } from '@shared/schema';
 import { PageHero } from '@/components/page-hero';
+import { PremiumCard } from '@/components/premium-card';
+import { ShareItemModal } from '@/components/share-item-modal';
+import { FeaturePreview } from '@/components/feature-preview';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 
 const CATEGORY_LABEL: Record<string, string> = {
   boarding_pass: 'Boarding Pass',
@@ -66,6 +71,8 @@ function MiniQr({ data, size = 80 }: { data: string; size?: number }) {
 export default function QRVaultPage() {
   const { qrCodes, addQrCode, updateQrCode, deleteQrCode } = useVault();
   const { toast } = useToast();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<QrCode | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -73,6 +80,7 @@ export default function QRVaultPage() {
   const [fullscreenFor, setFullscreenFor] = useState<QrCode | null>(null);
   const [fullscreenDataUrl, setFullscreenDataUrl] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<QrCode | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -128,6 +136,21 @@ export default function QRVaultPage() {
     } finally { setConfirmDeleteId(null); }
   };
 
+  if (!licenseLoading && !plan.isPaid) {
+    return (
+      <FeaturePreview
+        feature="QR Vault"
+        description="Save boarding passes, event tickets, UPI codes — anything with a QR — and show them fullscreen at the counter when you need them."
+        bullets={[
+          'Fullscreen scan mode optimised for boarding-gate scanners',
+          'Works offline — no inbox digging at the gate',
+          'Category-tagged (boarding, tickets, UPI, vCard) for fast lookup',
+        ]}
+        mock="documents"
+      />
+    );
+  }
+
   if (qrCodes.length === 0) {
     return (
       <div className="px-6 py-10 max-w-3xl mx-auto">
@@ -164,7 +187,7 @@ export default function QRVaultPage() {
           const Icon = CATEGORY_ICON[q.category] || QrIcon;
           const grad = CATEGORY_GRADIENT[q.category];
           return (
-            <div key={q.id} className="glass-card p-4 flex gap-3">
+            <PremiumCard key={q.id} accent="violet" className="p-4 flex gap-3">
               <button onClick={() => setFullscreenFor(q)} className="flex-shrink-0" title="View fullscreen">
                 <MiniQr data={q.qrData} size={96} />
               </button>
@@ -180,21 +203,33 @@ export default function QRVaultPage() {
                     </div>
                   </div>
                   {q.expiryDate && (
-                    <div className="text-[10px] uppercase tracking-wider text-amber-300 mt-1">
+                    <div className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-300 mt-1">
                       Expires {new Date(q.expiryDate).toLocaleDateString()}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 justify-end">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFullscreenFor(q)} title="Fullscreen"><Maximize2 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(q)} title="Share"><Share2 className="w-3.5 h-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(q)}><Edit className="w-3.5 h-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(q.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
               </div>
-            </div>
+            </PremiumCard>
           );
         })}
       </div>
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.name || 'QR code'}
+        itemKind="qr"
+        data={sharing ? {
+          name: sharing.name, category: sharing.category,
+          qrData: sharing.qrData, expiryDate: sharing.expiryDate, notes: sharing.notes,
+        } : {}}
+      />
 
       <Dialog open={!!fullscreenFor} onOpenChange={(o) => !o && setFullscreenFor(null)}>
         <DialogContent className="max-w-md">

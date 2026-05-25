@@ -11,11 +11,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Bitcoin, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Copy, Edit, Trash2, Eye, EyeOff, Search, Bitcoin, ShieldCheck, AlertTriangle, Share2 } from 'lucide-react';
 import type { CryptoWallet } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 import { PageHero } from '@/components/page-hero';
 import { VerifyAccessModal } from '@/components/verify-access-modal';
+import { PremiumCard } from '@/components/premium-card';
+import { ShareItemModal } from '@/components/share-item-modal';
+import { FeaturePreview } from '@/components/feature-preview';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 
 const WALLET_TYPE_LABEL: Record<string, string> = {
   bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL', polygon: 'MATIC', other: 'WALLET',
@@ -43,6 +48,8 @@ const blank = (): Omit<CryptoWallet, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function CryptoVaultPage() {
   const { cryptoWallets, addCryptoWallet, updateCryptoWallet, deleteCryptoWallet } = useVault();
   const { toast } = useToast();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<CryptoWallet | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -52,6 +59,7 @@ export default function CryptoVaultPage() {
   // verification can reveal both seed phrase AND private key for one wallet.
   const [unlockedId, setUnlockedId] = useState<string | null>(null);
   const [verifyFor, setVerifyFor] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<CryptoWallet | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,6 +114,22 @@ export default function CryptoVaultPage() {
     } finally { setConfirmDeleteId(null); }
   };
 
+  // Pro-gate — sensitive seed phrases / private keys live behind a paid plan
+  if (!licenseLoading && !plan.isPaid) {
+    return (
+      <FeaturePreview
+        feature="Crypto Vault"
+        description="Store BIP-39 seed phrases, private keys, and wallet addresses with master-password-gated reveal — the only password manager built for crypto holders."
+        bullets={[
+          'AES-256-GCM encryption with master-password gate on every reveal',
+          'Per-word seed phrase copy — never expose the full phrase',
+          'Bitcoin, Ethereum, Solana, Polygon support out of the box',
+        ]}
+        mock="api-keys"
+      />
+    );
+  }
+
   if (cryptoWallets.length === 0) {
     return (
       <div className="px-6 py-10 max-w-3xl mx-auto">
@@ -145,10 +169,10 @@ export default function CryptoVaultPage() {
           const revealed = unlockedId === w.id;
           const seedWords = (w.seedPhrase || '').trim().split(/\s+/).filter(Boolean);
           return (
-            <div key={w.id} className="glass-card p-4 flex flex-col gap-3">
+            <PremiumCard key={w.id} accent="amber" className="p-4 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${WALLET_TYPE_COLOR[w.walletType]} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${WALLET_TYPE_COLOR[w.walletType]} flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/20`}>
                     <span className="text-[10px] font-bold text-white tracking-tighter">{WALLET_TYPE_LABEL[w.walletType]}</span>
                   </div>
                   <div className="min-w-0">
@@ -159,6 +183,7 @@ export default function CryptoVaultPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(w)} title="Share"><Share2 className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)} title="Edit"><Edit className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(w.id)} title="Delete"><Trash2 className="w-4 h-4" /></Button>
                 </div>
@@ -168,7 +193,7 @@ export default function CryptoVaultPage() {
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Address</div>
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono truncate flex-1 bg-black/[0.04] dark:bg-white/[0.04] rounded px-2 py-1.5">{w.walletAddress}</code>
+                    <code className="text-xs font-mono truncate flex-1 bg-black/[0.03] dark:bg-white/[0.04] rounded px-2 py-1.5">{w.walletAddress}</code>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copy(w.walletAddress!, 'Address')}><Copy className="w-3.5 h-3.5" /></Button>
                   </div>
                 </div>
@@ -195,7 +220,7 @@ export default function CryptoVaultPage() {
                               <button
                                 key={i}
                                 onClick={() => copy(word, `Word ${i + 1}`)}
-                                className="text-left text-xs font-mono bg-black/[0.04] dark:bg-white/[0.04] hover:bg-black/[0.08] dark:hover:bg-white/[0.08] rounded px-1.5 py-1"
+                                className="text-left text-xs font-mono bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.08] dark:hover:bg-white/[0.08] rounded px-1.5 py-1"
                                 title="Copy word"
                               >
                                 <span className="text-muted-foreground mr-1">{i + 1}.</span>{word}
@@ -211,7 +236,7 @@ export default function CryptoVaultPage() {
                         <div>
                           <div className="text-[10px] text-muted-foreground mb-1">Private key</div>
                           <div className="flex items-center gap-2">
-                            <code className="text-xs font-mono truncate flex-1 bg-black/[0.04] dark:bg-white/[0.04] rounded px-2 py-1.5">{w.privateKey}</code>
+                            <code className="text-xs font-mono truncate flex-1 bg-black/[0.03] dark:bg-white/[0.04] rounded px-2 py-1.5">{w.privateKey}</code>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copy(w.privateKey!, 'Private key')}><Copy className="w-3.5 h-3.5" /></Button>
                           </div>
                         </div>
@@ -223,10 +248,23 @@ export default function CryptoVaultPage() {
                   )}
                 </div>
               )}
-            </div>
+            </PremiumCard>
           );
         })}
       </div>
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.name || 'Wallet'}
+        itemKind="wallet"
+        data={sharing ? {
+          name: sharing.name, walletType: sharing.walletType,
+          walletAddress: sharing.walletAddress, publicKey: sharing.publicKey,
+          network: sharing.network, exchangeName: sharing.exchangeName,
+          notes: sharing.notes,
+        } : {}}
+      />
 
       <VerifyAccessModal
         open={!!verifyFor}

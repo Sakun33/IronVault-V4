@@ -11,10 +11,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Copy, Edit, Trash2, Search, ShieldCheck, Heart, Car, Home, Plane, User, Briefcase } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, ShieldCheck, Heart, Car, Home, Plane, User, Briefcase, Share2 } from 'lucide-react';
 import type { InsurancePolicy } from '@shared/schema';
 import { copyToClipboardSecure } from '@/native/clipboard';
 import { PageHero } from '@/components/page-hero';
+import { PremiumCard } from '@/components/premium-card';
+import { ShareItemModal } from '@/components/share-item-modal';
+import { FeaturePreview } from '@/components/feature-preview';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePlan } from '@/lib/plan-service';
 
 const TYPE_ICON: Record<string, any> = {
   health: Heart, life: User, car: Car, home: Home, travel: Plane, term: Briefcase, other: ShieldCheck,
@@ -57,11 +62,14 @@ const blank = (): Omit<InsurancePolicy, 'id' | 'createdAt' | 'updatedAt'> => ({
 export default function InsuranceVaultPage() {
   const { insurancePolicies, addInsurancePolicy, updateInsurancePolicy, deleteInsurancePolicy } = useVault();
   const { toast } = useToast();
+  const { isLoading: licenseLoading } = useSubscription();
+  const plan = usePlan();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<InsurancePolicy | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(blank());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<InsurancePolicy | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -120,6 +128,21 @@ export default function InsuranceVaultPage() {
     } finally { setConfirmDeleteId(null); }
   };
 
+  if (!licenseLoading && !plan.isPaid) {
+    return (
+      <FeaturePreview
+        feature="Insurance Vault"
+        description="Every policy in one searchable, encrypted view — premiums, sum insured, nominees, claim contacts."
+        bullets={[
+          'Renewal alerts 30 days out so policies never lapse',
+          'Nominee + agent contact stored with the policy',
+          'Health, life, car, home, travel, and term coverage tracking',
+        ]}
+        mock="bank-statements"
+      />
+    );
+  }
+
   if (insurancePolicies.length === 0) {
     return (
       <div className="px-6 py-10 max-w-3xl mx-auto">
@@ -159,10 +182,10 @@ export default function InsuranceVaultPage() {
           const expired = days < 0;
           const expiringSoon = days >= 0 && days <= 30;
           return (
-            <div key={p.id} className="glass-card p-4 flex flex-col gap-3">
+            <PremiumCard key={p.id} accent="emerald" className="p-4 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${grad} flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20`}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <div className="min-w-0">
@@ -171,6 +194,7 @@ export default function InsuranceVaultPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSharing(p)} title="Share"><Share2 className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Edit className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDeleteId(p.id)}><Trash2 className="w-4 h-4" /></Button>
                 </div>
@@ -192,10 +216,10 @@ export default function InsuranceVaultPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wider">
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">{p.policyType}</span>
-                {expired && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/25">Expired</span>}
-                {expiringSoon && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">Renews in {days}d</span>}
-                {!expired && !expiringSoon && <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/25">Renews in {days}d</span>}
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">{p.policyType}</span>
+                {expired && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/25">Expired</span>}
+                {expiringSoon && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25">Renews in {days}d</span>}
+                {!expired && !expiringSoon && <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/25">Renews in {days}d</span>}
               </div>
               {(p.agentName || p.agentPhone) && (
                 <div className="text-xs text-muted-foreground border-t border-border/40 pt-2">
@@ -203,10 +227,23 @@ export default function InsuranceVaultPage() {
                   {p.agentPhone && <> · <a href={`tel:${p.agentPhone}`} className="text-primary hover:underline">{p.agentPhone}</a></>}
                 </div>
               )}
-            </div>
+            </PremiumCard>
           );
         })}
       </div>
+
+      <ShareItemModal
+        open={!!sharing}
+        onOpenChange={(o) => !o && setSharing(null)}
+        itemLabel={sharing?.policyName || 'Policy'}
+        itemKind="insurance"
+        data={sharing ? {
+          policyName: sharing.policyName, insurer: sharing.insurer,
+          policyNumber: sharing.policyNumber, policyType: sharing.policyType,
+          sumInsured: sharing.sumInsured, expiryDate: sharing.expiryDate,
+          agentName: sharing.agentName, agentPhone: sharing.agentPhone,
+        } : {}}
+      />
 
       <AddEditDialog isOpen={isOpen} setIsOpen={setIsOpen} editing={editing} form={form} setForm={setForm} submit={submit} />
 
