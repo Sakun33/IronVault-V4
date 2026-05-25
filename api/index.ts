@@ -1322,6 +1322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       _sharedLinkTableEnsured = true;
     } catch (e: any) {
       console.error('[ensureSharedLinkTable]', e.message);
+      throw e;
     }
   }
 
@@ -2849,7 +2850,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/share/create' && req.method === 'POST') {
     const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
-    await ensureSharedLinkTable();
+    try {
+      await ensureSharedLinkTable();
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Share-link table init failed', detail: e.message });
+    }
     const { encryptedPayload, iv, itemLabel, itemKind, maxViews, ttlSeconds } = (req.body || {}) as any;
     if (!encryptedPayload || !iv) return res.status(400).json({ error: 'encryptedPayload + iv required' });
     if (typeof encryptedPayload !== 'string' || encryptedPayload.length > 50_000) {
@@ -2879,7 +2884,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === '/api/share/redeem' && req.method === 'POST') {
-    await ensureSharedLinkTable();
+    try {
+      await ensureSharedLinkTable();
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Share-link table init failed', detail: e.message });
+    }
     const { id } = (req.body || {}) as any;
     if (!id || typeof id !== 'string') return res.status(400).json({ error: 'id required' });
     try {
