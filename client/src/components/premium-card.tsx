@@ -5,17 +5,20 @@ export type PremiumAccent =
   | 'sky' | 'cyan' | 'emerald' | 'violet' | 'fuchsia'
   | 'amber' | 'orange' | 'rose' | 'indigo' | 'slate';
 
-const ACCENT_BORDER: Record<PremiumAccent, string> = {
-  sky:      'before:bg-gradient-to-b before:from-sky-400 before:to-cyan-500',
-  cyan:     'before:bg-gradient-to-b before:from-cyan-400 before:to-sky-500',
-  emerald:  'before:bg-gradient-to-b before:from-emerald-400 before:to-teal-500',
-  violet:   'before:bg-gradient-to-b before:from-violet-400 before:to-fuchsia-500',
-  fuchsia:  'before:bg-gradient-to-b before:from-fuchsia-400 before:to-pink-500',
-  amber:    'before:bg-gradient-to-b before:from-amber-400 before:to-orange-500',
-  orange:   'before:bg-gradient-to-b before:from-orange-400 before:to-amber-500',
-  rose:     'before:bg-gradient-to-b before:from-rose-400 before:to-pink-500',
-  indigo:   'before:bg-gradient-to-b before:from-indigo-400 before:to-blue-500',
-  slate:    'before:bg-gradient-to-b before:from-slate-400 before:to-slate-500',
+// `after:` variants for the colored left edge — kept as a static map so
+// Tailwind JIT picks them up during build (dynamic string assembly would
+// be purged). The `before:` pseudo is reserved for the top highlight rim.
+const ACCENT_AFTER: Record<PremiumAccent, string> = {
+  sky:      'after:bg-gradient-to-b after:from-sky-400 after:to-cyan-500',
+  cyan:     'after:bg-gradient-to-b after:from-cyan-400 after:to-sky-500',
+  emerald:  'after:bg-gradient-to-b after:from-emerald-400 after:to-teal-500',
+  violet:   'after:bg-gradient-to-b after:from-violet-400 after:to-fuchsia-500',
+  fuchsia:  'after:bg-gradient-to-b after:from-fuchsia-400 after:to-pink-500',
+  amber:    'after:bg-gradient-to-b after:from-amber-400 after:to-orange-500',
+  orange:   'after:bg-gradient-to-b after:from-orange-400 after:to-amber-500',
+  rose:     'after:bg-gradient-to-b after:from-rose-400 after:to-pink-500',
+  indigo:   'after:bg-gradient-to-b after:from-indigo-400 after:to-blue-500',
+  slate:    'after:bg-gradient-to-b after:from-slate-400 after:to-slate-500',
 };
 
 const ACCENT_ICON_BG: Record<PremiumAccent, string> = {
@@ -62,18 +65,27 @@ export const PremiumCard = forwardRef<HTMLDivElement, PremiumCardProps>(
         ref={ref}
         className={cn(
           'relative overflow-hidden',
-          // Surface — same translucency in both themes; the gradient overlay
-          // gives the depth without needing different backgrounds.
-          'bg-gradient-to-br from-black/[0.03] to-black/[0.01]',
-          'dark:from-white/[0.06] dark:to-white/[0.02]',
-          'backdrop-blur-2xl',
-          'border border-black/[0.06] dark:border-white/[0.1]',
-          'rounded-3xl shadow-xl shadow-black/[0.04] dark:shadow-black/40',
-          // 4px left border accent — ::before pseudo-element so children stay
-          // unaffected and the corner radius is preserved.
-          'before:absolute before:inset-y-0 before:left-0 before:w-1',
-          ACCENT_BORDER[accent],
+          // HealthBridge-style depth: layered gradient surface that responds
+          // to elevation. Slightly stronger top-edge highlight gives the
+          // card a subtle "lift" against the deep-navy background.
+          'bg-gradient-to-br from-black/[0.04] to-black/[0.01]',
+          'dark:from-white/[0.07] dark:to-white/[0.015]',
+          'backdrop-blur-2xl backdrop-saturate-150',
+          'border border-black/[0.07] dark:border-white/[0.09]',
+          'rounded-3xl',
+          'shadow-[0_10px_36px_-12px_rgba(0,0,0,0.18)] dark:shadow-[0_18px_50px_-16px_rgba(0,0,0,0.70)]',
+          // Inset top-edge highlight — gives the glass that subtle "wet"
+          // sheen that HealthBridge cards have. Subtle in light mode, more
+          // pronounced in dark.
+          'before:absolute before:inset-x-0 before:top-0 before:h-px',
+          'before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent',
+          'dark:before:via-white/15',
+          // 4px left border accent — second ::after pseudo for the colored
+          // edge so we don't lose the top highlight.
+          'after:absolute after:inset-y-0 after:left-0 after:w-1',
+          ACCENT_AFTER[accent],
           'pl-1', // visual indent so content doesn't sit under the border
+          'transition-transform duration-300 ease-out',
           className,
         )}
         {...rest}

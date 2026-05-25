@@ -685,33 +685,44 @@ export default function VaultPickerPage() {
         }, vaultLimit);
       }
 
-      // ── Always-rescue local data ─────────────────────────────────────────
-      // The previous fix only ran rescue when `iv_dirty_<id>` was set, but
-      // that flag is cleared on push success — and a push can *appear* to
-      // succeed (HTTP 200) without actually landing the imports on the
-      // server (silent failures, races, server-side partial writes). When
-      // that happens, the rescue is skipped and clearEncryptedItems()
-      // unconditionally destroys the local imports.
+      // ── Smart rescue: only push local when cloud isn't ahead ─────────────
+      // P0 BUG FIX: the previous "always rescue" path destroyed cross-device
+      // imports. Scenario: user imports 158 items on iPhone (push succeeds).
+      // Then opens laptop where local IDB still holds a stale 12-item snapshot
+      // from a week ago. "Always rescue" pushed those 12 items with NOW
+      // timestamp, server accepted (NOW > iPhone push time), iPhone's import
+      // was overwritten before laptop ever pulled it.
       //
-      // Defensive approach: ALWAYS try to push local data first. The PUT
-      // endpoint's optimistic concurrency handles the multi-device case:
-      //   - rescue.success    → local was newer/equal; cloud now matches
-      //                         local. Keep local; skip the wipe.
-      //   - rescue.serverNewer → cloud is newer (another device updated).
-      //                          Fall through to wipe-and-replace.
-      //   - other failure      → if dirty flag is set, refuse to wipe (we
-      //                          have unsynced changes the user should not
-      //                          silently lose). Else fall through.
+      // Fix: compare cloud's serverUpdatedAt vs THIS device's last successful
+      // pull (`iv_last_pull_<vaultId>`). If cloud has been updated since our
+      // last pull, another device has authoritative newer data — pull it
+      // instead of pushing stale local. The dirty flag still wins (truly
+      // unsynced local changes on this device override).
       const dirtyKey = `iv_dirty_${cloudVault.vaultId}`;
+      const lastPullKey = `iv_last_pull_${cloudVault.vaultId}`;
       let preservedLocal = false;
       try {
         const localUnlocked = await vaultStorage.unlockVault(pw);
         if (localUnlocked) {
-          // Count actual entries — a byte-length threshold on the encrypted blob
-          // misclassifies vaults with rich metadata-only state (icons, categories,
-          // settings) as non-empty, and vaults with very small entries as empty.
           const localItemCount = await vaultStorage.getTotalItemCount();
-          if (localItemCount > 0) {
+          const isDirty = localStorage.getItem(dirtyKey) === '1';
+
+          // Cloud-ahead detection: cloud meta carries serverUpdatedAt; we
+          // compare it to our last successful pull. If cloud > lastPull, the
+          // cloud has data we have never seen — local is *necessarily* stale.
+          const cloudUpdatedTs = cloudVault.serverUpdatedAt
+            ? new Date(cloudVault.serverUpdatedAt).getTime()
+            : 0;
+          const lastPullRaw = localStorage.getItem(lastPullKey);
+          const lastPullTs = lastPullRaw ? new Date(lastPullRaw).getTime() : 0;
+          const cloudIsAhead = cloudUpdatedTs > lastPullTs;
+
+          // Only rescue local when:
+          //   - we have local items to rescue, AND
+          //   - cloud is NOT ahead of our last pull (no unseen remote data), OR
+          //   - dirty flag is explicitly set (user-modified local that hasn't synced)
+          const shouldRescue = localItemCount > 0 && (isDirty || !cloudIsAhead);
+          if (shouldRescue) {
             const localBlob = await vaultStorage.exportVault(pw);
             const rescue = await pushCloudVault(
               cloudVault.vaultId, cloudVault.vaultName, localBlob,
@@ -721,12 +732,8 @@ export default function VaultPickerPage() {
               preservedLocal = true;
               localStorage.removeItem(dirtyKey);
             } else if (rescue.serverNewer) {
-              // Cloud is newer — wipe-and-replace below is the right call.
-              // Clear dirty since cloud is now authoritative.
               localStorage.removeItem(dirtyKey);
-            } else if (localStorage.getItem(dirtyKey) === '1') {
-              // Push failed AND we have explicitly-marked unsynced changes —
-              // refuse to wipe.
+            } else if (isDirty) {
               console.error('[CLOUD-UNLOCK] Push failed with dirty flag set — refusing to wipe', rescue);
               setCloudErrors(e => ({
                 ...e,
@@ -734,11 +741,11 @@ export default function VaultPickerPage() {
                   'Cloud sync failed and you have unsynced local changes. Check your network and try again.',
               }));
               return;
-            } else {
             }
-          } else {
+          } else if (cloudIsAhead && localItemCount > 0 && !isDirty) {
+            console.info('[CLOUD-UNLOCK] Cloud is ahead of last pull — pulling without rescuing local',
+              { cloudUpdatedAt: cloudVault.serverUpdatedAt, lastPull: lastPullRaw, localItemCount });
           }
-        } else {
         }
       } catch (rescueErr) {
         console.error('[CLOUD-UNLOCK] Rescue attempt threw — falling through to cloud download', rescueErr);

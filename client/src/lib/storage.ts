@@ -559,11 +559,16 @@ export class VaultStorage {
         }
         // Sanity check: at least ONE known collection field must be present.
         // A blob with none of these is almost certainly malformed and we
-        // don't want to wipe local for it.
+        // don't want to wipe local for it. MUST cover every collection that
+        // exportVault writes — a missing key here turns into an undetected
+        // wipe vector on pull.
         const collectionKeys = [
           'passwords', 'subscriptions', 'notes', 'expenses', 'reminders',
           'bankStatements', 'bankTransactions', 'investments', 'investmentGoals',
           'apiKeys', 'creditCards', 'identities',
+          'cryptoWallets', 'wifiPasswords', 'softwareLicenses',
+          'insurancePolicies', 'taxDocuments', 'qrCodes',
+          'secureBookmarks', 'familyMembers', 'digitalWill', 'coupleVault',
         ];
         const hasAnyCollection = collectionKeys.some(k => Array.isArray((payload as any)[k]));
         if (!hasAnyCollection) {
@@ -637,7 +642,7 @@ export class VaultStorage {
       bankStatements, bankTransactions, investments, investmentGoals, apiKeys,
       creditCards, identities,
       cryptoWallets, wifiPasswords, softwareLicenses, insurancePolicies, taxDocuments, qrCodes,
-      secureBookmarks, familyMembers,
+      secureBookmarks, familyMembers, digitalWill, coupleVault,
     ] = await Promise.all([
       this.getAllPasswords(),
       this.getAllSubscriptions(),
@@ -659,6 +664,8 @@ export class VaultStorage {
       this.getAllQrCodes(),
       this.getAllSecureBookmarks(),
       this.getAllFamilyMembers(),
+      this.getDigitalWill(),
+      this.getCoupleVault(),
     ]);
     return {
       passwords: passwords.length,
@@ -681,6 +688,8 @@ export class VaultStorage {
       qrCodes: qrCodes.length,
       secureBookmarks: secureBookmarks.length,
       familyMembers: familyMembers.length,
+      digitalWill: digitalWill ? 1 : 0,
+      coupleVault: coupleVault ? 1 : 0,
     };
   }
 

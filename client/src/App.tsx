@@ -850,10 +850,10 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
         <motion.nav
-          animate={{ width: sidebarCollapsed ? 68 : 240 }}
+          animate={{ width: sidebarCollapsed ? 68 : 248 }}
           initial={false}
-          transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-          className="flex-shrink-0 glass-surface border-r p-3 flex flex-col h-full"
+          transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+          className="flex-shrink-0 border-r border-white/[0.04] bg-black/20 dark:bg-[#070b13]/60 backdrop-blur-2xl backdrop-saturate-150 p-3 flex flex-col h-full"
         >
           {/* Scrollable primary nav items with section groups */}
           <div className="flex-1 overflow-y-auto min-h-0 smooth-scrollbar">

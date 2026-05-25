@@ -151,23 +151,26 @@ input:-webkit-autofill:active {
 }
 
 .dark {
-  /* Dark theme — premium deep navy */
-  --background: 222 47% 7%;
+  /* Dark theme — HealthBridge-grade deep navy. Background is darker and
+     more saturated (#080c15 territory) so glass cards float with real
+     contrast; card lightness reduced by ~3pp so the surface elevation
+     gradient (bg → card → hover) reads clearly. */
+  --background: 221 51% 5%;
   --foreground: 210 40% 96%;
 
-  --card: 222 41% 11%;
+  --card: 221 40% 9%;
   --card-foreground: 210 40% 96%;
 
-  --popover: 222 41% 11%;
+  --popover: 221 40% 9%;
   --popover-foreground: 210 40% 96%;
 
-  --muted: 215 28% 17%;
+  --muted: 215 28% 15%;
   /* WCAG AA fix: lightness 57% on the dark navy bg was ~4.0:1 — borderline.
      Bumping to 68% gives ~5.4:1 which clears the audit comfortably. */
-  --muted-foreground: 215 18% 68%;
+  --muted-foreground: 215 18% 70%;
 
-  --border: 215 28% 20%;
-  --input: 215 28% 20%;
+  --border: 215 28% 18%;
+  --input: 215 28% 18%;
   --ring: 243 75% 65%;
 
   --primary: 243 75% 65%;
@@ -504,10 +507,14 @@ input:-webkit-autofill:active {
   content: '';
   position: absolute;
   inset: 0;
+  /* HealthBridge-grade ambient mesh: warmer emerald + cooler teal washes,
+     anchored to corners so the page reads as deep navy with luminous edges
+     rather than a flat plane. Opacities bumped slightly so the depth is
+     visible without dominating content. */
   background:
-    radial-gradient(ellipse 80% 60% at 20% 40%, rgba(16, 185, 129, 0.05) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(59, 130, 246, 0.04) 0%, transparent 70%),
-    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(139, 92, 246, 0.03) 0%, transparent 70%);
+    radial-gradient(ellipse 90% 70% at 15% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 90% at 85% 15%, rgba(45, 212, 191, 0.06) 0%, transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 90%, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
   animation: ambientShift 30s ease-in-out infinite alternate;
   pointer-events: none;
   z-index: 0;
@@ -772,17 +779,24 @@ input:-webkit-autofill:active {
    token so every list / card surface across the app reads as the same
    dark navy in dark mode and the same near-white surface in light mode. */
 .glass-card {
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   background-color: hsl(var(--card));
-  border: 1px solid hsl(var(--border) / 0.6);
-  border-radius: 1rem;
-  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid hsl(var(--border) / 0.55);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 12px 40px -12px rgba(0, 0, 0, 0.20),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 .dark .glass-card {
-  background-color: hsl(var(--card));
-  border-color: hsl(var(--border) / 0.65);
-  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  /* Translucent over the deep-navy bg so glass cards genuinely "float" — a
+     solid hsl(var(--card)) reads as a flat panel. The 0.65 alpha keeps the
+     mesh gradient visible behind the card edges. */
+  background-color: hsl(var(--card) / 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 14px 44px -14px rgba(0, 0, 0, 0.70),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .glass-surface {
