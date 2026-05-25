@@ -1313,11 +1313,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   async function ensurePasskeyTable(): Promise<void> {
     if (_passkeyTableEnsured) return;
     try {
-      // crm_users.id is UUID — the FK column type MUST match or Postgres
-      // refuses to create the table. v1 of these tables incorrectly used
-      // INTEGER and silently failed inside the try/catch, which is what was
-      // causing every passkey endpoint to return 500 after the static-import
-      // fix.
+      // crm_users.id is UUID — the FK column type MUST match. Earlier deploys
+      // used INTEGER FK columns which made CREATE TABLE fail with a type
+      // mismatch; the try/catch swallowed the error so the tables were
+      // never created and every endpoint returned 500. The migration block
+      // below detects a v1 (INTEGER-FK) table and drops it before the v2
+      // CREATE — safe because the tables were never reachable so they
+      // can't have real data.
+      const { rows: existingPasskey } = await db.query(`
+        SELECT data_type FROM information_schema.columns
+         WHERE table_name = 'passkey_credentials' AND column_name = 'user_id'
+      `);
+      if (existingPasskey.length > 0 && existingPasskey[0].data_type !== 'uuid') {
+        console.warn('[ensurePasskeyTable] dropping legacy non-UUID tables');
+        await db.query(`DROP TABLE IF EXISTS passkey_credentials CASCADE`);
+        await db.query(`DROP TABLE IF EXISTS passkey_challenges CASCADE`);
+      }
       await db.query(`
         CREATE TABLE IF NOT EXISTS passkey_credentials (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1344,6 +1355,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       _passkeyTableEnsured = true;
     } catch (e: any) {
       console.error('[ensurePasskeyTable]', e.message);
+      // Re-throw so the endpoint surfaces the real DB error to the client
+      // instead of returning a generic "Failed to generate options". This
+      // makes future schema drift much easier to diagnose.
+      throw e;
     }
   }
 
@@ -2654,7 +2669,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === '/api/auth/passkey/authenticate-options' && req.method === 'POST') {
-    await ensurePasskeyTable();
+    try {
+      await ensurePasskeyTable();
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Passkey table init failed', detail: e.message });
+    }
     const { email } = (req.body || {}) as any;
     try {
       let userId: string | null = null;
