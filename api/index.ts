@@ -1281,10 +1281,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   async function ensureSharedLinkTable(): Promise<void> {
     if (_sharedLinkTableEnsured) return;
     try {
+      // Probe FK type, same pattern as ensurePasskeyTable.
+      const { rows: crmIdInfo } = await db.query(`
+        SELECT data_type FROM information_schema.columns
+         WHERE table_name = 'crm_users' AND column_name = 'id'
+      `);
+      const crmIdType = (crmIdInfo[0]?.data_type || 'uuid').toUpperCase();
+      const fkColType =
+        crmIdType.includes('UUID') ? 'UUID' :
+        crmIdType.includes('BIGINT') ? 'BIGINT' :
+        crmIdType.includes('INTEGER') ? 'INTEGER' :
+        crmIdType.includes('TEXT') || crmIdType.includes('CHAR') ? 'TEXT' :
+        'UUID';
+      const { rows: existing } = await db.query(`
+        SELECT data_type FROM information_schema.columns
+         WHERE table_name = 'shared_links' AND column_name = 'owner_user_id'
+      `);
+      if (existing.length > 0 && !existing[0].data_type.toUpperCase().includes(fkColType)) {
+        console.warn(`[ensureSharedLinkTable] dropping legacy table (FK was ${existing[0].data_type}, need ${fkColType})`);
+        await db.query(`DROP TABLE IF EXISTS shared_links CASCADE`);
+      }
       await db.query(`
         CREATE TABLE IF NOT EXISTS shared_links (
           id TEXT PRIMARY KEY,
-          owner_user_id UUID REFERENCES crm_users(id) ON DELETE CASCADE,
+          owner_user_id ${fkColType} REFERENCES crm_users(id) ON DELETE CASCADE,
           owner_email TEXT,
           encrypted_payload TEXT NOT NULL,
           iv TEXT NOT NULL,
@@ -1320,19 +1340,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // below detects a v1 (INTEGER-FK) table and drops it before the v2
       // CREATE — safe because the tables were never reachable so they
       // can't have real data.
+      // Probe the actual data type of crm_users.id at runtime so the FK
+      // matches even if a future schema migration changes it. Postgres
+      // refuses to create a FK on type-mismatched columns.
+      const { rows: crmIdInfo } = await db.query(`
+        SELECT data_type FROM information_schema.columns
+         WHERE table_name = 'crm_users' AND column_name = 'id'
+      `);
+      const crmIdType = (crmIdInfo[0]?.data_type || 'uuid').toUpperCase();
+      // Map information_schema's logical name back to a CREATE-TABLE token.
+      const fkColType =
+        crmIdType.includes('UUID') ? 'UUID' :
+        crmIdType.includes('BIGINT') ? 'BIGINT' :
+        crmIdType.includes('INTEGER') ? 'INTEGER' :
+        crmIdType.includes('TEXT') || crmIdType.includes('CHAR') ? 'TEXT' :
+        'UUID';
+
+      // If an existing table has the wrong FK column type, drop + recreate.
+      // Safe because these tables were never reachable from production code
+      // (every passkey endpoint was returning 500), so they can't have data.
       const { rows: existingPasskey } = await db.query(`
         SELECT data_type FROM information_schema.columns
          WHERE table_name = 'passkey_credentials' AND column_name = 'user_id'
       `);
-      if (existingPasskey.length > 0 && existingPasskey[0].data_type !== 'uuid') {
-        console.warn('[ensurePasskeyTable] dropping legacy non-UUID tables');
+      if (existingPasskey.length > 0 && !existingPasskey[0].data_type.toUpperCase().includes(fkColType)) {
+        console.warn(`[ensurePasskeyTable] dropping legacy table (FK was ${existingPasskey[0].data_type}, need ${fkColType})`);
         await db.query(`DROP TABLE IF EXISTS passkey_credentials CASCADE`);
         await db.query(`DROP TABLE IF EXISTS passkey_challenges CASCADE`);
       }
+
       await db.query(`
         CREATE TABLE IF NOT EXISTS passkey_credentials (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID NOT NULL REFERENCES crm_users(id) ON DELETE CASCADE,
+          user_id ${fkColType} NOT NULL REFERENCES crm_users(id) ON DELETE CASCADE,
           credential_id TEXT UNIQUE NOT NULL,
           public_key BYTEA NOT NULL,
           counter BIGINT NOT NULL DEFAULT 0,
@@ -1346,7 +1386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS passkey_challenges (
           challenge TEXT PRIMARY KEY,
-          user_id UUID,
+          user_id ${fkColType},
           email TEXT,
           purpose TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
