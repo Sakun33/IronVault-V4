@@ -1293,13 +1293,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         crmIdType.includes('INTEGER') ? 'INTEGER' :
         crmIdType.includes('TEXT') || crmIdType.includes('CHAR') ? 'TEXT' :
         'UUID';
-      const { rows: existing } = await db.query(`
-        SELECT data_type FROM information_schema.columns
-         WHERE table_name = 'shared_links' AND column_name = 'owner_user_id'
+      // Drop the table if EITHER (a) the FK column type doesn't match or
+      // (b) the FK column is missing entirely (a half-created legacy table
+      // from a prior failed CREATE). The shared_links table was empty in
+      // every prior deploy, so dropping is safe.
+      const { rows: tableExistsRows } = await db.query(`
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'shared_links'
       `);
-      if (existing.length > 0 && !existing[0].data_type.toUpperCase().includes(fkColType)) {
-        console.warn(`[ensureSharedLinkTable] dropping legacy table (FK was ${existing[0].data_type}, need ${fkColType})`);
-        await db.query(`DROP TABLE IF EXISTS shared_links CASCADE`);
+      if (tableExistsRows.length > 0) {
+        const { rows: existing } = await db.query(`
+          SELECT data_type FROM information_schema.columns
+           WHERE table_name = 'shared_links' AND column_name = 'owner_user_id'
+        `);
+        const colMissing = existing.length === 0;
+        const colWrongType = existing.length > 0 && !existing[0].data_type.toUpperCase().includes(fkColType);
+        if (colMissing || colWrongType) {
+          console.warn(`[ensureSharedLinkTable] dropping legacy table (colMissing=${colMissing}, colWrongType=${colWrongType})`);
+          await db.query(`DROP TABLE IF EXISTS shared_links CASCADE`);
+        }
       }
       await db.query(`
         CREATE TABLE IF NOT EXISTS shared_links (
@@ -1357,17 +1368,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         crmIdType.includes('TEXT') || crmIdType.includes('CHAR') ? 'TEXT' :
         'UUID';
 
-      // If an existing table has the wrong FK column type, drop + recreate.
-      // Safe because these tables were never reachable from production code
-      // (every passkey endpoint was returning 500), so they can't have data.
-      const { rows: existingPasskey } = await db.query(`
-        SELECT data_type FROM information_schema.columns
-         WHERE table_name = 'passkey_credentials' AND column_name = 'user_id'
+      // Drop legacy passkey tables if EITHER the FK column has the wrong
+      // type OR is missing (half-created). Both scenarios are real: prior
+      // deploys hit the type-mismatch error mid-CREATE and left tables in
+      // an unusable state. They were never reachable from production code,
+      // so dropping is safe.
+      const { rows: passkeyTableRows } = await db.query(`
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'passkey_credentials'
       `);
-      if (existingPasskey.length > 0 && !existingPasskey[0].data_type.toUpperCase().includes(fkColType)) {
-        console.warn(`[ensurePasskeyTable] dropping legacy table (FK was ${existingPasskey[0].data_type}, need ${fkColType})`);
-        await db.query(`DROP TABLE IF EXISTS passkey_credentials CASCADE`);
-        await db.query(`DROP TABLE IF EXISTS passkey_challenges CASCADE`);
+      if (passkeyTableRows.length > 0) {
+        const { rows: existingPasskey } = await db.query(`
+          SELECT data_type FROM information_schema.columns
+           WHERE table_name = 'passkey_credentials' AND column_name = 'user_id'
+        `);
+        const colMissing = existingPasskey.length === 0;
+        const colWrongType = existingPasskey.length > 0 && !existingPasskey[0].data_type.toUpperCase().includes(fkColType);
+        if (colMissing || colWrongType) {
+          console.warn(`[ensurePasskeyTable] dropping legacy tables (colMissing=${colMissing}, colWrongType=${colWrongType})`);
+          await db.query(`DROP TABLE IF EXISTS passkey_credentials CASCADE`);
+          await db.query(`DROP TABLE IF EXISTS passkey_challenges CASCADE`);
+        }
       }
 
       await db.query(`
