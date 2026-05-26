@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
@@ -285,10 +285,16 @@ export default function Passwords() {
   const [windowSize, setWindowSize] = useState(WINDOW_PAGE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  // Defer the search query so a fast typist isn't blocked by the filter
+  // pass running over hundreds of passwords. React renders the input with
+  // the latest value but reuses the previous filter result until the
+  // deferred value catches up. Net effect: snappy typing, slightly stale
+  // list for a few ms — perfect for free-text search.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredPasswords = useMemo(() => {
     const filtered = passwords.filter(password => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch = searchQuery === '' ||
+      const q = deferredSearchQuery.toLowerCase();
+      const matchesSearch = deferredSearchQuery === '' ||
         (password.name ?? '').toLowerCase().includes(q) ||
         (password.username ?? '').toLowerCase().includes(q) ||
         (password.url ?? '').toLowerCase().includes(q) ||
@@ -306,7 +312,7 @@ export default function Passwords() {
     });
     // Stable sort: favorites first, otherwise preserve incoming order.
     return filtered.slice().sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite));
-  }, [passwords, searchQuery, categoryFilter, strengthFilter, favoritesOnly, strengthCache]);
+  }, [passwords, deferredSearchQuery, categoryFilter, strengthFilter, favoritesOnly, strengthCache]);
 
   // Reset the window whenever the filter set changes — without this the user
   // could be looking at the 5th page of the previous filter when they apply

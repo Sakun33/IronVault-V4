@@ -103,7 +103,7 @@ export function VerifyAccessModal({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 px-5 pt-4 pb-4 overflow-y-auto">
           {/* Biometric Option */}
           {biometricAvailable && isNativeApp() && (
             <Button

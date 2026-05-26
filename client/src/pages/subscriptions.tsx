@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SwipeRow, type SwipeAction } from '@/components/ios';
 import { XCircle, TrendingUp, TrendingDown, AlertTriangle, Sparkles, X } from 'lucide-react';
@@ -247,13 +247,15 @@ export default function Subscriptions() {
     }
   };
 
-  // Filter and search subscriptions
+  // Filter and search subscriptions. Defer the search query so the input
+  // stays responsive while the filter pass runs over hundreds of entries.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredSubscriptions = useMemo(() => {
     const matches = subscriptions.filter(subscription => {
-      const matchesSearch = searchQuery === '' ||
-        subscription.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (subscription.plan ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (subscription.category ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = deferredSearchQuery === '' ||
+        subscription.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (subscription.plan ?? '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (subscription.category ?? '').toLowerCase().includes(deferredSearchQuery.toLowerCase());
 
       const matchesCategory = categoryFilter === 'all' || subscription.category === categoryFilter;
       const matchesStatus = statusFilter === 'all' ||
@@ -267,7 +269,7 @@ export default function Subscriptions() {
     return matches.slice().sort(
       (a, b) => Number(!!(b as any).isFavorite) - Number(!!(a as any).isFavorite)
     );
-  }, [subscriptions, searchQuery, categoryFilter, statusFilter, favoritesOnly]);
+  }, [subscriptions, deferredSearchQuery, categoryFilter, statusFilter, favoritesOnly]);
 
   const selection = useMultiSelect(filteredSubscriptions);
 

@@ -1540,3 +1540,24 @@ html:not(.dark) .glass-card {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
 }
 
+/* =====================================================================
+   Global mobile-safe modal padding
+   ---------------------------------------------------------------------
+   Some dialogs put their content directly inside DialogContent instead
+   of using DialogBody (which already has the safe-area padding). On
+   mobile those modals slide up as a bottom sheet and the Submit / Save
+   button gets hidden behind the bottom tab bar.
+   The `.iv-modal-safe-area` utility — applied to the inner scroll
+   container of any modal not using DialogBody — reserves ~80px + the
+   iOS home indicator safe-area inset so action buttons clear the tab
+   bar.
+   ===================================================================== */
+.iv-modal-safe-area {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
+}
+@media (min-width: 640px) {
+  .iv-modal-safe-area {
+    padding-bottom: 1rem;
+  }
+}
+

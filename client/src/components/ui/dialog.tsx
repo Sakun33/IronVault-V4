@@ -55,8 +55,12 @@ const DialogContent = React.forwardRef<
         // corners, slides up from the bottom on open, full viewport width.
         // sm and up: classic centered modal with zoom + fade.
         "fixed z-50 flex flex-col w-full bg-background shadow-xl duration-200 border border-border/50",
-        // Mobile bottom-sheet positioning
+        // Mobile bottom-sheet positioning. The pb here reserves space at
+        // the BOTTOM of the modal container so action buttons in any
+        // descendant — even modals that bypass DialogBody — clear both
+        // the iOS home indicator and the mobile bottom tab bar.
         "left-0 bottom-0 max-w-full max-h-[92dvh] rounded-t-2xl rounded-b-none border-b-0",
+        "pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] sm:pb-0",
         // Desktop centered modal
         "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:translate-x-[-50%] sm:-translate-y-1/2",
         "sm:max-w-lg sm:max-h-[85dvh] sm:rounded-2xl sm:border-b",
@@ -114,12 +118,11 @@ const DialogBody = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      // Bottom padding on mobile clears the bottom tab bar (~60px) + the
-      // device safe-area inset so save/submit buttons inside any dialog
-      // body never sit underneath the fixed bottom nav on iOS/Android.
-      // Desktop falls back to a normal py-4 since the tab bar is hidden.
-      "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 pt-4 space-y-4",
-      "pb-[calc(env(safe-area-inset-bottom)+5rem)] sm:pb-4",
+      // DialogContent reserves the mobile safe-area + tab-bar padding at
+      // the parent level, so the body just needs a normal pb-4 here. This
+      // prevents double-padding while keeping any modal that bypasses
+      // DialogBody safe (the DialogContent wrapper handles it).
+      "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 pt-4 pb-4 space-y-4",
       className
     )}
     {...props}
@@ -134,9 +137,8 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border/50 px-5 py-4 bg-background",
-      // Clear the iOS home indicator on the bottom-sheet variant. No-op on
-      // sm+ where the dialog is centered and floats above the safe area.
-      "pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-4",
+      // Parent DialogContent already reserves the safe-area + tab-bar
+      // padding on mobile, so the footer just needs its normal py-4.
       className
     )}
     {...props}

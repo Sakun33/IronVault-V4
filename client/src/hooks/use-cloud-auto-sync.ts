@@ -18,13 +18,17 @@ import { vaultManager } from '@/lib/vault-manager';
  *
  * Pull side:
  *   - On mount: pull once (replace local with server's blob if newer).
- *   - Then poll every 60s.
+ *   - Then poll every 5 minutes (was 60s, but that churned battery and
+ *     ran a network request per minute even when nothing changed). The
+ *     listCloudVaults check is cheap, but the wake-up itself costs more
+ *     than the data round-trip. Cross-device imports still appear
+ *     within ~5 min, and manual refresh paths trigger an immediate pull.
  *   - Skipped while `isNoteEditing()` is true — pulling does a destructive
  *     replace and would clobber the editor's note. Push is safe during
  *     editing because it only writes our blob to the server.
  */
 
-const POLL_MS = 60_000;
+const POLL_MS = 5 * 60_000;
 const LAST_PULL_PREFIX = 'iv_last_pull_';
 const LAST_BLOB_HASH_PREFIX = 'iv_last_blob_hash_';
 

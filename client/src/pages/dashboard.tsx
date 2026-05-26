@@ -50,13 +50,17 @@ function getGreeting(): string {
 
 function getUserName(accountEmail: string | null): string {
   const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  // Strip digits from a candidate name. Real human first names don't
+  // contain digits, so "Saketsuman1312" (a stale email-prefix value cached
+  // by an older signup flow) becomes "Saketsuman". This is applied to
+  // EVERY source — even ones that "look right" — so a digit-laden cached
+  // value can never slip through the greeting.
   const firstName = (name: string): string => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
+    const cleaned = name.replace(/\d+/g, ' ').trim();
+    if (!cleaned) return '';
+    const parts = cleaned.split(/\s+/).filter(Boolean);
     return parts[0] ? cap(parts[0]) : '';
   };
-  // Strip digits + punctuation from an email prefix as an absolute last
-  // resort. "saketsuman1312" → "Saketsuman" (without the digits) is a
-  // friendlier fallback than "Saketsuman1312".
   const namifyEmail = (email: string): string => {
     const raw = email.split('@')[0];
     const cleaned = raw.replace(/[._-]+/g, ' ').replace(/\d+/g, ' ').trim();
@@ -66,7 +70,13 @@ function getUserName(accountEmail: string | null): string {
   };
   const isEmailPrefix = (name: string, email: string | null): boolean => {
     if (!email) return false;
-    return name.toLowerCase() === email.split('@')[0].toLowerCase();
+    // Also catch the case where the cached name is the email prefix WITH a
+    // capitalised first letter ("Saketsuman1312") — case-insensitive
+    // comparison already handles that, but we also strip digits before
+    // comparing so "Saketsuman" matches "saketsuman1312".
+    const a = name.toLowerCase().replace(/\d+/g, '');
+    const b = email.split('@')[0].toLowerCase().replace(/\d+/g, '');
+    return a === b;
   };
   try {
     // 1) customerProfile (most authoritative — set during signup).
@@ -78,7 +88,8 @@ function getUserName(accountEmail: string | null): string {
     if (profileMatchesAccount) {
       const fullName = (cp.full_name || cp.name || cp.display_name || '').trim();
       if (fullName && !fullName.includes('@') && !isEmailPrefix(fullName, accountEmail)) {
-        return firstName(fullName);
+        const out = firstName(fullName);
+        if (out) return out;
       }
     }
     // 2) iv_account_session (set on login; carries the user-provided name).
@@ -87,7 +98,8 @@ function getUserName(accountEmail: string | null): string {
       try {
         const { email, name } = JSON.parse(session);
         if (name && typeof name === 'string' && !name.includes('@') && !isEmailPrefix(name, email)) {
-          return firstName(name);
+          const out = firstName(name);
+          if (out) return out;
         }
       } catch { /* ignore */ }
     }
@@ -97,7 +109,10 @@ function getUserName(accountEmail: string | null): string {
       try {
         const a = JSON.parse(acct);
         const n = (a.fullName || a.full_name || a.name || a.displayName || '').trim();
-        if (n && !n.includes('@')) return firstName(n);
+        if (n && !n.includes('@') && !isEmailPrefix(n, accountEmail)) {
+          const out = firstName(n);
+          if (out) return out;
+        }
       } catch { /* ignore */ }
     }
     // 4) Last resort — email prefix without digits.
