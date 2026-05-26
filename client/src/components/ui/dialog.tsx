@@ -21,7 +21,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-[70] bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
@@ -54,13 +54,16 @@ const DialogContent = React.forwardRef<
         // Mobile: bottom sheet — pinned to the bottom edge with rounded top
         // corners, slides up from the bottom on open, full viewport width.
         // sm and up: classic centered modal with zoom + fade.
-        "fixed z-50 flex flex-col w-full bg-background shadow-xl duration-200 border border-border/50",
-        // Mobile bottom-sheet positioning. The pb here reserves space at
-        // the BOTTOM of the modal container so action buttons in any
-        // descendant — even modals that bypass DialogBody — clear both
-        // the iOS home indicator and the mobile bottom tab bar.
+        // z-[71] sits above the dialog overlay (z-70) and crucially above
+        // the bottom tab bar (z-[60]) so action buttons inside the modal
+        // are never clipped or hidden by the tab bar.
+        "fixed z-[71] flex flex-col w-full bg-background shadow-xl duration-200 border border-border/50",
+        // Mobile bottom-sheet positioning. Aggressive bottom padding
+        // (~160px) clears: 80px bottom tab bar + 34px iOS home indicator
+        // + Safari URL bar (~50px when visible). env() alone undershoots
+        // because it only covers the home indicator, not the tab bar.
         "left-0 bottom-0 max-w-full max-h-[92dvh] rounded-t-2xl rounded-b-none border-b-0",
-        "pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] sm:pb-0",
+        "pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-0",
         // Desktop centered modal
         "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:translate-x-[-50%] sm:-translate-y-1/2",
         "sm:max-w-lg sm:max-h-[85dvh] sm:rounded-2xl sm:border-b",

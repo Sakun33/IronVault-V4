@@ -389,7 +389,7 @@ export default function Identities() {
                   </span>
                 </DialogTitle>
               </DialogHeader>
-              <DialogBody className="space-y-4">
+              <DialogBody className="space-y-6">
                 {hasPersonal && (
                   <Section title="Personal Info">
                     <PlainRow id={`${detail.id}-name`} label="Full name" value={fullName(detail)} icon={UserCircle} copy={copy} copiedKey={copiedKey} />

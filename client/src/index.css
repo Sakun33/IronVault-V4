@@ -1553,11 +1553,27 @@ html:not(.dark) .glass-card {
    bar.
    ===================================================================== */
 .iv-modal-safe-area {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
+  /* AGGRESSIVE bottom clearance — env(safe-area-inset-bottom) only covers
+     the iOS home indicator (~34px). It does NOT account for our own
+     bottom tab bar (~80px) or Safari's chrome (~50px). Sum: ~160px.
+     `max()` guarantees a floor even when env() is 0. */
+  padding-bottom: max(160px, calc(env(safe-area-inset-bottom, 34px) + 120px));
 }
 @media (min-width: 640px) {
   .iv-modal-safe-area {
-    padding-bottom: 1rem;
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* iOS-specific aggressive fix. -webkit-touch-callout is a Safari-only
+   feature, so this @supports rule fires only on iOS Safari (and iOS
+   Capacitor WebView). Applies to every Radix dialog content — both
+   ones using DialogBody and those that don't. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 639.98px) {
+    [role="dialog"][data-state="open"] {
+      padding-bottom: max(160px, calc(env(safe-area-inset-bottom, 34px) + 120px)) !important;
+    }
   }
 }
 
