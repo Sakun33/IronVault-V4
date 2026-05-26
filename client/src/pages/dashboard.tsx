@@ -816,12 +816,19 @@ export default function Dashboard() {
                 const trimmed = next.trim();
                 if (trimmed) {
                   localStorage.setItem('iv_preferred_display_name', trimmed);
+                  // CRITICAL: userName is computed as `serverName || getUserName(email)`.
+                  // If serverName was already populated (from /api/auth/me earlier),
+                  // it wins over the localStorage value getUserName reads — so the
+                  // greeting would still show the old serverName. Updating
+                  // serverName directly is the only thing that triggers a
+                  // re-render with the new preferred name visible.
+                  setServerName(trimmed.split(/\s+/)[0].slice(0, 10));
                 } else {
                   localStorage.removeItem('iv_preferred_display_name');
+                  // Empty input → fall back to derivation. Clear serverName so
+                  // userName re-runs getUserName(accountEmail) on next render.
+                  setServerName('');
                 }
-                // Force re-render via state — read fresh from localStorage on next paint.
-                setServerName(s => s + ' ');
-                setTimeout(() => setServerName(s => s.trim()), 0);
               }}
               aria-label="Edit display name"
               title="Edit how we address you"

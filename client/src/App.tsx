@@ -283,18 +283,38 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     resetNoteEditing();
   }, [location]);
-  // Scroll-to-top on route change. SPAs preserve scroll position by default
-  // when swapping route components, so switching from a long Passwords list
-  // to Notes opens Notes at the deep scroll position you left Passwords at.
-  // Reset every scroll container we own so each section opens fresh at the
-  // top. `requestAnimationFrame` waits one frame so the new layout has
-  // mounted before we scroll — without it the scroll happens on the old
-  // height and the new section can still be partially scrolled.
+  // Scroll-to-top on route change.
+  //
+  // The previous one-shot rAF fix was correct in intent but the AnimatePresence
+  // mode="wait" wrapper around the route children adds a ~500ms cycle (exit
+  // anim → unmount → mount → enter anim). So we'd set scrollTop=0 on the OLD
+  // content's height, then the new content mounts and the section's own
+  // useEffect / scroll-into-view code can restore a non-zero position.
+  //
+  // Nuclear approach: hit every scrollable element multiple times along the
+  // AnimatePresence lifecycle. Cheap (scrollTop assignment on already-zero
+  // elements is a no-op) and resilient.
   useEffect(() => {
-    requestAnimationFrame(() => {
-      document.querySelectorAll('main').forEach(m => { m.scrollTop = 0; });
+    const resetAll = () => {
+      // Every element that can scroll vertically. querySelectorAll('*') is
+      // hot, but scoping to elements that ACTUALLY have a scroll position
+      // makes it a no-op for the vast majority of nodes — the if-check below
+      // skips the assignment when scrollTop is already 0.
+      const els = document.querySelectorAll<HTMLElement>('main, [data-scroll-container], [class*="overflow-y-auto"], [class*="overflow-auto"]');
+      els.forEach(el => { if (el.scrollTop !== 0) el.scrollTop = 0; });
       try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch { /* ignore */ }
-    });
+    };
+    // Tick 0: immediate (catches the case where AnimatePresence's mode is
+    // not "wait" or the route swap is synchronous).
+    resetAll();
+    // Tick 1: after one frame (new content has mounted in default mode).
+    const raf1 = requestAnimationFrame(resetAll);
+    // Tick 2: after the enter animation should be done (~320ms motion preset).
+    const t1 = setTimeout(resetAll, 350);
+    return () => {
+      cancelAnimationFrame(raf1);
+      clearTimeout(t1);
+    };
   }, [location]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
