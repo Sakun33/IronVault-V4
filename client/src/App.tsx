@@ -853,7 +853,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           animate={{ width: sidebarCollapsed ? 68 : 248 }}
           initial={false}
           transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-          className="flex-shrink-0 border-r border-white/[0.04] bg-black/20 dark:bg-[#070b13]/60 backdrop-blur-2xl backdrop-saturate-150 p-3 flex flex-col h-full"
+          className="flex-shrink-0 border-r border-black/[0.06] dark:border-white/[0.04] bg-white/70 dark:bg-[#070b13]/60 backdrop-blur-2xl backdrop-saturate-150 p-3 flex flex-col h-full"
         >
           {/* Scrollable primary nav items with section groups */}
           <div className="flex-1 overflow-y-auto min-h-0 smooth-scrollbar">

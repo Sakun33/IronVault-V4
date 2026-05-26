@@ -1397,3 +1397,146 @@ html, body, #root {
 @media (prefers-reduced-motion: reduce) {
   .cta-tap-pulse:active { animation: none; }
 }
+
+/* =====================================================================
+   LIGHT THEME COMPATIBILITY OVERRIDES
+   ---------------------------------------------------------------------
+   The app was originally built with a single dark palette. Many cards,
+   badges, and pills hard-code `text-white`, `text-{color}-300`,
+   `bg-white/0.X`, `border-white/0.X` — which become invisible or
+   unreadable on a light background.
+   Rather than touching every component, we override these classes when
+   the root element is NOT in dark mode. `html:not(.dark)` has higher
+   specificity than the bare `.text-white` Tailwind rule, so it wins
+   without needing `!important`.
+   Scoped to elements WITHIN the app shell (`#root`) so React-Quill /
+   AppleID iframes that genuinely want white text aren't disturbed.
+   ===================================================================== */
+/* Solid whites → foreground (near-black) so the text is readable on
+   the light surface. Alpha-prefixed variants map to muted-foreground
+   so secondary text still reads as secondary. */
+html:not(.dark) .text-white                    { color: hsl(var(--foreground)); }
+html:not(.dark) .text-white\/90                { color: hsl(var(--foreground)); }
+html:not(.dark) .text-white\/80                { color: hsl(var(--foreground)); }
+html:not(.dark) .text-white\/70                { color: hsl(var(--muted-foreground)); }
+html:not(.dark) .text-white\/60                { color: hsl(var(--muted-foreground)); }
+html:not(.dark) .text-white\/50                { color: hsl(var(--muted-foreground) / 0.85); }
+html:not(.dark) .text-white\/40                { color: hsl(var(--muted-foreground) / 0.7); }
+html:not(.dark) .text-white\/30                { color: hsl(var(--muted-foreground) / 0.55); }
+
+/* Pastel-300 colors are designed for dark backgrounds. On white they
+   have ~2:1 contrast at best. Bump to -700 (text-friendly tone) so
+   badges and chips remain readable. */
+html:not(.dark) .text-emerald-300              { color: rgb(4 120 87); }
+html:not(.dark) .text-emerald-200              { color: rgb(4 120 87); }
+html:not(.dark) .text-sky-300                  { color: rgb(3 105 161); }
+html:not(.dark) .text-sky-200                  { color: rgb(3 105 161); }
+html:not(.dark) .text-amber-300                { color: rgb(180 83 9); }
+html:not(.dark) .text-amber-200                { color: rgb(180 83 9); }
+html:not(.dark) .text-rose-300                 { color: rgb(190 18 60); }
+html:not(.dark) .text-rose-200                 { color: rgb(190 18 60); }
+html:not(.dark) .text-red-300                  { color: rgb(185 28 28); }
+html:not(.dark) .text-red-200                  { color: rgb(185 28 28); }
+html:not(.dark) .text-violet-300               { color: rgb(109 40 217); }
+html:not(.dark) .text-violet-200               { color: rgb(109 40 217); }
+html:not(.dark) .text-fuchsia-300              { color: rgb(162 28 175); }
+html:not(.dark) .text-fuchsia-200              { color: rgb(162 28 175); }
+html:not(.dark) .text-cyan-300                 { color: rgb(14 116 144); }
+html:not(.dark) .text-cyan-200                 { color: rgb(14 116 144); }
+html:not(.dark) .text-indigo-300               { color: rgb(67 56 202); }
+html:not(.dark) .text-indigo-200               { color: rgb(67 56 202); }
+html:not(.dark) .text-purple-300               { color: rgb(126 34 206); }
+html:not(.dark) .text-purple-200               { color: rgb(126 34 206); }
+html:not(.dark) .text-pink-300                 { color: rgb(190 24 93); }
+html:not(.dark) .text-pink-200                 { color: rgb(190 24 93); }
+html:not(.dark) .text-blue-300                 { color: rgb(29 78 216); }
+html:not(.dark) .text-blue-200                 { color: rgb(29 78 216); }
+html:not(.dark) .text-teal-300                 { color: rgb(15 118 110); }
+html:not(.dark) .text-teal-200                 { color: rgb(15 118 110); }
+html:not(.dark) .text-orange-300               { color: rgb(194 65 12); }
+html:not(.dark) .text-orange-200               { color: rgb(194 65 12); }
+html:not(.dark) .text-slate-300                { color: rgb(51 65 85); }
+html:not(.dark) .text-slate-200                { color: rgb(51 65 85); }
+html:not(.dark) .text-green-300                { color: rgb(21 128 61); }
+html:not(.dark) .text-green-200                { color: rgb(21 128 61); }
+
+/* Opacity-modifier variants like `text-rose-300/90`, `text-emerald-300/80`.
+   Tailwind generates them as separate classes (`.text-rose-300\/90`), so the
+   straight `.text-rose-300` rule above doesn't catch them. Attribute
+   selectors cover all opacity suffixes in one shot. */
+html:not(.dark) [class*="text-emerald-300\/"]  { color: rgb(4 120 87); }
+html:not(.dark) [class*="text-sky-300\/"]      { color: rgb(3 105 161); }
+html:not(.dark) [class*="text-amber-300\/"]    { color: rgb(180 83 9); }
+html:not(.dark) [class*="text-rose-300\/"]     { color: rgb(190 18 60); }
+html:not(.dark) [class*="text-violet-300\/"]   { color: rgb(109 40 217); }
+html:not(.dark) [class*="text-fuchsia-300\/"]  { color: rgb(162 28 175); }
+html:not(.dark) [class*="text-cyan-300\/"]     { color: rgb(14 116 144); }
+html:not(.dark) [class*="text-indigo-300\/"]   { color: rgb(67 56 202); }
+html:not(.dark) [class*="text-purple-300\/"]   { color: rgb(126 34 206); }
+html:not(.dark) [class*="text-pink-300\/"]     { color: rgb(190 24 93); }
+html:not(.dark) [class*="text-blue-300\/"]     { color: rgb(29 78 216); }
+html:not(.dark) [class*="text-teal-300\/"]     { color: rgb(15 118 110); }
+html:not(.dark) [class*="text-orange-300\/"]   { color: rgb(194 65 12); }
+html:not(.dark) [class*="text-red-300\/"]      { color: rgb(185 28 28); }
+html:not(.dark) [class*="text-slate-300\/"]    { color: rgb(51 65 85); }
+html:not(.dark) [class*="text-green-300\/"]    { color: rgb(21 128 61); }
+
+/* `bg-white/X` variants on a white page disappear entirely. Map them
+   to subtle dark overlays so cards/pills retain some surface. */
+html:not(.dark) .bg-white\/5                   { background-color: rgb(0 0 0 / 0.04); }
+html:not(.dark) .bg-white\/10                  { background-color: rgb(0 0 0 / 0.06); }
+html:not(.dark) .bg-white\/15                  { background-color: rgb(0 0 0 / 0.08); }
+html:not(.dark) .bg-white\/20                  { background-color: rgb(0 0 0 / 0.10); }
+html:not(.dark) .hover\:bg-white\/10:hover     { background-color: rgb(0 0 0 / 0.06); }
+html:not(.dark) .hover\:bg-white\/15:hover     { background-color: rgb(0 0 0 / 0.08); }
+
+/* Arbitrary opacity variants — `bg-white/[0.04]`, `bg-white/[0.06]` etc.
+   used throughout sidebar / cards. Same flip to dark-overlay on light. */
+html:not(.dark) .bg-white\/\[0\.02\]           { background-color: rgb(0 0 0 / 0.02); }
+html:not(.dark) .bg-white\/\[0\.03\]           { background-color: rgb(0 0 0 / 0.025); }
+html:not(.dark) .bg-white\/\[0\.04\]           { background-color: rgb(0 0 0 / 0.03); }
+html:not(.dark) .bg-white\/\[0\.06\]           { background-color: rgb(0 0 0 / 0.04); }
+html:not(.dark) .bg-white\/\[0\.08\]           { background-color: rgb(0 0 0 / 0.05); }
+html:not(.dark) .hover\:bg-white\/\[0\.06\]:hover { background-color: rgb(0 0 0 / 0.04); }
+html:not(.dark) .hover\:bg-white\/\[0\.08\]:hover { background-color: rgb(0 0 0 / 0.05); }
+html:not(.dark) .border-white\/\[0\.04\]       { border-color: rgb(0 0 0 / 0.04); }
+html:not(.dark) .border-white\/\[0\.06\]       { border-color: rgb(0 0 0 / 0.06); }
+html:not(.dark) .border-white\/\[0\.08\]       { border-color: rgb(0 0 0 / 0.07); }
+html:not(.dark) .border-white\/\[0\.09\]       { border-color: rgb(0 0 0 / 0.07); }
+html:not(.dark) .border-white\/\[0\.1\]        { border-color: rgb(0 0 0 / 0.08); }
+html:not(.dark) .from-white\/\[0\.06\]         { --tw-gradient-from: rgb(0 0 0 / 0.04) var(--tw-gradient-from-position); --tw-gradient-to: rgb(0 0 0 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+html:not(.dark) .to-white\/\[0\.02\]           { --tw-gradient-to: rgb(0 0 0 / 0.015) var(--tw-gradient-to-position); }
+
+/* `border-white/X` invisible on white — map to subtle dark border. */
+html:not(.dark) .border-white\/5               { border-color: rgb(0 0 0 / 0.05); }
+html:not(.dark) .border-white\/10              { border-color: rgb(0 0 0 / 0.08); }
+html:not(.dark) .border-white\/15              { border-color: rgb(0 0 0 / 0.10); }
+html:not(.dark) .border-white\/20              { border-color: rgb(0 0 0 / 0.12); }
+html:not(.dark) .border-white\/30              { border-color: rgb(0 0 0 / 0.15); }
+
+/* placeholder:text-white/X — same idea for inputs. */
+html:not(.dark) .placeholder\:text-white\/30::placeholder { color: hsl(var(--muted-foreground) / 0.5); }
+html:not(.dark) .placeholder\:text-white\/40::placeholder { color: hsl(var(--muted-foreground) / 0.6); }
+
+/* Active tab states using bg-white/10 + text-white — make them read as
+   a clear "selected" state on the light bg. */
+html:not(.dark) .data-\[state\=active\]\:bg-white\/10[data-state="active"] {
+  background-color: rgb(0 0 0 / 0.06);
+}
+html:not(.dark) .data-\[state\=active\]\:text-white[data-state="active"] {
+  color: hsl(var(--foreground));
+}
+
+/* Polished glass-card in light mode: pure white with subtle shadow so
+   cards stand out from the page rather than blending in. The default
+   `glass-card` rule pulls from --card (white) which gives zero
+   contrast against a white page bg. */
+html:not(.dark) .glass-card {
+  background-color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 1px 3px 0 rgba(15, 23, 42, 0.04),
+    0 12px 32px -8px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
