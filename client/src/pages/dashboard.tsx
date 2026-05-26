@@ -10,6 +10,7 @@ import {
   Wallet, Repeat, BookOpen, Check, Pencil as PencilIcon,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } from "react";
+import { getPref, savePref } from "@/lib/user-preferences";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInCalendarDays, formatDistanceToNow, isToday } from "date-fns";
@@ -72,10 +73,12 @@ function getUserName(accountEmail: string | null): string {
     const first = parts[0] ? cap(parts[0]) : '';
     return first.length > MAX_LEN ? first.slice(0, MAX_LEN) : first;
   };
-  // Priority 0: user-set preferred display name. Wins over everything
-  // else — only the user knows whether "saketsuman" should be "Saket".
+  // Priority 0: user-set preferred display name from the persistent prefs
+  // blob. Wins over everything else — only the user knows whether
+  // "saketsuman" should be "Saket". Persists across logout/login because
+  // auth-context's logout flow leaves iv_user_prefs alone.
   try {
-    const pref = (localStorage.getItem('iv_preferred_display_name') || '').trim();
+    const pref = (getPref('displayName') || '').trim();
     if (pref) {
       const cleaned = firstName(pref);
       if (cleaned) return cleaned;
@@ -807,26 +810,22 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => {
-                const current = localStorage.getItem('iv_preferred_display_name') || userName || '';
+                const current = getPref('displayName') || userName || '';
                 const next = window.prompt(
-                  `What should we call you?\n\n(We'll show this in the greeting. We can't always guess the right first name from your email — this lets you set it.)`,
+                  `What should we call you?\n\n(We'll show this in the greeting. We can't always guess the right first name from your email — this lets you set it. The preference syncs across your devices.)`,
                   current,
                 );
                 if (next === null) return; // user cancelled
                 const trimmed = next.trim();
                 if (trimmed) {
-                  localStorage.setItem('iv_preferred_display_name', trimmed);
-                  // CRITICAL: userName is computed as `serverName || getUserName(email)`.
-                  // If serverName was already populated (from /api/auth/me earlier),
-                  // it wins over the localStorage value getUserName reads — so the
-                  // greeting would still show the old serverName. Updating
-                  // serverName directly is the only thing that triggers a
-                  // re-render with the new preferred name visible.
+                  savePref('displayName', trimmed);
+                  // userName is `serverName || getUserName(email)` — if /api/auth/me
+                  // already populated serverName, it wins over what getUserName
+                  // reads from prefs. Updating serverName directly forces an
+                  // immediate visual update.
                   setServerName(trimmed.split(/\s+/)[0].slice(0, 10));
                 } else {
-                  localStorage.removeItem('iv_preferred_display_name');
-                  // Empty input → fall back to derivation. Clear serverName so
-                  // userName re-runs getUserName(accountEmail) on next render.
+                  savePref('displayName', null);
                   setServerName('');
                 }
               }}

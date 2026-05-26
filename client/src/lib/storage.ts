@@ -1,6 +1,7 @@
 import { PasswordEntry, SubscriptionEntry, NoteEntry, ExpenseEntry, ReminderEntry, VaultMetadata, KDFConfig, BankStatement, BankTransaction, Investment, InvestmentGoal, SharedExpense, ExpenseGroup, ExpenseContact, Settlement, ExpenseActivity } from '@shared/schema';
 import { CryptoService, KDFConfig as CryptoKDFConfig } from './crypto';
 import { PASSWORD_MANAGER_PARSERS, type ParserConfig } from './csv-parsers';
+import { loadPreferences, savePreferences } from './user-preferences';
 
 export class VaultStorage {
   private dbName = 'IronVault';
@@ -1310,9 +1311,13 @@ export class VaultStorage {
       familyMembers,
       digitalWill: digitalWill ? [digitalWill] : [],
       coupleVault: coupleVault ? [coupleVault] : [],
+      // v8: ride user preferences inside the encrypted blob so settings
+      // (display name, font size, auto-lock, notification opt-in, etc.)
+      // sync across devices alongside vault data.
+      userPreferences: (() => { try { return loadPreferences(); } catch { return null; } })(),
       metadata,
       exportedAt: new Date(),
-      version: 7, // v7: adds coupleVault singleton
+      version: 8, // v8: adds userPreferences
     };
 
     const salt = CryptoService.generateSalt();
@@ -1479,6 +1484,13 @@ export class VaultStorage {
         ...(importData.digitalWill ?? []).map((w: any) => this.saveDigitalWill(w)),
         ...(importData.coupleVault ?? []).map((c: any) => this.saveCoupleVault(c)),
       ]);
+      // Restore user preferences (v8+ blobs carry them). Merge into the
+      // current local prefs so explicit user edits on this device aren't
+      // clobbered if both sides changed — last-write wins per-key, but
+      // missing keys in the blob keep the local value.
+      if (importData.userPreferences && typeof importData.userPreferences === 'object') {
+        try { savePreferences(importData.userPreferences); } catch { /* ignore */ }
+      }
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) console.error(`[importVault] ${failed} item(s) failed to save`);
 
