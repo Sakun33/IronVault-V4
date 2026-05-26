@@ -186,13 +186,13 @@ export default function TaxDocumentsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {docs.map(d => (
-                <PremiumCard key={d.id} accent="amber" className="p-4 flex flex-col gap-2">
+                <PremiumCard key={d.id} accent="amber" className="p-4 flex flex-col gap-3 min-h-[76px]">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <PremiumIcon accent="amber"><FileText className="w-5 h-5" /></PremiumIcon>
                       <div className="min-w-0">
-                        <div className="font-semibold truncate">{d.documentName}</div>
-                        <div className="text-xs text-muted-foreground truncate">{d.assessmentYear ? `AY ${d.assessmentYear}` : `FY ${d.financialYear}`}</div>
+                        <div className="text-[15px] font-semibold truncate leading-tight">{d.documentName}</div>
+                        <div className="text-[13px] text-muted-foreground truncate mt-0.5">{d.assessmentYear ? `AY ${d.assessmentYear}` : `FY ${d.financialYear}`}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">

@@ -184,7 +184,7 @@ export default function SoftwareLicensesPage() {
           // fall back to first-letter circle via the shared Favicon component.
           const faviconUrl = l.purchaseUrl || (l.vendor ? '' : undefined);
           return (
-            <PremiumCard key={l.id} accent="violet" className="p-4 flex flex-col gap-3">
+            <PremiumCard key={l.id} accent="violet" className="p-4 flex flex-col gap-3 min-h-[76px]">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   {(l.vendor || l.purchaseUrl) ? (
@@ -193,8 +193,8 @@ export default function SoftwareLicensesPage() {
                     <PremiumIcon accent="violet"><KeyRound className="w-5 h-5" /></PremiumIcon>
                   )}
                   <div className="min-w-0">
-                    <div className="font-semibold truncate">{l.softwareName}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-[15px] font-semibold truncate leading-tight">{l.softwareName}</div>
+                    <div className="text-[13px] text-muted-foreground truncate mt-0.5">
                       {l.vendor || l.version || '—'}{l.version && l.vendor ? ` · v${l.version}` : ''}
                     </div>
                   </div>

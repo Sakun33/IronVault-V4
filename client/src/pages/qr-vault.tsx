@@ -187,7 +187,7 @@ export default function QRVaultPage() {
           const Icon = CATEGORY_ICON[q.category] || QrIcon;
           const grad = CATEGORY_GRADIENT[q.category];
           return (
-            <PremiumCard key={q.id} accent="violet" className="p-4 flex gap-3">
+            <PremiumCard key={q.id} accent="violet" className="p-4 flex gap-3 min-h-[76px]">
               <button onClick={() => setFullscreenFor(q)} className="flex-shrink-0" title="View fullscreen">
                 <MiniQr data={q.qrData} size={96} />
               </button>
@@ -195,8 +195,8 @@ export default function QRVaultPage() {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-semibold truncate">{q.name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <div className="text-[15px] font-semibold truncate leading-tight">{q.name}</div>
+                      <div className="text-[13px] text-muted-foreground flex items-center gap-1 mt-0.5">
                         <span className={`inline-flex items-center justify-center w-5 h-5 rounded bg-gradient-to-br ${grad}`}><Icon className="w-3 h-3 text-white" /></span>
                         <span className="truncate">{CATEGORY_LABEL[q.category]}</span>
                       </div>

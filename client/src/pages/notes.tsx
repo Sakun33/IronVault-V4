@@ -1520,7 +1520,7 @@ function NoteRow({ note, active, query, selected, selectionMode, onClick, onCont
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <h3 data-testid={`note-title-${note.id}`} className="text-[14px] font-semibold text-foreground leading-tight truncate flex-1">
+          <h3 data-testid={`note-title-${note.id}`} className="text-[15px] font-semibold text-foreground leading-tight truncate flex-1">
             {query ? highlightSnippet(note.title || 'New Note', query) : (note.title || 'New Note')}
           </h3>
           {note.isPinned && <Pin className="w-3 h-3 fill-amber-400 text-amber-400 flex-shrink-0" />}

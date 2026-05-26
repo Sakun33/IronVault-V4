@@ -182,15 +182,15 @@ export default function InsuranceVaultPage() {
           const expired = days < 0;
           const expiringSoon = days >= 0 && days <= 30;
           return (
-            <PremiumCard key={p.id} accent="emerald" className="p-4 flex flex-col gap-3">
+            <PremiumCard key={p.id} accent="emerald" className="p-4 flex flex-col gap-3 min-h-[76px]">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${grad} flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20`}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold truncate">{p.policyName}</div>
-                    <div className="text-xs text-muted-foreground truncate">{p.insurer}</div>
+                    <div className="text-[15px] font-semibold truncate leading-tight">{p.policyName}</div>
+                    <div className="text-[13px] text-muted-foreground truncate mt-0.5">{p.insurer}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

@@ -169,15 +169,15 @@ export default function CryptoVaultPage() {
           const revealed = unlockedId === w.id;
           const seedWords = (w.seedPhrase || '').trim().split(/\s+/).filter(Boolean);
           return (
-            <PremiumCard key={w.id} accent="amber" className="p-4 flex flex-col gap-3">
+            <PremiumCard key={w.id} accent="amber" className="p-4 flex flex-col gap-3 min-h-[76px]">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${WALLET_TYPE_COLOR[w.walletType]} flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/20`}>
                     <span className="text-[10px] font-bold text-white tracking-tighter">{WALLET_TYPE_LABEL[w.walletType]}</span>
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold truncate">{w.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-[15px] font-semibold truncate leading-tight">{w.name}</div>
+                    <div className="text-[13px] text-muted-foreground truncate mt-0.5">
                       {w.exchangeName || w.network || w.walletType.toUpperCase()}
                     </div>
                   </div>

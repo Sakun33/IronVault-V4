@@ -784,7 +784,7 @@ export default function Passwords() {
                     )}
                     <Favicon url={password.url} name={password.name} className="w-9 h-9 flex-shrink-0 rounded-lg" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-foreground truncate leading-tight">{password.name}</div>
+                      <div className="text-[15px] font-semibold text-foreground truncate leading-tight">{password.name}</div>
                       <div className="text-[13px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
                         <Lock size={11} className="flex-shrink-0" />
                         <span className="truncate">{password.username}</span>
