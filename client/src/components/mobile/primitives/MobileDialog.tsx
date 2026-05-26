@@ -29,7 +29,7 @@ const MobileDialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
+      'fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
@@ -53,7 +53,7 @@ const MobileDialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-51 -translate-x-1/2 -translate-y-1/2',
+        'fixed left-1/2 top-1/2 z-[71] -translate-x-1/2 -translate-y-1/2',
         'w-[calc(100vw-32px)] max-w-lg',
         'max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-24px)]',
         'flex flex-col',

@@ -141,7 +141,7 @@ function SearchModalInner({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="fixed inset-0 z-[70] bg-background flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       {/* Header */}
       <div className="bg-background px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
@@ -306,7 +306,7 @@ export function SearchModal(props: SearchModalProps) {
   } catch (err) {
     console.error('SearchModal crash:', err);
     return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4 p-8" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <div className="fixed inset-0 z-[70] bg-background flex flex-col items-center justify-center gap-4 p-8" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <Search className="w-10 h-10 text-muted-foreground" />
         <p className="text-sm text-muted-foreground text-center">Search is temporarily unavailable. Please try again.</p>
         <Button variant="outline" onClick={() => props.onOpenChange(false)}>Close</Button>

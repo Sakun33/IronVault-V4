@@ -92,7 +92,7 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
 
   return (
     <div
-      className="fixed inset-0 z-50 lg:hidden"
+      className="fixed inset-0 z-[70] lg:hidden"
       onClick={() => onOpenChange(false)}
     >
       {/* Backdrop */}
@@ -105,7 +105,7 @@ export function MoreSheet({ open, onOpenChange, sections, className }: MoreSheet
           'absolute bottom-0 left-0 right-0',
           'bg-background/95 backdrop-blur-2xl rounded-t-3xl',
           'transition-all duration-300 ease-out',
-          'pb-[calc(16px+env(safe-area-inset-bottom))]',
+          'pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))]',
           'shadow-[0_-8px_40px_rgba(0,0,0,0.2)]',
           'overflow-hidden flex flex-col',
           snapPoint === 'partial' ? 'max-h-[70dvh]' : 'max-h-[90dvh]',

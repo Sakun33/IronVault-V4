@@ -1565,13 +1565,32 @@ html:not(.dark) .glass-card {
   }
 }
 
-/* iOS-specific aggressive fix. -webkit-touch-callout is a Safari-only
-   feature, so this @supports rule fires only on iOS Safari (and iOS
-   Capacitor WebView). Applies to every Radix dialog content — both
-   ones using DialogBody and those that don't. */
+/* =====================================================================
+   NUCLEAR modal bottom-clearance catch-all (all mobile browsers)
+   ---------------------------------------------------------------------
+   The action-button-hidden-by-tab-bar bug has bitten us once per modal
+   type already. This block exists so it never wins again. Every dialog
+   surface gets ≥160px bottom padding on mobile, no matter which Radix
+   primitive built it.
+   ===================================================================== */
+@media (max-width: 639.98px) {
+  [role="dialog"],
+  [role="alertdialog"],
+  [data-state="open"][class*="bottom-0"],
+  .mobile-sheet-content,
+  .mobile-dialog-content,
+  .iv-modal-safe-area {
+    padding-bottom: max(160px, calc(env(safe-area-inset-bottom, 34px) + 120px)) !important;
+  }
+}
+
+/* iOS-specific reinforcement — same value, scoped via @supports so any
+   future CSS purge that loses the bare attribute selector still has the
+   iOS-only path. */
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 639.98px) {
-    [role="dialog"][data-state="open"] {
+    [role="dialog"][data-state="open"],
+    [role="alertdialog"][data-state="open"] {
       padding-bottom: max(160px, calc(env(safe-area-inset-bottom, 34px) + 120px)) !important;
     }
   }
