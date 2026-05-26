@@ -7,7 +7,7 @@ import {
   Clock, Upload, Shield, RefreshCw,
   ChevronRight, CreditCard, Activity, Key, KeyRound, TrendingUp, TrendingDown,
   Sparkles, ShieldAlert, ShieldCheck, ArrowRight, Search,
-  Wallet, Repeat, BookOpen, Check,
+  Wallet, Repeat, BookOpen, Check, Pencil as PencilIcon,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useDeferredValue, useRef, memo } from "react";
 import { Link, useLocation } from "wouter";
@@ -50,24 +50,37 @@ function getGreeting(): string {
 
 function getUserName(accountEmail: string | null): string {
   const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-  // Strip digits from a candidate name. Real human first names don't
-  // contain digits, so "Saketsuman1312" (a stale email-prefix value cached
-  // by an older signup flow) becomes "Saketsuman". This is applied to
-  // EVERY source — even ones that "look right" — so a digit-laden cached
-  // value can never slip through the greeting.
+  // Cap any extracted name at MAX_LEN so a concatenated email prefix
+  // ("saketsuman" → "Saketsuman") doesn't dominate the greeting line.
+  // For users whose real first name is shorter than the email prefix,
+  // they can set a preferred name via `iv_preferred_display_name` which
+  // is read first below (priority 0) — no algorithm can reliably split
+  // "saketsuman" into "saket", so we let the user pick.
+  const MAX_LEN = 10;
   const firstName = (name: string): string => {
     const cleaned = name.replace(/\d+/g, ' ').trim();
     if (!cleaned) return '';
     const parts = cleaned.split(/\s+/).filter(Boolean);
-    return parts[0] ? cap(parts[0]) : '';
+    const first = parts[0] ? cap(parts[0]) : '';
+    return first.length > MAX_LEN ? first.slice(0, MAX_LEN) : first;
   };
   const namifyEmail = (email: string): string => {
     const raw = email.split('@')[0];
     const cleaned = raw.replace(/[._-]+/g, ' ').replace(/\d+/g, ' ').trim();
     if (!cleaned) return '';
     const parts = cleaned.split(/\s+/).filter(Boolean);
-    return parts[0] ? cap(parts[0]) : '';
+    const first = parts[0] ? cap(parts[0]) : '';
+    return first.length > MAX_LEN ? first.slice(0, MAX_LEN) : first;
   };
+  // Priority 0: user-set preferred display name. Wins over everything
+  // else — only the user knows whether "saketsuman" should be "Saket".
+  try {
+    const pref = (localStorage.getItem('iv_preferred_display_name') || '').trim();
+    if (pref) {
+      const cleaned = firstName(pref);
+      if (cleaned) return cleaned;
+    }
+  } catch { /* ignore */ }
   const isEmailPrefix = (name: string, email: string | null): boolean => {
     if (!email) return false;
     // Also catch the case where the cached name is the email prefix WITH a
@@ -787,8 +800,35 @@ export default function Dashboard() {
         <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="mb-3">
-          <div className="text-2xl sm:text-3xl font-light tracking-tight text-foreground truncate">
-            {getGreeting()}, <span className="font-semibold">{userName || 'there'}</span>
+          <div className="text-2xl sm:text-3xl font-light tracking-tight text-foreground truncate flex items-center gap-2">
+            <span className="truncate">
+              {getGreeting()}, <span className="font-semibold">{userName || 'there'}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const current = localStorage.getItem('iv_preferred_display_name') || userName || '';
+                const next = window.prompt(
+                  `What should we call you?\n\n(We'll show this in the greeting. We can't always guess the right first name from your email — this lets you set it.)`,
+                  current,
+                );
+                if (next === null) return; // user cancelled
+                const trimmed = next.trim();
+                if (trimmed) {
+                  localStorage.setItem('iv_preferred_display_name', trimmed);
+                } else {
+                  localStorage.removeItem('iv_preferred_display_name');
+                }
+                // Force re-render via state — read fresh from localStorage on next paint.
+                setServerName(s => s + ' ');
+                setTimeout(() => setServerName(s => s.trim()), 0);
+              }}
+              aria-label="Edit display name"
+              title="Edit how we address you"
+              className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+            >
+              <PencilIcon className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="text-[12px] text-muted-foreground mt-0.5">{format(new Date(), 'EEEE, MMM d')}</div>
         </div>

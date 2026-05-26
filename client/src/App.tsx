@@ -283,6 +283,19 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     resetNoteEditing();
   }, [location]);
+  // Scroll-to-top on route change. SPAs preserve scroll position by default
+  // when swapping route components, so switching from a long Passwords list
+  // to Notes opens Notes at the deep scroll position you left Passwords at.
+  // Reset every scroll container we own so each section opens fresh at the
+  // top. `requestAnimationFrame` waits one frame so the new layout has
+  // mounted before we scroll — without it the scroll happens on the old
+  // height and the new section can still be partially scrolled.
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('main').forEach(m => { m.scrollTop = 0; });
+      try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch { /* ignore */ }
+    });
+  }, [location]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showExtensionPairing, setShowExtensionPairing] = useState(false);
