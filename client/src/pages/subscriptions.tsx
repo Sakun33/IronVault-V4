@@ -29,23 +29,37 @@ import { format, differenceInCalendarDays, subMonths, startOfMonth, endOfMonth }
 import { ListSkeleton } from '@/components/list-skeleton';
 
 // Category → accent color mapping for chips and dots.
+// Palette aligned with the project's PremiumCard accents + glass-card system
+// so tiles read as part of the same family across every section.
 const CATEGORY_COLORS: Record<string, { dot: string; chip: string; pill: string }> = {
-  Entertainment: { dot: 'bg-purple-500', chip: 'from-purple-500 to-fuchsia-500', pill: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
-  Music:         { dot: 'bg-pink-500',   chip: 'from-pink-500 to-rose-500',     pill: 'bg-pink-500/15 text-pink-300 border-pink-500/30' },
-  'Cloud Storage': { dot: 'bg-sky-500',  chip: 'from-sky-500 to-cyan-500',      pill: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
-  Shopping:      { dot: 'bg-amber-500',  chip: 'from-amber-500 to-orange-500',  pill: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-  'Health & Fitness': { dot: 'bg-emerald-500', chip: 'from-emerald-500 to-teal-500', pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  News:          { dot: 'bg-blue-500',   chip: 'from-blue-500 to-indigo-500',   pill: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
-  Gaming:        { dot: 'bg-rose-500',   chip: 'from-rose-500 to-red-500',      pill: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
-  Education:     { dot: 'bg-indigo-500', chip: 'from-indigo-500 to-violet-500', pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
-  Productivity:  { dot: 'bg-teal-500',   chip: 'from-teal-500 to-emerald-500',  pill: 'bg-teal-500/15 text-teal-300 border-teal-500/30' },
-  Other:         { dot: 'bg-slate-500',  chip: 'from-slate-500 to-zinc-500',    pill: 'bg-white/10 text-white/70 border-white/15' },
+  Entertainment:      { dot: 'bg-violet-500',  chip: 'from-violet-500 to-fuchsia-500',  pill: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
+  Music:              { dot: 'bg-fuchsia-500', chip: 'from-fuchsia-500 to-pink-500',    pill: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30' },
+  'Cloud Storage':    { dot: 'bg-sky-500',     chip: 'from-sky-500 to-cyan-500',        pill: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
+  Shopping:           { dot: 'bg-amber-500',   chip: 'from-amber-500 to-orange-500',    pill: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+  'Health & Fitness': { dot: 'bg-emerald-500', chip: 'from-emerald-500 to-teal-500',    pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+  News:               { dot: 'bg-blue-500',    chip: 'from-blue-500 to-indigo-500',     pill: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+  Gaming:             { dot: 'bg-rose-500',    chip: 'from-rose-500 to-pink-500',       pill: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+  Education:          { dot: 'bg-indigo-500',  chip: 'from-indigo-500 to-blue-500',     pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
+  Productivity:       { dot: 'bg-cyan-500',    chip: 'from-cyan-500 to-sky-500',        pill: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+  Other:              { dot: 'bg-slate-500',   chip: 'from-slate-500 to-slate-600',     pill: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
 };
 
 function categoryStyle(cat?: string) {
   if (!cat) return CATEGORY_COLORS.Other;
   return CATEGORY_COLORS[cat] || CATEGORY_COLORS.Other;
 }
+
+// Hoisted Motion variants — referenced by identity. Inline variant objects
+// inside JSX would create a new reference on every parent render, which
+// causes Motion to retrigger the enter animation (visible as flickering of
+// list / grid tiles). Hoisting eliminates the flicker.
+const HERO_VARIANTS = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } } as const;
+const HERO_TRANSITION = { type: 'spring' as const, stiffness: 280, damping: 28 };
+const STAGGER_PARENT = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } } as const;
+const STAGGER_PARENT_LIST = { hidden: {}, show: { transition: { staggerChildren: 0.035 } } } as const;
+const ITEM_VARIANTS_GRID = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } } as const;
+const ITEM_VARIANTS_LIST = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } } as const;
+const ITEM_TRANSITION = { type: 'spring' as const, stiffness: 320, damping: 26 };
 
 export default function Subscriptions() {
   const { isPro, getLimit, isLoading: licenseLoading } = useSubscription();
@@ -308,10 +322,17 @@ export default function Subscriptions() {
 
   const activeSubscriptions = subscriptions.filter(s => s.isActive).length;
 
-  // Hero stats — expiring soon (next 7 days) and overdue
-  const now = new Date();
-  const next7 = new Date();
-  next7.setDate(next7.getDate() + 7);
+  // Hero stats — expiring soon (next 7 days) and overdue.
+  // `now` is memoized against the subscriptions reference so a new Date is
+  // not allocated on every render. Without memoization, every parent
+  // re-render shifts the millisecond timestamp and downstream useMemos that
+  // depend on `now` retrigger — visible as flicker on the tiles.
+  const now = useMemo(() => new Date(), [subscriptions]);
+  const next7 = useMemo(() => {
+    const d = new Date(now.getTime());
+    d.setDate(d.getDate() + 7);
+    return d;
+  }, [now]);
 
   const expiringSoonCount = subscriptions.filter(s => {
     if (!s.isActive) return false;
@@ -481,10 +502,10 @@ export default function Subscriptions() {
 
         {/* ── Hero Summary ─────────────────────────────────────────────────── */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-          className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 p-5 sm:p-6"
+          initial={HERO_VARIANTS.initial}
+          animate={HERO_VARIANTS.animate}
+          transition={HERO_TRANSITION}
+          className="relative overflow-hidden rounded-2xl glass-card border border-white/10 p-5 sm:p-6"
         >
           {/* gradient wash */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10" />
@@ -715,7 +736,7 @@ export default function Subscriptions() {
               <ListSkeleton rows={5} showHeader={false} />
             ) : filteredSubscriptions.length > 0 && viewMode === 'grid' ? (
               <motion.div
-                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+                variants={STAGGER_PARENT}
                 initial="hidden"
                 animate="show"
                 className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${selection.isSelectionMode ? 'pb-20' : ''}`}
@@ -744,9 +765,8 @@ export default function Subscriptions() {
                     <motion.div
                       key={subscription.id}
                       data-testid={`subscription-card-${subscription.id}`}
-                      variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
-                      transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                      whileHover={{ y: -2 }}
+                      variants={ITEM_VARIANTS_GRID}
+                      transition={ITEM_TRANSITION}
                       whileTap={{ scale: 0.99 }}
                       onClick={() => {
                         if (selection.isSelectionMode) selection.toggle(subscription.id);
@@ -797,7 +817,7 @@ export default function Subscriptions() {
             ) : filteredSubscriptions.length > 0 ? (
               <div className={`bg-transparent ${selection.isSelectionMode ? 'pb-20' : ''}`}>
                 <motion.div
-                  variants={{ hidden: {}, show: { transition: { staggerChildren: 0.035 } } }}
+                  variants={STAGGER_PARENT_LIST}
                   initial="hidden"
                   animate="show"
                   className="space-y-3"
@@ -837,8 +857,8 @@ export default function Subscriptions() {
                         className="rounded-2xl overflow-hidden"
                       >
                         <motion.button
-                          variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-                          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                          variants={ITEM_VARIANTS_LIST}
+                          transition={ITEM_TRANSITION}
                           whileTap={{ scale: 0.995 }}
                           data-testid={`subscription-row-${subscription.id}`}
                           onClick={() => {

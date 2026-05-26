@@ -1177,8 +1177,12 @@ export default function Notes() {
     return (
       <div ref={desktopWrapperRef} className="flex flex-col h-full min-h-0 -mx-6 -my-6 bg-background overflow-hidden">
         <div className="flex-1 min-h-0 flex overflow-hidden">
-          {/* LEFT pane — list, search, filters */}
-          <section className="w-[300px] flex-shrink-0 border-r border-white/[0.06] bg-[#1c1c1e] flex flex-col h-full">
+          {/* LEFT pane — list, search, filters. Uses the project's glass
+              surface tokens so the sidebar reads as the same family as
+              every other section (passwords, subscriptions, etc.) instead
+              of the previous hardcoded #1c1c1e slab which looked
+              old-fashioned next to the glassmorphism elsewhere. */}
+          <section className="w-[300px] flex-shrink-0 border-r border-black/[0.06] dark:border-white/[0.06] bg-white/[0.6] dark:bg-[hsl(var(--card)/0.55)] backdrop-blur-xl backdrop-saturate-150 flex flex-col h-full">
             {/* Title row */}
             <div className="px-4 pt-4 pb-1.5 flex items-center justify-between flex-shrink-0">
               <h1 className="text-[18px] font-bold tracking-tight text-foreground">Notes</h1>
@@ -1577,19 +1581,31 @@ function GridView({ notes, activeId, query, selection, onOpen, onContextMenu, on
               onTouchStart={(e) => onLongPressStart(note, e)}
               onTouchEnd={onLongPressCancel}
               onTouchMove={onLongPressCancel}
-              className={`relative text-left rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.07] transition-colors duration-200 p-4 min-h-[140px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 overflow-hidden ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-black/[0.08] dark:border-white/[0.08]'}`}
+              className={`group relative text-left rounded-2xl border bg-gradient-to-br from-black/[0.04] to-black/[0.01] dark:from-white/[0.07] dark:to-white/[0.015] backdrop-blur-2xl backdrop-saturate-150 hover:from-black/[0.06] hover:to-black/[0.02] dark:hover:from-white/[0.10] dark:hover:to-white/[0.03] transition-all duration-200 p-4 min-h-[150px] flex flex-col outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/30 overflow-hidden shadow-[0_10px_36px_-12px_rgba(0,0,0,0.18)] dark:shadow-[0_18px_50px_-16px_rgba(0,0,0,0.70)] hover:shadow-[0_14px_40px_-12px_rgba(0,0,0,0.22)] dark:hover:shadow-[0_22px_58px_-16px_rgba(0,0,0,0.80)] before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/15 ${selected ? 'ring-2 ring-emerald-400/40' : ''} ${isActive ? 'border-emerald-400/60 ring-1 ring-emerald-400/30' : 'border-black/[0.07] dark:border-white/[0.09]'}`}
             >
               {/* Notebook color accent — 4px left rail + a soft gradient
                   wash from the rail color into transparent so the card
                   reads as a coloured "page" rather than a black tile with
-                  a stripe. The gradient sits BEHIND the content (z-0). */}
+                  a stripe. The gradient sits BEHIND the content (z-0).
+                  A radial bloom in the top-left corner mirrors the
+                  hero-card treatment used elsewhere in the app for a
+                  consistent premium feel. */}
               {accent && (
                 <>
-                  <span aria-hidden className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ background: accent }} />
                   <span
                     aria-hidden
-                    className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-15"
-                    style={{ background: `linear-gradient(90deg, ${accent}33 0%, transparent 60%)` }}
+                    className="absolute left-0 top-0 bottom-0 w-1 rounded-r-full"
+                    style={{ background: `linear-gradient(to bottom, ${accent}, ${accent}cc)` }}
+                  />
+                  <span
+                    aria-hidden
+                    className="absolute -left-12 -top-12 w-44 h-44 rounded-full blur-3xl pointer-events-none opacity-25 dark:opacity-35 group-hover:opacity-40 dark:group-hover:opacity-50 transition-opacity"
+                    style={{ background: accent }}
+                  />
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none opacity-30 dark:opacity-20"
+                    style={{ background: `linear-gradient(135deg, ${accent}33 0%, transparent 55%)` }}
                   />
                 </>
               )}

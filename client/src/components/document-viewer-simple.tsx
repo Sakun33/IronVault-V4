@@ -335,7 +335,11 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl w-full h-[90vh] p-0 flex flex-col overflow-hidden">
+      {/* Mobile: full-height bottom sheet that respects the tab bar +
+          safe-area inset so the toolbar is never hidden under the iOS
+          home indicator. Desktop: classic 90vh modal. The inner content
+          area still owns the scroll. */}
+      <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[92dvh] sm:h-[90vh] pb-[max(96px,calc(env(safe-area-inset-bottom,34px)+72px))] sm:pb-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -379,8 +383,11 @@ export default function DocumentViewer({ document, isOpen, onClose }: DocumentVi
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto bg-muted/30">
+        {/* Content — `min-h-0` lets the flex child collapse so the
+            inner overflow-y-auto actually scrolls instead of pushing
+            the modal beyond the viewport. `overscroll-contain` keeps
+            momentum scrolls from bubbling out to the page. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-muted/30">
           {renderContent()}
         </div>
       </DialogContent>

@@ -147,7 +147,10 @@ export function DocumentViewerModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl w-full h-[90vh] p-0 flex flex-col overflow-hidden">
+        {/* Reserve mobile safe-area + tab-bar padding so the document
+            renderer's bottom toolbar is never clipped under the iOS
+            home indicator / floating tab bar. */}
+        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[92dvh] sm:h-[90vh] pb-[max(96px,calc(env(safe-area-inset-bottom,34px)+72px))] sm:pb-0 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-border bg-card shrink-0">
             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -198,8 +201,11 @@ export function DocumentViewerModal({
             </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-hidden bg-background relative">
+          {/* Content — `min-h-0` lets the flex child collapse so the
+              renderer (PDF, image, text) actually scrolls when content
+              exceeds the modal height. `overflow-y-auto` plus
+              `overscroll-contain` keeps momentum scroll inside the modal. */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-background relative">
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-3">
