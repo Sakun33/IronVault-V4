@@ -2239,26 +2239,35 @@ export default function Profile() {
                     </a>
                     <Button variant="outline" className="w-full justify-start" onClick={() => {
                       const salesiq = (window as any).$zoho?.salesiq;
-                      try {
-                        if (salesiq?.floatwindow?.visible) {
-                          salesiq.floatwindow.visible('show');
-                          return;
+                      const tryOpen = (): boolean => {
+                        try {
+                          if (typeof salesiq?.floatwindow?.visible === 'function') {
+                            salesiq.floatwindow.visible('show');
+                            return true;
+                          }
+                          if (typeof salesiq?.floatbutton?.visible === 'function') {
+                            salesiq.floatbutton.visible('show');
+                            try { salesiq.floatwindow?.visible?.('show'); } catch { /* ignore */ }
+                            return true;
+                          }
+                          if (typeof salesiq?.chat?.start === 'function') {
+                            salesiq.chat.start();
+                            return true;
+                          }
+                        } catch (err) {
+                          console.warn('[salesiq] open failed', err);
                         }
-                        if (salesiq?.floatbutton?.visible) {
-                          salesiq.floatbutton.visible('show');
-                          salesiq.floatwindow?.visible?.('show');
-                          return;
-                        }
-                        if (typeof salesiq?.chat?.start === 'function') {
-                          salesiq.chat.start();
-                          return;
-                        }
-                      } catch {
-                        /* fall through to fallback */
-                      }
+                        return false;
+                      };
+                      if (tryOpen()) return;
+                      // SalesIQ SDK not ready — open the built-in support
+                      // modal so the click always produces a visible result.
+                      // The modal lets the user send a message that becomes a
+                      // Zoho Desk ticket (chat-like UX without the widget).
+                      setShowSupportModal(true);
                       toast({
                         title: 'Live chat is loading',
-                        description: 'Chat widget isn\'t ready yet. Email subsafeironvault@gmail.com or try again in a moment.',
+                        description: 'Send us a message and we\'ll respond by email — usually within a few hours.',
                       });
                     }}>
                       <MessageSquare className="w-4 h-4 mr-2" />

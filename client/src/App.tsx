@@ -1602,8 +1602,29 @@ function Router() {
       <Route path="/vaults"><MainLayout><VaultsPage /></MainLayout></Route>
       <Route path="/teams"><MainLayout><TeamsPage /></MainLayout></Route>
 
-      {/* Public Information Pages */}
-      {PUBLIC_INFO_ROUTES}
+      {/* Public Information Pages — wrap each in PublicPageWrapper so the
+          vault shell's overflow-hidden on html/body/root is overridden and
+          these pages can scroll the document. Tier 1 and Tier 2 already wrap
+          the whole Switch in PublicPageWrapper; tier 3 (authenticated) needs
+          per-route wrapping because MainLayout-based vault routes share the
+          same Switch and must keep the no-document-scroll behavior. */}
+      <Route path="/about"><PublicPageWrapper><AboutPage /></PublicPageWrapper></Route>
+      <Route path="/faq"><PublicPageWrapper><FAQPage /></PublicPageWrapper></Route>
+      <Route path="/features"><PublicPageWrapper><FeaturesPage /></PublicPageWrapper></Route>
+      <Route path="/security"><PublicPageWrapper><SecurityPage /></PublicPageWrapper></Route>
+      <Route path="/contact"><PublicPageWrapper><ContactPage /></PublicPageWrapper></Route>
+      <Route path="/docs"><PublicPageWrapper><DocsPage /></PublicPageWrapper></Route>
+      <Route path="/support"><PublicPageWrapper><DocsPage /></PublicPageWrapper></Route>
+      <Route path="/privacy"><PublicPageWrapper><PrivacyPage /></PublicPageWrapper></Route>
+      <Route path="/terms"><PublicPageWrapper><TermsPage /></PublicPageWrapper></Route>
+      <Route path="/disclaimer"><PublicPageWrapper><DisclaimerPage /></PublicPageWrapper></Route>
+      <Route path="/cookies"><PublicPageWrapper><PrivacyPage /></PublicPageWrapper></Route>
+      <Route path="/pricing"><PublicPageWrapper><PricingPage /></PublicPageWrapper></Route>
+      <Route path="/blog"><PublicPageWrapper><BlogPage /></PublicPageWrapper></Route>
+      <Route path="/changelog"><PublicPageWrapper><ChangelogPage /></PublicPageWrapper></Route>
+      <Route path="/status"><PublicPageWrapper><StatusPage /></PublicPageWrapper></Route>
+      <Route path="/roadmap"><PublicPageWrapper><AboutPage /></PublicPageWrapper></Route>
+      <Route path="/api"><PublicPageWrapper><AboutPage /></PublicPageWrapper></Route>
       <Route path="/upgrade"><MainLayout><UpgradePage /></MainLayout></Route>
       <Route component={NotFound} />
     </Switch>

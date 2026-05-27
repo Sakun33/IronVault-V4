@@ -61,8 +61,11 @@ export function InfoLayout({ children, title }: InfoLayoutProps) {
       {/* Spacer for fixed header */}
       <div className="h-[calc(env(safe-area-inset-top)+56px)]" />
 
-      {/* Content - scrollable */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Content - scrollable. `min-h-0` is REQUIRED on a flex child that
+          owns overflow-y-auto: without it, flex's default `min-height: auto`
+          lets the child grow to its content height, so overflow-y never
+          actually engages and the page can't scroll. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="max-w-7xl mx-auto px-4 py-4 pb-16">
           {children}
         </div>
