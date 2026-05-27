@@ -1,4 +1,4 @@
-// IronVault PWA Service Worker v3.72.0
+// IronVault PWA Service Worker v3.72.1
 //
 // Strategy:
 // - Network-first for HTML / navigation requests (every deploy picks up).
@@ -56,6 +56,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') return;
+
+  // Don't intercept third-party requests — let them go straight to the network.
+  // Intercepting cross-origin CORS requests breaks them (Zoho SalesIQ, etc.).
+  if (url.origin !== self.location.origin) return;
 
   // Never cache sensitive API calls
   if (NETWORK_ONLY.some((p) => url.pathname.startsWith(p))) {
