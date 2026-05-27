@@ -15,7 +15,7 @@ export function InfoLayout({ children, title }: InfoLayoutProps) {
   const { isUnlocked } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Header - Fixed with safe area for Dynamic Island */}
       <div className="bg-card border-b border-border fixed top-0 left-0 right-0 z-50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-3 py-3">
