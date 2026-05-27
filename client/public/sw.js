@@ -1,4 +1,4 @@
-// IronVault PWA Service Worker v3.72.1
+// IronVault PWA Service Worker v3.72.2
 //
 // Strategy:
 // - Network-first for HTML / navigation requests (every deploy picks up).
