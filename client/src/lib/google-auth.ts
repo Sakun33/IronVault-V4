@@ -81,16 +81,37 @@ function loadGsiScript(): Promise<void> {
 }
 
 /**
- * Pop the web GSI prompt and return the Google-issued ID token (a JWT).
- *
- * GSI's One Tap prompt can silently no-op for a bunch of reasons (third-party
- * cookies disabled, user dismissed it 3+ times, FedCM blocked, etc.). When
- * that happens we fall back to a popup-based OAuth flow via initTokenClient,
- * which is more reliable but uses an access token rather than an ID token —
- * so we make a follow-up call to the userinfo endpoint and synthesize the
- * shape our backend expects. (We don't actually do that fallback here yet;
- * we surface the error and let the caller show a toast.)
+ * iOS Safari (and many mobile browsers) suppress GSI's One Tap prompt
+ * because third-party cookies / FedCM are blocked by default. When the
+ * prompt no-ops, we fall back to Google's own rendered button — when
+ * clicked, it opens a popup that reliably returns the ID token via the
+ * GSI callback. We render that button off-screen and synthesize a click
+ * so the existing IronVault "Continue with Google" button still drives
+ * the flow.
  */
+function isMobileSafariLike(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // iOS Safari / Chrome on iOS (which is WKWebView under the hood) / iPad
+  // Safari. Android Chrome generally permits the One Tap prompt, but we
+  // still treat all touch-only mobile browsers as "prompt-may-be-suppressed"
+  // so we have a reliable fallback there too.
+  return /iPhone|iPad|iPod/.test(ua) || (/Android/.test(ua) && /Mobile/.test(ua));
+}
+
+function clickRenderedGoogleButton(container: HTMLElement): boolean {
+  // Google renders a nested <div role="button"> we can click. Older GSI
+  // versions used <iframe> — we can't click cross-origin iframes from JS,
+  // but on modern GSI the outer wrapper is same-origin so this works.
+  const btn = container.querySelector<HTMLElement>('div[role="button"]')
+    || container.querySelector<HTMLElement>('[role="button"]');
+  if (btn && typeof btn.click === 'function') {
+    btn.click();
+    return true;
+  }
+  return false;
+}
+
 function getGoogleIdTokenWeb(): Promise<string> {
   return new Promise((resolve, reject) => {
     loadGsiScript().then(() => {
@@ -103,20 +124,73 @@ function getGoogleIdTokenWeb(): Promise<string> {
         reject(new Error('GSI not available'));
         return;
       }
+      let settled = false;
+      const finish = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
       try {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (response: { credential?: string; error?: string }) => {
             if (response.credential) {
-              resolve(response.credential);
+              finish(() => resolve(response.credential!));
             } else {
-              reject(new Error(response.error || 'No credential returned'));
+              finish(() => reject(new Error(response.error || 'No credential returned')));
             }
           },
           ux_mode: 'popup',
           auto_select: false,
           itp_support: true,
         });
+
+        // On iOS Safari and other touch browsers the One Tap prompt is
+        // almost always suppressed. Skip the prompt() call entirely and go
+        // straight to the rendered-button popup flow — that flow is the
+        // user-gesture-friendly path and works in WebKit.
+        if (isMobileSafariLike()) {
+          const container = document.createElement('div');
+          container.setAttribute('data-google-fallback', '1');
+          container.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;width:200px;height:48px;';
+          document.body.appendChild(container);
+          try {
+            window.google.accounts.id.renderButton(container, {
+              type: 'standard',
+              theme: 'outline',
+              size: 'large',
+              text: 'continue_with',
+              shape: 'rectangular',
+              logo_alignment: 'left',
+            });
+          } catch (e) {
+            document.body.removeChild(container);
+            finish(() => reject(new Error('Could not render Google button: ' + (e instanceof Error ? e.message : String(e)))));
+            return;
+          }
+          // Give GSI a tick to mount the inner button DOM, then synth-click.
+          // The browser still treats this as inside the user's tap-event
+          // microtask because the parent onClick handler is what initiated
+          // signInWithGoogle() synchronously.
+          let attempts = 0;
+          const tryClick = () => {
+            if (settled) return;
+            if (clickRenderedGoogleButton(container)) return;
+            if (++attempts > 30) {
+              finish(() => reject(new Error('Google sign-in could not be opened (button did not render). Try again or use email + password.')));
+              return;
+            }
+            setTimeout(tryClick, 50);
+          };
+          tryClick();
+          // Cleanup once we resolve/reject.
+          const cleanup = () => { try { document.body.removeChild(container); } catch { /* noop */ } };
+          const origCb = (settled as unknown);
+          // Wrap settle to also clean the container.
+          const wrap = (orig: typeof finish) => (fn: () => void) => orig(() => { cleanup(); fn(); });
+          // We can't easily reassign `finish`, so just schedule a delayed
+          // cleanup as well — the container is tiny and off-screen.
+          void origCb; void wrap;
+          setTimeout(cleanup, 5 * 60 * 1000);
+          return;
+        }
+
         window.google.accounts.id.prompt((notification: any) => {
           // notification has both v1 (isNotDisplayed/isSkippedMoment) and v2
           // (getNotDisplayedReason/getSkippedReason) shapes depending on GSI
@@ -128,7 +202,37 @@ function getGoogleIdTokenWeb(): Promise<string> {
             ? notification.isSkippedMoment()
             : false;
           if (notDisplayed || skipped) {
-            reject(new Error('Google prompt was suppressed — try the popup flow'));
+            // Desktop fallback: same renderButton + synth-click trick.
+            const container = document.createElement('div');
+            container.setAttribute('data-google-fallback', '1');
+            container.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;width:200px;height:48px;';
+            document.body.appendChild(container);
+            try {
+              window.google!.accounts.id.renderButton(container, {
+                type: 'standard',
+                theme: 'outline',
+                size: 'large',
+                text: 'continue_with',
+                shape: 'rectangular',
+                logo_alignment: 'left',
+              });
+            } catch (e) {
+              try { document.body.removeChild(container); } catch { /* noop */ }
+              finish(() => reject(new Error('Could not render Google button: ' + (e instanceof Error ? e.message : String(e)))));
+              return;
+            }
+            let attempts = 0;
+            const tryClick = () => {
+              if (settled) return;
+              if (clickRenderedGoogleButton(container)) return;
+              if (++attempts > 30) {
+                finish(() => reject(new Error('Google sign-in could not be opened. Try again or use email + password.')));
+                return;
+              }
+              setTimeout(tryClick, 50);
+            };
+            tryClick();
+            setTimeout(() => { try { document.body.removeChild(container); } catch { /* noop */ } }, 5 * 60 * 1000);
           }
         });
       } catch (err) {

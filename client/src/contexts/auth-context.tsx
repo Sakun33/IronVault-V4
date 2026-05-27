@@ -35,6 +35,11 @@ export interface PendingTwoFactor {
   password: string;
 }
 
+// Result type for accountLogin — distinguishes success / 2FA-required /
+// wrong-password so the caller can render the right UI without racing
+// React's state-closure for `pendingTwoFactor`.
+export type AccountLoginResult = 'success' | 'needs_2fa' | 'wrong_password';
+
 interface AuthContextType {
   isUnlocked: boolean;
   vaultExists: boolean;
@@ -47,7 +52,7 @@ interface AuthContextType {
   loginWithoutVerification: (masterPassword: string) => void;
   createVault: (masterPassword: string) => Promise<void>;
   logout: () => void;
-  accountLogin: (email: string, password: string) => Promise<boolean>;
+  accountLogin: (email: string, password: string) => Promise<AccountLoginResult>;
   googleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
   appleLogin: () => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error?: string }>;
   finalizePasskeyLogin: (result: { token: string; email: string }) => Promise<boolean>;
@@ -319,7 +324,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccountEmail(normalizedEmail);
   };
 
-  const accountLogin = async (email: string, password: string): Promise<boolean> => {
+  const accountLogin = async (email: string, password: string): Promise<AccountLoginResult> => {
     const normalizedEmail = email.toLowerCase().trim();
     const passwordHash = await sha256(password);
 
@@ -334,15 +339,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json().catch(() => ({} as any));
         // 2FA gate: server says "password OK, now I need a code". Stash the
-        // pending state and return false — the login UI watches pendingTwoFactor
-        // and pivots to the code prompt. The caller's `success === false` here
-        // is NOT a failure — it just means "more steps needed".
+        // pending state and return 'needs_2fa' — the login UI pivots to the
+        // code prompt. This is NOT a failure.
         if (data.requires2FA && data.tempToken) {
           // Record the 2FA hint so we never fall back to local-hash auth for
           // this email when the server is unreachable.
           add2faHint(normalizedEmail);
           setPendingTwoFactor({ email: normalizedEmail, tempToken: data.tempToken, password });
-          return false;
+          return 'needs_2fa';
         }
         // P0 FIX: capture the JWT from THIS response and store it directly.
         // We used to call /api/auth/token a second time inside
@@ -356,15 +360,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeCloudToken(data.token);
         }
         await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
-        return true;
+        return 'success';
       }
       // 401 from server means wrong password — don't fall back to local
-      if (res.status === 401) return false;
+      if (res.status === 401) return 'wrong_password';
       // 403 means email not yet verified
       if (res.status === 403) {
         const data = await res.json().catch(() => ({}));
         if (data.error === 'email_not_verified') throw new Error('EMAIL_NOT_VERIFIED');
-        return false;
+        return 'wrong_password';
       }
       // 5xx or unexpected: fall through to localStorage fallback below
       console.error('[auth] /api/auth/token returned', res.status, '— falling back to local');
@@ -385,9 +389,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const localValid = await verifyAccountCredentials(email, password);
     if (localValid) {
       await finalizeAccountLogin(email, password, normalizedEmail, passwordHash);
-      return true;
+      return 'success';
     }
-    return false;
+    return 'wrong_password';
   };
 
   // Google Sign-In (Stage 1). Bypasses the email+password flow but produces

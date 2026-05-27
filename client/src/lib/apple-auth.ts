@@ -82,20 +82,60 @@ interface AppleAuthPayload {
 }
 
 async function getAppleAuthWeb(): Promise<AppleAuthPayload> {
-  await loadAppleScript();
+  try {
+    await loadAppleScript();
+  } catch (err) {
+    // The Apple JS SDK is hosted at appleid.cdn-apple.com — corporate
+    // firewalls and some VPNs block it, leaving the button forever
+    // "Signing in…". Surface a real error so the toast tells the user.
+    throw new Error('Could not load Apple sign-in. Check your network or VPN, then try again.');
+  }
   if (!window.AppleID?.auth) throw new Error('AppleID SDK not available');
   // Random nonce binds the JS call to the token Apple returns.
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
     .map(b => b.toString(16).padStart(2, '0')).join('');
-  window.AppleID.auth.init({
-    clientId: SERVICES_ID,
-    scope: 'name email',
-    redirectURI: REDIRECT_URI,
-    state: nonce,
-    nonce,
-    usePopup: true,
-  });
-  const data = await window.AppleID.auth.signIn();
+  try {
+    window.AppleID.auth.init({
+      clientId: SERVICES_ID,
+      scope: 'name email',
+      redirectURI: REDIRECT_URI,
+      state: nonce,
+      nonce,
+      usePopup: true,
+    });
+  } catch (err) {
+    throw new Error('Apple sign-in is not configured for this domain (Services ID / redirect URI mismatch).');
+  }
+
+  // signIn() returns a Promise that:
+  //  - resolves with the id_token on success
+  //  - rejects with { error: 'popup_closed_by_user' } if the user closes
+  //  - hangs forever if the popup never opens (iOS Safari pop-up blocker)
+  // Wrap with a hard 90s timeout so the calling button can't get stuck
+  // in its disabled/loading state.
+  let data: any;
+  try {
+    data = await withTimeout(
+      window.AppleID.auth.signIn(),
+      90_000,
+      'Apple sign-in',
+    );
+  } catch (err: any) {
+    const code = err?.error || err?.code || '';
+    if (code === 'popup_closed_by_user') {
+      throw new Error('Apple sign-in was cancelled.');
+    }
+    if (code === 'popup_blocked_by_browser') {
+      throw new Error('Apple sign-in popup was blocked. Allow pop-ups for this site and try again.');
+    }
+    if (err?.message && /timed out/.test(err.message)) {
+      throw new Error('Apple sign-in took too long to respond. Allow pop-ups for this site, or try email + password.');
+    }
+    // Bubble Apple's structured error if it has one, otherwise the message.
+    if (err?.error) throw new Error(`Apple sign-in failed (${err.error}).`);
+    throw err;
+  }
+
   const idToken = data?.authorization?.id_token;
   if (!idToken) throw new Error('Apple did not return an identity token');
   return { idToken, user: data.user };

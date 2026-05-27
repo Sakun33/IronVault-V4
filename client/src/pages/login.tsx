@@ -50,20 +50,18 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      const success = await accountLogin(trimmedEmail, password);
-      if (success) {
+      const result = await accountLogin(trimmedEmail, password);
+      if (result === 'success') {
         // Stash the just-validated password for the post-unlock enrollment
         // prompt to consume. Cleared by BiometricSetupPrompt or on logout.
         if (isNativeApp()) {
           try { sessionStorage.setItem('iv_pending_bio_account_pw', password); } catch {}
         }
         setLocation('/');
-      } else if (!pendingTwoFactor) {
-        // pendingTwoFactor is set synchronously inside accountLogin before it
-        // resolves, so by this point we can distinguish wrong-password from
-        // 2FA-required. (React batches the state update but the closure value
-        // we read here was captured at render time — re-reading it after await
-        // gets the latest committed value.)
+      } else if (result === 'wrong_password') {
+        // Only show the error when the server actually rejected the
+        // password. The 'needs_2fa' case sets pendingTwoFactor and pivots
+        // the UI to the code prompt — it must NOT surface an error toast.
         setError('Incorrect email or password. Please try again.');
         toast({
           title: 'Login failed',
@@ -71,6 +69,7 @@ export default function Login() {
           variant: 'destructive',
         });
       }
+      // result === 'needs_2fa' — UI re-renders with pendingTwoFactor set.
     } catch (err) {
       if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
         setEmailNotVerified(true);

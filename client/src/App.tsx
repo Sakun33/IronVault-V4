@@ -143,7 +143,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2, Clock } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2, Clock, Siren, Sparkles } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -454,6 +454,11 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'api-keys', label: 'API Keys', icon: Shield, count: null, color: 'text-cyan-600', requiresPro: true, alertBadge: null },
     { id: 'cards', label: 'Cards', icon: CardIcon, count: null, color: 'text-sky-600', requiresPro: false, alertBadge: null },
     { id: 'identities', label: 'Identities', icon: UserCircle, count: null, color: 'text-violet-600', requiresPro: false, alertBadge: null },
+    { id: 'crypto', label: 'Crypto Wallets', icon: Bitcoin, count: cryptoWallets?.length || null, color: 'text-amber-500', requiresPro: true, alertBadge: null },
+    { id: 'wifi', label: 'Wi-Fi Passwords', icon: Wifi, count: wifiPasswords?.length || null, color: 'text-blue-500', requiresPro: false, alertBadge: null },
+    { id: 'licenses', label: 'Software Licenses', icon: KeyRound, count: softwareLicenses?.length || null, color: 'text-teal-500', requiresPro: true, alertBadge: null },
+    { id: 'bookmarks', label: 'Secure Bookmarks', icon: Bookmark, count: secureBookmarks?.length || null, color: 'text-fuchsia-500', requiresPro: false, alertBadge: null },
+    { id: 'qr', label: 'QR Vault', icon: QrCodeIcon, count: qrCodes?.length || null, color: 'text-pink-500', requiresPro: true, alertBadge: null },
   ];
   // Finance items (second section)
   const financeNavItems = [
@@ -462,7 +467,23 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
     { id: 'investments', label: 'Investments', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
     { id: 'goals', label: 'Goals', icon: Target, count: null, color: 'text-emerald-700', requiresPro: true },
+    { id: 'insurance', label: 'Insurance', icon: ShieldCheck, count: insurancePolicies?.length || null, color: 'text-blue-600', requiresPro: true },
+    { id: 'tax', label: 'Tax Documents', icon: Calculator, count: taxDocuments?.length || null, color: 'text-amber-600', requiresPro: true },
     { id: 'reminders', label: 'Reminders', icon: Bell, count: stats.totalReminders, color: 'text-yellow-600', requiresPro: false },
+  ];
+  // Security & tools (third section)
+  const toolsNavItems = [
+    { id: 'dark-web', label: 'Dark Web Monitor', icon: ShieldAlert, count: null as number | null, color: 'text-red-500', requiresPro: true },
+    { id: 'phishing', label: 'Phishing Shield', icon: ShieldCheck, count: null, color: 'text-emerald-500', requiresPro: true },
+    { id: 'breach-timeline', label: 'Breach Timeline', icon: Clock, count: null, color: 'text-rose-500', requiresPro: true },
+    { id: 'form-filler', label: 'Smart Form Filler', icon: Wand2, count: null, color: 'text-violet-500', requiresPro: true },
+  ];
+  // Family & sharing (fourth section)
+  const familyNavItems = [
+    { id: 'family', label: 'Family Dashboard', icon: Users, count: familyMembers?.length || null as number | null, color: 'text-pink-500', requiresPro: true },
+    { id: 'couple', label: "Couple's Vault", icon: Heart, count: null, color: 'text-rose-500', requiresPro: true },
+    { id: 'digital-will', label: 'Digital Will', icon: Sparkles, count: null, color: 'text-purple-500', requiresPro: true },
+    { id: 'emergency-access', label: 'Emergency Access', icon: Siren, count: null, color: 'text-red-600', requiresPro: true },
   ];
   // Bottom pinned items (system/account)
   const bottomNavItems = [
@@ -472,7 +493,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary', requiresPro: false },
   ];
   // Flat list for mobile menu and other consumers
-  const navItems = [...coreNavItems, ...financeNavItems, ...bottomNavItems];
+  const navItems = [...coreNavItems, ...financeNavItems, ...toolsNavItems, ...familyNavItems, ...bottomNavItems];
 
   // Core sections for bottom navigation. The "Finance" combined tab was
   // confusing — users couldn't tell whether it meant Expenses or
@@ -511,6 +532,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'phishing', label: 'Phishing Shield', icon: ShieldCheck, href: '/phishing', group: 'tools' },
     { id: 'breach-timeline', label: 'Breach Timeline', icon: Clock, href: '/breach-timeline', group: 'tools' },
     { id: 'couple', label: "Couple's Vault", icon: Heart, href: '/couple', group: 'account' },
+    { id: 'emergency-access', label: 'Emergency Access', icon: Siren, href: '/emergency-access', group: 'account', requiresPro: true },
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
@@ -986,6 +1008,88 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                             {item.limitLabel}
                           </span>
                         ) : item.count !== null && (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.count > 99 ? '99+' : item.count}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                </Link>
+                );
+              })}
+            </div>
+            {/* Security & Tools group */}
+            <div className={`px-2 pt-2 pb-1 border-t border-border/30 mt-1 ${sidebarCollapsed ? 'h-2' : ''}`}>
+              {!sidebarCollapsed && (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Security & Tools</span>
+              )}
+            </div>
+            <div className="space-y-0.5">
+              {toolsNavItems.map((item) => {
+                const itemPath = `/${item.id}`;
+                const isActive = location === itemPath;
+                return (
+                <Link key={item.id} href={itemPath}>
+                  <Button
+                    variant="ghost"
+                    title={sidebarCollapsed ? item.label : undefined}
+                    aria-label={sidebarCollapsed ? item.label : undefined}
+                    className={`relative w-full ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 ${sidebarCollapsed ? '' : 'hover:translate-x-0.5'} hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="sidebarActiveIndicator"
+                        className="absolute left-0 top-[25%] bottom-[25%] w-[3px] rounded-r bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="text-sm">{item.label}</span>
+                        {item.count !== null && (
+                          <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {item.count > 99 ? '99+' : item.count}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                </Link>
+                );
+              })}
+            </div>
+            {/* Family & Sharing group */}
+            <div className={`px-2 pt-2 pb-1 border-t border-border/30 mt-1 ${sidebarCollapsed ? 'h-2' : ''}`}>
+              {!sidebarCollapsed && (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Family & Sharing</span>
+              )}
+            </div>
+            <div className="space-y-0.5">
+              {familyNavItems.map((item) => {
+                const itemPath = `/${item.id}`;
+                const isActive = location === itemPath;
+                return (
+                <Link key={item.id} href={itemPath}>
+                  <Button
+                    variant="ghost"
+                    title={sidebarCollapsed ? item.label : undefined}
+                    aria-label={sidebarCollapsed ? item.label : undefined}
+                    className={`relative w-full ${sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} py-2.5 h-auto text-foreground rounded-xl transition-all duration-200 ${sidebarCollapsed ? '' : 'hover:translate-x-0.5'} hover:bg-white/[0.06] hover:backdrop-blur-md${isActive ? ' bg-emerald-500/10 text-emerald-200 font-semibold shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]' : ''}`}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="sidebarActiveIndicator"
+                        className="absolute left-0 top-[25%] bottom-[25%] w-[3px] rounded-r bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="text-sm">{item.label}</span>
+                        {item.count !== null && (
                           <span className="ml-auto bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-semibold">
                             {item.count > 99 ? '99+' : item.count}
                           </span>
