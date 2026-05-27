@@ -135,7 +135,7 @@ export function HamburgerDrawer({ open, onOpenChange, sections, header, footer }
               </div>
 
               {/* Sections */}
-              <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-5">
+              <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-5" data-sidebar-scroll>
                 {grouped.map(({ group, items }) => (
                   <div key={group} className="space-y-1">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80 px-3 mb-1">

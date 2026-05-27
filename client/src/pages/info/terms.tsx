@@ -138,8 +138,8 @@ export default function TermsPage() {
               <p className="text-sm text-muted-foreground">
                 We offer refunds within <strong>7 days of purchase</strong> if you are not satisfied. To request a
                 refund, email{' '}
-                <a href="mailto:saketsuman1312@gmail.com" className="text-primary hover:underline">
-                  saketsuman1312@gmail.com
+                <a href="mailto:subsafeironvault@gmail.com" className="text-primary hover:underline">
+                  subsafeironvault@gmail.com
                 </a>{' '}
                 with your order details. Android purchases made through Google Play are subject to Google Play's
                 refund policy. We do not offer refunds for partial billing periods after cancellation.
@@ -292,8 +292,8 @@ export default function TermsPage() {
             </p>
             <p className="text-sm text-foreground">
               <strong>Email:</strong>{' '}
-              <a href="mailto:saketsuman1312@gmail.com" className="text-primary hover:underline">
-                saketsuman1312@gmail.com
+              <a href="mailto:subsafeironvault@gmail.com" className="text-primary hover:underline">
+                subsafeironvault@gmail.com
               </a>
             </p>
           </CardContent>

@@ -212,7 +212,7 @@ export default function PrivacyPage() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary">✓</span>
-                <span><strong>Deletion (Right to be Forgotten):</strong> Email us at saketsuman1312@gmail.com to request deletion of your account and all associated personal data. We will process deletion requests within 30 days.</span>
+                <span><strong>Deletion (Right to be Forgotten):</strong> Email us at subsafeironvault@gmail.com to request deletion of your account and all associated personal data. We will process deletion requests within 30 days.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary">✓</span>
@@ -239,8 +239,8 @@ export default function PrivacyPage() {
               IronVault is not intended for use by children under the age of 13. We do not knowingly collect
               personal information from children under 13. If you are a parent or guardian and believe your child
               has provided us with personal information, please contact us at{' '}
-              <a href="mailto:saketsuman1312@gmail.com" className="text-primary hover:underline">
-                saketsuman1312@gmail.com
+              <a href="mailto:subsafeironvault@gmail.com" className="text-primary hover:underline">
+                subsafeironvault@gmail.com
               </a>{' '}
               and we will delete such information promptly.
             </p>
@@ -274,8 +274,8 @@ export default function PrivacyPage() {
                 </p>
                 <p className="text-sm text-foreground">
                   <strong>Email:</strong>{' '}
-                  <a href="mailto:saketsuman1312@gmail.com" className="text-primary hover:underline">
-                    saketsuman1312@gmail.com
+                  <a href="mailto:subsafeironvault@gmail.com" className="text-primary hover:underline">
+                    subsafeironvault@gmail.com
                   </a>
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">

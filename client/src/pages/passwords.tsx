@@ -434,11 +434,16 @@ export default function Passwords() {
             clip Select/Add off the right edge. */}
         <div className="space-y-2.5 md:space-y-0">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Passwords</h1>
-              {!isPro && (
-                <p className="text-xs text-muted-foreground mt-0.5">{passwords.length} / {getLimit('passwords')} used</p>
-              )}
+            <div className="min-w-0 flex items-center gap-3">
+              <div className="flex-shrink-0 w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-blue-500/10 border border-indigo-400/30 ring-1 ring-indigo-400/20 shadow-[0_0_24px_-8px_rgba(99,102,241,0.55)] flex items-center justify-center">
+                <Lock className="w-5 h-5 text-indigo-300" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Passwords</h1>
+                {!isPro && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{passwords.length} / {getLimit('passwords')} used</p>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {/* Desktop-only Import + Templates */}

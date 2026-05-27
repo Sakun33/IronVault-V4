@@ -24,7 +24,32 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useVault } from '@/contexts/vault-context';
 import { CryptoService, KDFConfig, CryptoKDFConfig } from '@/lib/crypto';
-import { Shield, Clock, Zap, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
+import { Shield, Clock, Zap, AlertTriangle, Info, Eye, EyeOff, Check, X } from 'lucide-react';
+import { PasswordStrengthMeter } from '@/components/ui/password-strength-meter';
+
+// Lightweight crack-time estimator (entropy-based). Assumes a fast offline
+// attacker at 1e10 guesses/sec. Not as accurate as zxcvbn but adequate for
+// directional feedback in the analyzer.
+function estimateCrackTime(password: string): string {
+  if (!password) return '—';
+  let charset = 0;
+  if (/[a-z]/.test(password)) charset += 26;
+  if (/[A-Z]/.test(password)) charset += 26;
+  if (/[0-9]/.test(password)) charset += 10;
+  if (/[^A-Za-z0-9]/.test(password)) charset += 32;
+  if (charset === 0) return '—';
+  const combos = Math.pow(charset, password.length);
+  const seconds = combos / 1e10;
+  if (seconds < 1) return 'Instantly';
+  if (seconds < 60) return `${Math.round(seconds)} seconds`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} minutes`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} hours`;
+  if (seconds < 31536000) return `${Math.round(seconds / 86400)} days`;
+  if (seconds < 31536000 * 100) return `${Math.round(seconds / 31536000)} years`;
+  if (seconds < 31536000 * 1e6) return `${Math.round(seconds / 31536000 / 1000)}K years`;
+  if (seconds < 31536000 * 1e9) return `${Math.round(seconds / 31536000 / 1e6)}M years`;
+  return 'Centuries+';
+}
 
 interface SecuritySettingsModalProps {
   trigger: React.ReactNode;
@@ -452,9 +477,35 @@ export function SecuritySettingsModal({ trigger, onSettingsChanged }: SecuritySe
                   <span>Type a password above to see device-tuned security level recommendations.</span>
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Analyzing strength… recommendation appears below.
-                </p>
+                <div className="mt-3 space-y-3 p-3 rounded-lg border bg-card">
+                  <PasswordStrengthMeter password={testPassword} />
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[
+                      { label: '12+ characters', pass: testPassword.length >= 12 },
+                      { label: 'Uppercase letter', pass: /[A-Z]/.test(testPassword) },
+                      { label: 'Lowercase letter', pass: /[a-z]/.test(testPassword) },
+                      { label: 'Number', pass: /[0-9]/.test(testPassword) },
+                      { label: 'Symbol', pass: /[^A-Za-z0-9]/.test(testPassword) },
+                      { label: 'No repeats (3+)', pass: !/(.)\1{2,}/.test(testPassword) },
+                    ].map((c) => (
+                      <div key={c.label} className="flex items-center gap-1.5">
+                        {c.pass ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                        ) : (
+                          <X className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
+                        )}
+                        <span className={c.pass ? 'text-foreground' : 'text-muted-foreground'}>{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Estimated crack time
+                    </span>
+                    <span className="text-xs font-mono font-medium">{estimateCrackTime(testPassword)}</span>
+                  </div>
+                </div>
               )}
             </div>
 

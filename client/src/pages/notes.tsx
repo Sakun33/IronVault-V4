@@ -939,7 +939,12 @@ export default function Notes() {
 
   const headerBlock = (
     <div className="flex items-center justify-between gap-2 sm:px-0 min-w-0">
-      <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground truncate flex-shrink min-w-0">Notes</h1>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex-shrink-0 w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-400/30 ring-1 ring-amber-400/20 shadow-[0_0_24px_-8px_rgba(245,158,11,0.55)] flex items-center justify-center">
+          <FileText className="w-5 h-5 text-amber-300" />
+        </div>
+        <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-foreground truncate flex-shrink min-w-0">Notes</h1>
+      </div>
       <div className="flex items-center gap-0.5 flex-shrink-0">
         {/* Primary "New Note" button — visible without scrolling. Drops down
             with "Blank Note" + the 10 templates so users can pick a starter

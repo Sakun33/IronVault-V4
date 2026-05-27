@@ -1217,6 +1217,55 @@ export default function Profile() {
     if (activeTab === 'security') loadActivity();
   }, [activityFilterType, activityFilterAction, activeTab, loadActivity]);
 
+  // Fallback synthesized feed from local vault items. Used when the server
+  // has not logged any activity yet (e.g. user has not used the extension or
+  // mobile native bridge that POSTs to /api/vault/activity). Surfaces recent
+  // creates/updates so the Activity card never looks dead.
+  const synthesizedActivity = useMemo(() => {
+    type Synthetic = {
+      id: string;
+      action: string;
+      itemType: string;
+      itemTitle: string;
+      ipAddress: string | null;
+      createdAt: string;
+    };
+    const events: Synthetic[] = [];
+    const push = (
+      kind: string,
+      itemType: string,
+      items: any[] | undefined,
+      titleKey: string,
+    ) => {
+      (items || []).forEach((it: any) => {
+        const created = it.createdAt || it.updatedAt || it.timestamp;
+        if (!created) return;
+        events.push({
+          id: `${itemType}-${it.id || titleKey}-${created}`,
+          action: kind,
+          itemType,
+          itemTitle: String(it[titleKey] ?? '(untitled)'),
+          ipAddress: null,
+          createdAt: typeof created === 'string' ? created : new Date(created).toISOString(),
+        });
+      });
+    };
+    push('created', 'password', passwords, 'name');
+    push('created', 'note', notes, 'title');
+    push('created', 'subscription', subscriptions, 'name');
+    push('created', 'expense', expenses, 'description');
+    push('created', 'reminder', reminders, 'title');
+    push('created', 'investment', investments, 'name');
+    push('created', 'apiKey', apiKeys, 'name');
+    events.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    let filtered = events;
+    if (activityFilterType !== 'all') filtered = filtered.filter((e) => e.itemType === activityFilterType);
+    if (activityFilterAction !== 'all') filtered = filtered.filter((e) => e.action === activityFilterAction);
+    return filtered.slice(0, 50);
+  }, [passwords, notes, subscriptions, expenses, reminders, investments, apiKeys, activityFilterType, activityFilterAction]);
+
+  const displayedActivity = activity.length > 0 ? activity : synthesizedActivity;
+
   const browserIconFor = (browser: string | null) => {
     const b = (browser || '').toLowerCase();
     if (b.includes('chrome') || b.includes('chromium')) return <Chrome className="w-4 h-4" />;
@@ -2188,22 +2237,17 @@ export default function Profile() {
                         </div>
                       </Button>
                     </a>
-                    <a href="tel:+918287450463" className="w-full">
-                      <Button variant="outline" className="w-full justify-start">
-                        <Phone className="w-4 h-4 mr-2" />
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">Phone Support</span>
-                          <span className="text-xs text-muted-foreground">+91-8287450463</span>
-                        </div>
-                      </Button>
-                    </a>
                     <Button variant="outline" className="w-full justify-start" onClick={() => {
-                      window.open('https://wa.me/918287450463?text=Hi%20IronVault%20Support', '_blank', 'noopener,noreferrer');
+                      try {
+                        window.$zoho?.salesiq?.floatwindow?.visible?.('show');
+                      } catch {
+                        /* ignore */
+                      }
                     }}>
                       <MessageSquare className="w-4 h-4 mr-2" />
                       <div className="flex flex-col items-start">
                         <span className="font-medium">Live Chat</span>
-                        <span className="text-xs text-muted-foreground">Chat via WhatsApp</span>
+                        <span className="text-xs text-muted-foreground">Chat with our support team</span>
                       </div>
                     </Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setLocation('/docs')}>
@@ -2849,15 +2893,15 @@ export default function Profile() {
                   </SelectContent>
                 </Select>
               </div>
-              {activityLoading && activity.length === 0 && (
+              {activityLoading && displayedActivity.length === 0 && (
                 <p className="text-sm text-muted-foreground py-4">Loading activity…</p>
               )}
-              {!activityLoading && activity.length === 0 && (
-                <p className="text-sm text-muted-foreground py-4">No activity yet. Autofill a password or save a new entry to start the log.</p>
+              {!activityLoading && displayedActivity.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">No activity yet. Add a password, note, or subscription to start the log.</p>
               )}
-              {activity.length > 0 && (
+              {displayedActivity.length > 0 && (
                 <ul className="divide-y divide-border/60">
-                  {activity.map((a) => (
+                  {displayedActivity.map((a) => (
                     <li key={a.id} className="py-2.5 flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                         {a.action === 'filled' || a.action === 'viewed' ? <Eye className="w-3.5 h-3.5" />

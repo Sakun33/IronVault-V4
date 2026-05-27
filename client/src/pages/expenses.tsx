@@ -158,16 +158,21 @@ export default function ExpensesPage() {
     <div className="space-y-6 pb-24">
       {/* Header — premium title with item count badge + muted subtitle */}
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">Expenses</h1>
-            {sx.expenses.length > 0 && (
-              <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
-                {sx.expenses.length}
-              </span>
-            )}
+        <div className="min-w-0 flex items-center gap-3">
+          <div className="flex-shrink-0 w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/20 to-pink-500/10 border border-rose-400/30 ring-1 ring-rose-400/20 shadow-[0_0_24px_-8px_rgba(244,63,94,0.55)] flex items-center justify-center">
+            <Wallet className="w-5 h-5 text-rose-300" />
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">Split, track, and settle shared spending across groups and contacts.</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">Expenses</h1>
+              {sx.expenses.length > 0 && (
+                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+                  {sx.expenses.length}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">Split, track, and settle shared spending across groups and contacts.</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button

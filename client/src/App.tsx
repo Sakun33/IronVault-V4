@@ -296,21 +296,29 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   // elements is a no-op) and resilient.
   useEffect(() => {
     const resetAll = () => {
-      // Every element that can scroll vertically. querySelectorAll('*') is
-      // hot, but scoping to elements that ACTUALLY have a scroll position
-      // makes it a no-op for the vast majority of nodes — the if-check below
-      // skips the assignment when scrollTop is already 0.
+      // Every element that can scroll vertically. Excludes sidebar scroll
+      // containers (data-sidebar-scroll) so the user can still see which
+      // nav item is selected after route change.
       const els = document.querySelectorAll<HTMLElement>('main, [data-scroll-container], [class*="overflow-y-auto"], [class*="overflow-auto"]');
-      els.forEach(el => { if (el.scrollTop !== 0) el.scrollTop = 0; });
+      els.forEach(el => {
+        if (el.closest('[data-sidebar-scroll]') || el.hasAttribute('data-sidebar-scroll')) return;
+        if (el.scrollTop !== 0) el.scrollTop = 0;
+      });
       try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch { /* ignore */ }
     };
-    // Tick 0: immediate (catches the case where AnimatePresence's mode is
-    // not "wait" or the route swap is synchronous).
+    // After route change settles, scroll the active sidebar item into view.
+    // Active nav items get the `text-emerald-200` class, so we use it as a marker.
+    const focusActive = () => {
+      try {
+        document.querySelectorAll<HTMLElement>('[data-sidebar-scroll]').forEach(container => {
+          const active = container.querySelector<HTMLElement>('.text-emerald-200');
+          if (active) active.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+        });
+      } catch { /* ignore */ }
+    };
     resetAll();
-    // Tick 1: after one frame (new content has mounted in default mode).
-    const raf1 = requestAnimationFrame(resetAll);
-    // Tick 2: after the enter animation should be done (~320ms motion preset).
-    const t1 = setTimeout(resetAll, 350);
+    const raf1 = requestAnimationFrame(() => { resetAll(); focusActive(); });
+    const t1 = setTimeout(() => { resetAll(); focusActive(); }, 350);
     return () => {
       cancelAnimationFrame(raf1);
       clearTimeout(t1);
@@ -889,7 +897,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           className="flex-shrink-0 border-r border-black/[0.06] dark:border-white/[0.04] bg-white/70 dark:bg-[#070b13]/60 backdrop-blur-2xl backdrop-saturate-150 p-3 flex flex-col h-full"
         >
           {/* Scrollable primary nav items with section groups */}
-          <div className="flex-1 overflow-y-auto min-h-0 smooth-scrollbar">
+          <div className="flex-1 overflow-y-auto min-h-0 smooth-scrollbar" data-sidebar-scroll>
             {/* Core Vault group */}
             <div className={`px-2 pt-1 pb-1 ${sidebarCollapsed ? 'h-1' : ''}`}>
               {!sidebarCollapsed && (
