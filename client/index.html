@@ -321,24 +321,6 @@
          yet reached. -->
     <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
 
-    <!-- Zoho SalesIQ Live Chat — floating chat bubble visible on all pages -->
-    <style>
-      /* Force SalesIQ widget visible above app layout (app uses overflow:hidden on root) */
-      .zsiq_floatmain, .zsiq_theme1, .siq_bR, [id^="siqbt"], .zls-sptwndw, #zsiq_float,
-      div[class*="zsiq"], iframe[id*="siq"] {
-        position: fixed !important;
-        z-index: 2147483647 !important;
-        overflow: visible !important;
-        clip: auto !important;
-        clip-path: none !important;
-      }
-      /* Position chat bubble above mobile bottom nav bar */
-      .zsiq_floatmain { bottom: 80px !important; right: 16px !important; }
-      @media (min-width: 768px) { .zsiq_floatmain { bottom: 24px !important; right: 24px !important; } }
-    </style>
-    <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){console.log('[SalesIQ] Widget ready');}}</script>
-    <script id="zsiqscript" src="https://salesiq.zohopublic.in/widget?wc=siqa266e1f42413a689e18f90b8472f787bb18200c8b8fc4517bc699e896d4538aa" defer></script>
-    
     <!-- SEO: Crawlable content for search engines that don't fully render JavaScript SPAs -->
     <noscript>
       <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:system-ui,sans-serif;color:#333;">
@@ -396,5 +378,31 @@
         <p>Visit <a href="https://www.ironvault.app">www.ironvault.app</a> to get started. Contact us at <a href="mailto:subsafeironvault@gmail.com">subsafeironvault@gmail.com</a>.</p>
       </div>
     </noscript>
+
+    <!-- Zoho SalesIQ Live Chat — single embed, must be the ONLY copy on the page -->
+    <style>
+      /* Force SalesIQ widget visible above app layout (app uses overflow:hidden on root) */
+      .zsiq_floatmain,
+      .zsiq_theme1,
+      .siq_bR,
+      [id^="siqbt"],
+      .zls-sptwndw,
+      #zsiq_float,
+      div[class*="zsiq"],
+      iframe[id*="siq"] {
+        position: fixed !important;
+        z-index: 2147483647 !important;
+        overflow: visible !important;
+        clip: auto !important;
+        clip-path: none !important;
+      }
+      /* Position chat bubble above mobile bottom nav bar */
+      .zsiq_floatmain { bottom: 80px !important; right: 16px !important; }
+      @media (min-width: 768px) {
+        .zsiq_floatmain { bottom: 24px !important; right: 24px !important; }
+      }
+    </style>
+    <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){console.log('[SalesIQ] Widget ready');}}</script>
+    <script id="zsiqscript" src="https://salesiq.zohopublic.in/widget?wc=siqa266e1f42413a689e18f90b8472f787bb18200c8b8fc4517bc699e896d4538aa" defer></script>
   </body>
 </html>

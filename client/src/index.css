@@ -228,7 +228,7 @@ input:-webkit-autofill:active {
     width: 100%;
     height: 100%;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: visible;
     max-width: 100vw;
     scroll-behavior: smooth;
     text-size-adjust: 100%;
@@ -244,7 +244,7 @@ input:-webkit-autofill:active {
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     height: 100%;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: visible;
     max-width: 100vw;
     width: 100%;
     line-height: 1.6;
