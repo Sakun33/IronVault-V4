@@ -388,27 +388,108 @@ function BumblebeeSection() {
   );
 }
 
+// ─── Error boundary ──────────────────────────────────────────────────────────
+class ScannerErrorBoundary extends React.Component<
+  { children: React.ReactNode; onRetry: () => void },
+  { error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error('[SecurityScanner] render error:', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-[100dvh] bg-background">
+          <div className="max-w-5xl mx-auto px-3 sm:px-6 py-10 pb-24">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 sm:p-8 text-center">
+              <ShieldAlert className="w-10 h-10 mx-auto text-red-500 mb-3" />
+              <h2 className="text-lg font-bold mb-1">Security Scanner crashed</h2>
+              <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                Something went wrong while rendering the scanner. Your vault is safe — this is a UI issue only.
+              </p>
+              <div className="text-xs text-muted-foreground mb-4 font-mono break-all max-w-md mx-auto">
+                {this.state.error.message || String(this.state.error)}
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    this.setState({ error: null });
+                    this.props.onRetry();
+                  }}
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Try again
+                </Button>
+                <Link href="/">
+                  <Button variant="ghost" size="sm">Back to Dashboard</Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── Main page ───────────────────────────────────────────────────────────────
 export default function SecurityScannerPage() {
-  const { masterPassword, accountEmail } = useAuth();
-  const { passwords } = useVault();
-  const currentVaultId = vaultStorage.getCurrentVaultId();
+  return (
+    <ScannerErrorBoundary onRetry={() => window.location.reload()}>
+      <SecurityScannerPageInner />
+    </ScannerErrorBoundary>
+  );
+}
+
+function SecurityScannerPageInner() {
+  // Context hooks — read defensively so a missing/locked vault never crashes
+  // the page. Both contexts may still be initializing on first nav.
+  const auth = useAuth();
+  const vault = useVault();
+  const masterPassword = auth?.masterPassword ?? null;
+  const accountEmail = auth?.accountEmail ?? null;
+  const passwords = vault?.passwords ?? [];
+
+  let currentVaultId: string | null = null;
+  try {
+    currentVaultId = vaultStorage.getCurrentVaultId() ?? null;
+  } catch {
+    currentVaultId = null;
+  }
 
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0, label: '' });
   const [expandedCats, setExpandedCats] = useState<Set<Category>>(() => new Set<Category>(['vault']));
   const [history, setHistory] = useState<ScanResult[]>([]);
 
   useEffect(() => {
-    const h = loadHistory();
-    setHistory(h);
-    if (h[0]) setResult(h[0]);
+    try {
+      const h = loadHistory();
+      setHistory(h);
+      if (h[0]) setResult(h[0]);
+    } catch (e) {
+      // Corrupt history shouldn't block the page.
+      // eslint-disable-next-line no-console
+      console.warn('[SecurityScanner] failed to load history:', e);
+    }
   }, []);
 
   const runScanNow = useCallback(async () => {
     if (scanning) return;
     setScanning(true);
+    setScanError(null);
     setProgress({ done: 0, total: 0, label: 'Starting…' });
     try {
       const r = await runScan({
@@ -419,8 +500,12 @@ export default function SecurityScannerPage() {
         onProgress: (done, total, label) => setProgress({ done, total, label: label ?? '' }),
       });
       setResult(r);
-      saveScan(r);
-      setHistory(loadHistory());
+      try { saveScan(r); } catch { /* persistence is best-effort */ }
+      try { setHistory(loadHistory()); } catch { /* */ }
+    } catch (e: any) {
+      // eslint-disable-next-line no-console
+      console.error('[SecurityScanner] scan failed:', e);
+      setScanError(e?.message || 'Scan failed unexpectedly. Please try again.');
     } finally {
       setScanning(false);
     }
@@ -511,6 +596,20 @@ export default function SecurityScannerPage() {
                   <Progress value={(progress.done / progress.total) * 100} className="h-1.5" />
                   <div className="text-[11px] text-muted-foreground">
                     {progress.done} / {progress.total} · {progress.label}
+                  </div>
+                </div>
+              )}
+              {scanError && !scanning && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-red-600 dark:text-red-400">Scan failed</div>
+                      <div className="text-muted-foreground mt-0.5 break-all">{scanError}</div>
+                      <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={runScanNow}>
+                        <RefreshCw className="w-3 h-3 mr-1" /> Try again
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -42,63 +42,69 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
     Capacitor.getPlatform() === 'android' ? 'android' : 'web';
 
   // Each task returns a Finding or null (skipped — typically platform-gated).
-  const tasks: Array<{ label: string; run: () => Promise<Finding | null> }> = [
+  // `category` is preserved so that a thrown check still maps to the correct
+  // category in the error fallback (otherwise device/network errors disappear).
+  const tasks: Array<{ label: string; category: Category; run: () => Promise<Finding | null> }> = [
     // Browser
-    { label: 'HTTPS', run: () => C.checkHttps() },
-    { label: 'Secure context', run: () => C.checkSecureContext() },
-    { label: 'SubtleCrypto', run: () => C.checkSubtleCrypto() },
-    { label: 'Credential Mgmt', run: () => C.checkCredentialMgmt() },
-    { label: 'Service worker', run: () => C.checkServiceWorker() },
-    { label: 'localStorage', run: () => C.checkLocalStorageHygiene() },
-    { label: 'Cookies', run: () => C.checkCookies() },
-    { label: 'Private mode', run: () => C.checkPrivateMode() },
-    { label: 'WebRTC leak', run: () => C.checkWebrtcLeak() },
-    { label: 'Clipboard perm', run: () => C.checkClipboardPermission() },
-    { label: 'Mixed content', run: () => C.checkMixedContent() },
+    { label: 'HTTPS',          category: 'browser', run: () => safeAsync(C.checkHttps) },
+    { label: 'Secure context', category: 'browser', run: () => safeAsync(C.checkSecureContext) },
+    { label: 'SubtleCrypto',   category: 'browser', run: () => safeAsync(C.checkSubtleCrypto) },
+    { label: 'Credential Mgmt',category: 'browser', run: () => safeAsync(C.checkCredentialMgmt) },
+    { label: 'Service worker', category: 'browser', run: () => safeAsync(C.checkServiceWorker) },
+    { label: 'localStorage',   category: 'browser', run: () => safeAsync(C.checkLocalStorageHygiene) },
+    { label: 'Cookies',        category: 'browser', run: () => safeAsync(C.checkCookies) },
+    { label: 'Private mode',   category: 'browser', run: () => safeAsync(C.checkPrivateMode) },
+    { label: 'WebRTC leak',    category: 'browser', run: () => safeAsync(C.checkWebrtcLeak) },
+    { label: 'Clipboard perm', category: 'browser', run: () => safeAsync(C.checkClipboardPermission) },
+    { label: 'Mixed content',  category: 'browser', run: () => safeAsync(C.checkMixedContent) },
     // Device
-    { label: 'Biometric hardware', run: () => C.checkBiometricAvailable() },
-    { label: 'Biometric vault', run: () => C.checkBiometricEnrolledForVault(input.currentVaultId) },
-    { label: 'OS version', run: () => C.checkPlatformOs() },
-    { label: 'Screen lock', run: () => C.checkScreenLockHint() },
-    { label: 'Jailbreak/root', run: () => C.checkJailbreakRoot() },
-    { label: 'Secure storage', run: () => C.checkSecureStorageHint() },
+    { label: 'Biometric hardware', category: 'device', run: () => safeAsync(C.checkBiometricAvailable) },
+    { label: 'Biometric vault',    category: 'device', run: () => safeAsync(() => C.checkBiometricEnrolledForVault(input.currentVaultId)) },
+    { label: 'OS version',         category: 'device', run: () => safeAsync(C.checkPlatformOs) },
+    { label: 'Screen lock',        category: 'device', run: () => safeAsync(C.checkScreenLockHint) },
+    { label: 'Jailbreak/root',     category: 'device', run: () => safeAsync(C.checkJailbreakRoot) },
+    { label: 'Secure storage',     category: 'device', run: () => safeAsync(C.checkSecureStorageHint) },
     // Vault
-    { label: 'Master password', run: async () => C.checkMasterPasswordStrength(input.masterPassword) },
-    { label: 'Password reuse', run: async () => C.checkPasswordReuse(input.passwords) },
-    { label: 'Weak passwords', run: async () => C.checkWeakPasswords(input.passwords) },
-    { label: 'Stale passwords', run: async () => C.checkStalePasswords(input.passwords) },
-    { label: 'Auto-lock', run: async () => C.checkAutoLock() },
-    { label: 'Clipboard clear', run: async () => C.checkClipboardAutoClear() },
-    { label: 'Lock on bg', run: async () => C.checkLockOnBackground() },
-    { label: '2FA', run: () => C.checkTwoFactor(input.accountEmail) },
+    { label: 'Master password',  category: 'vault', run: async () => safeSync(() => C.checkMasterPasswordStrength(input.masterPassword)) },
+    { label: 'Password reuse',   category: 'vault', run: async () => safeSync(() => C.checkPasswordReuse(input.passwords ?? [])) },
+    { label: 'Weak passwords',   category: 'vault', run: async () => safeSync(() => C.checkWeakPasswords(input.passwords ?? [])) },
+    { label: 'Stale passwords',  category: 'vault', run: async () => safeSync(() => C.checkStalePasswords(input.passwords ?? [])) },
+    { label: 'Auto-lock',        category: 'vault', run: async () => safeSync(() => C.checkAutoLock()) },
+    { label: 'Clipboard clear',  category: 'vault', run: async () => safeSync(() => C.checkClipboardAutoClear()) },
+    { label: 'Lock on bg',       category: 'vault', run: async () => safeSync(() => C.checkLockOnBackground()) },
+    { label: '2FA',              category: 'vault', run: () => safeAsync(() => C.checkTwoFactor(input.accountEmail)) },
     // Network
-    { label: 'Online', run: () => C.checkOnline() },
-    { label: 'Connection', run: () => C.checkConnectionType() },
-    { label: 'HSTS', run: () => C.checkHstsProbe() },
-    { label: 'DNS info', run: () => C.checkDnsLeakInfo() },
+    { label: 'Online',     category: 'network', run: () => safeAsync(C.checkOnline) },
+    { label: 'Connection', category: 'network', run: () => safeAsync(C.checkConnectionType) },
+    { label: 'HSTS',       category: 'network', run: () => safeAsync(C.checkHstsProbe) },
+    { label: 'DNS info',   category: 'network', run: () => safeAsync(C.checkDnsLeakInfo) },
   ];
 
   const findings: Finding[] = [];
   let done = 0;
+  // settleAll: never rejects. Each task is independently wrapped (above) AND
+  // the outer Promise.all uses .catch on each task so one rogue check cannot
+  // abort the whole scan. Errors become INFO findings in the correct category.
   await Promise.all(
     tasks.map(async (task) => {
       try {
         const r = await task.run();
         if (r) findings.push(r);
       } catch (e: any) {
-        // A check threw — record as info rather than crash the whole scan.
+        // Defense-in-depth: safeAsync/safeSync already swallow, but if they
+        // ever leak we still want a sensible fallback rather than a crashed page.
         findings.push({
-          id: `error.${task.label.toLowerCase().replace(/\s+/g, '-')}`,
-          category: 'browser',
+          id: `error.${task.category}.${task.label.toLowerCase().replace(/\s+/g, '-')}`,
+          category: task.category,
           severity: 'info',
-          title: `Check error: ${task.label}`,
-          description: 'This check did not complete on your environment.',
+          title: `Check skipped: ${task.label}`,
+          description: 'This check could not complete in your environment and was skipped.',
           passed: false,
           detail: e?.message,
         });
       } finally {
         done += 1;
-        input.onProgress?.(done, tasks.length, task.label);
+        try { input.onProgress?.(done, tasks.length, task.label); } catch { /* progress callback must not crash scan */ }
       }
     })
   );
@@ -146,7 +152,30 @@ function computeScore(findings: Finding[]): number {
   let score = 100;
   for (const f of findings) {
     if (f.passed) continue;
-    score -= SEVERITY_WEIGHTS[f.severity];
+    const weight = SEVERITY_WEIGHTS[f.severity] ?? 1;
+    score -= weight;
   }
   return Math.max(0, Math.min(100, score));
+}
+
+// Final safety net around an async check: never throws, never rejects.
+// If a check (or any code it transitively calls — Capacitor plugin, network,
+// IndexedDB) fails, we return null so the engine simply skips it.
+async function safeAsync(
+  fn: () => Promise<Finding | null>,
+): Promise<Finding | null> {
+  try {
+    return await fn();
+  } catch {
+    return null;
+  }
+}
+
+// Sync variant for checks that don't return a promise.
+function safeSync(fn: () => Finding | null): Finding | null {
+  try {
+    return fn();
+  } catch {
+    return null;
+  }
 }
