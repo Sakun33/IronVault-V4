@@ -2238,32 +2238,20 @@ export default function Profile() {
                       </Button>
                     </a>
                     <Button variant="outline" className="w-full justify-start" onClick={() => {
-                      const salesiq = (window as any).$zoho?.salesiq;
-                      const tryOpen = (): boolean => {
-                        try {
-                          if (typeof salesiq?.floatwindow?.visible === 'function') {
-                            salesiq.floatwindow.visible('show');
-                            return true;
-                          }
-                          if (typeof salesiq?.floatbutton?.visible === 'function') {
-                            salesiq.floatbutton.visible('show');
-                            try { salesiq.floatwindow?.visible?.('show'); } catch { /* ignore */ }
-                            return true;
-                          }
-                          if (typeof salesiq?.chat?.start === 'function') {
-                            salesiq.chat.start();
-                            return true;
-                          }
-                        } catch (err) {
-                          console.warn('[salesiq] open failed', err);
+                      const tawk = (window as any).Tawk_API;
+                      try {
+                        if (tawk && typeof tawk.maximize === 'function') {
+                          tawk.maximize();
+                          return;
                         }
-                        return false;
-                      };
-                      if (tryOpen()) return;
-                      // SalesIQ SDK not ready — open the built-in support
-                      // modal so the click always produces a visible result.
-                      // The modal lets the user send a message that becomes a
-                      // Zoho Desk ticket (chat-like UX without the widget).
+                        if (tawk && typeof tawk.toggle === 'function') {
+                          tawk.toggle();
+                          return;
+                        }
+                      } catch (err) {
+                        console.warn('[tawk.to] open failed', err);
+                      }
+                      // tawk.to not ready — open built-in support ticket modal
                       setShowSupportModal(true);
                       toast({
                         title: 'Live chat is loading',

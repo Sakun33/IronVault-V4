@@ -379,30 +379,22 @@
       </div>
     </noscript>
 
-    <!-- Zoho SalesIQ Live Chat — single embed, must be the ONLY copy on the page -->
+    <!-- tawk.to Live Chat — 100% free, unlimited agents & chats -->
     <style>
-      /* Force SalesIQ widget visible above app layout (app uses overflow:hidden on root) */
-      .zsiq_floatmain,
-      .zsiq_theme1,
-      .siq_bR,
-      [id^="siqbt"],
-      .zls-sptwndw,
-      #zsiq_float,
-      div[class*="zsiq"],
-      iframe[id*="siq"] {
-        position: fixed !important;
-        z-index: 2147483647 !important;
-        overflow: visible !important;
-        clip: auto !important;
-        clip-path: none !important;
-      }
-      /* Position chat bubble above mobile bottom nav bar */
-      .zsiq_floatmain { bottom: 80px !important; right: 16px !important; }
-      @media (min-width: 768px) {
-        .zsiq_floatmain { bottom: 24px !important; right: 24px !important; }
-      }
+      /* Position tawk.to widget above mobile bottom nav bar */
+      #tawk-bubble-container { bottom: 80px !important; }
+      @media (min-width: 768px) { #tawk-bubble-container { bottom: 24px !important; } }
     </style>
-    <script>window.$zoho=window.$zoho || {};$zoho.salesiq=$zoho.salesiq||{ready:function(){console.log('[SalesIQ] Widget ready');}}</script>
-    <script id="zsiqscript" src="https://salesiq.zohopublic.in/widget?wc=siqa266e1f42413a689e18f90b8472f787bb18200c8b8fc4517bc699e896d4538aa" defer></script>
+    <script type="text/javascript">
+    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+    (function(){
+    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+    s1.async=true;
+    s1.src='https://embed.tawk.to/PROPERTY_ID/WIDGET_ID';
+    s1.charset='UTF-8';
+    s1.setAttribute('crossorigin','*');
+    s0.parentNode.insertBefore(s1,s0);
+    })();
+    </script>
   </body>
 </html>
