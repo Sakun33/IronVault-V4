@@ -1,4 +1,4 @@
-// IronVault PWA Service Worker v3.76.0
+// IronVault PWA Service Worker v3.77.0
 //
 // Strategy:
 // - Network-first for HTML / navigation requests (every deploy picks up).
@@ -9,7 +9,7 @@
 // - Cache-first for /assets/ images (heavier, low-churn).
 // - Skip-waiting + clients.claim so a new SW takes over immediately on
 //   install/activate — no "old tab keeps running v(n-1)" window.
-const CACHE_VERSION = 'ironvault-v3.76.0';
+const CACHE_VERSION = 'ironvault-v3.77.0';
 const ASSETS_CACHE  = 'ironvault-assets-v3.74.0';
 const DYNAMIC_CACHE = 'ironvault-dynamic-v3.74.0';
 

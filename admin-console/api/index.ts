@@ -10,8 +10,12 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 // Per-deploy random salt derived from JWT_SECRET so two deploys with the same
 // ADMIN_PASSWORD don't produce the same hash. scrypt is a memory-hard KDF —
 // hours-to-crack on commodity hardware vs seconds with unsalted SHA-256.
+// QA-2026-05 SEC: removed "ironvault-admin" fallback. If JWT_SECRET is unset
+// in production the deploy is misconfigured — fail fast so we never silently
+// downgrade to a publicly-known salt.
 function adminPasswordSalt(): Buffer {
-  return crypto.scryptSync(JWT_SECRET || "ironvault-admin", "ironvault-admin-v1", 16);
+  if (!JWT_SECRET) throw new Error("JWT_SECRET must be set");
+  return crypto.scryptSync(JWT_SECRET, "ironvault-admin-v1", 16);
 }
 
 let _adminPwdHashCache: Buffer | null = null;
@@ -124,14 +128,17 @@ const PLANS = [
 // able to talk to the admin API; CSRF-style attacks become trivial otherwise.
 const ADMIN_ALLOWED_ORIGIN = "https://admin.ironvault.app";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // QA-2026-05 SEC: only emit credentials + ACAO together when the request
+  // origin matches the allowlist. The old code always echoed ACAO=admin
+  // and Allow-Credentials=true even to mismatched origins; browsers refuse
+  // those responses, but the headers were misleading and a refactor away
+  // from a real CORS confusion bug.
   const origin = (req.headers.origin as string) || "";
   if (origin === ADMIN_ALLOWED_ORIGIN) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", ADMIN_ALLOWED_ORIGIN);
   }
-  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();

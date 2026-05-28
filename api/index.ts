@@ -475,6 +475,30 @@ function clearLoginFailures(ip: string) {
   _loginFailures.delete(ip);
 }
 
+// ── Generic per-IP + per-action rate limiter ─────────────────────────────────
+// Used for non-login auth endpoints that previously had no rate limiting:
+//   /api/auth/forgot-password (email-flood / SMTP-abuse vector)
+//   /api/auth/reset-password  (token brute-force vector)
+//   /api/auth/register        (signup flood / Zoho-CRM abuse vector)
+// Each (action, ip) tuple is bucketed independently so a forgot-password
+// flood does not lock a legitimate user out of /api/auth/token.
+// Same per-instance caveat as _loginFailures (see QA-R2 H7 above).
+const _actionBuckets = new Map<string, number[]>();
+function checkAndRecordAction(action: string, ip: string, max: number, windowMs: number): boolean {
+  // Returns true if rate-limited (does NOT record), false if allowed (records).
+  const now = Date.now();
+  const key = `${action}:${ip}`;
+  const cutoff = now - windowMs;
+  const fresh = (_actionBuckets.get(key) ?? []).filter(t => t > cutoff);
+  if (fresh.length >= max) {
+    _actionBuckets.set(key, fresh);
+    return true;
+  }
+  fresh.push(now);
+  _actionBuckets.set(key, fresh);
+  return false;
+}
+
 function setSecurityHeaders(res: VercelResponse) {
   // QA-R2 H6 — explicit policy:
   //   * NO 'unsafe-eval' anywhere (audited grep this file: none present).
@@ -487,7 +511,7 @@ function setSecurityHeaders(res: VercelResponse) {
   //     Razorpay's checkout SDK supports it.
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.ironvault.app https://api.razorpay.com; frame-src https://api.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
   );
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1941,6 +1965,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── POST /api/auth/register ────────────────────────────────────────────────
   // Creates a new account with pending_verification status and sends a verification email.
   if (path === '/api/auth/register' && req.method === 'POST') {
+    // QA-2026-05 SEC: per-IP signup rate limit. Without this an attacker can
+    // flood Zoho CRM (createCrmContact is fire-and-forget on every signup),
+    // exhaust verification-email quota, and spam the customers table. 3 / hour
+    // is enough for legitimate household / device-switch signups.
+    const _ip = getClientIp(req);
+    if (checkAndRecordAction('register', _ip, 3, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Too many signup attempts. Please try again in an hour.' });
+    }
     const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent, address, city, state, postalCode } = req.body || {};
     if (!email || !accountPasswordHash) return res.status(400).json({ error: 'email and accountPasswordHash required' });
     if (!/^[a-f0-9]{64}$/i.test(accountPasswordHash)) {
@@ -3597,6 +3629,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/forgot-password ─────────────────────────────────────────
   if (path === '/api/auth/forgot-password' && req.method === 'POST') {
+    // QA-2026-05 SEC: per-IP rate limit. Previously unprotected — an attacker
+    // could spam reset emails to any address (SMTP-quota / inbox-flood vector).
+    // Live audit confirmed 8 consecutive 200s with no throttle. 5 / 15min
+    // matches /api/auth/token; legitimate users rarely need more than 1.
+    const _ip = getClientIp(req);
+    if (checkAndRecordAction('forgot-pw', _ip, 5, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Too many password reset requests. Please try again in 15 minutes.' });
+    }
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'email required' });
     const normalizedEmail = (email as string).toLowerCase().trim();
@@ -3666,6 +3706,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── POST /api/auth/reset-password ──────────────────────────────────────────
   if (path === '/api/auth/reset-password' && req.method === 'POST') {
+    // QA-2026-05 SEC: per-IP rate limit. The reset token is 16 chars from a
+    // 32-char alphabet (~80 bits) so blind guessing is infeasible, but a
+    // network-eavesdropper or shoulder-surfer could brute-force a partial.
+    // 5 / 15min stops the cheap attack and matches forgot-password.
+    const _ip = getClientIp(req);
+    if (checkAndRecordAction('reset-pw', _ip, 5, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Too many reset attempts. Please try again in 15 minutes.' });
+    }
     const { email, token, newPasswordHash } = req.body || {};
     if (!email || !token || !newPasswordHash) {
       return res.status(400).json({ error: 'email, token and newPasswordHash required' });
