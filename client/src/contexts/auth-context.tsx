@@ -263,7 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           && payload.email.toLowerCase().trim() === normalizedEmail;
       } catch { return false; }
     })();
-    console.error('[AUTH-DEBUG] finalizeAccountLogin', {
+    console.debug('[AUTH-DEBUG] finalizeAccountLogin', {
       normalizedEmail,
       previousEmail,
       userChanged,
@@ -304,9 +304,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // acquireCloudToken call if we STILL don't have one — and if even that
     // fails, surface a window event so the UI can show a toast and a retry.
     if (!getCloudToken()) {
-      console.error('[AUTH-DEBUG] no token after login — falling back to acquireCloudToken');
+      console.debug('[AUTH-DEBUG] no token after login — falling back to acquireCloudToken');
       const t = await acquireCloudToken(normalizedEmail, passwordHash).catch(() => null);
-      console.error('[AUTH-DEBUG] acquireCloudToken result', { tokenAcquired: !!t });
+      console.debug('[AUTH-DEBUG] acquireCloudToken result', { tokenAcquired: !!t });
       if (!t) {
         console.error('[auth] cloud token acquisition failed — entitlement + cloud vaults will be unavailable until next login');
         try {
@@ -316,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch { /* noop */ }
       }
     }
-    console.error('[AUTH-DEBUG] finalizeAccountLogin done', {
+    console.debug('[AUTH-DEBUG] finalizeAccountLogin done', {
       tokenPresentAfter: !!getCloudToken(),
       tokenLen: getCloudToken()?.length || 0,
     });

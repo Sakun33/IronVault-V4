@@ -247,7 +247,7 @@ export default function SignupPage() {
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: '50%' }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] as [number, number, number, number], delay: 0.15 }}
               className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-teal-400"
             />
           </div>
@@ -448,7 +448,7 @@ export default function SignupPage() {
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 {PLANS.filter(p => p.id !== 'pro_family_member').map(plan => {
-                  const style = PLAN_CARD_STYLE[plan.id];
+                  const style = PLAN_CARD_STYLE[plan.id as keyof typeof PLAN_CARD_STYLE];
                   const Icon = style.icon;
                   const selected = selectedPlan === plan.id;
                   return (

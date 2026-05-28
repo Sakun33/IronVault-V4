@@ -30,7 +30,7 @@ function AnimatedNumber({ value, duration = 0.9, delay = 0 }: { value: number; d
   const mv = useMotionValue(0);
   const rounded = useTransform(mv, latest => Math.round(latest).toLocaleString());
   useEffect(() => {
-    const controls = motionAnimate(mv, value, { duration, delay, ease: [0.22, 1, 0.36, 1] });
+    const controls = motionAnimate(mv, value, { duration, delay, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] });
     return () => controls.stop();
   }, [value, duration, delay, mv]);
   return <motion.span>{rounded}</motion.span>;
@@ -38,7 +38,7 @@ function AnimatedNumber({ value, duration = 0.9, delay = 0 }: { value: number; d
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
 };
 const stagger = { show: { transition: { staggerChildren: 0.06 } } };
 

@@ -174,7 +174,12 @@ export class PrivacyPreservingAnalytics {
       const decryptedText = new TextDecoder().decode(decrypted);
       return JSON.parse(decryptedText);
     } catch (error) {
-      console.error('Analytics decryption failed:', error);
+      // Expected on first launch, after key rotation, or when the salt
+      // (regenerated per session in the constructor) doesn't match the
+      // salt used to encrypt the stored blob. The caller treats a thrown
+      // error the same as "no data" and re-creates defaults, so this
+      // self-heals on next write — don't pollute the production console.
+      console.debug('Analytics decryption failed (expected after key/session change):', error);
       throw new Error('Analytics decryption failed');
     }
   }
@@ -283,7 +288,9 @@ export class PrivacyPreservingAnalytics {
 
       return await this.decryptAnalytics(result.value);
     } catch (error) {
-      console.error('Failed to retrieve analytics:', error);
+      // Decryption failures here are expected (see decryptAnalytics).
+      // Returning null is the documented "no data, regenerate" path.
+      console.debug('Failed to retrieve analytics (self-heals on next write):', error);
       return null;
     }
   }

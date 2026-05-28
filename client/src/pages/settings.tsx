@@ -430,14 +430,6 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your IronVault preferences and privacy settings
-        </p>
-      </div>
-
       {/* Theme */}
       <Card className="rounded-2xl border bg-black/[0.03] dark:bg-white/[0.04] backdrop-blur-xl border-black/[0.08] dark:border-white/[0.08] shadow-none">
         <CardHeader>

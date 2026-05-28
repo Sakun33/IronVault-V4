@@ -371,11 +371,11 @@ export default function VaultPickerPage() {
       // retry via the banner that appears on cloudListFailed.
       safetyTimer = setTimeout(() => {
         if (cancelled) return;
-        console.error('[VAULT-DEBUG] cloud load safety timeout fired (15s)');
+        console.debug('[VAULT-DEBUG] cloud load safety timeout fired (15s)');
         setCloudVaultsLoading(false);
         setCloudListFailed(true);
       }, 15_000);
-      console.error('[VAULT-DEBUG] loadCloudVaults entered', {
+      console.debug('[VAULT-DEBUG] loadCloudVaults entered', {
         accountEmail,
         tokenPresent: !!getCloudToken(),
         tokenLen: getCloudToken()?.length || 0,
@@ -384,9 +384,9 @@ export default function VaultPickerPage() {
       let token = getCloudToken();
       if (!token) {
         const hash = getAccountPasswordHash();
-        console.error('[VAULT-DEBUG] no token, falling back to acquireCloudToken', { hashPresent: !!hash });
+        console.debug('[VAULT-DEBUG] no token, falling back to acquireCloudToken', { hashPresent: !!hash });
         if (hash) token = await acquireCloudToken(accountEmail, hash);
-        console.error('[VAULT-DEBUG] acquireCloudToken returned', { tokenPresent: !!token });
+        console.debug('[VAULT-DEBUG] acquireCloudToken returned', { tokenPresent: !!token });
       }
       if (!token) {
         // P0 FIX: surface the missing-token state instead of silently
@@ -403,7 +403,7 @@ export default function VaultPickerPage() {
       if (!cancelled) setCloudTokenMissing(false);
       try {
         const result = await listCloudVaultsWithStatus();
-        console.error('[VAULT-DEBUG] listCloudVaults result', {
+        console.debug('[VAULT-DEBUG] listCloudVaults result', {
           ok: result.ok,
           status: result.status,
           vaultCount: result.vaults?.length || 0,

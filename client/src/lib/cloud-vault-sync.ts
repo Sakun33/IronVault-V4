@@ -104,7 +104,7 @@ export interface ListCloudVaultsResult {
 }
 export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult> {
   const tokenLen = (getCloudToken() || '').length;
-  console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus call', { tokenPresent: tokenLen > 0, tokenLen });
+  console.debug('[CLOUD-DEBUG] listCloudVaultsWithStatus call', { tokenPresent: tokenLen > 0, tokenLen });
   // Skip the network round-trip entirely if there's no token — the request
   // would 401 anyway and on Android WebView a hung TLS handshake to a 401
   // endpoint is the same freeze symptom as a real network hang.
@@ -117,7 +117,7 @@ export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult
       { headers: authHeaders() },
       10_000,
     );
-    console.error('[CLOUD-DEBUG] listCloudVaultsWithStatus response', { status: res.status, ok: res.ok });
+    console.debug('[CLOUD-DEBUG] listCloudVaultsWithStatus response', { status: res.status, ok: res.ok });
     if (!res.ok) {
       console.error('[listCloudVaults] non-OK response:', res.status, res.statusText);
       // 401 specifically means "your token expired/was revoked" — the global
