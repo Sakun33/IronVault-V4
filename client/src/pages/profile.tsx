@@ -2251,11 +2251,10 @@ export default function Profile() {
                       } catch (err) {
                         console.warn('[tawk.to] open failed', err);
                       }
-                      // tawk.to not ready — open built-in support ticket modal
-                      setShowSupportModal(true);
+                      // tawk.to not loaded yet — show loading message
                       toast({
-                        title: 'Live chat is loading',
-                        description: 'Send us a message and we\'ll respond by email — usually within a few hours.',
+                        title: 'Opening live chat...',
+                        description: 'Please wait a moment while we connect you to support.',
                       });
                     }}>
                       <MessageSquare className="w-4 h-4 mr-2" />
