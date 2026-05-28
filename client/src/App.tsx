@@ -48,6 +48,7 @@ const ResetPasswordPage = React.lazy(() => import("@/pages/reset-password"));
 const VerifyEmailPage = React.lazy(() => import("@/pages/verify-email"));
 const Dashboard = React.lazy(() => import("@/pages/dashboard"));
 const SecurityHealth = React.lazy(() => import("@/pages/security-health"));
+const SecurityScanner = React.lazy(() => import("@/pages/security-scanner"));
 const Passwords = React.lazy(() => import("@/pages/passwords"));
 const Subscriptions = React.lazy(() => import("@/pages/subscriptions"));
 const Notes = React.lazy(() => import("@/pages/notes"));
@@ -118,6 +119,7 @@ function warmRouteChunks() {
     () => import("@/pages/api-keys"),
     () => import("@/pages/documents"),
     () => import("@/pages/security-health"),
+    () => import("@/pages/security-scanner"),
     () => import("@/pages/investments"),
     () => import("@/pages/bank-statements"),
     () => import("@/pages/profile"),
@@ -143,7 +145,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2, Clock, Siren, Sparkles } from "lucide-react";
+import { Search, RefreshCw, Settings as SettingsIcon, Bookmark, Key, BarChart3, Upload, Download, BookOpen, DollarSign, Bell, FileText, Building2, TrendingUp, Plus, Menu, X, Shield, ShieldAlert, Target, User, XCircle, ShieldCheck, Lock, Zap, ChevronDown, ChevronLeft, ChevronRight, Database, Check, MoreVertical, Sun, Moon, LogOut, CreditCard as CardIcon, UserCircle, Bitcoin, Wifi, KeyRound, Calculator, QrCode as QrCodeIcon, Heart, Users, Wand2, Clock, Siren, Sparkles, ScanSearch } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { BottomTabs, MoreSheet, HamburgerDrawer, SearchModal, type TabItem, type SectionItem } from "@/components/mobile";
 // ── Modal/dialog components — these only render when their `open` state
@@ -473,7 +475,8 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   ];
   // Security & tools (third section)
   const toolsNavItems = [
-    { id: 'dark-web', label: 'Dark Web Monitor', icon: ShieldAlert, count: null as number | null, color: 'text-red-500', requiresPro: true },
+    { id: 'security-scanner', label: 'Security Scanner', icon: ScanSearch, count: null as number | null, color: 'text-cyan-500', requiresPro: false },
+    { id: 'dark-web', label: 'Dark Web Monitor', icon: ShieldAlert, count: null, color: 'text-red-500', requiresPro: true },
     { id: 'phishing', label: 'Phishing Shield', icon: ShieldCheck, count: null, color: 'text-emerald-500', requiresPro: true },
     { id: 'breach-timeline', label: 'Breach Timeline', icon: Clock, count: null, color: 'text-rose-500', requiresPro: true },
     { id: 'form-filler', label: 'Smart Form Filler', icon: Wand2, count: null, color: 'text-violet-500', requiresPro: true },
@@ -541,6 +544,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'goals', label: 'Goals', icon: Target, href: '/goals', group: 'finance' },
     // Tools group
     { id: 'security-health', label: 'Security Health', icon: ShieldAlert, href: '/security-health', group: 'tools', count: breachedCount > 0 ? breachedCount : null },
+    { id: 'security-scanner', label: 'Security Scanner', icon: ScanSearch, href: '/security-scanner', group: 'tools' },
     { id: 'reminders', label: 'Reminders', icon: Bell, href: '/reminders', group: 'tools', count: stats.totalReminders },
     { id: 'logging', label: 'Activity Logs', icon: FileText, href: '/logging', group: 'tools' },
     // Account group
@@ -1562,6 +1566,7 @@ function Router() {
           component — no auth re-evaluation. */}
       <Route path="/dashboard"><MainLayout><Dashboard /></MainLayout></Route>
       <Route path="/security-health"><MainLayout><SecurityHealth /></MainLayout></Route>
+      <Route path="/security-scanner"><MainLayout><SecurityScanner /></MainLayout></Route>
       <Route path="/passwords"><MainLayout><Passwords /></MainLayout></Route>
       <Route path="/subscriptions"><MainLayout><Subscriptions /></MainLayout></Route>
       <Route path="/notes"><MainLayout><Notes /></MainLayout></Route>
