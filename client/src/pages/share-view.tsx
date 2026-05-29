@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Copy, Eye, EyeOff, AlertTriangle, Lock, ExternalLink, Check } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { CryptoService } from '@/lib/crypto';
+import { apiBase } from '@/native/platform';
 
 interface ShareData {
   name: string;
@@ -33,7 +34,7 @@ export default function ShareView() {
     const params = new URLSearchParams(frag);
     const keyB64 = params.get('k');
 
-    fetch(`/api/share/${token}`)
+    fetch(`${apiBase()}/api/share/${token}`)
       .then(r => r.json())
       .then(async d => {
         if (d.error) { setError(d.error); return; }

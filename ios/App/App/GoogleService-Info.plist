@@ -7,7 +7,7 @@
 	<key>REVERSED_CLIENT_ID</key>
 	<string>com.googleusercontent.apps.137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5</string>
 	<key>BUNDLE_ID</key>
-	<string>com.ironvault.app</string>
+	<string>app.ironvault.ios</string>
 	<key>PROJECT_ID</key>
 	<string>citric-bee-495700-v6</string>
 	<key>GCM_SENDER_ID</key>

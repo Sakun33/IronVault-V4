@@ -20,6 +20,7 @@ import {
 } from '@/native/biometrics';
 import { securitySettingsService } from '@/lib/security/security-settings';
 import type { PasswordEntry } from '@shared/schema';
+import { apiBase } from '@/native/platform';
 
 const isNative = () => Capacitor.isNativePlatform();
 const platform = (): 'web' | 'ios' | 'android' => {
@@ -655,7 +656,7 @@ export async function checkTwoFactor(accountEmail: string | null): Promise<Findi
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 2500);
-    const r = await fetch('/api/auth/2fa/status', {
+    const r = await fetch(`${apiBase()}/api/auth/2fa/status`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -734,7 +735,7 @@ export async function checkHstsProbe(): Promise<Finding> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 2500);
-    const r = await fetch('/api/health', { method: 'GET', signal: ctrl.signal });
+    const r = await fetch(`${apiBase()}/api/health`, { method: 'GET', signal: ctrl.signal });
     clearTimeout(t);
     const ok = r.ok;
     return {
