@@ -1990,16 +1990,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const verifyToken = cryptoRandomString(64, tokenChars);
       const storedHash = await hashAccountPassword(accountPasswordHash);
 
-      // TEMP v3.80.2 — Zoho SMTP credential rejected (554 5.7.8 Access Restricted),
-      // so verification emails do not deliver. Create the account as 'active' and
-      // skip the verify-email gate so users can register and log in. The
-      // verification_token is still stored so we can flip the flag back and
-      // resume sending verification emails once ZOHO_MAIL_PASSWORD is rotated to
-      // an app-specific password. To revert: change 'active' below back to
-      // 'pending_verification' and update the success message.
       const { rows: newUser } = await db.query(
         `INSERT INTO crm_users (email, full_name, country, marketing_consent, support_consent, account_password_hash, account_status, verification_token, verification_token_expires_at)
-         VALUES ($1, $2, $3, $4, true, $5, 'active', $6, NOW() + INTERVAL '24 hours')
+         VALUES ($1, $2, $3, $4, true, $5, 'pending_verification', $6, NOW() + INTERVAL '24 hours')
          RETURNING id`,
         [normalizedEmail, safeFullName, country || 'US', marketingConsent || false, storedHash, verifyToken]
       );
@@ -2044,9 +2037,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tmpl = verificationEmail(safeFullName, verifyLink);
       const emailSent = await sendEmail({ to: normalizedEmail, ...tmpl });
 
-      // TEMP v3.80.2 — verification bypassed (see comment above). Account is
-      // active immediately so the client should route straight to login.
-      return res.status(201).json({ success: true, emailSent, verificationRequired: false, message: 'Account created. You can sign in now.' });
+      return res.status(201).json({ success: true, emailSent, verificationRequired: true, message: 'Account created. Please check your email to verify your account.' });
     } catch (err: any) {
       console.error('auth/register error:', err.message);
       return res.status(500).json({ error: 'Failed to create account' });
@@ -2283,14 +2274,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [upgraded, userId]);
         } catch (e: any) { console.error('[auth/token] hash upgrade failed:', e.message); }
       }
-      // TEMP v3.80.3 — companion to v3.80.2 register-status bypass. Pre-v3.80.2
-      // signups are stuck on 'pending_verification' because Zoho SMTP is rejecting
-      // auth (554 5.7.8 Access Restricted), so they cannot click a verify link
-      // that was never delivered. Allow them to log in while ZOHO_MAIL_PASSWORD is
-      // rotated to an app-specific password. To revert: uncomment the block below.
-      // if (userRows[0].account_status === 'pending_verification') {
-      //   return res.status(403).json({ error: 'email_not_verified' });
-      // }
+      if (userRows[0].account_status === 'pending_verification') {
+        return res.status(403).json({ error: 'email_not_verified' });
+      }
       // 2FA gate: if enabled, do NOT issue a session token. Return a short-lived
       // pending-token instead — caller must POST it + the TOTP code to
       // /api/auth/2fa/validate to receive the real token.
