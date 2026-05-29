@@ -358,8 +358,12 @@ export default function MultiVaultLogin() {
       const result = await unlockWithBiometric(biometricVaultId);
       
       if (result.success && result.deviceKey) {
-        // Use pre-derived key directly (bypasses KDF re-derivation)
-        const unlockSuccess = await unlockVaultWithKey(biometricVaultId, result.deviceKey);
+        // result.deviceKey is the plaintext master password (the deprecated
+        // wrapper aliases masterPassword → deviceKey). unlockVaultWithKey
+        // expects a pre-derived base64 AES key, so feeding it the password
+        // produced a silent decrypt failure on iOS Face ID. Route through
+        // unlockVault, which runs the PBKDF2 derivation internally.
+        const unlockSuccess = await unlockVault(biometricVaultId, result.deviceKey);
         
         if (unlockSuccess) {
           const vaultName = vaults.find(v => v.id === biometricVaultId)?.name || 'Vault';

@@ -288,6 +288,37 @@ class BiometricKeystore {
   }
 
   /**
+   * Authoritative async lookup of the account email. iOS WKWebView can purge
+   * localStorage independently of Capacitor Preferences, leaving the encrypted
+   * biometric entry intact but the login UI unable to surface the "Sign in
+   * with Face ID" button. This rehydrates the email hint from the first
+   * still-valid Preferences entry. Requires a biometric prompt because reading
+   * the entry decrypts it.
+   */
+  async rehydrateAccountEmail(): Promise<string | null> {
+    if (!isNativeApp()) return null;
+    const cached = this.getAccountEmail();
+    if (cached) return cached;
+
+    const ids = await this.getEnrolledVaultIds();
+    if (ids.length === 0) return null;
+
+    // Touch only the email field — needs decrypt, which needs a biometric
+    // gesture. Callers should gate this behind an explicit user action
+    // ("Use biometric") so the prompt isn't surprising.
+    const auth = await this.authenticate('Restore biometric sign-in');
+    if (!auth.ok) return null;
+    try {
+      const entry = await this.readEntry(ids[0]);
+      if (!entry?.email) return null;
+      localStorage.setItem(ACCOUNT_EMAIL_FLAG, entry.email);
+      return entry.email;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Account-level sign in. Prompts biometric, returns email + accountPassword
    * from the first enrolled vault entry. Both passwords decrypt with the same
    * gesture, so this implicitly authorises the vault unlock that follows.

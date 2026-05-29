@@ -1603,7 +1603,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   function passkeyOrigin(): string[] {
     const env = process.env.PASSKEY_ORIGIN;
     if (env) return env.split(',').map(s => s.trim()).filter(Boolean);
-    return ['https://www.ironvault.app', 'https://ironvault.app'];
+    // capacitor://localhost is the WebView origin reported by clientDataJSON
+    // on iOS Capacitor; capacitor://www.ironvault.app appears when a custom
+    // hostname server config is used. Both are produced by our own signed
+    // native app — the bundle/RP-ID binding still anchors the credential to
+    // ironvault.app, so accepting these origins does not broaden attack surface
+    // beyond what the App Store signature already guarantees.
+    return [
+      'https://www.ironvault.app',
+      'https://ironvault.app',
+      'capacitor://localhost',
+      'capacitor://www.ironvault.app',
+    ];
   }
 
   // CRIT (WebAuthn): explicit server-side origin & type check on the
