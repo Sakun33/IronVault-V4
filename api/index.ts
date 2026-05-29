@@ -259,11 +259,26 @@ const _APP_URL   = process.env.APP_URL || 'https://www.ironvault.app';
 const emailConfigured = !!process.env.ZOHO_MAIL_PASSWORD;
 
 function _getTransporter() {
+  // Port 587 STARTTLS instead of 465 SSL: Vercel's egress IPs to Zoho's
+  // smtppro.zoho.in:465 endpoint hit "Greeting never received" / TLS-handshake
+  // failures — either Zoho's SSL listener rate-limits AWS-range IPs or the
+  // 465 implicit-TLS path is being filtered. Port 587 (submission) is a
+  // separate code path on Zoho's side and is the recommended modern port.
+  // family: 4 forces IPv4 — some Vercel regions try IPv6 first and the
+  // AAAA path to Zoho IN datacenter has been flaky. Explicit short timeouts
+  // let the Vercel function fail fast and surface clear errors rather than
+  // hanging until the function's 300s budget runs out.
   return nodemailer.createTransport({
     host: 'smtppro.zoho.in',
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
+    requireTLS: true,
     auth: { user: _FROM_ADDR, pass: process.env.ZOHO_MAIL_PASSWORD },
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    tls: { minVersion: 'TLSv1.2' },
   });
 }
 
@@ -286,9 +301,12 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
       envelope: { from: _FROM_ADDR, to },
       to, subject, html,
     });
-    void result;
+    console.log('[email] sent →', to, 'id=', (result as any)?.messageId, 'response=', (result as any)?.response);
     return true;
-  } catch (e: any) { console.error('[email] Zoho send error', e.message); return false; }
+  } catch (e: any) {
+    console.error('[email] Zoho send error', { to, message: e?.message, code: e?.code, command: e?.command, response: e?.response });
+    return false;
+  }
 }
 // HTML-escape user-controlled strings before injection into email template HTML.
 // Prevents phishing-via-vault-name and HTML injection in ticket subjects / agent
