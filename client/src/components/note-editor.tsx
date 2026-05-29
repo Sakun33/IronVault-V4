@@ -9,7 +9,7 @@ import {
   Code, Minus, Tag as TagIcon, X, BookOpen, Palette, Copy as CopyIcon,
   Share2, Highlighter, Quote, Search as SearchIcon, Plus,
   RotateCcw, RotateCw, Indent, Outdent, RemoveFormatting,
-  Link2, Type, ChevronDown,
+  Link2, Type, ChevronDown, Info,
 } from 'lucide-react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -220,6 +220,7 @@ export function NoteEditor({
   const [notebookMenuOpen, setNotebookMenuOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Tick state to force re-render when TipTap selection/transaction fires
   // so toolbar active-state highlights update in real time.
   const [, setStateTick] = useState(0);
@@ -550,6 +551,7 @@ export function NoteEditor({
       if (e.key === 'Escape') {
         if (slashMenu.open) { setSlashMenu({ open: false, pos: null, query: '' }); return; }
         if (colorPickerOpen) { setColorPickerOpen(false); return; }
+        if (detailsOpen) { setDetailsOpen(false); return; }
         if (moreMenuOpen) { setMoreMenuOpen(false); return; }
         if (searchOpen) { setSearchOpen(false); return; }
         if (tagInputOpen) { setTagInputOpen(false); return; }
@@ -578,7 +580,7 @@ export function NoteEditor({
       window.removeEventListener('notes:save-request', onExternalSave);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen]);
+  }, [open, moreMenuOpen, tagInputOpen, slashMenu.open, searchOpen, colorPickerOpen, detailsOpen]);
 
   // Close color picker when tapping outside
   useEffect(() => {
@@ -801,6 +803,15 @@ export function NoteEditor({
                 >
                   <button
                     type="button"
+                    onClick={() => { setDetailsOpen(true); setMoreMenuOpen(false); }}
+                    data-testid="button-note-details"
+                    className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-white/[0.06] transition-colors"
+                  >
+                    <Info className="w-3.5 h-3.5" /> Note details
+                  </button>
+                  <div className="md:hidden h-px bg-white/[0.06] my-1" />
+                  <button
+                    type="button"
                     onClick={() => { setViewerMode(v => !v); setMoreMenuOpen(false); }}
                     className="w-full flex items-center justify-between px-3 py-2 text-sm text-foreground hover:bg-white/[0.06] transition-colors"
                   >
@@ -1007,7 +1018,7 @@ export function NoteEditor({
       </div>
 
       <footer
-        className="flex-shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-md transition-transform duration-150"
+        className="hidden md:block flex-shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-md transition-transform duration-150"
         style={{
           paddingBottom: keyboardOffset ? 0 : 'env(safe-area-inset-bottom)',
           transform: keyboardOffset ? `translateY(-${keyboardOffset}px)` : undefined,
@@ -1154,6 +1165,146 @@ export function NoteEditor({
           </div>
         </div>
       </footer>
+
+      {/* Mobile note-details bottom sheet — notebook, tags, word count.
+          Desktop keeps everything inline in the footer above. */}
+      <AnimatePresence>
+        {detailsOpen && (
+          <motion.div
+            key="note-details-sheet"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[200] md:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Note details"
+          >
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setDetailsOpen(false)}
+              aria-hidden
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="absolute bottom-0 left-0 right-0 rounded-t-2xl bg-background border-t border-border/40 px-4 pt-3 pb-[calc(20px+env(safe-area-inset-bottom))] max-h-[80vh] overflow-y-auto"
+            >
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" aria-hidden />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-foreground">Note details</h3>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(false)}
+                  aria-label="Close"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-white/[0.06]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Notebook */}
+              <div className="mb-5">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground/70 mb-2">Notebook</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {notebookOptions.map(nb => {
+                    const selected = nb.name.toLowerCase() === notebook.toLowerCase();
+                    return (
+                      <button
+                        type="button"
+                        key={nb.name}
+                        onClick={() => setNotebook(nb.name)}
+                        data-testid={`sheet-notebook-${nb.name.toLowerCase().replace(/\s+/g, '-')}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] capitalize transition-colors ${
+                          selected
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/30'
+                            : 'bg-white/[0.04] text-foreground border border-white/10 hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        <span className="truncate">{nb.icon ? `${nb.icon} ${nb.name}` : nb.name}</span>
+                        {selected && <Check className="w-3 h-3 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => { setNewNotebookOpen(true); setDetailsOpen(false); }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[13px] text-emerald-300 bg-emerald-500/10 border border-emerald-400/30 hover:bg-emerald-500/15 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> New
+                  </button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="mb-5">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground/70 mb-2">Tags</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {tags.map(t => (
+                    <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/10 text-[12px] text-foreground">
+                      <TagIcon className="w-2.5 h-2.5 opacity-60" />
+                      {t}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${t}`}
+                        onClick={() => removeTag(t)}
+                        className="opacity-60 hover:opacity-100 ml-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <div className="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/30">
+                    <span aria-hidden className="text-[12px] text-emerald-300/70 select-none">#</span>
+                    <input
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value.replace(/^#+/, ''))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+                        else if (e.key === 'Escape') { e.preventDefault(); setTagInput(''); }
+                        else if (e.key === 'Backspace' && !tagInput && tags.length) { setTags(prev => prev.slice(0, -1)); }
+                      }}
+                      placeholder="add tag"
+                      className="bg-transparent border-0 outline-none text-[12px] w-20 text-emerald-200 placeholder:text-emerald-300/50"
+                      aria-label="Add tag"
+                    />
+                  </div>
+                </div>
+                {tagSuggestions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {tagSuggestions.slice(0, 6).map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => addTag(t)}
+                        className="px-2 py-0.5 rounded-full text-[11px] text-muted-foreground hover:text-foreground bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06]"
+                      >
+                        #{t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Word count */}
+              <div className="text-[12px] text-muted-foreground tabular-nums pb-2 border-b border-border/30">
+                {wordCount} word{wordCount === 1 ? '' : 's'}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(false)}
+                className="mt-4 w-full h-11 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors"
+              >
+                Done
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 
