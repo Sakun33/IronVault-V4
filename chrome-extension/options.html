@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IronVault settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="iv-opt-shell">
+    <header class="iv-opt-header">
+      <img src="icons/icon-128.png" alt="" width="40" height="40">
+      <div>
+        <h1>IronVault autofill</h1>
+        <p class="iv-opt-sub">Choose what to fill on the web, and where to keep quiet.</p>
+      </div>
+    </header>
+
+    <section class="iv-opt-card">
+      <h2>What to autofill</h2>
+      <p class="iv-opt-help">Each toggle hides IronVault's inline icon for that form type.</p>
+
+      <label class="iv-opt-row">
+        <div>
+          <strong>Logins &amp; signups</strong>
+          <span>Fill saved passwords. Offer to save new ones.</span>
+        </div>
+        <input id="opt-login" type="checkbox" class="iv-opt-switch">
+      </label>
+
+      <label class="iv-opt-row">
+        <div>
+          <strong>Credit cards</strong>
+          <span>Card number, holder, expiry, CVV, billing zip.</span>
+        </div>
+        <input id="opt-card" type="checkbox" class="iv-opt-switch">
+      </label>
+
+      <label class="iv-opt-row">
+        <div>
+          <strong>Identities &amp; addresses</strong>
+          <span>Name, email, phone, postal address.</span>
+        </div>
+        <input id="opt-identity" type="checkbox" class="iv-opt-switch">
+      </label>
+    </section>
+
+    <section class="iv-opt-card">
+      <h2>Inline UI</h2>
+
+      <label class="iv-opt-row">
+        <div>
+          <strong>Inline badge inside input fields</strong>
+          <span>Show the IronVault icon anchored to detected inputs.</span>
+        </div>
+        <input id="opt-badge" type="checkbox" class="iv-opt-switch">
+      </label>
+
+      <label class="iv-opt-row">
+        <div>
+          <strong>Offer to save new passwords</strong>
+          <span>Prompt after sign-up / sign-in submissions.</span>
+        </div>
+        <input id="opt-save" type="checkbox" class="iv-opt-switch">
+      </label>
+    </section>
+
+    <section class="iv-opt-card">
+      <h2>Keyboard shortcut</h2>
+      <p class="iv-opt-help">Press this on any input to open the IronVault picker for the focused field.</p>
+      <div class="iv-opt-shortcut-row">
+        <kbd id="iv-opt-shortcut">Ctrl + Shift + L</kbd>
+        <button type="button" id="iv-opt-change-shortcut" class="iv-opt-btn">Change shortcut</button>
+      </div>
+    </section>
+
+    <section class="iv-opt-card">
+      <h2>Never save for these sites</h2>
+      <p class="iv-opt-help">IronVault won't offer to save credentials on these domains.</p>
+      <ul id="iv-opt-neversave" class="iv-opt-neversave"></ul>
+      <p id="iv-opt-neversave-empty" class="iv-opt-empty" hidden>No sites on the never-save list yet.</p>
+    </section>
+
+    <footer class="iv-opt-footer">
+      <span id="iv-opt-status" class="iv-opt-status" aria-live="polite"></span>
+      <a class="iv-opt-link" href="https://www.ironvault.app" target="_blank" rel="noreferrer">Open IronVault →</a>
+    </footer>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+/* IronVault inline autofill UI styles.
+   All selectors prefixed .iv-af-* and use !important to survive aggressive
+   page styles. Without Shadow DOM this is the simplest defense, and the
+   high-z-index + reset works for the vast majority of pages. */
+
+.iv-af-badge {
+  position: absolute !important;
+  z-index: 2147483646 !important;
+  width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid rgba(79, 70, 229, 0.45) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,244,255,0.98) 100%) !important;
+  color: #4f46e5 !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow:
+    0 2px 6px rgba(79, 70, 229, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  pointer-events: auto !important;
+  outline: none !important;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease !important;
+  user-select: none !important;
+}
+.iv-af-badge:hover {
+  border-color: rgba(79, 70, 229, 0.8) !important;
+  box-shadow:
+    0 3px 10px rgba(79, 70, 229, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset !important;
+  transform: scale(1.06) !important;
+}
+.iv-af-badge:active { transform: scale(0.96) !important; }
+
+.iv-af-badge.iv-af-type-card {
+  border-color: rgba(13, 148, 136, 0.4) !important;
+  color: #0d9488 !important;
+}
+.iv-af-badge.iv-af-type-card:hover {
+  border-color: rgba(13, 148, 136, 0.8) !important;
+  box-shadow:
+    0 3px 10px rgba(13, 148, 136, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset !important;
+}
+.iv-af-badge.iv-af-type-identity {
+  border-color: rgba(217, 119, 6, 0.4) !important;
+  color: #d97706 !important;
+}
+.iv-af-badge.iv-af-type-identity:hover {
+  border-color: rgba(217, 119, 6, 0.8) !important;
+  box-shadow:
+    0 3px 10px rgba(217, 119, 6, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset !important;
+}
+
+.iv-af-badge-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+}
+
+/* ── Picker ─────────────────────────────────────────────────────────────── */
+.iv-af-picker {
+  position: absolute !important;
+  z-index: 2147483647 !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.22),
+    0 8px 16px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset !important;
+  padding: 6px !important;
+  margin: 0 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  max-height: 320px !important;
+  overflow-y: auto !important;
+  width: 300px !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+}
+
+.iv-af-picker-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 10px 6px !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+  margin: 0 0 4px !important;
+}
+.iv-af-picker-icon {
+  display: inline-flex !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 6px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(79, 70, 229, 0.1) !important;
+  color: #4f46e5 !important;
+}
+.iv-af-picker.iv-af-type-card .iv-af-picker-icon {
+  background: rgba(13, 148, 136, 0.12) !important;
+  color: #0d9488 !important;
+}
+.iv-af-picker.iv-af-type-identity .iv-af-picker-icon {
+  background: rgba(217, 119, 6, 0.12) !important;
+  color: #d97706 !important;
+}
+.iv-af-picker-title {
+  flex: 1 !important;
+  color: inherit !important;
+}
+
+.iv-af-picker-body {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  padding: 2px !important;
+}
+
+.iv-af-row {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  text-align: left !important;
+  padding: 10px 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  cursor: pointer !important;
+  border-radius: 10px !important;
+  font-family: inherit !important;
+  gap: 2px !important;
+  transition: background 120ms ease, transform 120ms ease !important;
+}
+.iv-af-row:hover {
+  background: rgba(79, 70, 229, 0.08) !important;
+}
+.iv-af-row:active {
+  transform: scale(0.99) !important;
+}
+.iv-af-row.is-filling {
+  opacity: 0.6 !important;
+  pointer-events: none !important;
+}
+
+.iv-af-name {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  color: #0f172a !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.iv-af-sub {
+  color: #64748b !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.iv-af-msg {
+  padding: 12px 14px !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+}
+.iv-af-err { color: #dc2626 !important; }
+
+.iv-af-hint {
+  padding: 4px 14px 10px !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+.iv-af-cta {
+  display: block !important;
+  margin: 4px 8px 8px !important;
+  width: calc(100% - 16px) !important;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  transition: filter 120ms ease !important;
+}
+.iv-af-cta:hover { filter: brightness(1.08) !important; }
+
+/* ── Save bar ───────────────────────────────────────────────────────────── */
+.iv-af-savebar {
+  position: fixed !important;
+  top: 16px !important;
+  left: 50% !important;
+  transform: translateX(-50%) translateY(0) !important;
+  z-index: 2147483647 !important;
+  max-width: 560px !important;
+  width: calc(100% - 32px) !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  color: #f8fafc !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    0 8px 18px rgba(0, 0, 0, 0.16) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  padding: 10px 12px !important;
+  animation: ivAfSlideIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  backdrop-filter: blur(18px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+}
+.iv-af-savebar.is-leaving {
+  animation: ivAfSlideOut 180ms ease forwards !important;
+}
+.iv-af-savebar-inner {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+.iv-af-savebar-icon {
+  display: inline-flex !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 9px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(129, 140, 248, 0.18) !important;
+  color: #a5b4fc !important;
+  flex-shrink: 0 !important;
+}
+.iv-af-savebar-text {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.iv-af-savebar-title {
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+}
+.iv-af-savebar-sub {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.iv-af-savebar-actions {
+  display: flex !important;
+  gap: 6px !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+.iv-af-savebar-btn {
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 7px 12px !important;
+  border-radius: 8px !important;
+  border: 1px solid transparent !important;
+  cursor: pointer !important;
+  color: #cbd5e1 !important;
+  background: transparent !important;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, filter 120ms ease !important;
+}
+.iv-af-savebar-btn:hover {
+  color: #f8fafc !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+.iv-af-savebar-btn.iv-af-savebar-primary {
+  color: #fff !important;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%) !important;
+  border-color: rgba(79, 70, 229, 0.6) !important;
+  font-weight: 600 !important;
+}
+.iv-af-savebar-btn.iv-af-savebar-primary:hover { filter: brightness(1.1) !important; }
+.iv-af-savebar-btn.iv-af-savebar-primary:disabled {
+  opacity: 0.7 !important;
+  cursor: progress !important;
+}
+
+@keyframes ivAfSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes ivAfSlideOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+}
+
+/* ── Dark-mode page palette ─────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .iv-af-badge {
+    background: linear-gradient(180deg, rgba(24,24,27,0.96) 0%, rgba(15,15,18,0.96) 100%) !important;
+    color: #a5b4fc !important;
+    border-color: rgba(165, 180, 252, 0.45) !important;
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.45),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset !important;
+  }
+  .iv-af-badge:hover {
+    border-color: rgba(165, 180, 252, 0.85) !important;
+    box-shadow:
+      0 3px 12px rgba(165, 180, 252, 0.34),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset !important;
+  }
+  .iv-af-badge.iv-af-type-card        { color: #5eead4 !important; border-color: rgba(94, 234, 212, 0.4) !important; }
+  .iv-af-badge.iv-af-type-identity    { color: #fcd34d !important; border-color: rgba(252, 211, 77, 0.4) !important; }
+
+  .iv-af-picker {
+    background: rgba(20, 22, 28, 0.96) !important;
+    color: #f1f5f9 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow:
+      0 24px 48px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset !important;
+  }
+  .iv-af-picker-head { color: #94a3b8 !important; border-color: rgba(255, 255, 255, 0.06) !important; }
+  .iv-af-picker-icon { background: rgba(129, 140, 248, 0.18) !important; color: #a5b4fc !important; }
+  .iv-af-picker.iv-af-type-card .iv-af-picker-icon     { background: rgba(94, 234, 212, 0.18) !important; color: #5eead4 !important; }
+  .iv-af-picker.iv-af-type-identity .iv-af-picker-icon { background: rgba(252, 211, 77, 0.18) !important; color: #fcd34d !important; }
+
+  .iv-af-row       { color: #f1f5f9 !important; }
+  .iv-af-row:hover { background: rgba(129, 140, 248, 0.14) !important; }
+  .iv-af-name      { color: #f8fafc !important; }
+  .iv-af-sub       { color: #94a3b8 !important; }
+  .iv-af-msg       { color: #94a3b8 !important; }
+  .iv-af-hint      { color: #64748b !important; }
+}

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IronVault — Secure Autofill",
   "short_name": "IronVault",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Zero-knowledge autofill from your IronVault. Master password required — vault stays end-to-end encrypted.",
   "minimum_chrome_version": "116",
   "incognito": "split",
@@ -12,7 +12,9 @@
     "alarms",
     "downloads",
     "tabs",
-    "notifications"
+    "notifications",
+    "scripting",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "https://www.ironvault.app/*",
@@ -32,6 +34,10 @@
       "128": "icons/icon-128.png"
     }
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -41,12 +47,40 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": [
+        "content/detector.js",
+        "content/filler.js",
+        "content/ui.js",
+        "content/save-prompt.js",
+        "content/main.js"
+      ],
+      "css": ["content/styles.css"],
       "run_at": "document_idle",
       "all_frames": true
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "commands": {
+    "open-autofill-picker": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "Open IronVault autofill picker on the focused field"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open IronVault popup"
+    }
+  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'"
   }

@@ -53,7 +53,19 @@ const SESSION_CHECK_PERIOD_MIN = 5;
 //   K_CACHE: { encryptedBlob, vaultId, vaultName, token, email, syncedAt,
 //              sessionDurationHours, sessionExpiresAt, expiryWarned }
 //   rememberedEmail (string)
+//   K_NEVER_SAVE: string[] — domains the user said "Never save for this site"
+//   K_AUTOFILL_SETTINGS: object — options page settings
 const K_CACHE = 'ironvault.cache';
+const K_NEVER_SAVE = 'ironvault.neverSaveDomains';
+const K_AUTOFILL_SETTINGS = 'ironvault.autofillSettings';
+
+const DEFAULT_AUTOFILL_SETTINGS = {
+  loginEnabled: true,
+  cardEnabled: true,
+  identityEnabled: true,
+  savePromptEnabled: true,
+  inlineBadgeEnabled: true,
+};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function extractDomain(url) {
@@ -95,6 +107,42 @@ async function getRememberedEmail() {
 
 async function rememberEmail(email) {
   await chrome.storage.local.set({ rememberedEmail: email });
+}
+
+async function getNeverSaveDomains() {
+  const { [K_NEVER_SAVE]: list } = await chrome.storage.local.get(K_NEVER_SAVE);
+  return Array.isArray(list) ? list : [];
+}
+
+async function addNeverSaveDomain(domain) {
+  const list = await getNeverSaveDomains();
+  const norm = String(domain || '').toLowerCase().replace(/^www\./, '');
+  if (!norm || list.includes(norm)) return;
+  list.push(norm);
+  await chrome.storage.local.set({ [K_NEVER_SAVE]: list });
+}
+
+async function getAutofillSettings() {
+  const { [K_AUTOFILL_SETTINGS]: s } = await chrome.storage.local.get(K_AUTOFILL_SETTINGS);
+  return { ...DEFAULT_AUTOFILL_SETTINGS, ...(s || {}) };
+}
+
+async function setAutofillSettings(patch) {
+  const cur = await getAutofillSettings();
+  const next = { ...cur, ...(patch || {}) };
+  await chrome.storage.local.set({ [K_AUTOFILL_SETTINGS]: next });
+  return next;
+}
+
+// Last-four for the card picker preview — leaks no PAN bytes.
+function lastFour(num) {
+  const digits = String(num || '').replace(/\D/g, '');
+  return digits.length >= 4 ? digits.slice(-4) : '';
+}
+
+function fullName(identity) {
+  return [identity?.firstName, identity?.middleName, identity?.lastName]
+    .filter(Boolean).join(' ').trim();
 }
 
 async function updateBadge() {
@@ -292,10 +340,10 @@ async function populateSessionFromPayload({ payload, masterPassword, email, toke
   const sessionKey = await generateSessionKey();
   const sessionKeyRaw = await exportRawKey(sessionKey);
 
+  // ── Passwords ──
   const passwordIndex = [];
   const wrappedSecrets = {};
   const list = Array.isArray(payload.passwords) ? payload.passwords : [];
-
   for (const p of list) {
     if (!p || typeof p !== 'object' || !p.id) continue;
     const meta = {
@@ -312,6 +360,67 @@ async function populateSessionFromPayload({ payload, masterPassword, email, toke
     }
   }
 
+  // ── Credit cards ──
+  // Index carries non-sensitive metadata only (label, brand, lastFour). Full
+  // card number + CVV are wrapped under the session key and only decrypted
+  // in response to an explicit GET_CARD_FOR_FILL request.
+  const cardIndex = [];
+  const wrappedCards = {};
+  const cards = Array.isArray(payload.creditCards) ? payload.creditCards : [];
+  for (const c of cards) {
+    if (!c || typeof c !== 'object' || !c.id) continue;
+    cardIndex.push({
+      id: String(c.id),
+      cardName: String(c.cardName || ''),
+      brand: String(c.brand || 'other'),
+      lastFour: lastFour(c.cardNumber),
+      type: String(c.type || 'credit'),
+    });
+    const payloadStr = JSON.stringify({
+      cardNumber: String(c.cardNumber || ''),
+      cardholderName: String(c.cardholderName || ''),
+      expiryMonth: String(c.expiryMonth || ''),
+      expiryYear: String(c.expiryYear || ''),
+      cvv: String(c.cvv || ''),
+      billingZip: String(c.billingZip || ''),
+    });
+    const { ciphertext, iv } = await aesGcmEncrypt(payloadStr, sessionKey);
+    wrappedCards[String(c.id)] = { ct: b64Encode(ciphertext), iv: b64Encode(iv) };
+  }
+
+  // ── Identities ──
+  // The picker preview shows title + full name + email; the address/document
+  // fields stay wrapped until the user picks the entry.
+  const identityIndex = [];
+  const wrappedIdentities = {};
+  const ids = Array.isArray(payload.identities) ? payload.identities : [];
+  for (const id of ids) {
+    if (!id || typeof id !== 'object' || !id.id) continue;
+    identityIndex.push({
+      id: String(id.id),
+      title: String(id.title || ''),
+      fullName: fullName(id),
+      email: String(id.email || ''),
+      city: String(id.city || ''),
+      country: String(id.country || ''),
+    });
+    const payloadStr = JSON.stringify({
+      firstName: String(id.firstName || ''),
+      middleName: String(id.middleName || ''),
+      lastName: String(id.lastName || ''),
+      email: String(id.email || ''),
+      phone: String(id.phone || ''),
+      addressLine1: String(id.addressLine1 || ''),
+      addressLine2: String(id.addressLine2 || ''),
+      city: String(id.city || ''),
+      state: String(id.state || ''),
+      postalCode: String(id.postalCode || ''),
+      country: String(id.country || ''),
+    });
+    const { ciphertext, iv } = await aesGcmEncrypt(payloadStr, sessionKey);
+    wrappedIdentities[String(id.id)] = { ct: b64Encode(ciphertext), iv: b64Encode(iv) };
+  }
+
   const wrappedMaster = await aesGcmEncrypt(masterPassword, sessionKey);
 
   await chrome.storage.session.set({
@@ -325,6 +434,10 @@ async function populateSessionFromPayload({ payload, masterPassword, email, toke
     wrappedMaster: { ct: b64Encode(wrappedMaster.ciphertext), iv: b64Encode(wrappedMaster.iv) },
     passwordIndex,
     wrappedSecrets,
+    cardIndex,
+    wrappedCards,
+    identityIndex,
+    wrappedIdentities,
   });
 }
 
@@ -452,6 +565,152 @@ async function decryptOne(id) {
     username: meta.username,
     password: new TextDecoder().decode(pt),
   };
+}
+
+// ── Card / identity decryption ─────────────────────────────────────────────
+async function decryptOneCard(id) {
+  const { unlocked, sessionKeyB64, wrappedCards, cardIndex } =
+    await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedCards', 'cardIndex']);
+  if (!unlocked || !sessionKeyB64) throw new Error('LOCKED');
+  const wrapped = wrappedCards && wrappedCards[id];
+  const meta = (cardIndex || []).find(c => c.id === id);
+  if (!wrapped || !meta) throw new Error('Card not found.');
+  const sessionKey = await importSessionKey(b64Decode(sessionKeyB64));
+  const pt = await aesGcmDecrypt(b64Decode(wrapped.ct), sessionKey, b64Decode(wrapped.iv));
+  const parsed = JSON.parse(new TextDecoder().decode(pt));
+  return {
+    id: meta.id,
+    cardName: meta.cardName,
+    brand: meta.brand,
+    type: meta.type,
+    ...parsed,
+  };
+}
+
+async function decryptOneIdentity(id) {
+  const { unlocked, sessionKeyB64, wrappedIdentities, identityIndex } =
+    await chrome.storage.session.get(['unlocked', 'sessionKeyB64', 'wrappedIdentities', 'identityIndex']);
+  if (!unlocked || !sessionKeyB64) throw new Error('LOCKED');
+  const wrapped = wrappedIdentities && wrappedIdentities[id];
+  const meta = (identityIndex || []).find(i => i.id === id);
+  if (!wrapped || !meta) throw new Error('Identity not found.');
+  const sessionKey = await importSessionKey(b64Decode(sessionKeyB64));
+  const pt = await aesGcmDecrypt(b64Decode(wrapped.ct), sessionKey, b64Decode(wrapped.iv));
+  const parsed = JSON.parse(new TextDecoder().decode(pt));
+  return {
+    id: meta.id,
+    title: meta.title,
+    ...parsed,
+  };
+}
+
+async function getCardMatches() {
+  const { unlocked, cardIndex } = await chrome.storage.session.get(['unlocked', 'cardIndex']);
+  if (!unlocked) return { unlocked: false, cards: [] };
+  return { unlocked: true, cards: cardIndex || [] };
+}
+
+async function getIdentityMatches() {
+  const { unlocked, identityIndex } = await chrome.storage.session.get(['unlocked', 'identityIndex']);
+  if (!unlocked) return { unlocked: false, identities: [] };
+  return { unlocked: true, identities: identityIndex || [] };
+}
+
+// ── Save / update credential from content script ───────────────────────────
+async function checkSaveCandidate({ domain, username }) {
+  const norm = String(domain || '').toLowerCase().replace(/^www\./, '');
+  if (!norm) return { suppressed: true, reason: 'no-domain' };
+  const neverList = await getNeverSaveDomains();
+  if (neverList.includes(norm)) return { suppressed: true, reason: 'blocklisted' };
+  const { unlocked, passwordIndex } = await chrome.storage.session.get(['unlocked', 'passwordIndex']);
+  if (!unlocked) return { suppressed: true, reason: 'locked' };
+  const same = (passwordIndex || []).filter(p => p.domain === norm);
+  if (same.length === 0) return { suppressed: false };
+  const normUser = String(username || '').toLowerCase();
+  const userMatch = same.find(p => (p.username || '').toLowerCase() === normUser);
+  if (!userMatch) return { suppressed: false, alreadyExistsForUser: false };
+  // We can't tell if the password matches without decrypting — that's the
+  // job of the "update" branch on the client side. Return the id so the
+  // save handler can update in place.
+  return { suppressed: false, alreadyExistsForUser: true, matchingId: userMatch.id };
+}
+
+async function saveNewCredential({ credential, mode }) {
+  if (!credential || !credential.password) throw new Error('Credential is empty.');
+  const cache = await getCache();
+  if (!cache?.encryptedBlob || !cache?.token || !cache?.vaultId) {
+    throw new Error('Sign in first.');
+  }
+  const master = await getSessionMaster();
+  if (!master) throw new Error('IronVault is locked. Unlock the extension first.');
+
+  let payload;
+  try {
+    payload = await decryptCloudBlob(cache.encryptedBlob, master);
+  } catch (err) {
+    if (err && err.message === 'WRONG_MASTER_PASSWORD') throw new Error('Could not re-encrypt vault — please re-unlock.');
+    throw new Error('Could not decrypt vault.');
+  }
+
+  if (!Array.isArray(payload.passwords)) payload.passwords = [];
+
+  const domain = String(credential.domain || '').toLowerCase().replace(/^www\./, '');
+  const username = String(credential.username || '');
+  const password = String(credential.password || '');
+  const url = String(credential.url || (domain ? `https://${domain}` : ''));
+  const name = String(credential.name || domain || 'Untitled');
+  const nowIso = new Date().toISOString();
+
+  const matchIdx = payload.passwords.findIndex((p) => {
+    if (!p) return false;
+    const pDomain = (extractDomain(p.url) || '').toLowerCase();
+    if (pDomain !== domain) return false;
+    return (p.username || '').toLowerCase() === username.toLowerCase();
+  });
+
+  let activityTitle;
+  if (mode === 'update' && matchIdx >= 0) {
+    if ((payload.passwords[matchIdx].password || '') === password) {
+      return { success: true, unchanged: true };
+    }
+    payload.passwords[matchIdx].password = password;
+    payload.passwords[matchIdx].updatedAt = nowIso;
+    activityTitle = 'Password updated';
+  } else if (matchIdx >= 0 && (payload.passwords[matchIdx].password || '') === password) {
+    return { success: true, unchanged: true };
+  } else {
+    const id = (crypto.randomUUID && crypto.randomUUID()) ||
+      `iv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    payload.passwords.push({
+      id, name, url, username, password,
+      notes: '', createdAt: nowIso, updatedAt: nowIso,
+    });
+    activityTitle = 'Password saved';
+  }
+
+  const newBlob = await encryptCloudBlob(payload, master);
+  try {
+    await uploadVaultBlob(cache.token, cache.vaultId, newBlob, {
+      itemType: 'password', title: activityTitle,
+    });
+  } catch (err) {
+    if (err && err.message === 'SESSION_REVOKED') {
+      await fullWipe();
+      throw new Error('Your session was revoked. Please sign in again.');
+    }
+    throw err;
+  }
+  await setCache({ ...cache, encryptedBlob: newBlob, syncedAt: Date.now() });
+
+  // Refresh in-memory indices so the next picker open includes the new entry.
+  await populateSessionFromPayload({
+    payload, masterPassword: master,
+    email: cache.email, token: cache.token, sessionId: cache.sessionId,
+    vaultId: cache.vaultId, vaultName: cache.vaultName,
+  });
+  await updateBadge();
+
+  return { success: true, mode: mode === 'update' ? 'updated' : 'saved' };
 }
 
 // ── Status / queries ────────────────────────────────────────────────────────
@@ -886,6 +1145,85 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
 
+        case 'GET_CARD_MATCHES': {
+          sendResponse({ ok: true, ...(await getCardMatches()) });
+          break;
+        }
+        case 'GET_CARD_FOR_FILL': {
+          const card = await decryptOneCard(msg.id);
+          sendResponse({ ok: true, card });
+          if (fromContent) {
+            const sess = await chrome.storage.session.get(['token']);
+            if (sess.token) {
+              logActivity(sess.token, 'filled', 'card', 'Card used').catch(() => {});
+            }
+          }
+          break;
+        }
+        case 'GET_IDENTITY_MATCHES': {
+          sendResponse({ ok: true, ...(await getIdentityMatches()) });
+          break;
+        }
+        case 'GET_IDENTITY_FOR_FILL': {
+          const identity = await decryptOneIdentity(msg.id);
+          sendResponse({ ok: true, identity });
+          if (fromContent) {
+            const sess = await chrome.storage.session.get(['token']);
+            if (sess.token) {
+              logActivity(sess.token, 'filled', 'identity', 'Identity used').catch(() => {});
+            }
+          }
+          break;
+        }
+
+        case 'CHECK_SAVE_CANDIDATE': {
+          // Settings gate — if save-prompt is disabled, suppress.
+          const settings = await getAutofillSettings();
+          if (!settings.savePromptEnabled) {
+            sendResponse({ ok: true, suppressed: true, reason: 'disabled' });
+            break;
+          }
+          sendResponse({ ok: true, ...(await checkSaveCandidate({
+            domain: msg.domain, username: msg.username,
+          })) });
+          break;
+        }
+        case 'BLOCK_SAVE_FOR_DOMAIN': {
+          await addNeverSaveDomain(msg.domain);
+          sendResponse({ ok: true });
+          break;
+        }
+        case 'SAVE_NEW_CREDENTIAL': {
+          // Allow from content OR popup. Origin doesn't carry the password
+          // back — content sees what user just typed anyway.
+          sendResponse({ ok: true, ...(await saveNewCredential({
+            credential: msg.credential, mode: msg.mode,
+          })) });
+          break;
+        }
+
+        case 'GET_AUTOFILL_SETTINGS': {
+          sendResponse({
+            ok: true,
+            settings: await getAutofillSettings(),
+            neverSaveDomains: await getNeverSaveDomains(),
+          });
+          break;
+        }
+        case 'SET_AUTOFILL_SETTINGS': {
+          if (fromContent) throw new Error('Settings must come from extension UI.');
+          const next = await setAutofillSettings(msg.patch || {});
+          sendResponse({ ok: true, settings: next });
+          break;
+        }
+        case 'REMOVE_NEVER_SAVE_DOMAIN': {
+          if (fromContent) throw new Error('Settings must come from extension UI.');
+          const list = (await getNeverSaveDomains()).filter(d => d !== msg.domain);
+          await chrome.storage.local.set({ [K_NEVER_SAVE]: list });
+          sendResponse({ ok: true, neverSaveDomains: list });
+          break;
+        }
+
         case 'SYNC_FROM_BROWSER': {
           if (fromContent) throw new Error('Sync must come from the popup.');
           const result = await syncFromBrowser({
@@ -914,6 +1252,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   })();
 
   return true;
+});
+
+// Keyboard command — opens the inline picker on the active tab's focused field.
+chrome.commands?.onCommand?.addListener?.(async (command) => {
+  if (command !== 'open-autofill-picker') return;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    chrome.tabs.sendMessage(tab.id, { type: 'IV_OPEN_PICKER' }).catch(() => {});
+  } catch {}
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
