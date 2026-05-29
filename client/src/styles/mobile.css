@@ -11,11 +11,19 @@
   --min-touch-target: 44px;
 }
 
-/* Safe area padding for body - ensure content clears dynamic island */
+/* Safe-area handling for body — the fixed mobile header in App.tsx already
+   owns the top safe-area via its own `pt-[env(safe-area-inset-top,0px)]`
+   plus the matching spacer below it, and the bottom safe-area is owned by
+   the bottom tab bar + main content's pb math. Adding `padding-top:
+   max(var(--sat), 44px)` on body double-counted the inset: the spacer was
+   pushed down by ~47px AND added safe-area-top inside, leaving an extra
+   ~47px gap between the mobile header and the section heading (Passwords,
+   Notes, etc.) on every page.
+
+   Keep the body horizontally safe (rare landscape notch cases) but stop
+   reserving vertical safe-area here — that's the job of the layout shell. */
 body {
-  padding-top: max(var(--sat), 44px);
   padding-right: var(--sar);
-  padding-bottom: var(--sab);
   padding-left: var(--sal);
 }
 
