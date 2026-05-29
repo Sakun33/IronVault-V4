@@ -280,10 +280,7 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
     // Zoho's outbound queue. Symptom: [email] sent logs success, user
     // never receives anything.
     const result = await _getTransporter().sendMail({
-      from: `"${_FROM_NAME}" <${_FROM_DISPLAY}>`,
-      replyTo: _FROM_DISPLAY,
-      sender: _FROM_ADDR,
-      envelope: { from: _FROM_ADDR, to },
+      from: `"${_FROM_NAME}" <${_FROM_ADDR}>`,
       to, subject, html,
     });
     void result;
