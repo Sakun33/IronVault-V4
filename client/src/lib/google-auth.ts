@@ -253,17 +253,25 @@ function getGoogleIdTokenWeb(): Promise<string> {
  * We pass the idToken to our backend, which validates the signature +
  * audience via Google's tokeninfo endpoint.
  */
+// IMPORTANT: never return the Capacitor plugin proxy from an `async` function.
+// Capacitor's plugin proxy answers `.then` property access with a function,
+// which makes the JS async-return machinery treat it as a thenable and call
+// `proxy.then(resolve, reject)` — which routes to a non-existent native
+// `then` method and throws "SocialLogin.then() is not implemented on ios".
+// We cache the plugin reference in a module-level variable and expose a
+// synchronous getter so it never crosses an async return boundary.
+let _socialLoginPlugin: any = null;
 let _socialLoginInitialized = false;
-let _socialLoginInitPromise: Promise<any> | null = null;
+let _socialLoginInitPromise: Promise<void> | null = null;
 
-async function getSocialLoginPlugin() {
-  const mod: any = await import('@capgo/capacitor-social-login');
-  const SocialLogin = mod.SocialLogin || mod.default?.SocialLogin || mod;
-  if (_socialLoginInitialized) {
-    return SocialLogin;
-  }
-  if (!_socialLoginInitPromise) {
-    _socialLoginInitPromise = SocialLogin.initialize({
+async function ensureSocialLoginReady(): Promise<void> {
+  if (_socialLoginInitialized) return;
+  if (_socialLoginInitPromise) return _socialLoginInitPromise;
+  _socialLoginInitPromise = (async () => {
+    const mod: any = await import('@capgo/capacitor-social-login');
+    const SocialLogin = mod.SocialLogin || mod.default?.SocialLogin || mod;
+    _socialLoginPlugin = SocialLogin;
+    await SocialLogin.initialize({
       google: {
         // Web client ID is used as the audience that the backend verifies.
         // On Android it doubles as the `serverClientId` for the credential
@@ -282,15 +290,20 @@ async function getSocialLoginPlugin() {
         iOSServerClientId: DEFAULT_WEB_CLIENT_ID,
         mode: 'online',
       },
-    }).then(() => {
-      _socialLoginInitialized = true;
-    }).catch((err: unknown) => {
-      _socialLoginInitPromise = null;
-      throw err;
     });
+    _socialLoginInitialized = true;
+  })().catch((err: unknown) => {
+    _socialLoginInitPromise = null;
+    throw err;
+  });
+  return _socialLoginInitPromise;
+}
+
+function getSocialLoginPluginSync(): any {
+  if (!_socialLoginPlugin) {
+    throw new Error('Google Sign-In is not ready yet — initialize first.');
   }
-  await _socialLoginInitPromise;
-  return SocialLogin;
+  return _socialLoginPlugin;
 }
 
 /**
@@ -303,9 +316,12 @@ async function getSocialLoginPlugin() {
 export async function initializeGoogleAuth(): Promise<void> {
   if (!isNativeApp()) return;
   try {
-    await getSocialLoginPlugin();
+    await ensureSocialLoginReady();
   } catch (err) {
-    console.error('[google-auth] early init failed:', err);
+    // Never let init errors propagate — Google Sign-In becomes unavailable,
+    // but the rest of the app must keep working. The user can still use
+    // email + password.
+    console.error('[google-auth] early init failed (non-fatal):', err);
   }
 }
 
@@ -328,7 +344,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 
 async function getGoogleIdTokenNative(): Promise<string> {
   console.warn('[google-auth] native: getting plugin');
-  const SocialLogin = await getSocialLoginPlugin();
+  await ensureSocialLoginReady();
+  const SocialLogin = getSocialLoginPluginSync();
   console.warn('[google-auth] native: plugin ready, calling login');
   let response: any;
   try {
@@ -436,7 +453,8 @@ export async function signInWithGoogle(): Promise<GoogleAuthOutcome> {
 export async function googleSignOut(): Promise<void> {
   try {
     if (isNativeApp()) {
-      const SocialLogin = await getSocialLoginPlugin();
+      await ensureSocialLoginReady();
+      const SocialLogin = getSocialLoginPluginSync();
       await SocialLogin.logout({ provider: 'google' });
     } else if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect();

@@ -13,13 +13,30 @@ installAuthFetchInterceptor();
 import { initFontScale } from "./lib/font-scale";
 initFontScale();
 
-// Warm up the native Google Sign-In plugin on Capacitor so the first click
-// doesn't pay the dynamic import + initialize cost. No-op on web. Errors
-// surface again on the actual sign-in attempt with a user-visible toast.
+// Warm up the native Google + Apple Sign-In plugins on Capacitor so the
+// first click doesn't pay the dynamic import + initialize cost. No-op on web.
+// CRITICAL: every call here is double-wrapped — once inside the function
+// itself, once here — so a plugin crash on iOS (e.g. the Capacitor proxy
+// throwing "SocialLogin.then() is not implemented on ios") can NEVER
+// reach the global unhandledrejection handler and crash the app to a
+// blank error screen. Social sign-in is a non-essential feature; the
+// app must boot even if it's broken.
 import { initializeGoogleAuth } from "./lib/google-auth";
 import { initializeAppleAuth } from "./lib/apple-auth";
-void initializeGoogleAuth();
-void initializeAppleAuth();
+(async () => {
+  try {
+    await initializeGoogleAuth();
+  } catch (err) {
+    console.error('[main] Google Sign-In init failed (non-fatal):', err);
+  }
+})();
+(async () => {
+  try {
+    await initializeAppleAuth();
+  } catch (err) {
+    console.error('[main] Apple Sign-In init failed (non-fatal):', err);
+  }
+})();
 
 // CRASH REPORTER — shows actual error on white screen instead of blank page
 function showCrash(label: string, msg: string, stack?: string) {
@@ -56,6 +73,21 @@ window.addEventListener('error', (e) => {
   showCrash('JS ERROR', `${e.message}\nFile: ${e.filename}:${e.lineno}:${e.colno}`, e.error?.stack);
 });
 
+// Plugin / SDK rejections we know are non-fatal — they break a specific
+// feature (social sign-in, biometric unlock) but the app itself is fine.
+// Never wipe the screen for these; let the user use email + password.
+function isNonFatalPluginRejection(msg: string): boolean {
+  if (!msg) return false;
+  return (
+    /SocialLogin\./i.test(msg) ||
+    /capacitor-social-login/i.test(msg) ||
+    /capacitor-biometric/i.test(msg) ||
+    /BiometricAuth/i.test(msg) ||
+    /NativeBiometric/i.test(msg) ||
+    /is not implemented on (ios|android|web)/i.test(msg)
+  );
+}
+
 window.addEventListener('unhandledrejection', (e) => {
   const reason = e.reason;
   const msg = reason?.message || String(reason);
@@ -64,6 +96,15 @@ window.addEventListener('unhandledrejection', (e) => {
   const root = document.getElementById('root');
   if (root && root.childElementCount > 0) {
     console.error('[IronVault] Unhandled rejection:', msg, reason?.stack);
+    e.preventDefault?.();
+    return;
+  }
+  // Known non-fatal plugin issues must NEVER crash the boot screen — they
+  // surface when iOS Capacitor plugins reject before React mounts. Log and
+  // swallow so the React app gets a chance to render normally.
+  if (isNonFatalPluginRejection(msg)) {
+    console.error('[IronVault] Non-fatal plugin rejection (suppressed):', msg, reason?.stack);
+    e.preventDefault?.();
     return;
   }
   showCrash('UNHANDLED PROMISE', msg, reason?.stack);
@@ -82,7 +123,15 @@ document.addEventListener('focusin', (e) => {
 // Last-resort handler: async errors that escape React's ErrorBoundary show a recoverable
 // overlay instead of a blank white screen.
 window.addEventListener('unhandledrejection', (e) => {
-  console.error('[IronVault] Unhandled promise rejection:', e.reason);
+  const reason = e.reason;
+  const msg = reason?.message || String(reason);
+  // Skip plugin rejections we already classified as non-fatal in the first
+  // handler. Without this guard, the same SocialLogin/biometric reject would
+  // still take over the screen here even though we know it's not fatal.
+  if (isNonFatalPluginRejection(msg)) {
+    return;
+  }
+  console.error('[IronVault] Unhandled promise rejection:', reason);
   const root = document.getElementById('root');
   if (root && root.childElementCount === 0) {
     root.innerHTML = `

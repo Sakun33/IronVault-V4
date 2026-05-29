@@ -141,15 +141,22 @@ async function getAppleAuthWeb(): Promise<AppleAuthPayload> {
   return { idToken, user: data.user };
 }
 
+// See google-auth.ts for the rationale on never returning the plugin proxy
+// from an async function. Capacitor's plugin proxy is treated as a thenable
+// by JS async-return machinery, which calls `proxy.then(...)` and crashes on
+// iOS where no native `then` method exists.
+let _appleSocialLoginPlugin: any = null;
 let _socialLoginInitialized = false;
-let _socialLoginInitPromise: Promise<any> | null = null;
+let _socialLoginInitPromise: Promise<void> | null = null;
 
-async function getAppleSocialLoginPlugin() {
-  const mod: any = await import('@capgo/capacitor-social-login');
-  const SocialLogin = mod.SocialLogin || mod.default?.SocialLogin || mod;
-  if (_socialLoginInitialized) return SocialLogin;
-  if (!_socialLoginInitPromise) {
-    _socialLoginInitPromise = SocialLogin.initialize({
+async function ensureAppleSocialLoginReady(): Promise<void> {
+  if (_socialLoginInitialized) return;
+  if (_socialLoginInitPromise) return _socialLoginInitPromise;
+  _socialLoginInitPromise = (async () => {
+    const mod: any = await import('@capgo/capacitor-social-login');
+    const SocialLogin = mod.SocialLogin || mod.default?.SocialLogin || mod;
+    _appleSocialLoginPlugin = SocialLogin;
+    await SocialLogin.initialize({
       apple: {
         // iOS uses the app's Bundle ID — passing the Services ID would be
         // wrong. On iOS the plugin ignores clientId and uses the bundle.
@@ -159,23 +166,30 @@ async function getAppleSocialLoginPlugin() {
         // Empty string on iOS prevents an external redirect.
         redirectUrl: isIOS() ? '' : REDIRECT_URI,
       },
-    }).then(() => {
-      _socialLoginInitialized = true;
-    }).catch((err: unknown) => {
-      _socialLoginInitPromise = null;
-      throw err;
     });
+    _socialLoginInitialized = true;
+  })().catch((err: unknown) => {
+    _socialLoginInitPromise = null;
+    throw err;
+  });
+  return _socialLoginInitPromise;
+}
+
+function getAppleSocialLoginPluginSync(): any {
+  if (!_appleSocialLoginPlugin) {
+    throw new Error('Apple Sign-In is not ready yet — initialize first.');
   }
-  await _socialLoginInitPromise;
-  return SocialLogin;
+  return _appleSocialLoginPlugin;
 }
 
 export async function initializeAppleAuth(): Promise<void> {
   if (!isNativeApp()) return;
   try {
-    await getAppleSocialLoginPlugin();
+    await ensureAppleSocialLoginReady();
   } catch (err) {
-    console.error('[apple-auth] early init failed:', err);
+    // Never let init errors propagate — Apple Sign-In becomes unavailable,
+    // but the rest of the app must keep working.
+    console.error('[apple-auth] early init failed (non-fatal):', err);
   }
 }
 
@@ -192,7 +206,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 }
 
 async function getAppleAuthNative(): Promise<AppleAuthPayload> {
-  const SocialLogin = await getAppleSocialLoginPlugin();
+  await ensureAppleSocialLoginReady();
+  const SocialLogin = getAppleSocialLoginPluginSync();
   const response: any = await withTimeout(
     SocialLogin.login({
       provider: 'apple',
@@ -263,7 +278,8 @@ export async function signInWithApple(): Promise<AppleAuthOutcome> {
 export async function appleSignOut(): Promise<void> {
   try {
     if (isNativeApp()) {
-      const SocialLogin = await getAppleSocialLoginPlugin();
+      await ensureAppleSocialLoginReady();
+      const SocialLogin = getAppleSocialLoginPluginSync();
       await SocialLogin.logout({ provider: 'apple' });
     }
   } catch {
