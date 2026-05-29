@@ -29,7 +29,14 @@ const FIRE_WINDOW_MS = 90 * 1000; // ±90s tolerance around the alert moment
 // every tab open. localStorage so it survives reloads — sessionStorage
 // would re-notify on each new tab.
 const SUB_FIRED_KEY = 'iv_subscription_fired_ids_v1';
-const SUB_RENEWAL_THRESHOLDS = [7, 3, 1] as const;
+// Down from [7, 3, 1]. Three pings per renewal × N subscriptions was the
+// dominant source of iOS notification spam — most users only act on the
+// last-minute reminder anyway. The notification center (in-app) still
+// surfaces broader visibility via the dashboard.
+const SUB_RENEWAL_THRESHOLDS = [1] as const;
+// Per-tick rate-limit so a backfill (many subs renewing on the same day)
+// trickles rather than dumps a dozen notifications at once.
+const MAX_NEW_PER_TICK = 3;
 
 function getFiredSet(): Set<string> {
   try {
@@ -341,6 +348,7 @@ export async function checkAndFireSubscriptionRenewals(
 
     fired[renewalKey] = Date.now();
     newCount++;
+    if (newCount >= MAX_NEW_PER_TICK) break;
   }
 
   if (newCount > 0) saveSubFiredMap(fired);

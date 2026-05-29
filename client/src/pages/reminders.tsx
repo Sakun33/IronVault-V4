@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useVault } from '@/contexts/vault-context';
-import { scheduleReminderNotification, requestNotificationPermission, checkNotificationPermission } from '@/native/notifications';
+import { requestNotificationPermission, checkNotificationPermission } from '@/native/notifications';
 import {
   startReminderLoop,
   getNotificationPermission,
@@ -277,17 +277,15 @@ export default function Reminders() {
       if (editingReminder) {
         await updateReminder(editingReminder.id, reminderData);
 
-        // Schedule native notification if enabled (Capacitor LocalNotifications
-        // for the OS-level alarm, plus our in-app loop polls every 60s while
-        // the tab is open in case the native scheduler isn't available).
+        // Schedule native notification if enabled. `scheduleNativeReminder`
+        // covers Capacitor LocalNotifications on iOS/Android and is a no-op
+        // on web (the in-app `startReminderLoop` handles web Notifications
+        // while the tab is open). Previously we *also* called
+        // `scheduleReminderNotification` — that path used a non-deterministic
+        // numeric id derived from `parseInt(uuid)` (or Math.random() as a
+        // fallback), which produced duplicate pending notifications on iOS
+        // every time the user edited a reminder.
         if (reminderData.notificationEnabled) {
-          const notificationId = parseInt(editingReminder.id.replace(/\D/g, '').slice(0, 8)) || Math.floor(Math.random() * 1000000);
-          await scheduleReminderNotification(
-            notificationId,
-            reminderData.title,
-            reminderData.description || `Reminder due: ${format(reminderData.dueDate, 'MMM dd, HH:mm')}`,
-            reminderData.dueDate
-          );
           await scheduleNativeReminder({ id: editingReminder.id, ...reminderData } as any);
         }
 
@@ -298,18 +296,9 @@ export default function Reminders() {
       } else {
         const newReminder = await addReminder(reminderData);
 
-        // Schedule native notification if enabled
-        if (reminderData.notificationEnabled && newReminder) {
-          const notificationId = parseInt((newReminder as any).id?.replace(/\D/g, '').slice(0, 8)) || Math.floor(Math.random() * 1000000);
-          await scheduleReminderNotification(
-            notificationId,
-            reminderData.title,
-            reminderData.description || `Reminder due: ${format(reminderData.dueDate, 'MMM dd, HH:mm')}`,
-            reminderData.dueDate
-          );
-          if ((newReminder as any).id) {
-            await scheduleNativeReminder({ ...(newReminder as any), ...reminderData });
-          }
+        // Schedule native notification if enabled (see comment above).
+        if (reminderData.notificationEnabled && newReminder && (newReminder as any).id) {
+          await scheduleNativeReminder({ ...(newReminder as any), ...reminderData });
         }
 
         toast({

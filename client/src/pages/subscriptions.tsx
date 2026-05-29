@@ -117,15 +117,25 @@ export default function Subscriptions() {
     window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
   }, [subscriptions]);
 
-  // Schedule OS-level renewal notifications (3-day warning + day-of) for any
-  // active subscription with a future renewal date.
+  // Schedule OS-level renewal notification (1 day before) for any active
+  // subscription with a future renewal date. Session-scoped Set prevents
+  // re-scheduling on every render — the old useEffect re-fired whenever
+  // `formatCurrency` re-identified, which on iOS produced a flood of pending
+  // notifications since the schedule call's id was non-deterministic.
+  const scheduledSubsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!subscriptions || subscriptions.length === 0) return;
     const now = Date.now();
+    const horizon = now + 60 * 24 * 60 * 60 * 1000; // 60-day look-ahead — anything beyond is speculative
     subscriptions.forEach((sub) => {
       if (!sub.isActive || !sub.nextBillingDate) return;
       const renewal = new Date(sub.nextBillingDate);
-      if (renewal.getTime() <= now) return;
+      const ts = renewal.getTime();
+      if (ts <= now || ts > horizon) return;
+      // Dedupe key includes the renewal date so a fresh cycle re-schedules.
+      const key = `${sub.id}:${renewal.toISOString().slice(0, 10)}`;
+      if (scheduledSubsRef.current.has(key)) return;
+      scheduledSubsRef.current.add(key);
       const amount = formatCurrency(sub.cost || 0, currency);
       void scheduleSubscriptionRenewalNotification(sub.id, sub.name, renewal, amount);
     });

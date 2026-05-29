@@ -178,7 +178,9 @@ export class NotificationService {
       const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
       const todayMidnight = new Date().setHours(0, 0, 0, 0);
       const days = Math.round((dueMidnight - todayMidnight) / dayMs);
-      if (days !== 0 && days !== 1 && days !== 3) continue;
+      // Only the most relevant thresholds — 1 day before and day-of. The
+      // 3-day-out ping was noise (most users don't act on a 3-day reminder).
+      if (days !== 0 && days !== 1) continue;
 
       // Dedupe: same subscription+threshold within the last 24h.
       const dupe = this.notifications.find(n =>

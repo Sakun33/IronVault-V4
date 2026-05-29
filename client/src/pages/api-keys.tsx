@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePlan } from '@/lib/plan-service';
@@ -178,14 +178,23 @@ export default function APIKeys() {
 
   const [formData, setFormData] = useState(blankForm());
 
-  // Schedule OS-level expiry alerts for any key with an expiresAt set.
+  // Schedule OS-level expiry alert (1 day before) for any key expiring
+  // within the next 30 days. Session-scoped Set prevents re-scheduling on
+  // every render — and we cap the look-ahead so a vault full of long-lived
+  // keys doesn't dump a notification per key into the OS scheduler.
+  const scheduledKeysRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!apiKeys || apiKeys.length === 0) return;
     const now = Date.now();
+    const horizon = now + 30 * 24 * 60 * 60 * 1000;
     apiKeys.forEach((key: APIKey) => {
       if (!key.expiresAt) return;
       const expiry = new Date(key.expiresAt);
-      if (expiry.getTime() < now) return;
+      const ts = expiry.getTime();
+      if (ts < now || ts > horizon) return;
+      const dedupeKey = `${key.id}:${expiry.toISOString().slice(0, 10)}`;
+      if (scheduledKeysRef.current.has(dedupeKey)) return;
+      scheduledKeysRef.current.add(dedupeKey);
       void scheduleCredentialExpiryNotification(key.id, key.name, expiry);
     });
   }, [apiKeys]);
