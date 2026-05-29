@@ -6,7 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Fingerprint, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { authenticateWithBiometric, isBiometricUnlockEnabled } from '@/native/biometrics';
+import {
+  unlockVaultWithBiometric,
+  hasBiometricEntryForVault,
+  checkBiometricCapabilities,
+} from '@/native/biometrics';
 import { isNativeApp } from '@/native/platform';
 import { vaultManager } from '@/lib/vault-manager';
 
@@ -29,28 +33,46 @@ export function VerifyAccessModal({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Face ID');
+  const [activeVaultId, setActiveVaultId] = useState<string | null>(null);
   const { masterPassword } = useAuth();
   const { toast } = useToast();
 
-  // Check biometric availability on mount and when modal opens
+  // Detect biometric availability — requires (1) native app, (2) hardware
+  // capability, (3) a stored credential for the currently active vault.
+  // Falls back to default vault if no active vault is set.
   useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
     const checkBiometric = async () => {
-      if (isNativeApp()) {
-        try {
-          const defaultVault = vaultManager.getDefaultVault();
-          const vaultId = defaultVault?.id || 'default';
-          const enabled = await isBiometricUnlockEnabled(vaultId);
-          setBiometricAvailable(enabled);
-        } catch (error) {
-          console.error('VerifyModal: Error checking biometric:', error);
-          // On iOS, still try to show biometric option
-          setBiometricAvailable(true);
-        }
+      if (!isNativeApp()) {
+        setBiometricAvailable(false);
+        return;
+      }
+      try {
+        const vaultId = vaultManager.getActiveVaultId()
+          || vaultManager.getDefaultVault()?.id
+          || 'default';
+        if (cancelled) return;
+        setActiveVaultId(vaultId);
+
+        const [caps, hasEntry] = await Promise.all([
+          checkBiometricCapabilities(),
+          hasBiometricEntryForVault(vaultId),
+        ]);
+        if (cancelled) return;
+
+        setBiometricLabel(caps.biometricLabel || 'Face ID');
+        setBiometricAvailable(caps.isAvailable && caps.isEnrolled && hasEntry);
+      } catch (error) {
+        console.error('VerifyModal: biometric probe failed', error);
+        if (!cancelled) setBiometricAvailable(false);
       }
     };
-    if (open) {
-      checkBiometric();
-    }
+
+    checkBiometric();
+    return () => { cancelled = true; };
   }, [open]);
 
   const handlePasswordVerify = () => {
@@ -68,23 +90,36 @@ export function VerifyAccessModal({
   };
 
   const handleBiometricVerify = async () => {
+    if (!activeVaultId) return;
     setIsLoading(true);
     try {
-      const result = await authenticateWithBiometric('Verify your identity');
-      if (result.success) {
-        onOpenChange(false);
-        onVerified();
-      } else {
+      // Retrieve the stored master password via biometric and verify it
+      // matches the unlocked vault's master password. This guards against
+      // a stale enrolment unlocking the wrong vault.
+      const result = await unlockVaultWithBiometric(activeVaultId);
+      if (!result.success || !result.masterPassword) {
         toast({
           title: 'Verification Failed',
           description: result.error || 'Biometric verification failed',
           variant: 'destructive',
         });
+        return;
       }
+      if (result.masterPassword !== masterPassword) {
+        toast({
+          title: 'Verification Failed',
+          description: 'Stored biometric credentials do not match the active vault. Re-enrol from Profile → Security.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setPassword('');
+      onOpenChange(false);
+      onVerified();
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to verify with biometrics',
+        description: error instanceof Error ? error.message : 'Failed to verify with biometrics',
         variant: 'destructive',
       });
     } finally {
@@ -105,19 +140,20 @@ export function VerifyAccessModal({
 
         <div className="space-y-4 px-5 pt-4 pb-4 overflow-y-auto">
           {/* Biometric Option */}
-          {biometricAvailable && isNativeApp() && (
+          {biometricAvailable && (
             <Button
               variant="outline"
               className="w-full h-12 gap-2"
               onClick={handleBiometricVerify}
               disabled={isLoading}
+              data-testid="verify-biometric-button"
             >
               <Fingerprint className="w-5 h-5" />
-              Use Biometric Authentication
+              {isLoading ? 'Verifying…' : `Use ${biometricLabel}`}
             </Button>
           )}
 
-          {biometricAvailable && isNativeApp() && (
+          {biometricAvailable && (
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -140,6 +176,7 @@ export function VerifyAccessModal({
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handlePasswordVerify()}
                 className="pr-10"
+                autoFocus={!biometricAvailable}
               />
               <Button
                 type="button"

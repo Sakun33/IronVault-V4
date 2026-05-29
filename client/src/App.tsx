@@ -478,7 +478,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
   const financeNavItems = [
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, count: stats.activeSubscriptions, limitLabel: null as string | null, color: 'text-purple-600', requiresPro: true },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, count: stats.totalExpenses, color: 'text-red-600', requiresPro: true },
-    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
+    // { id: 'bank-statements', label: 'Bank Statements', icon: Building2, count: null, color: 'text-indigo-600', requiresPro: true },
     { id: 'investments', label: 'Investments', icon: TrendingUp, count: null, color: 'text-emerald-600', requiresPro: true },
     { id: 'goals', label: 'Goals', icon: Target, count: null, color: 'text-emerald-700', requiresPro: true },
     { id: 'insurance', label: 'Insurance', icon: ShieldCheck, count: insurancePolicies?.length || null, color: 'text-blue-600', requiresPro: true },
@@ -557,7 +557,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     // Finance group
     { id: 'subscriptions', label: 'Subscriptions', icon: Bookmark, href: '/subscriptions', group: 'finance', count: stats.activeSubscriptions },
     { id: 'expenses', label: 'Expenses', icon: DollarSign, href: '/expenses', group: 'finance', count: stats.totalExpenses },
-    { id: 'bank-statements', label: 'Bank Statements', icon: Building2, href: '/bank-statements', group: 'finance' },
+    // { id: 'bank-statements', label: 'Bank Statements', icon: Building2, href: '/bank-statements', group: 'finance' },
     { id: 'investments', label: 'Investments', icon: TrendingUp, href: '/investments', group: 'finance' },
     { id: 'goals', label: 'Goals', icon: Target, href: '/goals', group: 'finance' },
     // Tools group

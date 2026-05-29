@@ -250,17 +250,19 @@ export default function Documents() {
           description: "Failed to initialize document storage. Try reloading the page.",
           variant: "destructive"
         });
+        setIsInitialLoading(false);
         return;
       }
-      // OCR is best-effort — failures here are silent. Scan/OCR-only features
-      // will surface their own errors when invoked.
+      // OCR (Tesseract.js WASM) loads from CDN and can hang on iOS WKWebView
+      // or restricted networks. Fire-and-forget so the document list always
+      // renders; the scan flow re-initialises on demand if needed.
+      ocrService.initialize().catch(() => { /* lazy retry on first scan */ });
       try {
-        await ocrService.initialize();
-      } catch (error) {
+        await loadDocuments();
+        await loadFolders();
+      } finally {
+        setIsInitialLoading(false);
       }
-      await loadDocuments();
-      await loadFolders();
-      setIsInitialLoading(false);
     };
 
     initializeServices();
@@ -727,7 +729,7 @@ export default function Documents() {
     handleScanComplete({
       image: dataUrl,
       ocrResult: { text: '', confidence: 0, words: [], lines: [], blocks: [], processingTime: 0 },
-      documentType: 'image'
+      documentType: 'other'
     });
   };
 
