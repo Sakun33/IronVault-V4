@@ -42,8 +42,12 @@ const DrawerContent = React.forwardRef<
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
+      data-side="bottom"
       className={cn(
-        "fixed inset-x-0 bottom-0 z-[71] mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-6",
+        // Same tab-bar-clearance pad as Dialog/Sheet. `html.kb-open`
+        // collapses it via the global CSS rule so the keyboard doesn't
+        // push the footer way above the keyboard surface.
+        "fixed inset-x-0 bottom-0 z-[71] mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background max-h-[92dvh] overflow-y-auto pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-6",
         className
       )}
       {...props}

@@ -93,6 +93,7 @@ export function BottomTabs({ items, className }: BottomTabsProps) {
 
   return (
     <nav
+      data-bottom-tabs
       className={cn(
         'fixed bottom-0 left-0 right-0 z-[60]',
         'glass-surface',

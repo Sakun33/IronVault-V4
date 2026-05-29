@@ -40,7 +40,12 @@ const sheetVariants = cva(
       side: {
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-6",
+          // Bottom pad clears the bottom tab bar (z-[60], ~80px) + iOS
+          // home indicator when the keyboard is closed. When the keyboard
+          // is open, the global `html.kb-open` rule shrinks this to just
+          // the safe-area inset so the form footer stays visible above
+          // the keyboard instead of floating ~160px too high.
+          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom max-h-[92dvh] overflow-y-auto pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-6",
         left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-3/4  border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
@@ -64,6 +69,7 @@ const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
+      data-side={side}
       className={cn(sheetVariants({ side }), className)}
       {...props}
     >

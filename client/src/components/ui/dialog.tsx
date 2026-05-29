@@ -37,6 +37,7 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      data-iv-dialog="bottom"
       // Some dialogs have no input as their first focusable child, so Radix
       // would auto-focus the close (X) button on open — that painted a brand
       // ring on the X for those dialogs and not others. Default to focusing
@@ -58,11 +59,18 @@ const DialogContent = React.forwardRef<
         // the bottom tab bar (z-[60]) so action buttons inside the modal
         // are never clipped or hidden by the tab bar.
         "fixed z-[71] flex flex-col w-full bg-background shadow-xl duration-200 border border-border/50",
-        // Mobile bottom-sheet positioning. Aggressive bottom padding
-        // (~160px) clears: 80px bottom tab bar + 34px iOS home indicator
-        // + Safari URL bar (~50px when visible). env() alone undershoots
-        // because it only covers the home indicator, not the tab bar.
+        // Mobile bottom-sheet positioning. Bottom padding lifts the sheet
+        // above the tab bar + home indicator when the keyboard is closed,
+        // but shrinks to just the keyboard height (no tab bar to worry
+        // about — it's also hidden under the keyboard) when the keyboard
+        // is open. The kb-aware-bottom class wires this up.
         "left-0 bottom-0 max-w-full max-h-[92dvh] rounded-t-2xl rounded-b-none border-b-0",
+        // Bottom padding clears the bottom tab bar (~80px) + iOS home
+        // indicator (~34px) + Safari URL bar slack. When the keyboard
+        // opens, the global `html.kb-open [data-iv-dialog="bottom"]`
+        // rule in mobile-foundation.css collapses this pad to just the
+        // safe-area inset, since the tab bar hides under the keyboard
+        // and the webview shrinks via Capacitor `resize: 'body'`.
         "pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-0",
         // Desktop centered modal
         "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:translate-x-[-50%] sm:-translate-y-1/2",

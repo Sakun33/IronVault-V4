@@ -13,6 +13,21 @@ installAuthFetchInterceptor();
 import { initFontScale } from "./lib/font-scale";
 initFontScale();
 
+// Wire global keyboard handling. On Capacitor iOS/Android this hooks the
+// native Keyboard plugin and exposes `--keyboard-height` + a `kb-open`
+// class on <html>; on web it falls back to VisualViewport. Either way,
+// the rest of the app can rely on the same CSS contract for keyboard-aware
+// layout. Non-fatal: wrapped because the @capacitor/keyboard module is
+// imported eagerly and a plugin failure must never crash the boot.
+import { setupKeyboardHandling } from "./native/keyboard";
+(async () => {
+  try {
+    await setupKeyboardHandling();
+  } catch (err) {
+    console.error('[main] Keyboard handling init failed (non-fatal):', err);
+  }
+})();
+
 // Warm up the native Google + Apple Sign-In plugins on Capacitor so the
 // first click doesn't pay the dynamic import + initialize cost. No-op on web.
 // CRITICAL: every call here is double-wrapped — once inside the function

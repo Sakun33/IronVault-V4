@@ -33,7 +33,13 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Keyboard: {
-      resize: 'native',
+      // 'body' mode shrinks the WKWebView body when the keyboard appears.
+      // 'native' relies on iOS native content insets, which fights our
+      // contentInset: 'never' setting and leaves dialogs/sheets covered
+      // by the keyboard. With 'body', 100dvh tracks the visible viewport
+      // and CSS like `max-height: 100dvh` and `position: fixed; bottom: 0`
+      // automatically respect the on-screen keyboard.
+      resize: 'body',
       resizeOnFullScreen: true,
       style: 'dark',
     },
