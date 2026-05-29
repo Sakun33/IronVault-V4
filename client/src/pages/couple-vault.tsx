@@ -11,9 +11,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Heart, Mail, Pause, Play, Send, Trash2, Users, Key, Bookmark, BookOpen, CreditCard, Wifi, Bitcoin, UserCircle, Bell, FileText } from 'lucide-react';
+import { Heart, Mail, Pause, Play, Send, Trash2, Users, Key, Bookmark, BookOpen, CreditCard, Wifi, Bitcoin, UserCircle, Bell, FileText, CheckCircle2 } from 'lucide-react';
 import type { CoupleVault } from '@shared/schema';
 import { PageHero } from '@/components/page-hero';
+import { inviteCouple, getCoupleStatus, unpairCouple, type CouplePair } from '@/lib/couple-api';
 
 const SECTION_DEF = [
   { id: 'passwords',     label: 'Passwords',     icon: Key,        desc: 'All saved logins' },
@@ -71,6 +72,18 @@ export default function CoupleVaultPage() {
     setSections(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
+  const [serverPair, setServerPair] = useState<CouplePair | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Sync server-side invite status once on mount and after every save.
+  const refreshServer = async () => {
+    try {
+      const r = await getCoupleStatus();
+      setServerPair(r.pair);
+    } catch { /* ignore — local state still works */ }
+  };
+  useEffect(() => { refreshServer(); }, []);
+
   const invite = async () => {
     if (!partnerEmail.trim() || !partnerName.trim()) {
       toast({ title: 'Partner name and email required', variant: 'destructive' });
@@ -80,23 +93,39 @@ export default function CoupleVaultPage() {
       toast({ title: 'Pick at least one section to share', variant: 'destructive' });
       return;
     }
-    await saveCoupleVault({
-      partnerEmail: partnerEmail.toLowerCase().trim(),
-      partnerName: partnerName.trim(),
-      sharedSections: sections as any,
-      privateItemIds: coupleVault?.privateItemIds || [],
-      sharedItemIds: coupleVault?.sharedItemIds || [],
-      status: coupleVault?.status === 'active' ? 'active' : 'invited',
-      sharedAt: coupleVault?.sharedAt || new Date().toISOString(),
-      message: message.trim() || undefined,
-    });
-    toast({
-      title: coupleVault ? 'Pairing updated' : 'Invitation queued',
-      description: coupleVault
-        ? `Shared sections updated for ${partnerName}.`
-        : `Server-side invite emails roll out in a follow-up. ${partnerName} can pair once we ship the backend.`,
-      variant: 'success',
-    });
+    try {
+      setBusy(true);
+      // Save locally for offline UI.
+      await saveCoupleVault({
+        partnerEmail: partnerEmail.toLowerCase().trim(),
+        partnerName: partnerName.trim(),
+        sharedSections: sections as any,
+        privateItemIds: coupleVault?.privateItemIds || [],
+        sharedItemIds: coupleVault?.sharedItemIds || [],
+        status: coupleVault?.status === 'active' ? 'active' : 'invited',
+        sharedAt: coupleVault?.sharedAt || new Date().toISOString(),
+        message: message.trim() || undefined,
+      });
+      // Fire server-side invite (email goes out).
+      const r = await inviteCouple({
+        partnerEmail: partnerEmail.toLowerCase().trim(),
+        partnerName: partnerName.trim(),
+        sharedSections: sections,
+        message: message.trim() || undefined,
+      });
+      await refreshServer();
+      toast({
+        title: r.status === 'accepted' ? 'Pairing updated' : 'Invitation sent',
+        description: r.status === 'accepted'
+          ? `Shared sections updated for ${partnerName}.`
+          : `Email sent to ${partnerEmail}. They'll see the invite right away.`,
+        variant: 'success',
+      });
+    } catch (e: any) {
+      toast({ title: 'Invite failed', description: e?.message, variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pauseOrResume = async () => {
@@ -111,9 +140,16 @@ export default function CoupleVaultPage() {
   };
 
   const remove = async () => {
-    await clearCoupleVault();
-    setConfirmRemove(false);
-    toast({ title: 'Unpaired', description: 'Couple\'s vault settings removed.' });
+    try {
+      setBusy(true);
+      await clearCoupleVault();
+      await unpairCouple().catch(() => {/* ignore — local clear is authoritative */});
+      setServerPair(null);
+      setConfirmRemove(false);
+      toast({ title: 'Unpaired', description: 'Couple\'s vault settings removed.' });
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!coupleVault) {

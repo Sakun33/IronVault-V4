@@ -5186,6 +5186,664 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DIGITAL WILL — dead-man's switch for vault inheritance
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Stores: settings (1 row per user), beneficiaries (N), activations (N).
+  // Trigger chain: cron sweep checks every owner's last_checkin_at against
+  // inactivity_period_days. Day 1 overdue → reminder. Day 3 → urgent reminder.
+  // Day 7 → activation: each verified beneficiary receives an email with the
+  // personal message + a time-limited token to fetch the encrypted blob.
+  const ensureDigitalWillTables = (() => {
+    let ready = false;
+    return async () => {
+      if (ready) return;
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS digital_wills (
+          owner_user_id TEXT PRIMARY KEY,
+          owner_email TEXT NOT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT false,
+          inactivity_period_days INTEGER NOT NULL DEFAULT 30,
+          last_checkin_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          personal_message TEXT,
+          last_reminder_stage INTEGER NOT NULL DEFAULT 0,
+          last_reminder_at TIMESTAMPTZ,
+          activated_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS digital_will_beneficiaries (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          owner_user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          relationship TEXT,
+          phone TEXT,
+          access_level TEXT NOT NULL DEFAULT 'full',
+          verification_token TEXT,
+          verified_at TIMESTAMPTZ,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(owner_user_id, email)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dwb_owner ON digital_will_beneficiaries(owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_dwb_token ON digital_will_beneficiaries(verification_token);
+
+        CREATE TABLE IF NOT EXISTS digital_will_activations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          owner_user_id TEXT NOT NULL,
+          beneficiary_id UUID NOT NULL REFERENCES digital_will_beneficiaries(id) ON DELETE CASCADE,
+          access_token TEXT NOT NULL UNIQUE,
+          activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          expires_at TIMESTAMPTZ NOT NULL,
+          accessed_at TIMESTAMPTZ,
+          status TEXT NOT NULL DEFAULT 'active'
+        );
+        CREATE INDEX IF NOT EXISTS idx_dwa_owner ON digital_will_activations(owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_dwa_token ON digital_will_activations(access_token);
+      `);
+      ready = true;
+    };
+  })();
+
+  // Email templates for digital-will lifecycle.
+  function _willVerifyEmail(ownerEmail: string, beneficiaryName: string, verifyLink: string) {
+    const safeOwner = _eHtml(ownerEmail);
+    const safeName = _eHtml(beneficiaryName);
+    const body =
+      `${_eh1("You're designated as a beneficiary")}` +
+      `${_ep(`Hi ${safeName}, <strong style="color:#111827">${safeOwner}</strong> has designated you as a beneficiary in their IronVault Digital Will. If they ever become unreachable, you'll be granted controlled access to their encrypted vault.`)}` +
+      `${_ebtn(verifyLink, 'Confirm I accept this role')}` +
+      `${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">By confirming, you agree to receive a single notification if the dead-man's switch is ever triggered. You can be removed at any time by ${safeOwner}.</p>`)}` +
+      `<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you don't recognize this account, you can safely ignore this email.</p>`;
+    return { subject: `${safeOwner} added you to their IronVault Digital Will`, html: _emailLayout(body) };
+  }
+
+  function _willReminderEmail(ownerName: string, daysRemaining: number, urgent: boolean) {
+    const safeName = _eHtml(ownerName);
+    const checkinLink = `${_APP_URL}/digital-will`;
+    const heading = urgent ? 'Urgent: check in to your IronVault now' : 'Reminder: check in to IronVault';
+    const phrase = urgent
+      ? `<strong style="color:#dc2626">Your beneficiaries will be notified in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}</strong> if you don't check in.`
+      : `Your digital will is configured. ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain before beneficiaries are notified.`;
+    const body =
+      `${_eh1(heading)}` +
+      `${_ep(`Hi ${safeName}, ${phrase}`)}` +
+      `${_ebtn(checkinLink, "I'm still here — check in")}` +
+      `${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Click the button above to reset your dead-man's switch timer. You can also open IronVault and use the "Check in" button on the Digital Will page.</p>`)}`;
+    return { subject: heading, html: _emailLayout(body) };
+  }
+
+  function _willActivationEmail(ownerEmail: string, beneficiaryName: string, personalMessage: string, accessLink: string, expiresOn: string) {
+    const safeOwner = _eHtml(ownerEmail);
+    const safeName = _eHtml(beneficiaryName);
+    const safeMsg = personalMessage ? _eHtml(personalMessage) : '';
+    const safeExpires = _eHtml(expiresOn);
+    const messageBlock = safeMsg
+      ? `${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Personal message from ${safeOwner}</p><p style="margin:0;font-size:15px;color:#111827;line-height:1.7;white-space:pre-wrap">${safeMsg}</p>`)}`
+      : '';
+    const body =
+      `${_eh1('Your IronVault inheritance is ready')}` +
+      `${_ep(`Hi ${safeName}, ${safeOwner}'s Digital Will has been activated. As a designated beneficiary, you can now request access to their encrypted vault data.`)}` +
+      messageBlock +
+      `${_ebtn(accessLink, 'Access vault data')}` +
+      `${_ecard(`<p style="margin:0 0 8px;font-size:13px;color:#6b7280;font-weight:600">How this works</p><ul style="margin:0;padding-left:20px;color:#374151;font-size:13px;line-height:1.8"><li>Click the button above to download the encrypted vault blob.</li><li>You'll still need the master password to decrypt it — ${safeOwner} should have shared it separately (sealed envelope, password manager, lawyer).</li><li>This access link expires on <strong>${safeExpires}</strong>.</li></ul>`)}`;
+    return { subject: `IronVault Digital Will activated by ${safeOwner}`, html: _emailLayout(body) };
+  }
+
+  // GET /api/digital-will/status — owner view of will state.
+  if (path === '/api/digital-will/status' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureDigitalWillTables();
+      const { rows: wRows } = await db.query(
+        `SELECT * FROM digital_wills WHERE owner_user_id = $1 LIMIT 1`,
+        [cloudUser.userId]
+      );
+      const will = wRows[0] || null;
+      const { rows: bRows } = await db.query(
+        `SELECT id, name, email, relationship, phone, access_level, status, verified_at, created_at
+           FROM digital_will_beneficiaries WHERE owner_user_id = $1 ORDER BY created_at ASC`,
+        [cloudUser.userId]
+      );
+      const lastCheckin = will?.last_checkin_at ? new Date(will.last_checkin_at) : null;
+      const periodDays = will?.inactivity_period_days || 30;
+      const daysSince = lastCheckin ? Math.floor((Date.now() - lastCheckin.getTime()) / 86400000) : 0;
+      const daysRemaining = Math.max(0, periodDays - daysSince);
+      return res.json({
+        success: true,
+        will: will ? {
+          isActive: will.is_active,
+          inactivityPeriodDays: will.inactivity_period_days,
+          lastCheckinAt: lastCheckin?.toISOString(),
+          personalMessage: will.personal_message || '',
+          activatedAt: will.activated_at?.toISOString() || null,
+          daysSinceCheckin: daysSince,
+          daysRemaining,
+        } : null,
+        beneficiaries: bRows.map(r => ({
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          relationship: r.relationship,
+          phone: r.phone,
+          accessLevel: r.access_level,
+          status: r.status,
+          verifiedAt: r.verified_at?.toISOString() || null,
+          createdAt: r.created_at?.toISOString(),
+        })),
+      });
+    } catch (err: any) {
+      console.error('[digital-will/status]', err.message);
+      return res.status(500).json({ error: 'Failed to load digital will status' });
+    }
+  }
+
+  // POST /api/digital-will/configure — upsert settings.
+  if (path === '/api/digital-will/configure' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { isActive, inactivityPeriodDays, personalMessage } = req.body as {
+        isActive?: boolean; inactivityPeriodDays?: number; personalMessage?: string;
+      };
+      const periodDays = Math.max(7, Math.min(365, Number(inactivityPeriodDays) || 30));
+      const msg = String(personalMessage || '').slice(0, 5000);
+      await ensureDigitalWillTables();
+      await db.query(
+        `INSERT INTO digital_wills (owner_user_id, owner_email, is_active, inactivity_period_days, personal_message, last_checkin_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         ON CONFLICT (owner_user_id) DO UPDATE SET
+           owner_email = EXCLUDED.owner_email,
+           is_active = EXCLUDED.is_active,
+           inactivity_period_days = EXCLUDED.inactivity_period_days,
+           personal_message = EXCLUDED.personal_message,
+           updated_at = NOW()`,
+        [cloudUser.userId, cloudUser.email, !!isActive, periodDays, msg]
+      );
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[digital-will/configure]', err.message);
+      return res.status(500).json({ error: 'Failed to save digital will' });
+    }
+  }
+
+  // POST /api/digital-will/beneficiaries — add beneficiary + send verification email.
+  if (path === '/api/digital-will/beneficiaries' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { name, email, relationship, phone, accessLevel } = req.body as {
+        name?: string; email?: string; relationship?: string; phone?: string; accessLevel?: string;
+      };
+      if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'name and valid email required' });
+      }
+      if (email.toLowerCase() === String(cloudUser.email || '').toLowerCase()) {
+        return res.status(400).json({ error: 'cannot add yourself as a beneficiary' });
+      }
+      const allowedLevels = new Set(['full', 'passwords_only', 'documents_only', 'selected']);
+      const level = allowedLevels.has(String(accessLevel)) ? String(accessLevel) : 'full';
+      const verificationToken = randomUUID() + '-' + randomBytes(8).toString('hex');
+      await ensureDigitalWillTables();
+      // Ensure parent settings row exists
+      await db.query(
+        `INSERT INTO digital_wills (owner_user_id, owner_email)
+         VALUES ($1, $2)
+         ON CONFLICT (owner_user_id) DO NOTHING`,
+        [cloudUser.userId, cloudUser.email]
+      );
+      const { rows } = await db.query(
+        `INSERT INTO digital_will_beneficiaries (owner_user_id, name, email, relationship, phone, access_level, verification_token, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+         ON CONFLICT (owner_user_id, email) DO UPDATE SET
+           name = EXCLUDED.name,
+           relationship = EXCLUDED.relationship,
+           phone = EXCLUDED.phone,
+           access_level = EXCLUDED.access_level,
+           verification_token = COALESCE(digital_will_beneficiaries.verification_token, EXCLUDED.verification_token),
+           status = CASE WHEN digital_will_beneficiaries.status = 'verified' THEN 'verified' ELSE 'pending' END
+         RETURNING id, name, email, relationship, phone, access_level, status, verified_at, verification_token, created_at`,
+        [cloudUser.userId, name.trim().slice(0, 120), email.toLowerCase(), relationship?.trim().slice(0, 80) || null, phone?.trim().slice(0, 40) || null, level, verificationToken]
+      );
+      const b = rows[0];
+      if (b.status === 'pending' && b.verification_token) {
+        const verifyLink = `${_APP_URL}/digital-will/verify?token=${encodeURIComponent(b.verification_token)}`;
+        const tmpl = _willVerifyEmail(cloudUser.email, b.name, verifyLink);
+        sendEmail({ to: b.email, ...tmpl }).catch(() => {});
+      }
+      return res.json({
+        success: true,
+        beneficiary: {
+          id: b.id,
+          name: b.name,
+          email: b.email,
+          relationship: b.relationship,
+          phone: b.phone,
+          accessLevel: b.access_level,
+          status: b.status,
+          verifiedAt: b.verified_at?.toISOString() || null,
+          createdAt: b.created_at?.toISOString(),
+        },
+      });
+    } catch (err: any) {
+      console.error('[digital-will/beneficiaries POST]', err.message);
+      return res.status(500).json({ error: 'Failed to add beneficiary' });
+    }
+  }
+
+  // DELETE /api/digital-will/beneficiaries/:id
+  if (/^\/api\/digital-will\/beneficiaries\/[a-f0-9-]{36}$/.test(path) && req.method === 'DELETE') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    const id = path.split('/')[4];
+    try {
+      await ensureDigitalWillTables();
+      const { rowCount } = await db.query(
+        `DELETE FROM digital_will_beneficiaries WHERE id = $1 AND owner_user_id = $2`,
+        [id, cloudUser.userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'not found' });
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[digital-will/beneficiaries DELETE]', err.message);
+      return res.status(500).json({ error: 'Failed to remove beneficiary' });
+    }
+  }
+
+  // POST /api/digital-will/verify-beneficiary — public, accepts token.
+  // Beneficiary clicks email link → confirms acceptance.
+  if (path === '/api/digital-will/verify-beneficiary' && req.method === 'POST') {
+    try {
+      const { token } = req.body as { token?: string };
+      if (!token) return res.status(400).json({ error: 'token required' });
+      await ensureDigitalWillTables();
+      const { rows } = await db.query(
+        `UPDATE digital_will_beneficiaries
+            SET status = 'verified', verified_at = NOW(), verification_token = NULL
+          WHERE verification_token = $1 AND status = 'pending'
+        RETURNING id, name, email`,
+        [token]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Invalid or already-used token' });
+      return res.json({ success: true, beneficiary: { name: rows[0].name, email: rows[0].email } });
+    } catch (err: any) {
+      console.error('[digital-will/verify-beneficiary]', err.message);
+      return res.status(500).json({ error: 'Verification failed' });
+    }
+  }
+
+  // POST /api/digital-will/checkin — reset dead-man timer.
+  if (path === '/api/digital-will/checkin' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureDigitalWillTables();
+      const { rows } = await db.query(
+        `INSERT INTO digital_wills (owner_user_id, owner_email, last_checkin_at, last_reminder_stage, last_reminder_at, updated_at)
+         VALUES ($1, $2, NOW(), 0, NULL, NOW())
+         ON CONFLICT (owner_user_id) DO UPDATE SET
+           owner_email = EXCLUDED.owner_email,
+           last_checkin_at = NOW(),
+           last_reminder_stage = 0,
+           last_reminder_at = NULL,
+           updated_at = NOW()
+         RETURNING last_checkin_at, inactivity_period_days`,
+        [cloudUser.userId, cloudUser.email]
+      );
+      return res.json({
+        success: true,
+        lastCheckinAt: rows[0].last_checkin_at?.toISOString(),
+        daysRemaining: rows[0].inactivity_period_days,
+      });
+    } catch (err: any) {
+      console.error('[digital-will/checkin]', err.message);
+      return res.status(500).json({ error: 'Check-in failed' });
+    }
+  }
+
+  // POST /api/digital-will/activate — manual activation by owner.
+  if (path === '/api/digital-will/activate' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureDigitalWillTables();
+      const result = await _runDigitalWillActivation(cloudUser.userId, cloudUser.email, true);
+      return res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('[digital-will/activate]', err.message);
+      return res.status(500).json({ error: 'Activation failed' });
+    }
+  }
+
+  // GET /api/digital-will/access?token=... — public, beneficiary downloads blob.
+  if (path === '/api/digital-will/access' && req.method === 'GET') {
+    try {
+      const token = String((req.query as any).token || '');
+      if (!token) return res.status(400).json({ error: 'token required' });
+      await ensureDigitalWillTables();
+      const { rows } = await db.query(
+        `SELECT a.id, a.owner_user_id, a.expires_at, a.status, b.email as beneficiary_email, b.name as beneficiary_name
+           FROM digital_will_activations a
+           JOIN digital_will_beneficiaries b ON b.id = a.beneficiary_id
+          WHERE a.access_token = $1 LIMIT 1`,
+        [token]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Invalid token' });
+      const a = rows[0];
+      if (new Date(a.expires_at) < new Date()) return res.status(410).json({ error: 'Access link has expired' });
+      const { rows: vRows } = await db.query(
+        `SELECT vault_id, encrypted_data, updated_at FROM cloud_vaults
+          WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`,
+        [a.owner_user_id]
+      );
+      if (vRows.length === 0) return res.status(404).json({ error: 'No vault data available' });
+      await db.query(
+        `UPDATE digital_will_activations SET accessed_at = COALESCE(accessed_at, NOW()), status = 'accessed' WHERE id = $1`,
+        [a.id]
+      );
+      return res.json({
+        success: true,
+        beneficiary: { name: a.beneficiary_name, email: a.beneficiary_email },
+        vault: vRows[0],
+        expiresAt: new Date(a.expires_at).toISOString(),
+      });
+    } catch (err: any) {
+      console.error('[digital-will/access]', err.message);
+      return res.status(500).json({ error: 'Access failed' });
+    }
+  }
+
+  // POST /api/digital-will/tick — cron-callable sweep. Auth via ADMIN_API_KEY.
+  // Run hourly: reminders at day 1, urgent at day 3, activate at day 7 past
+  // the inactivity period. Stage tracks last sent (0=none,1=reminder,2=urgent,3=activated).
+  if (path === '/api/digital-will/tick' && (req.method === 'POST' || req.method === 'GET')) {
+    // Three accepted auth methods:
+    //  1. Vercel-provided cron: Authorization: Bearer ${CRON_SECRET}
+    //  2. Manual admin trigger: x-admin-key: ${ADMIN_API_KEY}
+    //  3. Manual admin trigger: ?key=${ADMIN_API_KEY}
+    const adminKey = process.env.ADMIN_API_KEY || '';
+    const cronSecret = process.env.CRON_SECRET || '';
+    const authHeader = String(req.headers.authorization || '');
+    const xAdmin = String(req.headers['x-admin-key'] || '');
+    const queryKey = String((req.query as any).key || '');
+    const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
+    const isAdmin = adminKey && (xAdmin === adminKey || queryKey === adminKey);
+    if (!isCron && !isAdmin) return res.status(401).json({ error: 'admin auth required' });
+    try {
+      await ensureDigitalWillTables();
+      const { rows } = await db.query(
+        `SELECT owner_user_id, owner_email, inactivity_period_days, last_checkin_at, last_reminder_stage
+           FROM digital_wills
+          WHERE is_active = true AND activated_at IS NULL`
+      );
+      const report: { reminders: number; urgent: number; activated: number; skipped: number } = {
+        reminders: 0, urgent: 0, activated: 0, skipped: 0,
+      };
+      for (const w of rows) {
+        const lastCheckin = new Date(w.last_checkin_at);
+        const periodDays = w.inactivity_period_days as number;
+        const daysSince = Math.floor((Date.now() - lastCheckin.getTime()) / 86400000);
+        const overdue = daysSince - periodDays;
+        if (overdue < 1) { report.skipped++; continue; }
+        const stage = w.last_reminder_stage as number;
+        if (overdue >= 7 && stage < 3) {
+          await _runDigitalWillActivation(w.owner_user_id, w.owner_email, false);
+          report.activated++;
+        } else if (overdue >= 3 && stage < 2) {
+          const tmpl = _willReminderEmail(w.owner_email, Math.max(1, 7 - overdue), true);
+          await sendEmail({ to: w.owner_email, ...tmpl });
+          await db.query(
+            `UPDATE digital_wills SET last_reminder_stage = 2, last_reminder_at = NOW(), updated_at = NOW() WHERE owner_user_id = $1`,
+            [w.owner_user_id]
+          );
+          report.urgent++;
+        } else if (overdue >= 1 && stage < 1) {
+          const tmpl = _willReminderEmail(w.owner_email, Math.max(1, 7 - overdue), false);
+          await sendEmail({ to: w.owner_email, ...tmpl });
+          await db.query(
+            `UPDATE digital_wills SET last_reminder_stage = 1, last_reminder_at = NOW(), updated_at = NOW() WHERE owner_user_id = $1`,
+            [w.owner_user_id]
+          );
+          report.reminders++;
+        } else {
+          report.skipped++;
+        }
+      }
+      return res.json({ success: true, ...report, scanned: rows.length });
+    } catch (err: any) {
+      console.error('[digital-will/tick]', err.message);
+      return res.status(500).json({ error: 'Tick failed' });
+    }
+  }
+
+  // Internal helper for activation (used by both manual activate and cron tick).
+  // Creates a 30-day access token per verified beneficiary and emails them.
+  async function _runDigitalWillActivation(ownerUserId: string, ownerEmail: string, manual: boolean): Promise<{ activated: number; skipped: number }> {
+    await ensureDigitalWillTables();
+    const { rows: wRows } = await db.query(
+      `SELECT personal_message FROM digital_wills WHERE owner_user_id = $1 LIMIT 1`,
+      [ownerUserId]
+    );
+    const personalMessage = wRows[0]?.personal_message || '';
+    const { rows: bRows } = await db.query(
+      `SELECT id, name, email FROM digital_will_beneficiaries
+        WHERE owner_user_id = $1 AND status = 'verified'`,
+      [ownerUserId]
+    );
+    let activated = 0, skipped = 0;
+    const expiresAt = new Date(Date.now() + 30 * 86400000);
+    for (const b of bRows) {
+      try {
+        const accessToken = randomUUID() + '-' + randomBytes(12).toString('hex');
+        await db.query(
+          `INSERT INTO digital_will_activations (owner_user_id, beneficiary_id, access_token, expires_at)
+           VALUES ($1, $2, $3, $4)`,
+          [ownerUserId, b.id, accessToken, expiresAt]
+        );
+        const accessLink = `${_APP_URL}/will-access?token=${encodeURIComponent(accessToken)}`;
+        const tmpl = _willActivationEmail(ownerEmail, b.name, personalMessage, accessLink, expiresAt.toUTCString());
+        await sendEmail({ to: b.email, ...tmpl });
+        activated++;
+      } catch (e: any) {
+        console.error('[will-activation] beneficiary failed:', b.email, e.message);
+        skipped++;
+      }
+    }
+    await db.query(
+      `UPDATE digital_wills
+          SET activated_at = COALESCE(activated_at, NOW()),
+              last_reminder_stage = 3,
+              last_reminder_at = NOW(),
+              updated_at = NOW()
+        WHERE owner_user_id = $1`,
+      [ownerUserId]
+    );
+    if (manual) {
+      // Notify owner that they manually activated, in case it was a mis-click.
+      sendEmail({
+        to: ownerEmail,
+        subject: 'Your IronVault Digital Will was activated',
+        html: _emailLayout(
+          `${_eh1('Digital Will activated')}` +
+          `${_ep(`You manually activated your IronVault Digital Will. <strong>${activated}</strong> beneficiar${activated === 1 ? 'y was' : 'ies were'} notified with access links valid until ${_eHtml(expiresAt.toUTCString())}.`)}` +
+          `${_ecard(`<p style="margin:0;font-size:13px;color:#6b7280">Didn't mean to? Open IronVault → Digital Will and check in to reset the timer. The access links remain valid until they expire — rotate your master password if you want to revoke them.</p>`)}`
+        ),
+      }).catch(() => {});
+    }
+    return { activated, skipped };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COUPLE'S VAULT — pair-share invite (single-pair per user)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Lightweight backend that just powers the invite email + pair record.
+  // Section selection + per-item overrides remain local to the user's vault
+  // (encrypted in cloud_vaults) — the partner pairs separately and decrypts
+  // their own shared subset client-side.
+  const ensureCoupleTables = (() => {
+    let ready = false;
+    return async () => {
+      if (ready) return;
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS couple_invites (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          inviter_user_id TEXT NOT NULL,
+          inviter_email TEXT NOT NULL,
+          partner_email TEXT NOT NULL,
+          partner_name TEXT NOT NULL,
+          shared_sections TEXT[] NOT NULL DEFAULT '{}',
+          message TEXT,
+          status TEXT NOT NULL DEFAULT 'invited',
+          accept_token TEXT NOT NULL UNIQUE,
+          invited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          accepted_at TIMESTAMPTZ,
+          UNIQUE(inviter_user_id, partner_email)
+        );
+        CREATE INDEX IF NOT EXISTS idx_couple_inv_owner ON couple_invites(inviter_user_id);
+        CREATE INDEX IF NOT EXISTS idx_couple_inv_partner ON couple_invites(partner_email);
+        CREATE INDEX IF NOT EXISTS idx_couple_inv_token ON couple_invites(accept_token);
+      `);
+      ready = true;
+    };
+  })();
+
+  // POST /api/couple/invite — create or update invite, email partner.
+  if (path === '/api/couple/invite' && req.method === 'POST') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      const { partnerEmail, partnerName, sharedSections, message } = req.body as {
+        partnerEmail?: string; partnerName?: string; sharedSections?: string[]; message?: string;
+      };
+      if (!partnerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(partnerEmail)) {
+        return res.status(400).json({ error: 'valid partner email required' });
+      }
+      if (!partnerName?.trim()) return res.status(400).json({ error: 'partner name required' });
+      if (partnerEmail.toLowerCase() === String(cloudUser.email || '').toLowerCase()) {
+        return res.status(400).json({ error: 'cannot pair with yourself' });
+      }
+      const sections = Array.isArray(sharedSections) ? sharedSections.slice(0, 50).map(String) : [];
+      const acceptToken = randomUUID() + '-' + randomBytes(8).toString('hex');
+      await ensureCoupleTables();
+      const { rows } = await db.query(
+        `INSERT INTO couple_invites (inviter_user_id, inviter_email, partner_email, partner_name, shared_sections, message, accept_token)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (inviter_user_id, partner_email) DO UPDATE SET
+           partner_name = EXCLUDED.partner_name,
+           shared_sections = EXCLUDED.shared_sections,
+           message = EXCLUDED.message,
+           status = CASE WHEN couple_invites.status = 'accepted' THEN 'accepted' ELSE 'invited' END
+         RETURNING id, status, accept_token, invited_at`,
+        [cloudUser.userId, cloudUser.email, partnerEmail.toLowerCase(), partnerName.trim().slice(0, 120), sections, message?.toString().slice(0, 2000) || null, acceptToken]
+      );
+      const inv = rows[0];
+      if (inv.status === 'invited') {
+        const safeInviter = _eHtml(cloudUser.email);
+        const safePartner = _eHtml(partnerName);
+        const safeMsg = message ? _eHtml(String(message).slice(0, 2000)) : '';
+        const sectionsList = sections.length
+          ? `<ul style="margin:6px 0 0;padding-left:20px;color:#374151;font-size:13px;line-height:1.8">${sections.map(s => `<li>${_eHtml(s)}</li>`).join('')}</ul>`
+          : '';
+        const acceptLink = `${_APP_URL}/couple-accept?token=${encodeURIComponent(inv.accept_token)}`;
+        sendEmail({
+          to: partnerEmail.toLowerCase(),
+          subject: `${safeInviter} invited you to a shared IronVault`,
+          html: _emailLayout(
+            `${_eh1("You're invited to a Couple's Vault")}` +
+            `${_ep(`Hi ${safePartner}, <strong style="color:#111827">${safeInviter}</strong> wants to share parts of their IronVault with you. Once you accept, the selected sections sync to your account.`)}` +
+            (safeMsg ? `${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Personal message</p><p style="margin:0;font-size:14px;color:#111827;line-height:1.7;white-space:pre-wrap">${safeMsg}</p>`)}` : '') +
+            (sectionsList ? `${_ecard(`<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Sections being shared</p>${sectionsList}`)}` : '') +
+            `${_ebtn(acceptLink, 'Accept invitation')}` +
+            `<p style="margin:0;text-align:center;font-size:12px;color:#9ca3af">If you don't have an IronVault account yet, accept the invite to create one — you'll see the shared sections appear after you set up your own vault.</p>`
+          ),
+        }).catch(() => {});
+      }
+      return res.json({ success: true, inviteId: inv.id, status: inv.status, invitedAt: inv.invited_at?.toISOString() });
+    } catch (err: any) {
+      console.error('[couple/invite]', err.message);
+      return res.status(500).json({ error: 'Invite failed' });
+    }
+  }
+
+  // GET /api/couple/status — fetch current invite (one per user) or null
+  if (path === '/api/couple/status' && req.method === 'GET') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureCoupleTables();
+      const { rows } = await db.query(
+        `SELECT id, partner_email, partner_name, shared_sections, message, status, invited_at, accepted_at
+           FROM couple_invites WHERE inviter_user_id = $1 ORDER BY invited_at DESC LIMIT 1`,
+        [cloudUser.userId]
+      );
+      if (rows.length === 0) return res.json({ success: true, pair: null });
+      const r = rows[0];
+      return res.json({
+        success: true,
+        pair: {
+          id: r.id,
+          partnerEmail: r.partner_email,
+          partnerName: r.partner_name,
+          sharedSections: r.shared_sections || [],
+          message: r.message,
+          status: r.status,
+          invitedAt: r.invited_at?.toISOString(),
+          acceptedAt: r.accepted_at?.toISOString() || null,
+        },
+      });
+    } catch (err: any) {
+      console.error('[couple/status]', err.message);
+      return res.status(500).json({ error: 'Status failed' });
+    }
+  }
+
+  // POST /api/couple/accept — public, token-based.
+  if (path === '/api/couple/accept' && req.method === 'POST') {
+    try {
+      const { token } = req.body as { token?: string };
+      if (!token) return res.status(400).json({ error: 'token required' });
+      await ensureCoupleTables();
+      const { rows } = await db.query(
+        `UPDATE couple_invites SET status = 'accepted', accepted_at = NOW()
+          WHERE accept_token = $1 AND status = 'invited'
+        RETURNING inviter_email, partner_name`,
+        [token]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Invalid or already-used token' });
+      // Notify inviter
+      sendEmail({
+        to: rows[0].inviter_email,
+        subject: `${_eHtml(rows[0].partner_name)} accepted your Couple's Vault invite`,
+        html: _emailLayout(
+          `${_eh1('Pairing complete')}` +
+          `${_ep(`Your partner has accepted the invite. The selected sections of your vault are now flagged for sharing — open IronVault to see the pairing status.`)}` +
+          `${_ebtn(`${_APP_URL}/couple`, 'Open Couple\'s Vault')}`
+        ),
+      }).catch(() => {});
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[couple/accept]', err.message);
+      return res.status(500).json({ error: 'Accept failed' });
+    }
+  }
+
+  // DELETE /api/couple/invite — unpair
+  if (path === '/api/couple/invite' && req.method === 'DELETE') {
+    const cloudUser = await getCloudUser(req);
+    if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    try {
+      await ensureCoupleTables();
+      await db.query(`DELETE FROM couple_invites WHERE inviter_user_id = $1`, [cloudUser.userId]);
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('[couple/invite DELETE]', err.message);
+      return res.status(500).json({ error: 'Unpair failed' });
+    }
+  }
+
   // ── GET /api/auth/sessions ─────────────────────────────────────────────────
   // Lists all active sessions (extension + web) for the authenticated user.
   // Used by the Active Sessions UI in Profile → Security and by the extension

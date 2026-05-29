@@ -74,6 +74,9 @@ const SecureBookmarks = React.lazy(() => import("@/pages/secure-bookmarks"));
 const DarkWebMonitor = React.lazy(() => import("@/pages/dark-web-monitor"));
 const FamilyDashboard = React.lazy(() => import("@/pages/family-dashboard"));
 const DigitalWill = React.lazy(() => import("@/pages/digital-will"));
+const DigitalWillVerify = React.lazy(() => import("@/pages/digital-will-verify"));
+const DigitalWillAccess = React.lazy(() => import("@/pages/digital-will-access"));
+const CoupleAccept = React.lazy(() => import("@/pages/couple-accept"));
 const SmartFormFiller = React.lazy(() => import("@/pages/smart-form-filler"));
 const PhishingShield = React.lazy(() => import("@/pages/phishing-shield"));
 const CoupleVault = React.lazy(() => import("@/pages/couple-vault"));
@@ -1443,6 +1446,10 @@ const PUBLIC_INFO_ROUTES = (
     <Route path="/status" component={StatusPage} />
     <Route path="/roadmap" component={AboutPage} />
     <Route path="/api" component={AboutPage} />
+    {/* Public Digital Will routes — beneficiaries may not have an IronVault account. */}
+    <Route path="/digital-will/verify" component={DigitalWillVerify} />
+    <Route path="/will-access" component={DigitalWillAccess} />
+    <Route path="/couple-accept" component={CoupleAccept} />
   </>
 );
 
@@ -1615,6 +1622,9 @@ function Router() {
       <Route path="/dark-web"><MainLayout><DarkWebMonitor /></MainLayout></Route>
       <Route path="/family"><MainLayout><FamilyDashboard /></MainLayout></Route>
       <Route path="/digital-will"><MainLayout><DigitalWill /></MainLayout></Route>
+      <Route path="/digital-will/verify"><PublicPageWrapper><DigitalWillVerify /></PublicPageWrapper></Route>
+      <Route path="/will-access"><PublicPageWrapper><DigitalWillAccess /></PublicPageWrapper></Route>
+      <Route path="/couple-accept"><PublicPageWrapper><CoupleAccept /></PublicPageWrapper></Route>
       <Route path="/form-filler"><MainLayout><SmartFormFiller /></MainLayout></Route>
       <Route path="/phishing"><MainLayout><PhishingShield /></MainLayout></Route>
       <Route path="/breach-timeline"><MainLayout><BreachTimeline /></MainLayout></Route>

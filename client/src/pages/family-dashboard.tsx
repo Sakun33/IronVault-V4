@@ -15,6 +15,25 @@ import {
 import { Plus, Edit, Trash2, Search, Users, Mail, Crown, User, Baby, Activity } from 'lucide-react';
 import type { FamilyMember } from '@shared/schema';
 import { PageHero } from '@/components/page-hero';
+import { apiBase } from '@/native/platform';
+import { getCloudToken } from '@/lib/cloud-vault-sync';
+
+async function sendFamilyInviteEmail(inviteeEmail: string): Promise<{ ok: boolean; error?: string }> {
+  const token = getCloudToken();
+  if (!token) return { ok: false, error: 'Not signed in to cloud' };
+  try {
+    const res = await fetch(`${apiBase()}/api/crm/family-invites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ inviteeEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: (data as any).error || `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Network error' };
+  }
+}
 
 const ROLE_ICON = { admin: Crown, adult: User, child: Baby };
 const ROLE_COLOR: Record<string, string> = {
@@ -103,11 +122,21 @@ export default function FamilyDashboardPage() {
         toast({ title: 'Member updated', variant: 'success' });
       } else {
         await addFamilyMember(form);
-        toast({
-          title: 'Invitation sent',
-          description: `Invite email queued for ${form.email}. Backend invite flow is rolling out — for now the entry tracks who you intend to share with.`,
-          variant: 'success',
-        });
+        const inviteEmail = form.email.trim().toLowerCase();
+        const emailResult = await sendFamilyInviteEmail(inviteEmail);
+        if (emailResult.ok) {
+          toast({
+            title: 'Invitation sent',
+            description: `An invite email has been sent to ${inviteEmail}.`,
+            variant: 'success',
+          });
+        } else {
+          toast({
+            title: 'Member added — email not sent',
+            description: emailResult.error || 'Could not send invite email. They can still be added manually.',
+            variant: 'destructive',
+          });
+        }
       }
       setIsOpen(false);
     } catch {
