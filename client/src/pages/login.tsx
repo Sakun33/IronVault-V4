@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,17 @@ export default function Login() {
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   const hasCredentials = hasAccountCredentials();
+
+  // Pre-fill the email field from `?email=` (set by verify-email after
+  // a successful click-through). Saves the user from retyping after
+  // bouncing through their email client. Runs once on mount.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const prefill = params.get('email');
+      if (prefill) setEmail(prefill);
+    } catch { /* noop */ }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

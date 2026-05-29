@@ -71,7 +71,10 @@ export default function VerifyEmailPage() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight mb-2">Email verified!</h1>
               <p className="text-muted-foreground mb-6">{message}</p>
-              <Link href="/auth/login">
+              {/* Pass the verified email through so login pre-fills it —
+                  one less field for the user to retype after clicking
+                  through from their email client. */}
+              <Link href={`/auth/login?email=${encodeURIComponent(email)}`}>
                 <a className="block">
                   <Button className="w-full h-11">Log In Now</Button>
                 </a>

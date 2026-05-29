@@ -338,7 +338,7 @@ interface PlanCard {
 
 function PricingSection() {
   const plans: PlanCard[] = [
-    { name: "Free",     price: "₹0",      priceNote: "forever",   description: "All the essentials to get started.",  features: ["50 passwords", "10 secure notes", "1 vault (mobile only)", "Local storage"], href: "/auth/signup" },
+    { name: "Free",     price: "₹0",      priceNote: "forever",   description: "All the essentials to get started.",  features: ["50 passwords", "10 secure notes", "1 vault (web + mobile)", "Local-only · no cloud sync"], href: "/auth/signup" },
     { name: "Pro",      price: "₹149",    priceNote: "/month",    description: "Full access. 14-day free trial.",     features: ["Unlimited everything", "5 vaults · cloud sync", "Bank import (OCR)", "Expense tracking", "Priority support"], href: "/auth/signup", popular: true },
     { name: "Lifetime", price: "₹9,999",  priceNote: "one-time",  description: "Pay once, use forever.",              features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"], href: "/auth/signup" },
   ];

@@ -472,17 +472,21 @@ export default function VaultPickerPage() {
     }
   };
 
-  // Auto-bypass the paywall for returning free users who already have at
-  // least one vault (local or cloud). Forcing the upgrade gate on every
-  // login when they've already created a vault is hostile UX — surface a
-  // small "See plans" banner instead so they can upgrade later.
+  // Auto-bypass the paywall for free users by default. Forcing a wall of
+  // pricing cards as the first thing they see after signup contradicts
+  // the landing page's "Free forever · No credit card required" promise
+  // and reads as bait-and-switch. The "Upgrade" banner + "See plans"
+  // button below keeps the upsell one click away without blocking the
+  // create-vault path. If the user explicitly clicked "See plans" we
+  // honor that choice for the rest of the session (sessionStorage flag).
   useEffect(() => {
     if (planLoading) return;
     if (isPaid) return;
     if (paywallBypassed) return;
-    if (vaults.length > 0 || cloudVaults.length > 0) {
-      persistPaywallBypassed(true);
-    }
+    try {
+      if (sessionStorage.getItem('iv_paywall_user_requested') === '1') return;
+    } catch { /* noop */ }
+    persistPaywallBypassed(true);
   }, [vaults.length, cloudVaults.length, isPaid, planLoading, paywallBypassed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Consume pending family invite — checks both URL params and localStorage.
@@ -1110,7 +1114,10 @@ export default function VaultPickerPage() {
               </p>
               <button
                 type="button"
-                onClick={() => persistPaywallBypassed(false)}
+                onClick={() => {
+                  try { sessionStorage.setItem('iv_paywall_user_requested', '1'); } catch { /* noop */ }
+                  persistPaywallBypassed(false);
+                }}
                 className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 whitespace-nowrap underline underline-offset-2"
                 data-testid="button-show-upgrade"
               >
@@ -1277,19 +1284,19 @@ export default function VaultPickerPage() {
                   })}
                 </div>
                 <p className="text-center text-xs text-muted-foreground mt-6">
-                  Free plan: Mobile app only · 1 local vault · No web access
+                  Free plan: 1 vault · Local storage only · No cloud sync
                 </p>
                 <div className="mt-4 text-center">
                   <button
                     type="button"
                     onClick={() => persistPaywallBypassed(true)}
-                    className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                    className="text-sm text-primary hover:underline font-medium"
                     data-testid="button-continue-free"
                   >
                     Continue with Free Plan →
                   </button>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Limited to 1 local vault, no cloud sync
+                    You can upgrade anytime from your profile
                   </p>
                 </div>
               </div>
@@ -1324,9 +1331,17 @@ export default function VaultPickerPage() {
             <>
               {vaults.filter(v => !cloudVaults.some(cv => cv.vaultId === v.id)).length === 0 ? (
                 cloudVaults.length === 0 && vaults.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <ShieldCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No vaults yet. Create your first vault below.</p>
+                  <div className="text-center py-8 px-4" data-testid="text-vault-empty-welcome">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-teal-500/10 flex items-center justify-center mx-auto mb-4 shadow-[0_8px_24px_-12px_rgba(16,185,129,0.6)]">
+                      <ShieldCheck className="w-8 h-8 text-emerald-500" />
+                    </div>
+                    <h2 className="text-lg font-semibold text-foreground mb-1.5">Welcome to IronVault!</h2>
+                    <p className="text-sm text-muted-foreground max-w-xs mx-auto mb-3">
+                      Tap <strong className="text-foreground">New Vault</strong> below to create your first encrypted vault and start storing passwords, notes, cards, and more.
+                    </p>
+                    <p className="text-xs text-muted-foreground/80 max-w-xs mx-auto">
+                      You'll set a <strong className="text-foreground">master password</strong> — this encrypts your data and is separate from your account password.
+                    </p>
                   </div>
                 ) : null
               ) : (
