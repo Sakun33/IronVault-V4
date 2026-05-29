@@ -2,7 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
   "crons": [
-    { "path": "/api/digital-will/tick", "schedule": "0 */6 * * *" }
+    { "path": "/api/digital-will/tick", "schedule": "0 0 * * *" }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.ts" },
