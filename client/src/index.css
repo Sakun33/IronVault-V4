@@ -32,15 +32,28 @@ input::-webkit-strong-password-auto-fill-button {
   margin: 0 !important;
 }
 
-/* iOS Safari auto-zooms when an input's computed font-size is below 16px.
-   Force ≥16px on every form control GLOBALLY (not just iOS) — Tailwind
-   utilities like `text-sm` / `text-xs` on inputs would otherwise re-trigger
-   the bug. This rule wins via !important. Buttons, labels, and chip-style
-   controls are unaffected. */
+/* iOS Safari auto-zooms when a focused editable element's computed
+   font-size is below 16px. Force ≥16px on every form control AND every
+   contenteditable surface (Tiptap/ProseMirror notes editor) GLOBALLY —
+   Tailwind utilities like `text-sm` / `text-xs` / `prose-sm` on the
+   wrapper would otherwise re-trigger the bug. This rule wins via
+   !important. Buttons, labels, and chip-style controls are unaffected.
+   The viewport meta keeps `maximum-scale=5` so users can still
+   pinch-zoom images and content — only the input-focus auto-zoom is
+   suppressed. */
+input,
+select,
+textarea,
+[contenteditable],
+[contenteditable="true"],
+.ProseMirror,
+.tiptap {
+  font-size: 16px !important;
+}
+
 input,
 select,
 textarea {
-  font-size: 16px !important;
   /* Defensive: typed password characters / dots were going invisible in
      some browsers because of cascaded background overrides making the
      text-fill-color match the input bg. Forcing both `color` and the
@@ -49,6 +62,14 @@ textarea {
   color: hsl(var(--foreground)) !important;
   -webkit-text-fill-color: hsl(var(--foreground)) !important;
   caret-color: hsl(var(--foreground)) !important;
+}
+
+/* Suppress iOS double-tap-to-zoom on UI chrome while preserving pinch
+   zoom (which `touch-action: manipulation` keeps enabled). Children
+   that genuinely want gesture zoom (e.g. document viewer / image
+   lightbox) can opt back in with `touch-action: pinch-zoom` locally. */
+html, body {
+  touch-action: manipulation;
 }
 
 /* Browser autofill (yellow/blue tint) was clobbering text color and
@@ -1180,7 +1201,7 @@ html, body, #root {
 .note-content,
 .iv-rich-editor,
 .ProseMirror {
-  font-size: 16px;            /* prevents iOS zoom on focus */
+  font-size: 16px !important; /* prevents iOS zoom on focus (Tailwind prose-sm cascade) */
   line-height: 1.7;
   color: hsl(var(--foreground));
   word-wrap: break-word;
