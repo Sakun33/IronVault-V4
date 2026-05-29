@@ -3244,6 +3244,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!vaultId || !vaultName || !encryptedBlob) {
       return res.status(400).json({ error: 'vaultId, vaultName, encryptedBlob required' });
     }
+    // SEC: F-028 — storage-exhaustion DoS gate. 10 MB ceiling per blob; the
+    // largest seen in practice is <1 MB for power users with thousands of
+    // entries. Reject anything larger before it touches Postgres.
+    if (typeof encryptedBlob === 'string' && encryptedBlob.length > 10_485_760) {
+      return res.status(413).json({ error: 'encryptedBlob exceeds 10 MB cap' });
+    }
+    if (typeof vaultName === 'string' && vaultName.length > 200) {
+      return res.status(400).json({ error: 'vaultName exceeds 200 chars' });
+    }
     try {
       // Plan check — check entitlements first, fall back to legacy customers table
       const { rows: entRows } = await db.query(
@@ -3323,6 +3332,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const vaultId = path.replace('/api/vaults/cloud/', '');
     const { encryptedBlob, vaultName, isDefault, clientModifiedAt } = req.body || {};
     if (!encryptedBlob) return res.status(400).json({ error: 'encryptedBlob required' });
+    // SEC: F-028 — 10 MB cap, same as POST.
+    if (typeof encryptedBlob === 'string' && encryptedBlob.length > 10_485_760) {
+      return res.status(413).json({ error: 'encryptedBlob exceeds 10 MB cap' });
+    }
+    if (typeof vaultName === 'string' && vaultName.length > 200) {
+      return res.status(400).json({ error: 'vaultName exceeds 200 chars' });
+    }
     try {
       const { rows: existing } = await db.query(
         `SELECT vault_id, encrypted_blob, client_modified_at, server_updated_at
@@ -5050,6 +5066,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
     const { vaultId, encryptedBlob, clientModifiedAt, addedItem } = req.body || {};
     if (!encryptedBlob) return res.status(400).json({ error: 'encryptedBlob required' });
+    // SEC: F-027 — 10 MB cap, matches /api/vaults/cloud limits.
+    if (typeof encryptedBlob === 'string' && encryptedBlob.length > 10_485_760) {
+      return res.status(413).json({ error: 'encryptedBlob exceeds 10 MB cap' });
+    }
     try {
       await ensureSessionAndActivityTables();
       // Resolve target vault: explicit vaultId, default vault, or single vault.

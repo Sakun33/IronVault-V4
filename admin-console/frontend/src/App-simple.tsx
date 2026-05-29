@@ -223,18 +223,10 @@ function App() {
             </button>
           </form>
 
-          <div style={{ 
-            marginTop: '1.5rem', 
-            padding: '1rem', 
-            backgroundColor: '#f9fafb', 
-            borderRadius: '4px',
-            fontSize: '0.875rem',
-            color: '#6b7280'
-          }}>
-            <p style={{ fontWeight: '500', marginBottom: '0.5rem' }}>Default Credentials:</p>
-            <p>Username: <code style={{ backgroundColor: '#e5e7eb', padding: '0.125rem 0.25rem', borderRadius: '2px' }}>admin</code></p>
-            <p>Password: <code style={{ backgroundColor: '#e5e7eb', padding: '0.125rem 0.25rem', borderRadius: '2px' }}>admin123</code></p>
-          </div>
+          {/* SEC: removed printed default credentials. Displaying admin/admin123 on
+              the production login page (visible to anyone hitting admin.ironvault.app)
+              was a CRITICAL credential disclosure — combined with the absence of any
+              brute-force gate (pre-fix), it was a 30-second account takeover. */}
         </div>
       </div>
     );
