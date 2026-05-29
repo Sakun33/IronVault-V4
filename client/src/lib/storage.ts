@@ -489,6 +489,14 @@ export class VaultStorage {
     try {
       // Import the base64 key as a CryptoKey
       const keyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
+      // C-011 (audit): hard-fail any wrong-sized key. AES-256 requires exactly
+      // 32 bytes. Without this gate, a corrupted / shorter key would silently
+      // import as a different key class on some platforms and lead to opaque
+      // decrypt failures (or worse, accept-anything edge cases).
+      if (keyBytes.length !== 32) {
+        console.error('[unlockVaultWithKey] rejecting key with invalid length', keyBytes.length);
+        return false;
+      }
       const key = await crypto.subtle.importKey(
         'raw',
         keyBytes,

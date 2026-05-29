@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { vaultStorage } from '@/lib/storage';
 import { useLogging } from './logging-context';
 import { deriveAutofillKey, generateSalt } from '@/lib/vault-autofill-crypto';
@@ -70,10 +70,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Legacy key — older builds wrote the master password here. We never write it
-// anymore (security: master password must not be persisted), but we still
-// remove the key on every relevant transition to clean up old sessions.
+// Legacy key — older builds wrote the master password here. As of the
+// CRIT-8/9 hardening pass we NEVER write it (sessionStorage is XSS-readable;
+// holding the plaintext master password there for the life of a tab was a
+// trivial vault-decryption capability for any injected script). We still
+// remove the key on every relevant transition to clean up old sessions on
+// devices that upgraded from an older build.
 const SESSION_KEY = 'iv_session';
+
+// CRIT-8/9 mitigation: master password is wiped from React state +
+// sessionStorage after this many ms of user inactivity, even if the vault
+// itself stays unlocked. The vault encryption key in vaultStorage remains so
+// read paths keep working; functions that need plaintext (cloud push,
+// changeMasterPassword, getMasterKey for autofill) re-prompt the user.
+const MP_INACTIVITY_MS = 15 * 60 * 1000;
 
 // Set of emails for which the server has previously reported 2FA is enabled.
 // We use this as a hint to refuse the local-hash fallback when the server is
@@ -106,6 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingTwoFactor, setPendingTwoFactor] = useState<PendingTwoFactor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { clearLogs, addLog } = useLogging();
+  // CRIT-8/9: timer that clears the master password from memory after 15min
+  // of inactivity. Holds a window setTimeout id so we can reset on activity.
+  const mpInactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clears the plaintext master password from React state + sessionStorage
+  // without locking the vault. Used by the 15min inactivity timer and by any
+  // caller that needs to forget the plaintext (e.g. once derived keys are
+  // built and the password is no longer needed for the lifetime of the tab).
+  const clearMasterPasswordFromMemory = (reason: string) => {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
+    setMasterPassword(null);
+    try {
+      window.dispatchEvent(new CustomEvent('vault:mp:cleared', { detail: { reason } }));
+    } catch { /* noop */ }
+  };
 
   useEffect(() => {
     initializeAuth();
@@ -122,6 +147,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
   }, [isUnlocked]);
+
+  // CRIT-8/9: 15-minute inactivity timer that clears ONLY the plaintext
+  // master password (state + sessionStorage). Vault encryption key remains
+  // set on vaultStorage so read paths keep working; any subsequent operation
+  // that needs the plaintext password (cloud push, change master password,
+  // getMasterKey for autofill) re-prompts the user via the lock screen.
+  // Distinct from autoLockService which locks the entire vault.
+  useEffect(() => {
+    if (!masterPassword) return;
+    const events = ['mousedown', 'keydown', 'touchstart', 'input', 'visibilitychange'];
+    const reset = () => {
+      if (mpInactivityTimer.current) clearTimeout(mpInactivityTimer.current);
+      mpInactivityTimer.current = setTimeout(() => {
+        clearMasterPasswordFromMemory('inactivity-15min');
+      }, MP_INACTIVITY_MS);
+    };
+    reset();
+    events.forEach(ev => document.addEventListener(ev, reset, { passive: true }));
+    return () => {
+      if (mpInactivityTimer.current) {
+        clearTimeout(mpInactivityTimer.current);
+        mpInactivityTimer.current = null;
+      }
+      events.forEach(ev => document.removeEventListener(ev, reset));
+    };
+  }, [masterPassword]);
 
   // QA-R2 H2: global 401 handler. The fetch interceptor in
   // lib/auth-fetch-interceptor.ts dispatches `vault:auth:expired` whenever
@@ -198,27 +249,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const exists = await vaultStorage.vaultExists();
       setVaultExists(exists);
 
-      // Vault session persistence (BUG-07): cache master password in
-      // sessionStorage so an in-tab page reload doesn't bounce the user
-      // back to the vault picker. sessionStorage is per-tab and dies with
-      // the tab; logout/auto-lock/2FA still clears it explicitly below.
-      // This is a deliberate UX-over-paranoia tradeoff — closing the tab
-      // or quitting the browser still re-prompts.
-      try {
-        const persisted = exists ? sessionStorage.getItem(SESSION_KEY) : null;
-        if (persisted) {
-          const ok = await vaultStorage.unlockVault(persisted);
-          if (ok) {
-            setIsUnlocked(true);
-            setMasterPassword(persisted);
-            markLoginComplete();
-          } else {
-            sessionStorage.removeItem(SESSION_KEY);
-          }
-        }
-      } catch {
-        sessionStorage.removeItem(SESSION_KEY);
-      }
+      // CRIT-8/9 (audit): the previous build persisted the master password in
+      // sessionStorage so a page reload didn't bounce the user to the vault
+      // picker. sessionStorage is readable by any XSS payload, so we now
+      // refuse to persist or restore the master password — a reload re-prompts.
+      // The auto-lock idle timer (auto-lock.ts) still zeroes the in-memory copy
+      // after inactivity. Defensive cleanup for users upgrading from older
+      // builds that may still have a stale value sitting in sessionStorage:
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
     } finally {
@@ -609,10 +647,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
         setMasterPassword(password);
-        try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
-        // REGRESSION-3: vault unlock is an auth transition too. Bump the
-        // grace timestamp so background calls during the post-unlock burst
-        // (refreshData, cloud sync, plan check) can't 401 → bounce.
+        // CRIT-8/9 (audit): never persist the master password. The encryption
+        // key lives in vaultStorage (in-memory CryptoKey only) and the
+        // plaintext sits in React state until the idle timer or logout
+        // explicitly zeroes it.
         markLoginComplete();
         addLog('Vault Unlock', 'security', 'Vault unlocked successfully');
       }
@@ -628,7 +666,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithoutVerification = (password: string): void => {
     setIsUnlocked(true);
     setMasterPassword(password);
-    try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
+    // CRIT-8/9 (audit): no sessionStorage persistence. See `login()` above.
     markLoginComplete(); // REGRESSION-3 — same rationale as login()
   };
 
@@ -654,7 +692,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setVaultExists(true);
       setIsUnlocked(true);
       setMasterPassword(password);
-      try { sessionStorage.setItem(SESSION_KEY, password); } catch { /* noop */ }
+      // CRIT-8/9 (audit): no sessionStorage persistence. See `login()` above.
 
       // Clear activity logs when creating a new vault
       clearLogs();

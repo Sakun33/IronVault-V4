@@ -18,11 +18,22 @@ function adminPasswordSalt(): Buffer {
   return crypto.scryptSync(JWT_SECRET, "ironvault-admin-v1", 16);
 }
 
+// Strengthened scrypt parameters (OWASP 2024 guidance for high-value
+// secrets). N=2^17 forces ~128 MB peak memory + ~600-900 ms per derivation
+// on Vercel x64 — makes offline cracking of the single admin password
+// uneconomic. The previous default (N=16384, ~32 MB) was ~30x weaker.
+const ADMIN_SCRYPT_OPTS = {
+  N: 1 << 17,
+  r: 8,
+  p: 1,
+  maxmem: 256 * 1024 * 1024,
+};
+
 let _adminPwdHashCache: Buffer | null = null;
 function adminPasswordHash(): Buffer | null {
   if (!ADMIN_PASSWORD) return null;
   if (_adminPwdHashCache) return _adminPwdHashCache;
-  _adminPwdHashCache = crypto.scryptSync(ADMIN_PASSWORD, adminPasswordSalt(), 64);
+  _adminPwdHashCache = crypto.scryptSync(ADMIN_PASSWORD, adminPasswordSalt(), 64, ADMIN_SCRYPT_OPTS);
   return _adminPwdHashCache;
 }
 
@@ -31,7 +42,7 @@ function safeVerifyAdminPassword(input: string): boolean {
   if (!expected) return false;
   let candidate: Buffer;
   try {
-    candidate = crypto.scryptSync(input, adminPasswordSalt(), 64);
+    candidate = crypto.scryptSync(input, adminPasswordSalt(), 64, ADMIN_SCRYPT_OPTS);
   } catch { return false; }
   if (candidate.length !== expected.length) return false;
   return crypto.timingSafeEqual(candidate, expected);
@@ -219,7 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!ADMIN_PASSWORD || !JWT_SECRET) {
       // Burn time so unconfigured deploys take the same wall-clock as a real
       // login attempt — no oracle that says "this deploy has no admin".
-      try { crypto.scryptSync("burner", Buffer.alloc(16, 0), 64); } catch {}
+      try { crypto.scryptSync("burner", Buffer.alloc(16, 0), 64, ADMIN_SCRYPT_OPTS); } catch {}
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const { username, password } = (req.body as { username?: string; password?: string }) || {};

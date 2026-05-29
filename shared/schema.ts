@@ -3,6 +3,40 @@ import { pgTable, text, varchar, timestamp, decimal, jsonb, boolean, integer } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// ENV-2 (audit): shared maximum bounds applied across every vault and CRM
+// schema. The pre-hardening schemas accepted arbitrary-length strings and
+// unbounded arrays, which gave an attacker (or a buggy client) a cheap
+// route to push multi-megabyte payloads through the encryption + IndexedDB
+// + cloud-sync pipeline. Each limit below was sized comfortably above the
+// largest legitimate value observed in production traffic. New schemas
+// added in the future MUST use these constants — see the existing call
+// sites for the pattern.
+export const LIMITS = {
+  /** Display names, item titles, network SSIDs, etc. */
+  NAME: 500,
+  /** Short identifier tokens (currency code, category enum text, etc.). */
+  SHORT: 200,
+  /** Email address per RFC 5321 hard cap. */
+  EMAIL: 320,
+  /** Phone, address line, document number — single-line user input. */
+  LINE: 500,
+  /** URLs per common practical limit (URL spec is unbounded). */
+  URL: 2048,
+  /** Generated/encoded secrets: TOTP URIs, license keys, wallet seed phrases. */
+  SECRET: 10_000,
+  /** Per-credential password — vastly larger than any real one to allow
+   *  legitimate weird use cases (Diceware sentences, hex tokens, etc.). */
+  PASSWORD: 10_000,
+  /** Plaintext notes / descriptions / inline rich-text content. */
+  NOTES: 1_000_000,
+  /** Maximum number of items in any array field. */
+  ARRAY: 10_000,
+  /** Vault-blob encrypted payload upper bound (also enforced server-side). */
+  BLOB: 10 * 1024 * 1024,
+  /** Inline base64 image preview (QR card, statement thumb, etc.). */
+  IMAGE_DATA_URL: 5 * 1024 * 1024,
+} as const;
+
 // CRM Users table - stores user profile for backend CRM (NOT vault data)
 export const crmUsers = pgTable("crm_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -148,97 +182,97 @@ export const users = pgTable("users", {
 
 // Zod schemas for CRM validation (manual definitions for better type safety)
 export const insertCrmUserSchema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(1, "Full name is required"),
+  email: z.string().max(LIMITS.EMAIL).email(),
+  fullName: z.string().max(LIMITS.NAME).min(1, "Full name is required"),
   country: z.string().length(2, "Country must be 2-letter code"),
-  phone: z.string().optional(),
+  phone: z.string().max(LIMITS.LINE).optional(),
   marketingConsent: z.boolean().optional().default(false),
   supportConsent: z.boolean().default(true),
   vaultCreatedAt: z.date().optional(),
   lastActiveAt: z.date().optional(),
-  appVersion: z.string().optional(),
-  platform: z.string().optional(),
+  appVersion: z.string().max(LIMITS.NAME).optional(),
+  platform: z.string().max(LIMITS.SHORT).optional(),
 });
 
 export const insertEntitlementSchema = z.object({
-  userId: z.string().optional(),
+  userId: z.string().max(LIMITS.NAME).optional(),
   plan: z.enum(["free", "pro", "family", "premium", "lifetime"]).default("free"),
   status: z.enum(["active", "cancelled", "expired", "trial"]).default("active"),
   trialActive: z.boolean().optional().default(false),
   trialEndsAt: z.date().optional(),
   subscriptionPlatform: z.enum(["stripe", "app_store", "play_store", "admin", "zoho_billing", "razorpay"]).optional(),
-  subscriptionId: z.string().optional(),
-  productId: z.string().optional(),
+  subscriptionId: z.string().max(LIMITS.NAME).optional(),
+  productId: z.string().max(LIMITS.NAME).optional(),
   currentPeriodEndsAt: z.date().optional(),
   willRenew: z.boolean().optional().default(true),
   cancelledAt: z.date().optional(),
   adminOverride: z.boolean().optional().default(false),
-  adminOverrideBy: z.string().optional(),
-  adminOverrideReason: z.string().optional(),
+  adminOverrideBy: z.string().max(LIMITS.NAME).optional(),
+  adminOverrideReason: z.string().max(LIMITS.NAME).optional(),
 });
 
 export const insertBillingEventSchema = z.object({
-  userId: z.string().optional(),
-  eventType: z.string(),
-  platform: z.string(),
-  subscriptionId: z.string().optional(),
-  productId: z.string().optional(),
+  userId: z.string().max(LIMITS.NAME).optional(),
+  eventType: z.string().max(LIMITS.SHORT),
+  platform: z.string().max(LIMITS.SHORT),
+  subscriptionId: z.string().max(LIMITS.NAME).optional(),
+  productId: z.string().max(LIMITS.NAME).optional(),
   amount: z.number().optional(),
-  currency: z.string().optional(),
+  currency: z.string().max(LIMITS.SHORT).optional(),
   rawEvent: z.any().optional(),
 });
 
 export const insertSupportTicketSchema = z.object({
-  userId: z.string().optional(),
-  subject: z.string().min(1, "Subject is required"),
-  description: z.string().min(1, "Description is required"),
+  userId: z.string().max(LIMITS.NAME).optional(),
+  subject: z.string().max(LIMITS.NAME).min(1, "Subject is required"),
+  description: z.string().max(LIMITS.NOTES).min(1, "Description is required"),
   status: z.enum(["open", "in_progress", "resolved", "closed"]).optional().default("open"),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
-  assignedTo: z.string().optional(),
+  assignedTo: z.string().max(LIMITS.NAME).optional(),
 });
 
 export const insertTicketReplySchema = z.object({
-  ticketId: z.string(),
-  userId: z.string().optional(),
-  adminId: z.string().optional(),
-  message: z.string().min(1, "Message is required"),
+  ticketId: z.string().max(LIMITS.NAME),
+  userId: z.string().max(LIMITS.NAME).optional(),
+  adminId: z.string().max(LIMITS.NAME).optional(),
+  message: z.string().max(LIMITS.NOTES).min(1, "Message is required"),
   isInternal: z.boolean().optional().default(false),
 });
 
 export const insertAdminUserSchema = z.object({
-  email: z.string().email(),
-  passwordHash: z.string(),
-  fullName: z.string().min(1, "Full name is required"),
+  email: z.string().max(LIMITS.EMAIL).email(),
+  passwordHash: z.string().max(LIMITS.SECRET),
+  fullName: z.string().max(LIMITS.NAME).min(1, "Full name is required"),
   role: z.enum(["super_admin", "admin", "support"]).optional().default("support"),
   isActive: z.boolean().optional().default(true),
   lastLoginAt: z.date().optional(),
 });
 
 export const insertAuditLogSchema = z.object({
-  adminId: z.string().optional(),
-  action: z.string(),
-  entityType: z.string().optional(),
-  entityId: z.string().optional(),
+  adminId: z.string().max(LIMITS.NAME).optional(),
+  action: z.string().max(LIMITS.NAME),
+  entityType: z.string().max(LIMITS.SHORT).optional(),
+  entityId: z.string().max(LIMITS.NAME).optional(),
   oldValue: z.any().optional(),
   newValue: z.any().optional(),
-  ipAddress: z.string().optional(),
-  userAgent: z.string().optional(),
+  ipAddress: z.string().max(LIMITS.SHORT).optional(),
+  userAgent: z.string().max(LIMITS.URL).optional(),
 });
 
 export const insertDeletionRequestSchema = z.object({
-  userId: z.string().optional(),
-  email: z.string().email(),
-  reason: z.string().optional(),
+  userId: z.string().max(LIMITS.NAME).optional(),
+  email: z.string().max(LIMITS.EMAIL).email(),
+  reason: z.string().max(LIMITS.NAME).optional(),
   status: z.enum(["pending", "processing", "completed"]).optional().default("pending"),
   processedAt: z.date().optional(),
-  processedBy: z.string().optional(),
+  processedBy: z.string().max(LIMITS.NAME).optional(),
 });
 
 export const insertCloudVaultSchema = z.object({
-  userId: z.string().optional(),
-  vaultId: z.string().min(1),
-  vaultName: z.string().min(1),
-  encryptedBlob: z.string().min(1),
+  userId: z.string().max(LIMITS.NAME).optional(),
+  vaultId: z.string().max(LIMITS.NAME).min(1),
+  vaultName: z.string().max(LIMITS.NAME).min(1),
+  encryptedBlob: z.string().max(LIMITS.BLOB).min(1),
   isDefault: z.boolean().optional().default(false),
   clientModifiedAt: z.date(),
 });
@@ -393,13 +427,13 @@ export type PlanCapabilities = typeof planCapabilities[keyof typeof planCapabili
 
 // Password entries stored in IndexedDB (client-side only)
 export const passwordEntrySchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, "Site name is required"),
-  url: z.string().url().optional().or(z.literal("")),
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  category: z.string().optional(),
-  notes: z.string().optional(),
+  id: z.string().max(LIMITS.SHORT),
+  name: z.string().min(1, "Site name is required").max(LIMITS.NAME),
+  url: z.string().url().max(LIMITS.URL).optional().or(z.literal("")),
+  username: z.string().min(1, "Username is required").max(LIMITS.NAME),
+  password: z.string().min(1, "Password is required").max(LIMITS.PASSWORD),
+  category: z.string().max(LIMITS.SHORT).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
   lastUsed: z.date().optional(),
@@ -407,34 +441,34 @@ export const passwordEntrySchema = z.object({
   // Previous password versions, newest first. Capped at 10 by the writer
   // (vault-context.updatePassword) so encrypted blob size stays bounded.
   history: z.array(z.object({
-    password: z.string(),
-    changedAt: z.string(),
-  })).optional(),
+    password: z.string().max(LIMITS.PASSWORD),
+    changedAt: z.string().max(LIMITS.SHORT),
+  })).max(LIMITS.ARRAY).optional(),
   // TOTP secret for 2FA. Accepts either a raw base32 secret or a full
   // `otpauth://` URI; the consumer (totp util) extracts the secret param.
-  totp: z.string().optional(),
+  totp: z.string().max(LIMITS.SECRET).optional(),
 });
 
 // Credit / debit card entries stored in IndexedDB (client-side only).
 export const creditCardSchema = z.object({
-  id: z.string(),
-  cardName: z.string().min(1, 'Card name is required'),
-  cardholderName: z.string().min(1, 'Cardholder name is required'),
-  cardNumber: z.string().min(12, 'Card number must be at least 12 digits'),
+  id: z.string().max(LIMITS.SHORT),
+  cardName: z.string().min(1, 'Card name is required').max(LIMITS.NAME),
+  cardholderName: z.string().min(1, 'Cardholder name is required').max(LIMITS.NAME),
+  cardNumber: z.string().min(12, 'Card number must be at least 12 digits').max(32),
   // Two-digit month + two/four-digit year, stored as separate strings to
   // sidestep timezone/Date parsing pain when round-tripping through JSON.
-  expiryMonth: z.string().min(1),
-  expiryYear: z.string().min(2),
-  cvv: z.string().optional(),
+  expiryMonth: z.string().min(1).max(2),
+  expiryYear: z.string().min(2).max(4),
+  cvv: z.string().max(8).optional(),
   brand: z.enum([
     'visa', 'mastercard', 'amex', 'discover', 'rupay', 'diners', 'jcb', 'unionpay', 'other',
   ]).default('other'),
   type: z.enum(['credit', 'debit', 'prepaid']).default('credit'),
   // Hex tile color for the visual card. Picker lives in the add/edit modal.
-  color: z.string().default('#1f2937'),
-  pin: z.string().optional(),
-  notes: z.string().optional(),
-  billingZip: z.string().optional(),
+  color: z.string().max(16).default('#1f2937'),
+  pin: z.string().max(16).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
+  billingZip: z.string().max(LIMITS.SHORT).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -445,33 +479,33 @@ export const creditCardSchema = z.object({
 // visual grouping; individual document fields (passport, SSN, licence) live
 // inside the identity rather than being separate identity types.
 export const identitySchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, 'Title is required'),
+  id: z.string().max(LIMITS.SHORT),
+  title: z.string().min(1, 'Title is required').max(LIMITS.NAME),
   // Accept any string so legacy records (passport/driver_license/etc.) from
   // an earlier schema revision still parse. The UI only treats personal /
   // work / custom specially; anything else falls back to the custom tile.
-  type: z.string().default('personal'),
-  firstName: z.string().optional(),
-  middleName: z.string().optional(),
-  lastName: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  gender: z.string().optional(),
+  type: z.string().max(LIMITS.SHORT).default('personal'),
+  firstName: z.string().max(LIMITS.NAME).optional(),
+  middleName: z.string().max(LIMITS.NAME).optional(),
+  lastName: z.string().max(LIMITS.NAME).optional(),
+  dateOfBirth: z.string().max(LIMITS.SHORT).optional(),
+  gender: z.string().max(LIMITS.SHORT).optional(),
   // Document fields. Sensitive ones (number) are masked in card view.
-  documentNumber: z.string().optional(),
-  issuingCountry: z.string().optional(),
-  issueDate: z.string().optional(),
-  expiryDate: z.string().optional(),
+  documentNumber: z.string().max(LIMITS.NAME).optional(),
+  issuingCountry: z.string().max(LIMITS.NAME).optional(),
+  issueDate: z.string().max(LIMITS.SHORT).optional(),
+  expiryDate: z.string().max(LIMITS.SHORT).optional(),
   // Address fields
-  addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postalCode: z.string().optional(),
-  country: z.string().optional(),
+  addressLine1: z.string().max(LIMITS.LINE).optional(),
+  addressLine2: z.string().max(LIMITS.LINE).optional(),
+  city: z.string().max(LIMITS.NAME).optional(),
+  state: z.string().max(LIMITS.NAME).optional(),
+  postalCode: z.string().max(LIMITS.SHORT).optional(),
+  country: z.string().max(LIMITS.NAME).optional(),
   // Contact fields
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional(),
-  notes: z.string().optional(),
+  email: z.string().email().max(LIMITS.EMAIL).optional().or(z.literal('')),
+  phone: z.string().max(LIMITS.LINE).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -486,16 +520,16 @@ export type Identity = z.infer<typeof identitySchema>;
 // list view, revealed only after master-password re-prompt (same pattern
 // as API Keys).
 export const cryptoWalletSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, 'Wallet name is required'),
+  id: z.string().max(LIMITS.SHORT),
+  name: z.string().min(1, 'Wallet name is required').max(LIMITS.NAME),
   walletType: z.enum(['bitcoin', 'ethereum', 'solana', 'polygon', 'other']).default('other'),
-  walletAddress: z.string().optional(),
-  seedPhrase: z.string().optional(),
-  privateKey: z.string().optional(),
-  publicKey: z.string().optional(),
-  network: z.string().optional(),
-  exchangeName: z.string().optional(),
-  notes: z.string().optional(),
+  walletAddress: z.string().max(LIMITS.SECRET).optional(),
+  seedPhrase: z.string().max(LIMITS.SECRET).optional(),
+  privateKey: z.string().max(LIMITS.SECRET).optional(),
+  publicKey: z.string().max(LIMITS.SECRET).optional(),
+  network: z.string().max(LIMITS.NAME).optional(),
+  exchangeName: z.string().max(LIMITS.NAME).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -505,14 +539,14 @@ export type CryptoWallet = z.infer<typeof cryptoWalletSchema>;
 // Wi-Fi credential — `securityType` drives the QR-code format. SSIDs with
 // special characters (` ; , : \ "`) are escaped when the QR is generated.
 export const wifiPasswordSchema = z.object({
-  id: z.string(),
-  networkName: z.string().min(1, 'Network name (SSID) is required'),
-  password: z.string(),
+  id: z.string().max(LIMITS.SHORT),
+  networkName: z.string().min(1, 'Network name (SSID) is required').max(LIMITS.NAME),
+  password: z.string().max(LIMITS.PASSWORD),
   securityType: z.enum(['WPA2', 'WPA3', 'WEP', 'Open', 'other']).default('WPA2'),
-  location: z.string().optional(),
-  router: z.string().optional(),
+  location: z.string().max(LIMITS.NAME).optional(),
+  router: z.string().max(LIMITS.NAME).optional(),
   frequency: z.enum(['2.4GHz', '5GHz', 'Both']).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -522,18 +556,18 @@ export type WifiPassword = z.infer<typeof wifiPasswordSchema>;
 // Software license — license key masked by default; expiry countdown
 // surfaced in card view.
 export const softwareLicenseSchema = z.object({
-  id: z.string(),
-  softwareName: z.string().min(1, 'Software name is required'),
-  licenseKey: z.string().min(1, 'License key is required'),
-  version: z.string().optional(),
-  purchaseDate: z.string().optional(),
-  expiryDate: z.string().optional(),
-  licensedTo: z.string().optional(),
+  id: z.string().max(LIMITS.SHORT),
+  softwareName: z.string().min(1, 'Software name is required').max(LIMITS.NAME),
+  licenseKey: z.string().min(1, 'License key is required').max(LIMITS.SECRET),
+  version: z.string().max(LIMITS.SHORT).optional(),
+  purchaseDate: z.string().max(LIMITS.SHORT).optional(),
+  expiryDate: z.string().max(LIMITS.SHORT).optional(),
+  licensedTo: z.string().max(LIMITS.NAME).optional(),
   seats: z.number().optional(),
   platform: z.enum(['windows', 'mac', 'linux', 'android', 'ios', 'web', 'all']).optional(),
-  vendor: z.string().optional(),
-  purchaseUrl: z.string().optional(),
-  notes: z.string().optional(),
+  vendor: z.string().max(LIMITS.NAME).optional(),
+  purchaseUrl: z.string().max(LIMITS.URL).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -542,21 +576,21 @@ export type SoftwareLicense = z.infer<typeof softwareLicenseSchema>;
 
 // Insurance policy — premium + renewal countdown surfaced in card view.
 export const insurancePolicySchema = z.object({
-  id: z.string(),
-  policyName: z.string().min(1, 'Policy name is required'),
-  insurer: z.string().min(1, 'Insurer is required'),
-  policyNumber: z.string().min(1, 'Policy number is required'),
+  id: z.string().max(LIMITS.SHORT),
+  policyName: z.string().min(1, 'Policy name is required').max(LIMITS.NAME),
+  insurer: z.string().min(1, 'Insurer is required').max(LIMITS.NAME),
+  policyNumber: z.string().min(1, 'Policy number is required').max(LIMITS.NAME),
   policyType: z.enum(['health', 'life', 'car', 'home', 'travel', 'term', 'other']).default('other'),
   premium: z.number().nonnegative(),
   premiumFrequency: z.enum(['monthly', 'quarterly', 'half-yearly', 'yearly']).default('yearly'),
   sumInsured: z.number().optional(),
-  startDate: z.string(),
-  expiryDate: z.string(),
-  nominees: z.string().optional(),
-  agentName: z.string().optional(),
-  agentPhone: z.string().optional(),
-  claimProcess: z.string().optional(),
-  notes: z.string().optional(),
+  startDate: z.string().max(LIMITS.SHORT),
+  expiryDate: z.string().max(LIMITS.SHORT),
+  nominees: z.string().max(LIMITS.NOTES).optional(),
+  agentName: z.string().max(LIMITS.NAME).optional(),
+  agentPhone: z.string().max(LIMITS.LINE).optional(),
+  claimProcess: z.string().max(LIMITS.NOTES).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -566,16 +600,16 @@ export type InsurancePolicy = z.infer<typeof insurancePolicySchema>;
 // Tax document — organised by financial year; documentType drives the
 // badge color in card view.
 export const taxDocumentSchema = z.object({
-  id: z.string(),
-  documentName: z.string().min(1, 'Document name is required'),
+  id: z.string().max(LIMITS.SHORT),
+  documentName: z.string().min(1, 'Document name is required').max(LIMITS.NAME),
   documentType: z.enum(['form16', 'itr', 'tds', 'investment_proof', '80c', '80d', 'hra', 'other']).default('other'),
-  financialYear: z.string().min(1, 'Financial year is required'),
-  assessmentYear: z.string().optional(),
+  financialYear: z.string().min(1, 'Financial year is required').max(LIMITS.SHORT),
+  assessmentYear: z.string().max(LIMITS.SHORT).optional(),
   amount: z.number().optional(),
-  panNumber: z.string().optional(),
-  filedDate: z.string().optional(),
-  acknowledgementNumber: z.string().optional(),
-  notes: z.string().optional(),
+  panNumber: z.string().max(LIMITS.SHORT).optional(),
+  filedDate: z.string().max(LIMITS.SHORT).optional(),
+  acknowledgementNumber: z.string().max(LIMITS.NAME).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -586,13 +620,13 @@ export type TaxDocument = z.infer<typeof taxDocumentSchema>;
 // optionally caches a pre-rendered base64 PNG so the lock-screen surface
 // doesn't have to re-render at every wake.
 export const qrCodeSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, 'Name is required'),
+  id: z.string().max(LIMITS.SHORT),
+  name: z.string().min(1, 'Name is required').max(LIMITS.NAME),
   category: z.enum(['boarding_pass', 'event_ticket', 'payment', 'wifi', 'url', 'contact', 'other']).default('other'),
-  qrData: z.string().min(1, 'QR content is required'),
-  imageData: z.string().optional(),
-  expiryDate: z.string().optional(),
-  notes: z.string().optional(),
+  qrData: z.string().min(1, 'QR content is required').max(LIMITS.SECRET),
+  imageData: z.string().max(LIMITS.IMAGE_DATA_URL).optional(),
+  expiryDate: z.string().max(LIMITS.SHORT).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -605,15 +639,15 @@ export type QrCode = z.infer<typeof qrCodeSchema>;
 // When opened from the bookmarks page on a device with the Chrome extension
 // installed, the extension picks up the linked password and autofills.
 export const secureBookmarkSchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, 'Title is required'),
-  url: z.string().url('Valid URL required'),
-  category: z.string().optional(),
-  tags: z.array(z.string()).default([]),
-  icon: z.string().optional(),
+  id: z.string().max(LIMITS.SHORT),
+  title: z.string().min(1, 'Title is required').max(LIMITS.NAME),
+  url: z.string().url('Valid URL required').max(LIMITS.URL),
+  category: z.string().max(LIMITS.SHORT).optional(),
+  tags: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).default([]),
+  icon: z.string().max(LIMITS.URL).optional(),
   autoLogin: z.boolean().default(false),
-  linkedPasswordId: z.string().optional(),
-  notes: z.string().optional(),
+  linkedPasswordId: z.string().max(LIMITS.SHORT).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isFavorite: z.boolean().optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -625,11 +659,11 @@ export type SecureBookmark = z.infer<typeof secureBookmarkSchema>;
 // /api/family/* endpoints; this schema stores the device-local cache so
 // the dashboard renders instantly offline.
 export const familyMemberSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Valid email required'),
+  id: z.string().max(LIMITS.SHORT),
+  name: z.string().min(1, 'Name is required').max(LIMITS.NAME),
+  email: z.string().email('Valid email required').max(LIMITS.EMAIL),
   role: z.enum(['admin', 'adult', 'child']).default('adult'),
-  sharedVaults: z.array(z.string()).default([]),
+  sharedVaults: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).default([]),
   permissions: z.object({
     canViewPasswords: z.boolean().default(true),
     canEditPasswords: z.boolean().default(false),
@@ -644,9 +678,9 @@ export const familyMemberSchema = z.object({
     canExport: false,
   }),
   status: z.enum(['invited', 'active', 'suspended']).default('invited'),
-  joinedAt: z.string(),
-  lastActive: z.string().optional(),
-  avatarUrl: z.string().optional(),
+  joinedAt: z.string().max(LIMITS.SHORT),
+  lastActive: z.string().max(LIMITS.SHORT).optional(),
+  avatarUrl: z.string().max(LIMITS.URL).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
@@ -657,19 +691,19 @@ export type FamilyMember = z.infer<typeof familyMemberSchema>;
 // `lastCheckinAt` powers the dead-man's-switch countdown; backend cron
 // (added in a follow-up) compares it against `inactivityPeriodDays`.
 export const digitalWillBeneficiarySchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Valid email required'),
-  relationship: z.string().optional(),
+  name: z.string().min(1, 'Name is required').max(LIMITS.NAME),
+  email: z.string().email('Valid email required').max(LIMITS.EMAIL),
+  relationship: z.string().max(LIMITS.NAME).optional(),
   accessLevel: z.enum(['full', 'passwords_only', 'documents_only', 'selected']).default('full'),
-  selectedVaultIds: z.array(z.string()).optional(),
+  selectedVaultIds: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).optional(),
 });
 export const digitalWillSchema = z.object({
-  id: z.string().default('singleton'),
+  id: z.string().max(LIMITS.SHORT).default('singleton'),
   isActive: z.boolean().default(false),
   inactivityPeriodDays: z.number().int().positive().default(30),
-  lastCheckinAt: z.string(),
-  beneficiaries: z.array(digitalWillBeneficiarySchema).default([]),
-  personalMessage: z.string().optional(),
+  lastCheckinAt: z.string().max(LIMITS.SHORT),
+  beneficiaries: z.array(digitalWillBeneficiarySchema).max(100).default([]),
+  personalMessage: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
@@ -681,22 +715,22 @@ export type DigitalWill = z.infer<typeof digitalWillSchema>;
 // Backend pairing rolls out separately; this schema keeps device-local
 // state so the UI works offline today.
 export const coupleVaultSchema = z.object({
-  id: z.string().default('singleton'),
-  partnerEmail: z.string().email('Valid email required'),
-  partnerName: z.string().min(1, 'Partner name required'),
-  partnerAvatarUrl: z.string().optional(),
+  id: z.string().max(LIMITS.SHORT).default('singleton'),
+  partnerEmail: z.string().email('Valid email required').max(LIMITS.EMAIL),
+  partnerName: z.string().min(1, 'Partner name required').max(LIMITS.NAME),
+  partnerAvatarUrl: z.string().max(LIMITS.URL).optional(),
   sharedSections: z.array(z.enum([
     'passwords', 'cards', 'subscriptions', 'notes', 'reminders',
     'wifi', 'documents', 'identities', 'crypto',
-  ])).default([]),
+  ])).max(LIMITS.ARRAY).default([]),
   /** IDs of individual items the user explicitly marked private (override the section share). */
-  privateItemIds: z.array(z.string()).default([]),
+  privateItemIds: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).default([]),
   /** IDs of individual items the user explicitly marked shared (override the section share). */
-  sharedItemIds: z.array(z.string()).default([]),
+  sharedItemIds: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).default([]),
   status: z.enum(['invited', 'active', 'paused']).default('invited'),
-  sharedAt: z.string(),
-  pausedAt: z.string().optional(),
-  message: z.string().optional(),
+  sharedAt: z.string().max(LIMITS.SHORT),
+  pausedAt: z.string().max(LIMITS.SHORT).optional(),
+  message: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
@@ -722,27 +756,27 @@ export const IDENTITY_TYPES = [
 
 // Subscription entries stored in IndexedDB (client-side only)
 export const subscriptionEntrySchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, "Service name is required"),
-  plan: z.string().optional(),
+  id: z.string().max(LIMITS.SHORT),
+  name: z.string().min(1, "Service name is required").max(LIMITS.NAME),
+  plan: z.string().max(LIMITS.NAME).optional(),
   cost: z.number().positive("Cost must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().max(8).default("USD"),
   billingCycle: z.enum(["monthly", "yearly", "weekly", "daily"]).default("monthly"),
   nextBillingDate: z.date(),
   reminderDays: z.number().default(7),
-  category: z.string().optional(),
-  notes: z.string().optional(),
+  category: z.string().max(LIMITS.SHORT).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isActive: z.boolean().default(true),
   isFavorite: z.boolean().optional(),
   // Enhanced fields
   subscriptionType: z.enum(["streaming", "software", "cloud", "gaming", "news", "fitness", "productivity", "security", "education", "other"]).default("other"),
   credentials: z.object({
-    username: z.string().optional(),
-    email: z.string().email().optional(),
-    accountId: z.string().optional(),
-    password: z.string().optional(),
+    username: z.string().max(LIMITS.NAME).optional(),
+    email: z.string().email().max(LIMITS.EMAIL).optional(),
+    accountId: z.string().max(LIMITS.NAME).optional(),
+    password: z.string().max(LIMITS.PASSWORD).optional(),
   }).optional(),
-  platformLink: z.string().url().optional().or(z.literal("")),
+  platformLink: z.string().url().max(LIMITS.URL).optional().or(z.literal("")),
   expiryDate: z.date().optional(),
   autoRenew: z.boolean().default(true),
   createdAt: z.date().default(() => new Date()),
@@ -751,35 +785,35 @@ export const subscriptionEntrySchema = z.object({
 
 // Notes entries stored in IndexedDB (client-side only)
 export const noteEntrySchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, "Title is required"),
-  content: z.string(), // Rich markdown content
-  notebook: z.string().default("Default"), // Organization folder/notebook
-  tags: z.array(z.string()).default([]), // Tags for filtering/searching
+  id: z.string().max(LIMITS.SHORT),
+  title: z.string().min(1, "Title is required").max(LIMITS.NAME),
+  content: z.string().max(LIMITS.NOTES), // Rich markdown content
+  notebook: z.string().max(LIMITS.NAME).default("Default"), // Organization folder/notebook
+  tags: z.array(z.string().max(LIMITS.SHORT)).max(LIMITS.ARRAY).default([]), // Tags for filtering/searching
   isPinned: z.boolean().default(false),
   isFavorite: z.boolean().optional(),
   // Optional per-note accent. One of the design-system swatches
   // ('emerald'|'violet'|'amber'|'rose'|'sky'|'slate') — when omitted the UI
   // falls back to the notebook's color. Adding as optional is forward and
   // backwards compatible with existing encrypted blobs.
-  color: z.string().optional(),
+  color: z.string().max(LIMITS.NAME).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
 
 // Expense entries stored in IndexedDB (client-side only)
 export const expenseEntrySchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, "Title is required"),
+  id: z.string().max(LIMITS.NAME),
+  title: z.string().max(LIMITS.NAME).min(1, "Title is required"),
   amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("USD"),
-  category: z.string().min(1, "Category is required"),
+  currency: z.string().max(LIMITS.SHORT).default("USD"),
+  category: z.string().max(LIMITS.SHORT).min(1, "Category is required"),
   date: z.date().default(() => new Date()),
-  notes: z.string().optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   isRecurring: z.boolean().default(false),
   recurringFrequency: z.enum(["daily", "weekly", "monthly", "yearly"]).optional(),
   nextDueDate: z.date().optional(),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(z.string()).max(LIMITS.ARRAY).default([]),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
@@ -792,76 +826,76 @@ export const expenseEntrySchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const expenseContactSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional(),
-  notes: z.string().optional(),
-  avatarColor: z.string().optional(),
+  id: z.string().max(LIMITS.NAME),
+  name: z.string().max(LIMITS.NAME).min(1),
+  email: z.string().max(LIMITS.EMAIL).email().optional().or(z.literal('')),
+  phone: z.string().max(LIMITS.LINE).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
+  avatarColor: z.string().max(LIMITS.URL).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
 
 export const expenseGroupSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1),
-  emoji: z.string().default('👥'),
-  description: z.string().optional(),
+  id: z.string().max(LIMITS.NAME),
+  name: z.string().max(LIMITS.NAME).min(1),
+  emoji: z.string().max(LIMITS.NAME).default('👥'),
+  description: z.string().max(LIMITS.NOTES).optional(),
   // Member contact ids — 'self' is implicit and always included.
-  memberIds: z.array(z.string()).default([]),
+  memberIds: z.array(z.string()).max(LIMITS.ARRAY).default([]),
   archived: z.boolean().default(false),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
 
 export const sharedExpenseSplitSchema = z.object({
-  contactId: z.string(), // 'self' or expenseContact.id
+  contactId: z.string().max(LIMITS.NAME), // 'self' or expenseContact.id
   amount: z.number(),    // exact share in expense currency
 });
 
 export const sharedExpenseSchema = z.object({
-  id: z.string(),
-  title: z.string().min(1),
+  id: z.string().max(LIMITS.NAME),
+  title: z.string().max(LIMITS.NAME).min(1),
   amount: z.number().positive(),
-  currency: z.string().default('USD'),
-  paidBy: z.string().default('self'), // 'self' or contactId
+  currency: z.string().max(LIMITS.SHORT).default('USD'),
+  paidBy: z.string().max(LIMITS.NAME).default('self'), // 'self' or contactId
   splitType: z.enum(['equal', 'exact', 'percent', 'shares']).default('equal'),
   // Resolved per-contact shares. Always cents-accurate after the dialog reconciles.
-  splits: z.array(sharedExpenseSplitSchema).default([]),
-  groupId: z.string().optional(),
-  category: z.string().default('Other'),
+  splits: z.array(sharedExpenseSplitSchema).max(LIMITS.ARRAY).default([]),
+  groupId: z.string().max(LIMITS.NAME).optional(),
+  category: z.string().max(LIMITS.SHORT).default('Other'),
   date: z.date().default(() => new Date()),
-  notes: z.string().optional(),
-  receiptDataUrl: z.string().optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
+  receiptDataUrl: z.string().max(LIMITS.URL).optional(),
   recurrence: z.enum(['none', 'weekly', 'monthly', 'yearly']).default('none'),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
 
 export const settlementSchema = z.object({
-  id: z.string(),
-  fromContact: z.string(), // 'self' or contactId
-  toContact: z.string(),
+  id: z.string().max(LIMITS.NAME),
+  fromContact: z.string().max(LIMITS.NAME), // 'self' or contactId
+  toContact: z.string().max(LIMITS.NAME),
   amount: z.number().positive(),
-  currency: z.string().default('USD'),
+  currency: z.string().max(LIMITS.SHORT).default('USD'),
   date: z.date().default(() => new Date()),
   method: z.enum(['cash', 'upi', 'bank', 'card', 'other']).default('cash'),
-  groupId: z.string().optional(),
-  notes: z.string().optional(),
+  groupId: z.string().max(LIMITS.NAME).optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
 });
 
 export const expenseActivitySchema = z.object({
-  id: z.string(),
+  id: z.string().max(LIMITS.NAME),
   kind: z.enum([
     'expense_added', 'expense_edited', 'expense_deleted',
     'settlement_added', 'group_added', 'contact_added',
   ]),
-  refId: z.string(),
-  title: z.string(),
+  refId: z.string().max(LIMITS.NAME),
+  title: z.string().max(LIMITS.NAME),
   amount: z.number().optional(),
-  currency: z.string().optional(),
-  groupId: z.string().optional(),
+  currency: z.string().max(LIMITS.SHORT).optional(),
+  groupId: z.string().max(LIMITS.NAME).optional(),
   createdAt: z.date().default(() => new Date()),
 });
 
@@ -896,27 +930,27 @@ export const SETTLEMENT_METHODS = [
 
 // Reminder entries stored in IndexedDB (client-side only)
 export const reminderEntrySchema = z.object({
-  id: z.string(),
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
+  id: z.string().max(LIMITS.NAME),
+  title: z.string().max(LIMITS.NAME).min(1, "Title is required"),
+  description: z.string().max(LIMITS.NOTES).optional(),
   dueDate: z.date(),
-  dueTime: z.string().optional(), // HH:MM format
+  dueTime: z.string().max(LIMITS.NAME).optional(), // HH:MM format
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  category: z.string().default("Personal"),
+  category: z.string().max(LIMITS.SHORT).default("Personal"),
   isCompleted: z.boolean().default(false),
   completedAt: z.date().optional(),
   isRecurring: z.boolean().default(false),
   recurringFrequency: z.enum(["daily", "weekly", "monthly", "yearly"]).optional(),
   nextReminderDate: z.date().optional(),
-  tags: z.array(z.string()).default([]),
-  color: z.string().default("#6366f1"), // Color for calendar display
+  tags: z.array(z.string()).max(LIMITS.ARRAY).default([]),
+  color: z.string().max(LIMITS.NAME).default("#6366f1"), // Color for calendar display
   notificationEnabled: z.boolean().default(true),
   // Alarm/pre-alert functionality
   alarmEnabled: z.boolean().default(false),
-  alarmTime: z.string().optional(), // HH:MM format for alarm
+  alarmTime: z.string().max(LIMITS.NAME).optional(), // HH:MM format for alarm
   alertMinutesBefore: z.number().default(15), // Alert X minutes before due time
   preAlertEnabled: z.boolean().default(false),
-  subscriptionId: z.string().optional(), // Link to subscription for renewal reminders
+  subscriptionId: z.string().max(LIMITS.NAME).optional(), // Link to subscription for renewal reminders
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
@@ -930,8 +964,8 @@ export const kdfConfigSchema = z.object({
 
 // Vault metadata stored in IndexedDB
 export const vaultMetadataSchema = z.object({
-  id: z.string().default("vault"),
-  encryptionSalt: z.string(),
+  id: z.string().max(LIMITS.NAME).default("vault"),
+  encryptionSalt: z.string().max(LIMITS.NAME),
   kdfConfig: kdfConfigSchema.optional(), // KDF configuration for this vault
   createdAt: z.date(),
   lastUnlocked: z.date(),
@@ -947,8 +981,8 @@ export const vaultMetadataSchema = z.object({
 });
 
 export const insertUserSchema = z.object({
-  username: z.string(),
-  password: z.string(),
+  username: z.string().max(LIMITS.NAME),
+  password: z.string().max(LIMITS.SECRET),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -1065,53 +1099,53 @@ export const REMINDER_COLORS = [
 
 // Bank Statement Transaction entries stored in IndexedDB (client-side only)
 export const bankTransactionSchema = z.object({
-  id: z.string(),
-  statementId: z.string(), // Reference to the statement this transaction belongs to
+  id: z.string().max(LIMITS.NAME),
+  statementId: z.string().max(LIMITS.LINE), // Reference to the statement this transaction belongs to
   date: z.date(),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().max(LIMITS.NOTES).min(1, "Description is required"),
   amount: z.number(), // Can be positive (credit) or negative (debit)
-  currency: z.string().default("USD"),
+  currency: z.string().max(LIMITS.SHORT).default("USD"),
   transactionType: z.enum(["debit", "credit", "transfer"]),
-  category: z.string().optional(), // Auto-categorized or user-assigned
-  subcategory: z.string().optional(),
-  account: z.string().optional(), // Account name/number
+  category: z.string().max(LIMITS.SHORT).optional(), // Auto-categorized or user-assigned
+  subcategory: z.string().max(LIMITS.SHORT).optional(),
+  account: z.string().max(LIMITS.NAME).optional(), // Account name/number
   balance: z.number().optional(), // Running balance if available
-  reference: z.string().optional(), // Transaction reference number
-  merchant: z.string().optional(), // Extracted merchant name
+  reference: z.string().max(LIMITS.NAME).optional(), // Transaction reference number
+  merchant: z.string().max(LIMITS.NAME).optional(), // Extracted merchant name
   isRecurring: z.boolean().default(false),
-  recurringPattern: z.string().optional(), // Pattern like "monthly", "weekly"
-  tags: z.array(z.string()).default([]),
-  notes: z.string().optional(),
+  recurringPattern: z.string().max(LIMITS.NAME).optional(), // Pattern like "monthly", "weekly"
+  tags: z.array(z.string()).max(LIMITS.ARRAY).default([]),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
 });
 
 // Bank Statement entries stored in IndexedDB (client-side only)
 export const bankStatementSchema = z.object({
-  id: z.string(),
-  bankName: z.string().min(1, "Bank name is required"),
-  accountName: z.string().optional(),
-  accountNumber: z.string().optional(),
+  id: z.string().max(LIMITS.NAME),
+  bankName: z.string().max(LIMITS.NAME).min(1, "Bank name is required"),
+  accountName: z.string().max(LIMITS.NAME).optional(),
+  accountNumber: z.string().max(LIMITS.NAME).optional(),
   statementPeriod: z.object({
     startDate: z.date(),
     endDate: z.date(),
   }),
-  currency: z.string().default("USD"),
+  currency: z.string().max(LIMITS.SHORT).default("USD"),
   openingBalance: z.number().optional(),
   closingBalance: z.number().optional(),
   totalCredits: z.number().default(0),
   totalDebits: z.number().default(0),
   transactionCount: z.number().default(0),
-  fileName: z.string().optional(), // Original file name
+  fileName: z.string().max(LIMITS.NAME).optional(), // Original file name
   fileType: z.enum(["pdf", "csv", "xlsx", "xls", "ofx", "qif"]),
   importDate: z.date().default(() => new Date()),
   parsingRules: z.object({
-    dateColumn: z.string().optional(),
-    descriptionColumn: z.string().optional(),
-    amountColumn: z.string().optional(),
-    balanceColumn: z.string().optional(),
-    creditIndicator: z.string().optional(),
-    debitIndicator: z.string().optional(),
+    dateColumn: z.string().max(LIMITS.NAME).optional(),
+    descriptionColumn: z.string().max(LIMITS.NOTES).optional(),
+    amountColumn: z.string().max(LIMITS.NAME).optional(),
+    balanceColumn: z.string().max(LIMITS.NAME).optional(),
+    creditIndicator: z.string().max(LIMITS.NAME).optional(),
+    debitIndicator: z.string().max(LIMITS.NAME).optional(),
   }).optional(),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -1119,26 +1153,26 @@ export const bankStatementSchema = z.object({
 
 // Investment entries stored in IndexedDB (client-side only)
 export const investmentSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, "Investment name is required"),
+  id: z.string().max(LIMITS.NAME),
+  name: z.string().max(LIMITS.NAME).min(1, "Investment name is required"),
   type: z.enum([
     "fixed_deposit", "recurring_deposit", "mutual_fund", "stocks", 
     "bonds", "crypto", "nft", "futures", "debt", "real_estate", "other"
   ]),
-  institution: z.string().optional(), // Bank, broker, platform name
-  ticker: z.string().optional(), // Stock ticker, crypto symbol, etc.
+  institution: z.string().max(LIMITS.NAME).optional(), // Bank, broker, platform name
+  ticker: z.string().max(LIMITS.NAME).optional(), // Stock ticker, crypto symbol, etc.
   purchaseDate: z.date(),
   purchasePrice: z.number().positive("Purchase price must be positive"),
   quantity: z.number().positive("Quantity must be positive").default(1),
   currentPrice: z.number().optional(), // Current market price per unit
   currentValue: z.number().optional(), // Total current value
-  currency: z.string().default("USD"),
+  currency: z.string().max(LIMITS.SHORT).default("USD"),
   interestRate: z.number().optional(), // For FDs, bonds
   maturityDate: z.date().optional(), // For FDs, bonds
   dividendYield: z.number().optional(), // Annual dividend yield %
   fees: z.number().default(0), // Management fees, transaction costs
-  notes: z.string().optional(),
-  tags: z.array(z.string()).default([]),
+  notes: z.string().max(LIMITS.NOTES).optional(),
+  tags: z.array(z.string()).max(LIMITS.ARRAY).default([]),
   isActive: z.boolean().default(true),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
@@ -1146,16 +1180,16 @@ export const investmentSchema = z.object({
 
 // Investment Goal entries stored in IndexedDB (client-side only)
 export const investmentGoalSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, "Goal name is required"),
-  description: z.string().optional(),
+  id: z.string().max(LIMITS.NAME),
+  name: z.string().max(LIMITS.NAME).min(1, "Goal name is required"),
+  description: z.string().max(LIMITS.NOTES).optional(),
   targetAmount: z.number().positive("Target amount must be positive"),
   targetDate: z.date(),
   currentAmount: z.number().default(0), // Current progress
-  currency: z.string().default("USD"),
+  currency: z.string().max(LIMITS.SHORT).default("USD"),
   priority: z.enum(["low", "medium", "high"]).default("medium"),
-  category: z.string().optional(), // Retirement, House, Education, etc.
-  investmentIds: z.array(z.string()).default([]), // Which investments contribute to this goal
+  category: z.string().max(LIMITS.SHORT).optional(), // Retirement, House, Education, etc.
+  investmentIds: z.array(z.string()).max(LIMITS.ARRAY).default([]), // Which investments contribute to this goal
   monthlyContribution: z.number().optional(), // Suggested monthly contribution
   isAchieved: z.boolean().default(false),
   achievedDate: z.date().optional(),
@@ -1165,12 +1199,12 @@ export const investmentGoalSchema = z.object({
 
 // Investment Performance History entries stored in IndexedDB (client-side only)
 export const investmentPerformanceSchema = z.object({
-  id: z.string(),
-  investmentId: z.string(),
+  id: z.string().max(LIMITS.NAME),
+  investmentId: z.string().max(LIMITS.NAME),
   date: z.date(),
   value: z.number().positive("Value must be positive"),
   price: z.number().optional(), // Price per unit if applicable
-  notes: z.string().optional(),
+  notes: z.string().max(LIMITS.NOTES).optional(),
   createdAt: z.date().default(() => new Date()),
 });
 

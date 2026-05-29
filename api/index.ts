@@ -16,8 +16,37 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
+import { argon2id as argon2idHash, argon2Verify } from "hash-wasm";
 
-const scrypt = promisify(scryptCb) as (password: string | Buffer, salt: string | Buffer, keylen: number) => Promise<Buffer>;
+// scrypt with explicit options. Defaults (N=16384, r=8, p=1, maxmem≈32MB)
+// are the legacy curve we used to migrate from. The HARDENED parameters
+// below land near OWASP 2024 guidance for high-value secrets and force a
+// minimum 256 MB of working memory per guess, taking single-thread scrypt
+// to ~600-900 ms on a modern x64 — slow enough to make offline-cracking the
+// account-password hash uneconomic.
+const scrypt = promisify(scryptCb) as (
+  password: string | Buffer,
+  salt: string | Buffer,
+  keylen: number,
+  options?: { N?: number; r?: number; p?: number; maxmem?: number },
+) => Promise<Buffer>;
+
+// Strengthened scrypt: N=2^17 (131072), r=8, p=1 — ~128 MB peak memory,
+// ~600-900 ms per derivation on Vercel x64. Old hashes (N=16384 default)
+// remain accepted; on next successful login they're transparently re-hashed
+// at the new parameters or migrated to Argon2id. See HARDENED_SCRYPT_VERSION.
+const HARDENED_SCRYPT_N = 1 << 17;
+const HARDENED_SCRYPT_R = 8;
+const HARDENED_SCRYPT_P = 1;
+const HARDENED_SCRYPT_MAXMEM = 256 * 1024 * 1024;
+const HARDENED_SCRYPT_VERSION = 2;
+
+// Argon2id parameters — OWASP "high-security" profile clamped for
+// Vercel-serverless memory limits (default 1 GB; we use 64 MB → safe).
+// t=3 iterations, m=65536 KiB (64 MiB), p=1 parallelism = ~250-450 ms.
+const ARGON2ID_T = 3;
+const ARGON2ID_M = 64 * 1024;
+const ARGON2ID_P = 1;
 
 // Cryptographically random alphanumeric token of arbitrary length.
 function cryptoRandomString(len: number, alphabet: string): string {
@@ -28,38 +57,93 @@ function cryptoRandomString(len: number, alphabet: string): string {
   return out.join('');
 }
 
-// Account-password hashing — scrypt with per-user random salt, format
-// `scrypt$<salt_hex>$<key_hex>`. Legacy 64-char hex SHA-256 hashes are
-// recognized on login and silently re-hashed.
+// Account-password hashing. New hashes use Argon2id (memory-hard, GPU-
+// resistant) via hash-wasm — pure WASM, no native binary, works on Vercel
+// serverless. Legacy formats remain accepted on verify and are flagged via
+// `needsUpgrade` so the caller can re-hash transparently on next login.
+//
+// Format taxonomy on disk:
+//   `$argon2id$v=19$m=…,t=…,p=…$…`  — current
+//   `scrypt2$<saltHex>$<N>$<r>$<p>$<keyHex>` — strengthened scrypt
+//   `scrypt$<saltHex>$<keyHex>`     — legacy scrypt (N=16384 default)
+//   `<64-hex>`                      — legacy unsalted SHA-256 from client
 async function hashAccountPassword(input: string): Promise<string> {
   const salt = randomBytes(16);
-  const key = await scrypt(input, salt, 64);
-  return `scrypt$${salt.toString('hex')}$${(key as Buffer).toString('hex')}`;
+  // hash-wasm needs a Uint8Array for salt. Returns the PHC encoded string.
+  return await argon2idHash({
+    password: input,
+    salt: new Uint8Array(salt),
+    iterations: ARGON2ID_T,
+    memorySize: ARGON2ID_M,
+    parallelism: ARGON2ID_P,
+    hashLength: 32,
+    outputType: 'encoded',
+  });
 }
 
-async function verifyAccountPassword(input: string, stored: string): Promise<{ ok: boolean; legacy: boolean }> {
-  // Normalize: legacy SHA-256 hashes can sneak in with stray whitespace or
-  // mixed case from older insert paths; trim before format-detecting.
+// Verify result. `needsUpgrade` is true when the stored format is anything
+// older than Argon2id (legacy SHA-256, legacy scrypt, or strengthened
+// scrypt). The caller MUST re-hash with `hashAccountPassword` on a
+// successful login and write the new hash back to the DB.
+async function verifyAccountPassword(input: string, stored: string): Promise<{ ok: boolean; legacy: boolean; needsUpgrade: boolean }> {
+  // Normalize: legacy hashes can have stray whitespace or mixed case.
   const normStored = (stored || '').trim();
   const normInput = (input || '').trim();
+
+  // 1) Argon2id (current). PHC-encoded — hash-wasm verifies internally.
+  if (normStored.startsWith('$argon2')) {
+    try {
+      const ok = await argon2Verify({ password: normInput, hash: normStored });
+      return { ok, legacy: false, needsUpgrade: false };
+    } catch {
+      return { ok: false, legacy: false, needsUpgrade: false };
+    }
+  }
+
+  // 2) Strengthened scrypt (transitional). Format encodes its parameters
+  //    so we can verify regardless of what the current HARDENED_* constants are.
+  if (normStored.startsWith('scrypt2$')) {
+    const parts = normStored.split('$');
+    if (parts.length !== 6) return { ok: false, legacy: false, needsUpgrade: true };
+    const salt = Buffer.from(parts[1], 'hex');
+    const N = parseInt(parts[2], 10);
+    const r = parseInt(parts[3], 10);
+    const p = parseInt(parts[4], 10);
+    const expected = Buffer.from(parts[5], 'hex');
+    if (!Number.isFinite(N) || !Number.isFinite(r) || !Number.isFinite(p)) return { ok: false, legacy: false, needsUpgrade: true };
+    if (salt.length === 0 || expected.length === 0) return { ok: false, legacy: false, needsUpgrade: true };
+    // Cap memory ceiling to whatever the encoded params demand. maxmem must
+    // be greater than 128 * N * r — give it a healthy margin.
+    const maxmem = Math.max(HARDENED_SCRYPT_MAXMEM, 256 * N * r);
+    let got: Buffer;
+    try {
+      got = (await scrypt(normInput, salt, expected.length, { N, r, p, maxmem })) as Buffer;
+    } catch { return { ok: false, legacy: false, needsUpgrade: true }; }
+    if (got.length !== expected.length) return { ok: false, legacy: false, needsUpgrade: true };
+    // Upgrade to Argon2id on next login.
+    return { ok: timingSafeEqual(got, expected), legacy: false, needsUpgrade: true };
+  }
+
+  // 3) Legacy scrypt (N=16384, default scrypt options).
   if (normStored.startsWith('scrypt$')) {
     const parts = normStored.split('$');
-    if (parts.length !== 3) return { ok: false, legacy: false };
+    if (parts.length !== 3) return { ok: false, legacy: true, needsUpgrade: true };
     const salt = Buffer.from(parts[1], 'hex');
     const expected = Buffer.from(parts[2], 'hex');
-    if (salt.length === 0 || expected.length === 0) return { ok: false, legacy: false };
+    if (salt.length === 0 || expected.length === 0) return { ok: false, legacy: true, needsUpgrade: true };
     const got = (await scrypt(normInput, salt, expected.length)) as Buffer;
-    if (got.length !== expected.length) return { ok: false, legacy: false };
-    return { ok: timingSafeEqual(got, expected), legacy: false };
+    if (got.length !== expected.length) return { ok: false, legacy: true, needsUpgrade: true };
+    return { ok: timingSafeEqual(got, expected), legacy: true, needsUpgrade: true };
   }
-  // Legacy: 64-char hex SHA-256, no salt. Case-insensitive hex compare.
+
+  // 4) Legacy: 64-char hex SHA-256, no salt. Case-insensitive hex compare.
   if (/^[a-f0-9]{64}$/i.test(normStored) && /^[a-f0-9]{64}$/i.test(normInput)) {
     const a = Buffer.from(normStored.toLowerCase(), 'hex');
     const b = Buffer.from(normInput.toLowerCase(), 'hex');
-    if (a.length !== b.length) return { ok: false, legacy: true };
-    return { ok: timingSafeEqual(a, b), legacy: true };
+    if (a.length !== b.length) return { ok: false, legacy: true, needsUpgrade: true };
+    return { ok: timingSafeEqual(a, b), legacy: true, needsUpgrade: true };
   }
-  return { ok: false, legacy: false };
+  return { ok: false, legacy: false, needsUpgrade: false };
 }
 
 // AES-256-GCM envelope for TOTP secrets at rest. Key = scrypt(JWT_SECRET, "totp")
@@ -632,6 +716,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Clearbit, etc.), which made favicons render as empty circles for many users.
   // Fetching same-origin and proxying server-side bypasses those filter lists.
   if (path === "/api/favicon" && req.method === "GET") {
+    // F-003 (audit): per-IP rate-limit. Without this an attacker can pin a
+    // serverless instance to upstream DDG by spamming domain lookups, and we
+    // pay outbound bandwidth for every request.
+    if (checkAndRecordAction('favicon', getClientIp(req), 120, 60_000)) {
+      return res.status(429).send('Too many requests');
+    }
     const domain = (req.query?.d as string | undefined)?.toLowerCase();
     if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain) || domain.length > 253) {
       return res.status(400).send('Invalid domain');
@@ -663,6 +753,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // password (and full hash) never leaves the device. Proxying server-side
   // sidesteps mobile WebView CORS quirks and lets us add server-side cache.
   if (path === "/api/security/breach-check" && req.method === "POST") {
+    // F-002 (audit): per-IP rate-limit on the HIBP k-anonymity proxy.
+    // Each request can carry up to 100 prefixes, each one becoming a
+    // separate outbound request to pwnedpasswords.com — without this gate
+    // a single client can amplify a request 100x.
+    if (checkAndRecordAction('breach-check', getClientIp(req), 30, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     const body = (req.body ?? {}) as { prefixes?: unknown };
     const raw = Array.isArray(body.prefixes) ? body.prefixes : [];
     if (raw.length === 0) return res.status(400).json({ error: "prefixes required" });
@@ -710,8 +807,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The client gets a normalized severity (clean / warn / phishing) plus the
   // raw reasons so the page can explain *why* something looks bad.
   if (path === "/api/security/phishing-check" && req.method === "POST") {
+    // F-003 (audit): per-IP rate-limit. The Safe Browsing v4 backend has a
+    // per-key quota; without a frontend rate-limit a single user can drain it.
+    if (checkAndRecordAction('phishing-check', getClientIp(req), 60, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     const { url } = (req.body || {}) as { url?: unknown };
     if (!url || typeof url !== "string") return res.status(400).json({ error: "url required" });
+    if (url.length > 2048) return res.status(400).json({ error: "url too long" });
 
     let parsed: URL;
     try {
@@ -1199,9 +1302,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   function getClientIp(req: VercelRequest): string {
+    // F-019 (audit): prefer x-vercel-forwarded-for, which Vercel sets to
+    // the immediate-upstream IP (the real client) and overwrites — it can't
+    // be spoofed by a client header. x-forwarded-for is a chain that the
+    // client controls the leftmost entry of; trusting its first segment
+    // lets a client spoof their source IP for rate-limiting purposes.
+    const vercelXff = (req.headers['x-vercel-forwarded-for'] as string) || '';
+    const vercelFirst = vercelXff.split(',')[0]?.trim();
+    if (vercelFirst) return vercelFirst;
+    // Fall back to the trailing (closest-to-server) entry of x-forwarded-for,
+    // which is set by Vercel's edge and not spoofable.
     const xff = (req.headers['x-forwarded-for'] as string) || '';
-    const first = xff.split(',')[0]?.trim();
-    return first || (req.headers['x-real-ip'] as string) || (req.socket?.remoteAddress as string) || 'unknown';
+    const xffParts = xff.split(',').map(s => s.trim()).filter(Boolean);
+    const xffLast = xffParts[xffParts.length - 1];
+    return xffLast
+      || (req.headers['x-real-ip'] as string)
+      || (req.socket?.remoteAddress as string)
+      || 'unknown';
   }
 
   function parseUserAgent(ua: string | undefined): { browser: string; os: string; deviceName: string } {
@@ -1476,6 +1593,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const env = process.env.PASSKEY_ORIGIN;
     if (env) return env.split(',').map(s => s.trim()).filter(Boolean);
     return ['https://www.ironvault.app', 'https://ironvault.app'];
+  }
+
+  // CRIT (WebAuthn): explicit server-side origin & type check on the
+  // attacker-supplied clientDataJSON. SimpleWebAuthn's verify* functions
+  // already do this internally, but pre-checking here gives defense in
+  // depth — and lets us fail fast (and rate-limit on bad origin) before
+  // doing any database work for an obviously-malformed payload.
+  function verifyPasskeyClientData(
+    clientDataB64Url: string | undefined | null,
+    expectedType: 'webauthn.create' | 'webauthn.get',
+  ): { ok: true; challenge: string } | { ok: false; error: string } {
+    if (!clientDataB64Url || typeof clientDataB64Url !== 'string') {
+      return { ok: false, error: 'Missing clientDataJSON' };
+    }
+    let parsed: any;
+    try {
+      parsed = JSON.parse(Buffer.from(clientDataB64Url, 'base64url').toString());
+    } catch {
+      return { ok: false, error: 'Malformed clientDataJSON' };
+    }
+    if (parsed?.type !== expectedType) {
+      return { ok: false, error: 'Wrong ceremony type' };
+    }
+    const origin = parsed?.origin;
+    if (typeof origin !== 'string' || !passkeyOrigin().includes(origin)) {
+      console.warn('[passkey] rejected unexpected origin:', origin);
+      return { ok: false, error: 'Origin not allowed' };
+    }
+    if (typeof parsed?.challenge !== 'string' || parsed.challenge.length < 16) {
+      return { ok: false, error: 'Malformed challenge' };
+    }
+    return { ok: true, challenge: parsed.challenge };
+  }
+
+  // base64url is the WebAuthn canonical credential id encoding. Anything
+  // else is almost certainly an attacker probing arbitrary strings.
+  function isBase64Url(s: unknown): s is string {
+    return typeof s === 'string' && s.length > 0 && s.length < 1024 && /^[A-Za-z0-9_-]+$/.test(s);
   }
 
   // Backfill the apple_id column for Sign in with Apple. Same memoized pattern
@@ -1821,6 +1976,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (rows.length === 0) return res.status(401).json({ error: 'Auth required' });
         const v = await verifyAccountPassword(pwdStr, rows[0].account_password_hash);
         authed = v.ok;
+        if (v.ok && v.needsUpgrade) {
+          try {
+            const upgraded = await hashAccountPassword(pwdStr);
+            await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [upgraded, cloudUser.userId]);
+          } catch (e: any) { console.error('[2fa-disable] hash upgrade failed:', e.message); }
+        }
       }
       if (!authed && codeStr) {
         const v = await verifyTotpOrBackup(cloudUser.userId, codeStr);
@@ -2287,8 +2448,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         recordLoginFailure(clientIp);
         return res.status(401).json({ error: 'Invalid email or password' });
       }
-      // Migrate legacy SHA-256 hashes to scrypt on successful login
-      if (verify.legacy) {
+      // Transparent upgrade: re-hash to current Argon2id on any non-current
+      // format (legacy SHA-256, legacy scrypt, transitional scrypt2).
+      if (verify.needsUpgrade) {
         try {
           const upgraded = await hashAccountPassword(accountPasswordHash);
           await db.query(`UPDATE crm_users SET account_password_hash = $1 WHERE id = $2`, [upgraded, userId]);
@@ -2733,14 +2895,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/auth/passkey/register' && req.method === 'POST') {
     const cloudUser = await getCloudUser(req);
     if (!cloudUser) return res.status(401).json({ error: 'Auth required' });
+    if (checkAndRecordAction('passkey-register', getClientIp(req), 10, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     await ensurePasskeyTable();
     const { attestationResponse, deviceLabel } = (req.body || {}) as any;
     if (!attestationResponse) return res.status(400).json({ error: 'attestationResponse required' });
     try {
-      const expectedChallenge = attestationResponse?.response?.clientDataJSON
-        ? JSON.parse(Buffer.from(attestationResponse.response.clientDataJSON, 'base64url').toString()).challenge
-        : null;
-      if (!expectedChallenge) return res.status(400).json({ error: 'Malformed response' });
+      const cdv = verifyPasskeyClientData(
+        attestationResponse?.response?.clientDataJSON,
+        'webauthn.create',
+      );
+      if (!cdv.ok) return res.status(400).json({ error: cdv.error });
+      const expectedChallenge = cdv.challenge;
 
       const { rows } = await db.query(
         `SELECT user_id FROM passkey_challenges
@@ -2781,6 +2948,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === '/api/auth/passkey/authenticate-options' && req.method === 'POST') {
+    // CRIT-13 / F-001 (audit): per-IP rate-limit. Without this an attacker
+    // could brute-force credential IDs via the authenticate endpoint at
+    // unbounded request rate.
+    if (checkAndRecordAction('passkey-authenticate-options', getClientIp(req), 30, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     try {
       await ensurePasskeyTable();
     } catch (e: any) {
@@ -2825,14 +2998,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === '/api/auth/passkey/authenticate' && req.method === 'POST') {
+    // CRIT-13 / F-001 (audit): per-IP rate-limit to make credential-ID
+    // guessing infeasible.
+    if (checkAndRecordAction('passkey-authenticate', getClientIp(req), 15, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     await ensurePasskeyTable();
     const { assertionResponse } = (req.body || {}) as any;
     if (!assertionResponse) return res.status(400).json({ error: 'assertionResponse required' });
+    // CRIT-13 / F-001 (audit): reject malformed credential IDs before any
+    // DB hit. WebAuthn IDs are base64url; anything else (length anomaly,
+    // SQL-y characters, etc.) is treated as an enumeration probe.
+    if (typeof assertionResponse.id !== 'string'
+        || assertionResponse.id.length < 16
+        || assertionResponse.id.length > 1024
+        || !/^[A-Za-z0-9_-]+$/.test(assertionResponse.id)) {
+      return res.status(400).json({ error: 'Malformed credential id' });
+    }
     try {
-      const expectedChallenge = assertionResponse?.response?.clientDataJSON
-        ? JSON.parse(Buffer.from(assertionResponse.response.clientDataJSON, 'base64url').toString()).challenge
-        : null;
-      if (!expectedChallenge) return res.status(400).json({ error: 'Malformed response' });
+      // CRIT (WebAuthn origin): explicit pre-check of origin + ceremony type
+      // before any DB hit. Defense in depth on top of
+      // verifyAuthenticationResponse's internal check.
+      const cdv = verifyPasskeyClientData(
+        assertionResponse?.response?.clientDataJSON,
+        'webauthn.get',
+      );
+      if (!cdv.ok) return res.status(400).json({ error: cdv.error });
+      const expectedChallenge = cdv.challenge;
 
       const { rows: chalRows } = await db.query(
         `SELECT user_id, email FROM passkey_challenges
@@ -2841,6 +3033,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [expectedChallenge]
       );
       if (chalRows.length === 0) return res.status(400).json({ error: 'Stale or unknown challenge' });
+      const chal = chalRows[0];
 
       const credentialId: string = assertionResponse.id;
       const { rows: credRows } = await db.query(
@@ -2853,6 +3046,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       if (credRows.length === 0) return res.status(404).json({ error: 'Unknown credential' });
       const cred = credRows[0];
+
+      // CRIT-13 / F-001 (audit): if the challenge row was scoped to a
+      // specific user (because /authenticate-options was called with an
+      // email), require the redeemed credential to belong to that user.
+      // Without this gate, an attacker could request an email-less
+      // challenge and then redeem it with any victim's credential id and
+      // be issued a session for the victim's account.
+      if (chal.user_id && String(chal.user_id) !== String(cred.user_id)) {
+        return res.status(401).json({ error: 'Credential does not belong to challenge user' });
+      }
 
       const verification = await verifyAuthenticationResponse({
         response: assertionResponse,
@@ -2955,6 +3158,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === '/api/share/redeem' && req.method === 'POST') {
+    // F-004 (audit): per-IP rate-limit. Without this an attacker who has
+    // a guessable share-id space (or a leaked link) can drain view_count
+    // by brute force.
+    if (checkAndRecordAction('share-redeem', getClientIp(req), 30, 60_000)) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     try {
       await ensureSharedLinkTable();
     } catch (e: any) {
@@ -2962,37 +3171,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { id } = (req.body || {}) as any;
     if (!id || typeof id !== 'string') return res.status(400).json({ error: 'id required' });
+    if (id.length > 200) return res.status(400).json({ error: 'id too long' });
     try {
-      const { rows } = await db.query(
-        `SELECT encrypted_payload, iv, item_label, item_kind, max_views, view_count, expires_at, revoked_at
-           FROM shared_links WHERE id = $1`,
-        [id]
-      );
-      if (rows.length === 0) return res.status(404).json({ error: 'Link not found or expired' });
-      const row = rows[0];
-      if (row.revoked_at) return res.status(410).json({ error: 'Link revoked by owner' });
-      if (new Date(row.expires_at).getTime() < Date.now()) {
-        return res.status(410).json({ error: 'Link expired' });
-      }
-      if (row.view_count >= row.max_views) {
-        return res.status(410).json({ error: 'Link view limit reached' });
-      }
-      // Atomic-ish increment. Two near-simultaneous redemptions could both
-      // succeed at the boundary; that's accepted (the user explicitly
-      // allowed N views and one extra over the boundary is harmless).
+      // F-004 (audit): single atomic UPDATE that enforces all gating
+      // conditions in SQL — no race between SELECT and UPDATE where two
+      // concurrent redeems both pass the `view_count < max_views` check
+      // and then both succeed. RETURNING gives us the post-update row for
+      // the response when the gate passed.
       const updated = await db.query(
         `UPDATE shared_links SET view_count = view_count + 1
-           WHERE id = $1 AND view_count < max_views
-         RETURNING view_count, max_views`,
+           WHERE id = $1
+             AND revoked_at IS NULL
+             AND expires_at > NOW()
+             AND view_count < max_views
+         RETURNING encrypted_payload, iv, item_label, item_kind, view_count, max_views, expires_at`,
         [id]
       );
-      const viewCount = updated.rows[0]?.view_count ?? row.view_count + 1;
+      if (updated.rows.length === 0) {
+        // Fetch metadata to return the most precise reason — 404 if the
+        // link doesn't exist at all, 410 for revoked/expired/exhausted.
+        const { rows } = await db.query(
+          `SELECT revoked_at, expires_at, view_count, max_views FROM shared_links WHERE id = $1`,
+          [id]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: 'Link not found or expired' });
+        const r = rows[0];
+        if (r.revoked_at) return res.status(410).json({ error: 'Link revoked by owner' });
+        if (new Date(r.expires_at).getTime() < Date.now()) {
+          return res.status(410).json({ error: 'Link expired' });
+        }
+        return res.status(410).json({ error: 'Link view limit reached' });
+      }
+      const row = updated.rows[0];
       return res.json({
         encryptedPayload: row.encrypted_payload,
         iv: row.iv,
         itemLabel: row.item_label,
         itemKind: row.item_kind,
-        viewCount,
+        viewCount: row.view_count,
         maxViews: row.max_views,
         expiresAt: row.expires_at,
       });

@@ -13,14 +13,9 @@
     <!-- Replace YOUR_VERIFICATION_CODE with code from Google Search Console -->
     <meta name="google-site-verification" content="OHvJ-50oMQj18dUH_lZEWGXgs7wIfCQk0w_2" />
     
-    <!-- Google Analytics 4 -->
+    <!-- Google Analytics 4 — config queue is initialized inside /iv-boot.js
+         (CSP-001: no inline scripts in this file). -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-5H25535Q8W"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-5H25535Q8W');
-    </script>
     
     <!-- Zoho PageSense Analytics — `defer` so it doesn't block first
          paint. PageSense was responsible for ~1,650ms of render-blocking
@@ -290,11 +285,14 @@
       as="style"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
     >
+    <!-- CSP-001: removed the `onload="this.media='all'"` inline event handler.
+         /iv-boot.js wires the same behaviour from JS, keyed off
+         `data-async-font`. -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
       media="print"
-      onload="this.media='all'"
+      data-async-font
     >
     <noscript>
       <link
@@ -305,15 +303,10 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Nuke stale SW caches before app boots — removes any ironvault cache not matching current version -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        caches.keys().then(function(names) {
-          names.filter(function(n) { return n.indexOf('v3.1') === -1; })
-               .forEach(function(n) { caches.delete(n); });
-        });
-      }
-    </script>
+    <!-- CSP-001: SW cache nuke, GA config queue, font onload, and tawk.to init
+         are all consolidated into /iv-boot.js so the app CSP can drop
+         `'unsafe-inline'` from script-src. -->
+    <script src="/iv-boot.js"></script>
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Razorpay Checkout — `defer` so it doesn't block first paint. The
@@ -380,7 +373,8 @@
       </div>
     </noscript>
 
-    <!-- tawk.to Live Chat — bubble hidden by default; opened via in-app UI -->
+    <!-- tawk.to Live Chat — bubble hidden by default; opened via in-app UI.
+         Init script moved to /iv-boot.js per CSP-001 (no inline scripts). -->
     <style>
       /* Defense-in-depth: keep the default bubble + minimized greeting card
          hidden even before the widget script loads, so they can't flash in.
@@ -396,28 +390,5 @@
         display: none !important;
       }
     </style>
-    <script type="text/javascript">
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-    // Hide the floating bubble globally — our own UI (header icon on vault
-    // pages, floating Help pill on auth pages) calls Tawk_API.maximize() to
-    // open the chat window directly. Avoids the oversized always-on bubble.
-    Tawk_API.onLoad = function() {
-      try { if (typeof Tawk_API.hideWidget === 'function') Tawk_API.hideWidget(); } catch (e) {}
-    };
-    // When the user minimizes the chat panel, fully hide the widget — the
-    // default minimized bubble shows the "We Are Here!" cartoon greeting,
-    // which we never want on screen. Users re-open via our own Help button.
-    Tawk_API.onChatMinimized = function() {
-      try { if (typeof Tawk_API.hideWidget === 'function') Tawk_API.hideWidget(); } catch (e) {}
-    };
-    (function(){
-    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-    s1.async=true;
-    s1.src='https://embed.tawk.to/6a184abf549ee11c36b0d928/1jpne7vlu';
-    s1.charset='UTF-8';
-    s1.setAttribute('crossorigin','*');
-    s0.parentNode.insertBefore(s1,s0);
-    })();
-    </script>
   </body>
 </html>
