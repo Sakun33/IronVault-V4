@@ -132,16 +132,65 @@ export async function listCloudVaultsWithStatus(): Promise<ListCloudVaultsResult
   }
 }
 
-// ── Download vault blob ───────────────────────────────────────────────────────
-export async function downloadCloudVault(vaultId: string): Promise<CloudVaultFull | null> {
+// ── Encrypted-blob envelope guard (SEC: S-001/S-002) ─────────────────────────
+// Defence in depth for the zero-knowledge invariant. The exporter upstream is
+// responsible for encryption, but a regression that lets plaintext through
+// would silently leak the entire vault to the server. We reject anything that
+// doesn't look like our AES-GCM envelope BEFORE the network call.
+// Envelope shape from storage.ts:exportVault — { version, salt, iv, data }
+// where salt/iv/data are base64 and version is a positive integer.
+const MIN_ENVELOPE_BYTES = 80; // any real ciphertext is well above this
+function isEncryptedEnvelope(blob: string): boolean {
+  if (typeof blob !== 'string' || blob.length < MIN_ENVELOPE_BYTES) return false;
   try {
-    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, { headers: authHeaders() });
-    if (!res.ok) return null;
+    const parsed = JSON.parse(blob);
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (typeof parsed.version !== 'number' || parsed.version <= 0) return false;
+    if (typeof parsed.salt !== 'string' || parsed.salt.length < 16) return false;
+    if (typeof parsed.iv !== 'string' || parsed.iv.length < 12) return false;
+    if (typeof parsed.data !== 'string' || parsed.data.length < 16) return false;
+    // Sanity: no plaintext collection keys leaked at the top level.
+    const PLAINTEXT_LEAK_KEYS = ['passwords', 'notes', 'creditCards', 'identities', 'apiKeys'];
+    if (PLAINTEXT_LEAK_KEYS.some(k => k in parsed)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Download vault blob ───────────────────────────────────────────────────────
+export interface DownloadResult {
+  ok: boolean;
+  status: number;
+  vault?: CloudVaultFull;
+  error?: string;
+}
+
+export async function downloadCloudVault(vaultId: string): Promise<CloudVaultFull | null> {
+  const result = await downloadCloudVaultWithStatus(vaultId);
+  return result.ok ? (result.vault ?? null) : null;
+}
+
+// SEC: S-016 — discriminated result so callers can distinguish 404 (vault
+// deleted on server) from transient network errors. Destructive consumers
+// (e.g. local-blob replacement) must use this and only act on ok:true.
+export async function downloadCloudVaultWithStatus(vaultId: string): Promise<DownloadResult> {
+  try {
+    const res = await fetchWithTimeout(
+      `${CLOUD_API}/api/vaults/cloud/${vaultId}`,
+      { headers: authHeaders() },
+      15_000,
+    );
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: `HTTP ${res.status}` };
+    }
     const data = await res.json();
-    // API returns fields at top level (not nested under `vault`)
-    if (data.vaultId) return data as CloudVaultFull;
-    return data.vault ?? null;
-  } catch { return null; }
+    const vault = data.vaultId ? (data as CloudVaultFull) : (data.vault ?? null);
+    if (!vault) return { ok: false, status: 200, error: 'empty vault payload' };
+    return { ok: true, status: 200, vault };
+  } catch (err: any) {
+    return { ok: false, status: 0, error: err?.message || String(err) };
+  }
 }
 
 // ── Push (create or update) ───────────────────────────────────────────────────
@@ -169,6 +218,15 @@ export async function pushCloudVault(
     console.error('[CLOUD-PUSH] No cloud token — user is not authenticated for cloud sync');
     return { success: false, status: 0, error: 'Not signed in to cloud' };
   }
+  // SEC: S-001/S-002 — defence in depth for zero-knowledge invariant. Refuse
+  // anything that doesn't look like our AES-GCM envelope BEFORE the network
+  // call. Hard throw, not soft return — pushing plaintext is a breach, not a
+  // sync hiccup, and a soft return could let a regression land silently.
+  if (!isEncryptedEnvelope(encryptedBlob)) {
+    const err = '[CLOUD-PUSH] REFUSED: blob does not match encrypted envelope shape';
+    console.error(err);
+    throw new Error('refuse to push non-encrypted blob');
+  }
   const clientModifiedAt = new Date().toISOString();
   const sourceDeviceId = getOrCreateDeviceId();
   // Log every push attempt with the size of the blob and the vault id so
@@ -176,19 +234,22 @@ export async function pushCloudVault(
   console.info(`[CLOUD-PUSH] pushing vault ${vaultId} (${(encryptedBlob.length / 1024).toFixed(1)} KB) at ${clientModifiedAt}`);
   try {
     // Try PUT first (update existing)
-    const putRes = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
+    // SEC: S-005 — 30s timeout. Without it, a hung Android-WebView fetch can
+    // permanently brick the sync queue (inFlight stays true; next runPush
+    // early-returns; nothing ever ships).
+    const putRes = await fetchWithTimeout(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ encryptedBlob, vaultName, isDefault, clientModifiedAt }),
-    });
+    }, 30_000);
     if (putRes.status === 404) {
       // Not in cloud yet — create it
       console.info(`[CLOUD-PUSH] vault ${vaultId} not in cloud yet — creating`);
-      const postRes = await fetch(`${CLOUD_API}/api/vaults/cloud`, {
+      const postRes = await fetchWithTimeout(`${CLOUD_API}/api/vaults/cloud`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ vaultId, vaultName, encryptedBlob, isDefault, clientModifiedAt, sourceDeviceId }),
-      });
+      }, 30_000);
       if (postRes.status === 403) {
         const body = await postRes.json().catch(() => ({}));
         const planError = body.code === 'PLAN_UPGRADE_REQUIRED';
@@ -235,11 +296,12 @@ export async function pushCloudVault(
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
+// SEC: S-005 — timeouts on all mutating calls.
 export async function deleteCloudVault(vaultId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
+    const res = await fetchWithTimeout(`${CLOUD_API}/api/vaults/cloud/${vaultId}`, {
       method: 'DELETE', headers: authHeaders(),
-    });
+    }, 15_000);
     return res.ok;
   } catch { return false; }
 }
@@ -247,9 +309,9 @@ export async function deleteCloudVault(vaultId: string): Promise<boolean> {
 // ── Set default ───────────────────────────────────────────────────────────────
 export async function setCloudDefault(vaultId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${CLOUD_API}/api/vaults/cloud/${vaultId}/default`, {
+    const res = await fetchWithTimeout(`${CLOUD_API}/api/vaults/cloud/${vaultId}/default`, {
       method: 'PATCH', headers: authHeaders(),
-    });
+    }, 15_000);
     return res.ok;
   } catch { return false; }
 }

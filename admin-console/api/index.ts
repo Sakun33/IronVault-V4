@@ -71,6 +71,15 @@ function verifyJWT(token: string): object | null {
   try {
     const [h, b, s] = token.split(".");
     if (!h || !b || !s) return null;
+    // SEC: A-006 — explicit algorithm pinning. Reject anything that isn't
+    // HS256 (alg=none, alg=RS256 with attacker-controlled key, etc.). Even
+    // though we recompute the HMAC ourselves, future maintainers swapping in
+    // a JWT library that trusts the header claim would inherit the bug.
+    let header: { alg?: string; typ?: string };
+    try {
+      header = JSON.parse(Buffer.from(h, "base64url").toString()) as { alg?: string; typ?: string };
+    } catch { return null; }
+    if (header.alg !== "HS256") return null;
     const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${h}.${b}`).digest("base64url");
     if (!safeStrEq(s, expected)) return null;
     const payload = JSON.parse(Buffer.from(b, "base64url").toString()) as {
@@ -84,6 +93,8 @@ function verifyJWT(token: string): object | null {
     // A main-app user JWT will fail HMAC if JWT_SECRET differs, but we also
     // hard-require role + iss claims so even a shared-secret deploy is safe.
     if (payload.iss !== "ironvault-admin") return null;
+    // SEC: A-015 — verify aud as well now that we're issuing it.
+    if (payload.aud && payload.aud !== "ironvault-admin") return null;
     if (payload.role !== "admin" && payload.role !== "super_admin") return null;
     return payload;
   } catch { return null; }
@@ -108,6 +119,38 @@ function registerRateLimitHit(ip: string): boolean {
   }
   b.count++;
   return b.count > 5;
+}
+
+// SEC: A-001 — per-IP brute-force gate for admin login. 5 attempts / 15 min;
+// after that, lock the IP out for 1 hour. Stored in memory only (no DB write
+// on every attempt); resets on cold-start, which is fine — Vercel recycles
+// often enough that a sustained attacker still loses thousands of attempts
+// per minute to the cap. Combined with scrypt's cost per guess this turns
+// "trivial brute force" into "weeks of attempts per password guess".
+const _loginRateBuckets = new Map<string, { count: number; resetAt: number; lockedUntil: number }>();
+function loginRateLimitHit(ip: string): { blocked: boolean; retryAfterSec?: number } {
+  const now = Date.now();
+  const WINDOW = 15 * 60 * 1000;
+  const LOCKOUT = 60 * 60 * 1000;
+  const MAX_ATTEMPTS = 5;
+  const b = _loginRateBuckets.get(ip);
+  if (b && b.lockedUntil > now) {
+    return { blocked: true, retryAfterSec: Math.ceil((b.lockedUntil - now) / 1000) };
+  }
+  if (!b || b.resetAt < now) {
+    _loginRateBuckets.set(ip, { count: 1, resetAt: now + WINDOW, lockedUntil: 0 });
+    return { blocked: false };
+  }
+  b.count++;
+  if (b.count > MAX_ATTEMPTS) {
+    b.lockedUntil = now + LOCKOUT;
+    console.error(`[ADMIN-LOGIN] IP ${ip} locked out for 1h after ${b.count} attempts`);
+    return { blocked: true, retryAfterSec: Math.ceil(LOCKOUT / 1000) };
+  }
+  return { blocked: false };
+}
+function loginRateLimitReset(ip: string): void {
+  _loginRateBuckets.delete(ip);
 }
 function getClientIp(req: VercelRequest): string {
   const xff = (req.headers["x-forwarded-for"] as string) || "";
@@ -147,8 +190,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const method = req.method || "GET";
 
   // ── Health (public) ─────────────────────────────────────────────────────────
+  // SEC: A-027 — return only a status flag to unauthenticated callers. Don't
+  // leak DB-attached / admin-bootstrapped fingerprints.
   if (path === "/api/health") {
-    return res.json({ status: "ok", db: !!process.env.DATABASE_URL, admins: 1 });
+    return res.json({ status: "ok" });
   }
 
   // ── GET /api/auth/me ────────────────────────────────────────────────────────
@@ -160,11 +205,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── Auth login (public) ─────────────────────────────────────────────────────
   if (path === "/api/auth/login" && method === "POST") {
+    // SEC: A-001 — brute-force gate. Check first, before any work, so attackers
+    // can't probe whether credentials are configured by timing.
+    const ip = getClientIp(req);
+    const gate = loginRateLimitHit(ip);
+    if (gate.blocked) {
+      if (gate.retryAfterSec) res.setHeader("Retry-After", String(gate.retryAfterSec));
+      return res.status(429).json({ error: "Too many attempts. Try again later." });
+    }
+    // SEC: A-013 — collapse "credentials not configured" into the generic
+    // invalid-credentials response so an attacker can't fingerprint deploy
+    // state. Always run the scrypt comparison to keep timing flat.
     if (!ADMIN_PASSWORD || !JWT_SECRET) {
-      return res.status(503).json({ error: "Admin credentials not configured" });
+      // Burn time so unconfigured deploys take the same wall-clock as a real
+      // login attempt — no oracle that says "this deploy has no admin".
+      try { crypto.scryptSync("burner", Buffer.alloc(16, 0), 64); } catch {}
+      return res.status(401).json({ error: "Invalid credentials" });
     }
     const { username, password } = (req.body as { username?: string; password?: string }) || {};
-    if (username === ADMIN_USERNAME && safeVerifyAdminPassword(password || "")) {
+    // SEC: A-014 — always run scrypt regardless of username match so the
+    // timing of "wrong username" matches "wrong password". timingSafeEqual
+    // compares usernames in constant time too.
+    const pwOk = safeVerifyAdminPassword(password || "");
+    const userOk = !!username && safeStrEq(username, ADMIN_USERNAME);
+    if (userOk && pwOk) {
+      loginRateLimitReset(ip);
       // Best-effort: persist last_login so /api/admins can surface it. Ignore failures.
       if (process.env.DATABASE_URL) {
         getPool().query(
@@ -231,18 +296,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { email, fullName, country, platform } = (req.body as Record<string, string>) || {};
     if (!email) return res.status(400).json({ error: "email required" });
+    // SEC: minimal input validation on this public endpoint.
+    const emailNorm = String(email).toLowerCase().trim();
+    if (emailNorm.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+      return res.status(400).json({ error: "invalid email" });
+    }
+    const fnSafe = fullName ? String(fullName).slice(0, 200) : null;
+    const ctSafe = country ? String(country).slice(0, 100) : null;
+    const ptSafe = platform ? String(platform).slice(0, 50) : null;
     try {
-      const { rows } = await db.query(
+      await db.query(
         `INSERT INTO crm_users (email, full_name, country, platform, marketing_consent, support_consent)
          VALUES ($1, $2, $3, $4, false, true)
          ON CONFLICT (email) DO NOTHING
          RETURNING id, email, full_name, country, platform, created_at`,
-        [email.toLowerCase().trim(), fullName || null, country || null, platform || null]
+        [emailNorm, fnSafe, ctSafe, ptSafe]
       );
       // Always respond success — don't leak whether the email already existed.
       return res.json({ success: true });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      // SEC: A-028 — public endpoint must not leak PostgreSQL error details
+      // (column / constraint / table names are useful to an attacker).
+      console.error("[public/register] db error:", err.message);
+      return res.status(500).json({ error: "registration failed" });
     }
   }
 

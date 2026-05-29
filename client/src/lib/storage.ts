@@ -393,7 +393,12 @@ export class VaultStorage {
       if (!metadata) return false;
 
       const salt = CryptoService.base64ToUint8Array(metadata.encryptionSalt);
-      
+      // SEC: salt must be >=16 bytes — tampered metadata could shrink it.
+      if (salt.length < 16) {
+        console.error('[SEC] vault metadata salt below 16 bytes — refusing unlock');
+        return false;
+      }
+
       // Use stored KDF configuration or fall back to legacy default (100k iterations)
       const kdfConfig = metadata.kdfConfig ? {
         algorithm: metadata.kdfConfig.algorithm,
@@ -404,7 +409,24 @@ export class VaultStorage {
         iterations: 100000, // Original default before KDF upgrade
         hash: 'SHA-256' as const
       };
-      
+      // SEC: C-010 — KDF parameter allowlist. The kdfConfig is read from
+      // IndexedDB, which a malicious extension / post-XSS attacker can write
+      // to. Without this gate, lowering iterations to 1 brute-forces the
+      // password offline in seconds. 100k floor preserves legacy-vault
+      // compatibility (original default); modern vaults are 600k.
+      if (kdfConfig.algorithm !== 'PBKDF2') {
+        console.error('[SEC] unsupported KDF algorithm in metadata — refusing unlock');
+        return false;
+      }
+      if (kdfConfig.hash !== 'SHA-256' && kdfConfig.hash !== 'SHA-512') {
+        console.error('[SEC] unsupported KDF hash in metadata — refusing unlock');
+        return false;
+      }
+      if (!Number.isInteger(kdfConfig.iterations) || kdfConfig.iterations < 100000) {
+        console.error('[SEC] KDF iterations below 100k floor — refusing unlock (tamper?)');
+        return false;
+      }
+
       const key = await CryptoService.deriveKey(masterPassword, salt, kdfConfig);
       
       // Test the key by trying to decrypt existing data or verification entry
