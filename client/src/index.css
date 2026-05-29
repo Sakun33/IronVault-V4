@@ -1202,8 +1202,21 @@ html, body, #root {
 }
 .iv-rich-editor,
 .ProseMirror {
-  min-height: 300px;
+  min-height: 100%;
   padding: 0;
+}
+/* When ProseMirror lives inside a flex-1 `.note-content`, stretch the
+   contenteditable so the click-to-type target fills the visible editor
+   area instead of leaving a dead band between the last line and the
+   keyboard (or footer) on mobile. */
+.note-content {
+  display: flex;
+  flex-direction: column;
+}
+.note-content > .tiptap-editor-host,
+.note-content .ProseMirror {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Block-level typography */

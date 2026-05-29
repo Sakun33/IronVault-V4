@@ -1024,11 +1024,13 @@ export default function Dashboard() {
             { label: 'Add Password', icon: Lock,        href: '/passwords?action=add', tone: 'indigo'  as StatTone },
             { label: 'New Note',     icon: FileText,    href: '/notes?action=add',     tone: 'amber'   as StatTone },
             { label: 'Log Expense',  icon: DollarSign,  href: '/expenses?action=add',  tone: 'emerald' as StatTone },
-            // KeyRound has a chunkier glyph than Key — visually matches the
-            // other Quick Action icons (Lock / FileText / DollarSign) which
-            // already have heavier strokes. Also bumped icon size from 18 →
-            // 20 (w-5 h-5) across the row for better legibility.
-            { label: 'Generator',    icon: KeyRound,                                   tone: 'cyan'    as StatTone, onClick: openPasswordGenerator },
+            // Sparkles has the same visual weight at w-5 h-5 as the other
+            // Quick Action icons. Previous choices (Key / KeyRound) rendered
+            // visibly smaller than Lock / FileText / DollarSign even at the
+            // same Tailwind size class because the glyph itself sits in a
+            // smaller bounding box. Sparkles fits the "generate" semantics
+            // and matches the row visually.
+            { label: 'Generator',    icon: Sparkles,                                   tone: 'cyan'    as StatTone, onClick: openPasswordGenerator },
           ] as Array<{ label: string; icon: React.ElementType; tone: StatTone; href?: string; onClick?: () => void }>).map(({ label, icon: Icon, href, tone, onClick }) => {
             const inner = (
               <motion.div

@@ -582,8 +582,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     <div className="h-[100dvh] bg-background overflow-hidden flex flex-col w-full" style={{width: '100%', maxWidth: '100vw', overscrollBehavior: 'none'}}>
       {/* Travel-mode banner — visible app-wide while active. */}
       <TravelModeBanner />
-      {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
+      {/* Mobile Header — in-flow (not fixed). Outer container is
+          `overflow-hidden flex flex-col` so this stays at the visible
+          top naturally; the mobile <main> below claims `flex-1` for the
+          rest. Using in-flow positioning eliminates the fixed-header +
+          spacer math that kept producing a stray safe-area gap below
+          the header on iOS notch devices. */}
+      <header className="lg:hidden z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-2 pt-[env(safe-area-inset-top,0px)] overflow-visible">
         <div className="flex items-center justify-between h-9 gap-1 overflow-visible">
           {/* Left: hamburger + logo */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
@@ -680,11 +685,6 @@ function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      {/* Spacer for fixed header + safe area. Height must match the header
-          (h-9 = 36px) plus its top safe-area padding. The 0px fallback
-          keeps the spacer flush on devices/browsers without a notch. */}
-      <div className="lg:hidden h-[calc(env(safe-area-inset-top,0px)+36px)]" />
-
       {/* Desktop Header - Glassmorphism */}
       <header className="hidden lg:block sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 px-6 py-3">
         <div className="flex items-center justify-between">
