@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield } from 'lucide-react';
+import { Eye, EyeOff, Mail, KeyRound, MailCheck, Shield, Fingerprint, ScanFace } from 'lucide-react';
 import { AppLogo } from '@/components/app-logo';
 import { GoogleSignInButton } from '@/components/google-sign-in-button';
 import { AppleSignInButton } from '@/components/apple-sign-in-button';
@@ -14,6 +14,12 @@ import { useToast } from '@/hooks/use-toast';
 import { hasAccountCredentials } from '@/lib/account-auth';
 import { motionPresets } from '@/lib/design-system';
 import { apiBase, isNativeApp } from '@/native/platform';
+import {
+  checkBiometricCapabilities,
+  signInWithBiometric,
+  hasAccountBiometricCredentials,
+  getAccountBiometricEmail,
+} from '@/native/biometrics';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -32,6 +38,17 @@ export default function Login() {
   const [twoFactorError, setTwoFactorError] = useState('');
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
+  // Biometric sign-in state (native only). The button is shown when:
+  //  (a) device biometry is available AND
+  //  (b) Capacitor Preferences has at least one enrolled vault entry.
+  // The email hint may have been wiped from localStorage on a WKWebView
+  // storage purge — `rehydrateAccountEmail()` recovers it lazily on tap.
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState<'Face ID' | 'Touch ID' | 'Fingerprint' | 'Biometric'>('Biometric');
+  const [biometricIcon, setBiometricIcon] = useState<'face' | 'finger'>('finger');
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [biometricEmailHint, setBiometricEmailHint] = useState<string | null>(null);
+
   const hasCredentials = hasAccountCredentials();
 
   // Pre-fill the email field from `?email=` (set by verify-email after
@@ -44,6 +61,90 @@ export default function Login() {
       if (prefill) setEmail(prefill);
     } catch { /* noop */ }
   }, []);
+
+  // Detect biometric availability on mount. Native only.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [caps, hasCreds] = await Promise.all([
+          checkBiometricCapabilities(),
+          hasAccountBiometricCredentials(),
+        ]);
+        if (cancelled) return;
+        if (!caps.isAvailable || !hasCreds) {
+          setBiometricAvailable(false);
+          return;
+        }
+        setBiometricAvailable(true);
+        setBiometricLabel(caps.biometricLabel);
+        setBiometricIcon(
+          caps.biometryType === 'faceId' || caps.biometryType === 'face' ? 'face' : 'finger',
+        );
+        // Surface the cached email hint immediately if present. (We don't
+        // proactively prompt biometric to rehydrate — that happens on tap.)
+        setBiometricEmailHint(getAccountBiometricEmail());
+      } catch {
+        if (!cancelled) setBiometricAvailable(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleBiometricSignIn = async () => {
+    if (!isNativeApp() || biometricLoading) return;
+    setBiometricLoading(true);
+    setError('');
+    try {
+      // If the email hint was lost (WKWebView purge) try to rehydrate
+      // it from the encrypted Preferences entry. This needs a biometric
+      // prompt, so it's combined with the sign-in flow below — we only
+      // proactively call it here if the next call wouldn't already prompt.
+      const result = await signInWithBiometric();
+      if (!result.success || !result.email || !result.password) {
+        // Cancelled or failed — surface a soft message, NOT a full error UI.
+        if (result.error && !/cancel/i.test(result.error)) {
+          toast({
+            title: `${biometricLabel} sign-in failed`,
+            description: result.error,
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+      // Pre-fill the form so 2FA / wrong-password paths show the right email.
+      setEmail(result.email);
+      const loginResult = await accountLogin(result.email, result.password);
+      if (loginResult === 'success') {
+        // Re-stash the just-validated password so the post-unlock
+        // BiometricSetupPrompt can re-enroll if Preferences was rotated.
+        try { sessionStorage.setItem('iv_pending_bio_account_pw', result.password); } catch {}
+        setLocation('/');
+      } else if (loginResult === 'wrong_password') {
+        // The stored biometric credential is stale (e.g. account password
+        // was changed elsewhere). Tell the user to sign in with the typed
+        // password — that path can re-enroll biometric afterwards.
+        toast({
+          title: 'Stored password is stale',
+          description: 'Your account password changed. Sign in once with your password to re-enable biometric.',
+          variant: 'destructive',
+        });
+        setError('Stored biometric password is stale. Please type your account password.');
+        setBiometricAvailable(false);
+      }
+      // 'needs_2fa' — UI re-renders with pendingTwoFactor set, no action here.
+    } catch (err) {
+      console.error('[login] biometric sign-in failed:', err);
+      toast({
+        title: `${biometricLabel} sign-in failed`,
+        description: 'Please try again or sign in with your password.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,9 +483,6 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Google Sign-In — biometric is intentionally NOT shown on the
-              account login page. Biometric only unlocks individual vaults
-              from the vault picker, not the account itself. */}
           <div className="mt-4">
             <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">
@@ -394,6 +492,31 @@ export default function Login() {
                 <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
               </div>
             </div>
+            {/* Biometric Sign-In (native only). Requires a previously enrolled
+                vault — without an entry in Capacitor Preferences this button
+                stays hidden. Tapping prompts Face ID / Touch ID and signs in
+                with the stored email + account password in one gesture. */}
+            {isNativeApp() && biometricAvailable && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBiometricSignIn}
+                disabled={biometricLoading || isLoading}
+                data-testid="button-biometric-signin"
+                className="w-full h-11 mb-2 gap-2 border-primary/30 hover:border-primary hover:bg-primary/5"
+              >
+                {biometricIcon === 'face'
+                  ? <ScanFace className="w-5 h-5 text-primary" />
+                  : <Fingerprint className="w-5 h-5 text-primary" />}
+                <span className="font-medium">
+                  {biometricLoading
+                    ? `Signing in…`
+                    : biometricEmailHint
+                      ? `Sign in as ${biometricEmailHint} with ${biometricLabel}`
+                      : `Sign in with ${biometricLabel}`}
+                </span>
+              </Button>
+            )}
             <GoogleSignInButton label="Continue with Google" />
             <div className="mt-2">
               <AppleSignInButton label="Continue with Apple" />

@@ -585,23 +585,43 @@ export default function VaultPickerPage() {
     setLoading('biometric');
     try {
       const vault = vaultManager.getDefaultVault();
-      if (!vault) return;
+      if (!vault) {
+        toast({
+          title: 'No default vault',
+          description: 'Choose a vault from the list to unlock it with your master password.',
+        });
+        return;
+      }
 
       const enrolled = await hasBiometricEntryForVault(vault.id);
       if (!enrolled) {
         toast({
-          title: `${`Set up biometric`}`,
+          title: 'Set up biometric',
           description: 'Unlock this vault with your master password once — biometric will be offered after.',
         });
         return;
       }
 
+      // Make absolutely sure the per-vault IndexedDB is selected before we
+      // hand the master password to unlockVault. switchToVault is async — if
+      // we don't await it, `login()` runs against whichever DB happened to
+      // be active and silently returns false ("no metadata"), which the old
+      // code path mistook for a stale-password event and auto-wiped the
+      // biometric entry.
       vaultManager.setActiveVaultId(vault.id);
       await vaultStorage.switchToVault(vault.id);
 
       const result = await unlockVaultWithBiometric(vault.id);
       if (!result.success || !result.masterPassword) {
-        toast({ title: 'Biometric failed', description: result.error || 'Please enter your master password.', variant: 'destructive' });
+        // Distinguish user-cancel (silent) from real failure (toast).
+        const cancelled = result.error && /cancel|user.*cancell?ed|UserCancel/i.test(result.error);
+        if (!cancelled) {
+          toast({
+            title: 'Biometric failed',
+            description: result.error || 'Please enter your master password.',
+            variant: 'destructive',
+          });
+        }
         return;
       }
 
@@ -614,17 +634,26 @@ export default function VaultPickerPage() {
         setLocation('/');
         return;
       }
-      // Stored password is stale (e.g. master password was changed elsewhere).
-      // Fall back to typed unlock and clear the bad biometric entry.
-      try { await import('@/native/biometrics').then(m => m.disableBiometric(vault.id)); } catch { /* noop */ }
-      setBiometricAvailable(false);
+      // login() returned false. This means either:
+      //   (a) the stored master password no longer matches this vault
+      //       (user changed it on another device), or
+      //   (b) a transient init race where the DB wasn't ready.
+      // We can't reliably tell the two apart from this side, so we KEEP the
+      // biometric entry intact and prompt the user to type their password.
+      // If it's really stale, the next typed unlock will re-trigger
+      // BiometricSetupPrompt which can re-enrol with the new password.
       toast({
-        title: 'Biometric password stale',
-        description: 'Master password changed. Enter it once and re-enable biometric.',
+        title: 'Biometric unlock failed',
+        description: 'Please enter your master password — if it works, you can re-enable biometric from Settings.',
         variant: 'destructive',
       });
-    } catch {
-      toast({ title: 'Biometric error', description: 'Please enter your master password.', variant: 'destructive' });
+    } catch (err) {
+      console.error('[vault-picker] biometric unlock error:', err);
+      toast({
+        title: 'Biometric error',
+        description: err instanceof Error ? err.message : 'Please enter your master password.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(null);
     }
@@ -645,12 +674,24 @@ export default function VaultPickerPage() {
       }
       const result = await unlockVaultWithBiometric(cv.vaultId);
       if (!result.success || !result.masterPassword) {
-        toast({ title: 'Biometric failed', description: result.error || 'Please enter your master password.', variant: 'destructive' });
+        const cancelled = result.error && /cancel|user.*cancell?ed|UserCancel/i.test(result.error);
+        if (!cancelled) {
+          toast({
+            title: 'Biometric failed',
+            description: result.error || 'Please enter your master password.',
+            variant: 'destructive',
+          });
+        }
         return;
       }
       await handleCloudUnlock(cv, result.masterPassword);
     } catch (err) {
-      toast({ title: 'Biometric error', description: 'Please enter your master password.', variant: 'destructive' });
+      console.error('[vault-picker] cloud biometric unlock error:', err);
+      toast({
+        title: 'Biometric error',
+        description: err instanceof Error ? err.message : 'Please enter your master password.',
+        variant: 'destructive',
+      });
     }
   };
 
