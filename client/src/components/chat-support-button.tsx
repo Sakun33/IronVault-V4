@@ -2,53 +2,23 @@ import { MessageCircle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCallback } from "react";
-
-declare global {
-  interface Window {
-    Tawk_API?: {
-      maximize?: () => void;
-      minimize?: () => void;
-      toggle?: () => void;
-      showWidget?: () => void;
-      hideWidget?: () => void;
-      onLoad?: () => void;
-    };
-  }
-}
-
-function openTawkChat() {
-  const tawk = window.Tawk_API;
-  if (!tawk) return false;
-  try {
-    if (typeof tawk.showWidget === "function") tawk.showWidget();
-    if (typeof tawk.maximize === "function") {
-      tawk.maximize();
-      return true;
-    }
-    if (typeof tawk.toggle === "function") {
-      tawk.toggle();
-      return true;
-    }
-  } catch (err) {
-    console.warn("[tawk.to] open failed", err);
-  }
-  return false;
-}
+import { openSupportChat } from "@/lib/open-support-chat";
 
 /**
  * Header-style icon button. Matches notification-bell / theme-toggle sizing.
  */
 export function ChatSupportHeaderButton({ size = "desktop" }: { size?: "desktop" | "mobile" }) {
   const onClick = useCallback(() => {
-    const opened = openTawkChat();
-    if (!opened) {
-      try {
-        const ev = new CustomEvent("chat-support-unavailable");
-        window.dispatchEvent(ev);
-      } catch {
-        /* noop */
+    void openSupportChat().then((opened) => {
+      if (!opened) {
+        try {
+          const ev = new CustomEvent("chat-support-unavailable");
+          window.dispatchEvent(ev);
+        } catch {
+          /* noop */
+        }
       }
-    }
+    });
   }, []);
 
   if (size === "mobile") {
@@ -94,7 +64,7 @@ export function ChatSupportHeaderButton({ size = "desktop" }: { size?: "desktop"
  */
 export function FloatingHelpButton() {
   const onClick = useCallback(() => {
-    openTawkChat();
+    void openSupportChat();
   }, []);
 
   return (

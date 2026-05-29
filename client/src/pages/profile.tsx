@@ -91,6 +91,7 @@ import { useCurrency } from '@/contexts/currency-context';
 import { autoLockService } from '@/native/auto-lock';
 import { useVault } from '@/contexts/vault-context';
 import { apiBase } from '@/native/platform';
+import { openSupportChat } from '@/lib/open-support-chat';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useToast } from '@/hooks/use-toast';
 import { format, addDays, addMonths, addYears, isValid } from 'date-fns';
@@ -2238,23 +2239,13 @@ export default function Profile() {
                       </Button>
                     </a>
                     <Button variant="outline" className="w-full justify-start" onClick={() => {
-                      const tawk = (window as any).Tawk_API;
-                      try {
-                        if (tawk && typeof tawk.maximize === 'function') {
-                          tawk.maximize();
-                          return;
+                      void openSupportChat().then((opened) => {
+                        if (!opened) {
+                          toast({
+                            title: 'Opening live chat...',
+                            description: 'Please wait a moment while we connect you to support.',
+                          });
                         }
-                        if (tawk && typeof tawk.toggle === 'function') {
-                          tawk.toggle();
-                          return;
-                        }
-                      } catch (err) {
-                        console.warn('[tawk.to] open failed', err);
-                      }
-                      // tawk.to not loaded yet — show loading message
-                      toast({
-                        title: 'Opening live chat...',
-                        description: 'Please wait a moment while we connect you to support.',
                       });
                     }}>
                       <MessageSquare className="w-4 h-4 mr-2" />
