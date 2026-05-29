@@ -270,50 +270,34 @@ html.kb-open body {
   transition: padding-bottom 180ms ease-out;
 }
 
-/* When the keyboard is open, Radix dialogs/sheets shrink to fit and
-   their inner scroll region (DialogBody) takes the slack. */
+/* When the keyboard is open, Radix dialogs/sheets shrink to fit so the
+   inner scroll region (DialogBody) takes the slack. Both the centered
+   Dialog and the bottom-anchored Sheet/Drawer need this max-height cap
+   so they never overlap the keyboard. */
 html.kb-open [role="dialog"][data-state="open"] {
-  /* `100dvh` already excludes the iOS keyboard under `resize: 'body'`,
-     but on web (or if a future iOS update changes that behavior) the
+  /* `100dvh` already excludes the iOS keyboard under Capacitor's
+     `resize: 'body'`, but on web (or if iOS changes that behavior) the
      extra subtraction guarantees we never exceed the visible area. */
   max-height: min(
     var(--dialog-max-h, 92dvh),
     calc(100dvh - var(--keyboard-height) - var(--safe-top) - 8px)
-  );
+  ) !important;
 }
 
 /* Sticky action footers inside dialogs/sheets get lifted above the
-   keyboard. Used by DialogFooter / SheetFooter / any element with the
-   `kb-sticky-footer` class. */
+   keyboard. Used by any element with the `kb-sticky-footer` class. */
 .kb-sticky-footer {
   padding-bottom: max(var(--safe-bottom), var(--keyboard-height));
   transition: padding-bottom 180ms ease-out;
 }
 
-/* When the keyboard is open on mobile, the bottom tab bar is hidden under
-   the keyboard anyway and just wastes precious vertical space inside
-   open dialogs/sheets that allocate ~160px of bottom padding to clear
-   it. Hide it visually so dialogs/sheets can collapse their bottom
-   padding (see `--dialog-bottom-pad` override below). */
+/* When the keyboard is open on mobile, hide the bottom tab bar so it
+   doesn't intercept touches above the keyboard or peek out behind
+   bottom-anchored sheets. */
 html.kb-open [data-bottom-tabs] {
   transform: translateY(120%);
   pointer-events: none;
   transition: transform 180ms ease-out;
-}
-
-/* Dialog / Sheet / Drawer bottom-pad collapses to just the safe-area
-   inset when the keyboard is open. Without this override, the ~160px
-   bottom-tab-bar clearance (hardcoded in dialog.tsx, sheet.tsx, and
-   drawer.tsx) floats the form footer 160px above the keyboard — which
-   produced the awkward "Add expense" button gap from the screenshot.
-   On mobile we hide the tab bar (rule above) and Capacitor's
-   `resize: 'body'` already shrinks the viewport, so the slack is wasted.
-
-   Use !important because the components carry their own arbitrary
-   `pb-[...]` Tailwind classes and the layer order would otherwise lose. */
-html.kb-open [data-iv-dialog="bottom"],
-html.kb-open [data-side="bottom"][data-state="open"] {
-  padding-bottom: max(var(--safe-bottom), 12px) !important;
 }
 
 /* ============================================

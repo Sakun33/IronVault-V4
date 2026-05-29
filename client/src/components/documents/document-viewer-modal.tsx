@@ -147,10 +147,10 @@ export function DocumentViewerModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        {/* Reserve mobile safe-area + tab-bar padding so the document
-            renderer's bottom toolbar is never clipped under the iOS
-            home indicator / floating tab bar. */}
-        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[92dvh] sm:h-[90vh] pb-[max(96px,calc(env(safe-area-inset-bottom,34px)+72px))] sm:pb-0 overflow-hidden">
+        {/* Centered viewer: takes most of the viewport with safe-area-aware
+            height so the document toolbar is never clipped under the iOS
+            home indicator. */}
+        <DialogContent className="max-w-4xl w-full p-0 flex flex-col h-[calc(100dvh-var(--safe-top,0px)-var(--safe-bottom,0px)-32px)] sm:h-[90vh] sm:max-h-[90vh] overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-border bg-card shrink-0">
             <div className="flex items-center gap-3 min-w-0 flex-1">

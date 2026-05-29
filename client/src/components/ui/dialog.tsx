@@ -37,12 +37,7 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
-      data-iv-dialog="bottom"
-      // Some dialogs have no input as their first focusable child, so Radix
-      // would auto-focus the close (X) button on open — that painted a brand
-      // ring on the X for those dialogs and not others. Default to focusing
-      // the content panel so every dialog opens with the same flat X icon.
-      // Callers can still override by passing their own onOpenAutoFocus.
+      data-iv-dialog="centered"
       onOpenAutoFocus={(e) => {
         if (onOpenAutoFocus) { onOpenAutoFocus(e); return; }
         e.preventDefault();
@@ -52,46 +47,29 @@ const DialogContent = React.forwardRef<
         }
       }}
       className={cn(
-        // Mobile: bottom sheet — pinned to the bottom edge with rounded top
-        // corners, slides up from the bottom on open, full viewport width.
-        // sm and up: classic centered modal with zoom + fade.
-        // z-[71] sits above the dialog overlay (z-70) and crucially above
-        // the bottom tab bar (z-[60]) so action buttons inside the modal
-        // are never clipped or hidden by the tab bar.
-        "fixed z-[71] flex flex-col w-full bg-background shadow-xl duration-200 border border-border/50",
-        // Mobile bottom-sheet positioning. Bottom padding lifts the sheet
-        // above the tab bar + home indicator when the keyboard is closed,
-        // but shrinks to just the keyboard height (no tab bar to worry
-        // about — it's also hidden under the keyboard) when the keyboard
-        // is open. The kb-aware-bottom class wires this up.
-        "left-0 bottom-0 max-w-full max-h-[92dvh] rounded-t-2xl rounded-b-none border-b-0",
-        // Bottom padding clears the bottom tab bar (~80px) + iOS home
-        // indicator (~34px) + Safari URL bar slack. When the keyboard
-        // opens, the global `html.kb-open [data-iv-dialog="bottom"]`
-        // rule in mobile-foundation.css collapses this pad to just the
-        // safe-area inset, since the tab bar hides under the keyboard
-        // and the webview shrinks via Capacitor `resize: 'body'`.
-        "pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-0",
-        // Desktop centered modal
-        "sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:translate-x-[-50%] sm:-translate-y-1/2",
-        "sm:max-w-lg sm:max-h-[85dvh] sm:rounded-2xl sm:border-b",
-        // Animations: slide up from bottom on mobile, zoom on desktop
+        // Centered modal on every screen size. The old mobile bottom-sheet
+        // layout (bottom-0 + 160px padding) caused dialogs to float at the
+        // bottom of the viewport with a huge blank gap above the content.
+        // Now: fixed center, capped max-height that respects iOS safe areas
+        // and keyboard via global rules in mobile-foundation.css.
+        "fixed left-[50%] top-[50%] z-[71] -translate-x-1/2 -translate-y-1/2",
+        "flex flex-col bg-background shadow-xl border border-border/50 rounded-2xl",
+        // Width: leave 16px margin on each side on mobile, max-w-lg on desktop.
+        "w-[calc(100vw-32px)] max-w-md sm:w-full sm:max-w-lg",
+        // Vertical cap: respect safe areas (notch + home indicator) and the
+        // global `html.kb-open` rule shrinks this further when the keyboard
+        // is open so the dialog stays fully visible above the keyboard.
+        "max-h-[calc(100dvh-var(--safe-top,0px)-var(--safe-bottom,0px)-32px)] sm:max-h-[85dvh]",
+        "duration-200",
+        // Centered zoom + fade animation on every size.
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-        "data-[state=open]:slide-in-from-bottom-full data-[state=closed]:slide-out-to-bottom-full",
-        "sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=closed]:slide-out-to-left-1/2",
-        "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95",
+        "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
         "overflow-hidden",
         className
       )}
       {...props}
     >
-      {/* Drag handle — visible only on mobile bottom-sheet layout. Pure
-          decoration here; tap-to-dismiss is handled by the existing close
-          button + Radix's overlay click. */}
-      <div aria-hidden className="sm:hidden flex justify-center pt-2 pb-1">
-        <span className="h-1 w-10 rounded-full bg-muted-foreground/30" />
-      </div>
       {/* Sticky close button — always at top-right, never scrolls away.
           Uses focus-visible: so the ring only paints on real keyboard
           interaction; mouse/Radix auto-focus no longer leaves a stray
@@ -129,10 +107,6 @@ const DialogBody = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      // DialogContent reserves the mobile safe-area + tab-bar padding at
-      // the parent level, so the body just needs a normal pb-4 here. This
-      // prevents double-padding while keeping any modal that bypasses
-      // DialogBody safe (the DialogContent wrapper handles it).
       "flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 pt-4 pb-4 space-y-4",
       className
     )}
@@ -148,8 +122,6 @@ const DialogFooter = ({
   <div
     className={cn(
       "flex-shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 border-t border-border/50 px-5 py-4 bg-background",
-      // Parent DialogContent already reserves the safe-area + tab-bar
-      // padding on mobile, so the footer just needs its normal py-4.
       className
     )}
     {...props}

@@ -44,10 +44,11 @@ const DrawerContent = React.forwardRef<
       ref={ref}
       data-side="bottom"
       className={cn(
-        // Same tab-bar-clearance pad as Dialog/Sheet. `html.kb-open`
-        // collapses it via the global CSS rule so the keyboard doesn't
-        // push the footer way above the keyboard surface.
-        "fixed inset-x-0 bottom-0 z-[71] mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background max-h-[92dvh] overflow-y-auto pb-[max(160px,calc(env(safe-area-inset-bottom,34px)+120px))] sm:pb-6",
+        // Bottom-anchored drawer at z-[71] paints OVER the bottom tab bar
+        // (z-[60]), so we only need the iOS home-indicator safe-area inset.
+        // The old 160px clearance left a big blank gap below the drawer
+        // content. Keyboard handling stays in `html.kb-open` (global CSS).
+        "fixed inset-x-0 bottom-0 z-[71] mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background max-h-[92dvh] overflow-y-auto pb-[max(env(safe-area-inset-bottom,0px),16px)] sm:pb-6",
         className
       )}
       {...props}
