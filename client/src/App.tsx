@@ -28,6 +28,7 @@ import { useCloudAutoSync } from "@/hooks/use-cloud-auto-sync";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { CloudSyncPill } from "@/components/cloud-sync-pill";
 import { TravelModeBanner } from "@/components/travel-mode-banner";
+import { isSectionHidden as isTravelSectionHidden, subscribeTravelMode } from "@/lib/travel-mode";
 import { resetNoteEditing } from "@/lib/note-editing-guard";
 import { listCloudVaults, markVaultAsCloudSynced, pushCloudVault, acquireCloudToken, getCloudToken } from "@/lib/cloud-vault-sync";
 import { getAccountEmail, getAccountPasswordHash } from "@/lib/account-auth";
@@ -446,6 +447,16 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     setSearchQuery('');
   };
 
+  // Travel mode — re-renders the sidebar so hidden sections vanish/return
+  // instantly when the user toggles travel mode.
+  const [travelTick, setTravelTick] = useState(0);
+  useEffect(() => subscribeTravelMode(() => setTravelTick(t => t + 1)), []);
+  const sectionVisible = useCallback(
+    (id: string) => !isTravelSectionHidden(id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [travelTick],
+  );
+
   // Core vault items (top section of sidebar)
   const coreNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, count: null, limitLabel: null as string | null, color: 'text-primary', requiresPro: false, alertBadge: null as number | null },
@@ -497,7 +508,13 @@ function MainLayout({ children }: { children: React.ReactNode }) {
     { id: 'upgrade', label: 'Upgrade to Pro', icon: Zap, count: null, color: 'text-primary', requiresPro: false },
   ];
   // Flat list for mobile menu and other consumers
-  const navItems = [...coreNavItems, ...financeNavItems, ...toolsNavItems, ...familyNavItems, ...bottomNavItems];
+  // Travel mode filters out sensitive sections — applied here so every consumer
+  // (sidebar groups, mobile menu, bottom tab MoreSheet) honors the hide list.
+  const coreNavItemsVisible = coreNavItems.filter(item => sectionVisible(item.id));
+  const financeNavItemsVisible = financeNavItems.filter(item => sectionVisible(item.id));
+  const toolsNavItemsVisible = toolsNavItems.filter(item => sectionVisible(item.id));
+  const familyNavItemsVisible = familyNavItems.filter(item => sectionVisible(item.id));
+  const navItems = [...coreNavItemsVisible, ...financeNavItemsVisible, ...toolsNavItemsVisible, ...familyNavItemsVisible, ...bottomNavItems];
 
   // Core sections for bottom navigation. The "Finance" combined tab was
   // confusing — users couldn't tell whether it meant Expenses or
@@ -934,7 +951,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="space-y-0.5 mb-1">
-              {coreNavItems.map((item) => {
+              {coreNavItemsVisible.map((item) => {
                 const itemPath = item.id === 'dashboard' ? '/' : `/${item.id}`;
                 const isActive = item.id === 'dashboard' ? location === '/' : location === itemPath;
                 return (
@@ -988,7 +1005,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="space-y-0.5">
-              {financeNavItems.map((item) => {
+              {financeNavItemsVisible.map((item) => {
                 const itemPath = `/${item.id}`;
                 const isActive = location === itemPath;
                 return (
@@ -1033,7 +1050,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="space-y-0.5">
-              {toolsNavItems.map((item) => {
+              {toolsNavItemsVisible.map((item) => {
                 const itemPath = `/${item.id}`;
                 const isActive = location === itemPath;
                 return (
@@ -1074,7 +1091,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="space-y-0.5">
-              {familyNavItems.map((item) => {
+              {familyNavItemsVisible.map((item) => {
                 const itemPath = `/${item.id}`;
                 const isActive = location === itemPath;
                 return (
@@ -1231,7 +1248,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       </React.Suspense>
 
       {/* Bottom Navigation for Mobile - New BottomTabs Component */}
-      <BottomTabs items={bottomTabItems} />
+      <BottomTabs items={bottomTabItems.filter(t => sectionVisible(t.id))} />
 
       {/* Hamburger Drawer (left-slide) — replaces the older bottom-sheet for the
           ☰ menu trigger. The MoreSheet component still ships from
@@ -1240,7 +1257,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       <HamburgerDrawer
         open={showQuickAccess}
         onOpenChange={setShowQuickAccess}
-        sections={allSections}
+        sections={allSections.filter(s => sectionVisible(s.id))}
         header={
           <div className="flex items-center gap-2.5">
             <AppLogo size={28} />

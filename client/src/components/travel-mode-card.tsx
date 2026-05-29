@@ -26,8 +26,32 @@ import {
   disableTravelMode,
   isTravelModeActive,
   getSafeVaultIds,
+  getHiddenSections,
   subscribeTravelMode,
 } from '@/lib/travel-mode';
+
+// Section catalog shown in the Travel Mode picker. Keep this list focused on
+// sections that hold sensitive data a border agent might ask about. The IDs
+// must match the nav item ids in App.tsx (sidebar + bottom tabs + MoreSheet).
+const SENSITIVE_SECTIONS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'passwords', label: 'Passwords' },
+  { id: 'cards', label: 'Credit Cards' },
+  { id: 'identities', label: 'Identities' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'api-keys', label: 'API Keys' },
+  { id: 'crypto', label: 'Crypto Wallets' },
+  { id: 'wifi', label: 'Wi-Fi Passwords' },
+  { id: 'licenses', label: 'Software Licenses' },
+  { id: 'bookmarks', label: 'Bookmarks' },
+  { id: 'qr', label: 'QR Vault' },
+  { id: 'investments', label: 'Investments' },
+  { id: 'bank-statements', label: 'Bank Statements' },
+  { id: 'expenses', label: 'Expenses' },
+  { id: 'subscriptions', label: 'Subscriptions' },
+  { id: 'insurance', label: 'Insurance' },
+  { id: 'tax', label: 'Tax Documents' },
+  { id: 'notes', label: 'Notes' },
+];
 import { vaultStorage } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,6 +63,7 @@ export default function TravelModeCard() {
   const [showEnableDialog, setShowEnableDialog] = useState(false);
   const [showDisableDialog, setShowDisableDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [hiddenSectionIds, setHiddenSectionIds] = useState<Set<string>>(new Set());
   const [disablePassword, setDisablePassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [disableError, setDisableError] = useState('');
@@ -47,6 +72,7 @@ export default function TravelModeCard() {
   useEffect(() => subscribeTravelMode(() => setActive(isTravelModeActive())), []);
 
   const safeIds = active ? getSafeVaultIds() : [];
+  const activeHiddenSections = active ? getHiddenSections() : [];
 
   const openEnable = () => {
     // Default-include the currently active vault so users don't accidentally
@@ -54,6 +80,12 @@ export default function TravelModeCard() {
     const initial = new Set<string>();
     if (activeVault?.id) initial.add(activeVault.id);
     setSelectedIds(initial);
+    // Sensible defaults for sections to hide at a border — financial + most
+    // sensitive vault sections. User can toggle these before confirming.
+    setHiddenSectionIds(new Set([
+      'passwords', 'cards', 'identities', 'api-keys',
+      'crypto', 'investments', 'bank-statements',
+    ]));
     setShowEnableDialog(true);
   };
 
@@ -66,11 +98,21 @@ export default function TravelModeCard() {
       });
       return;
     }
-    enableTravelMode(Array.from(selectedIds));
+    enableTravelMode(Array.from(selectedIds), Array.from(hiddenSectionIds));
     setShowEnableDialog(false);
+    const sectionsHidden = hiddenSectionIds.size;
     toast({
       title: 'Travel Mode enabled',
-      description: `${selectedIds.size} vault${selectedIds.size === 1 ? '' : 's'} visible. Others hidden.`,
+      description: `${selectedIds.size} vault${selectedIds.size === 1 ? '' : 's'} visible · ${sectionsHidden} section${sectionsHidden === 1 ? '' : 's'} hidden.`,
+    });
+  };
+
+  const toggleSection = (id: string) => {
+    setHiddenSectionIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -147,8 +189,11 @@ export default function TravelModeCard() {
                   <div className="text-sm">
                     <div className="font-semibold text-destructive">Travel Mode is active</div>
                     <div className="text-muted-foreground mt-0.5">
-                      {safeIds.length} of {allVaults.length} vault{allVaults.length === 1 ? '' : 's'} visible.
-                      Hidden vaults are completely invisible until disabled.
+                      {safeIds.length} of {allVaults.length} vault{allVaults.length === 1 ? '' : 's'} visible
+                      {activeHiddenSections.length > 0 && (
+                        <> · {activeHiddenSections.length} section{activeHiddenSections.length === 1 ? '' : 's'} hidden</>
+                      )}
+                      . Disabling requires your master password.
                     </div>
                   </div>
                 </div>
@@ -179,29 +224,56 @@ export default function TravelModeCard() {
               until you disable Travel Mode.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 max-h-[300px] overflow-y-auto py-2">
-            {allVaults.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No vaults found.</p>
-            ) : (
-              allVaults.map(v => (
-                <label
-                  key={v.id}
-                  className="flex items-center gap-3 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={selectedIds.has(v.id)}
-                    onCheckedChange={() => toggleId(v.id)}
-                    data-testid={`travel-vault-${v.id}`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{v.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {v.id === activeVault?.id ? 'Currently active' : 'Other vault'}
-                    </div>
-                  </div>
-                </label>
-              ))
-            )}
+          <div className="space-y-4 max-h-[440px] overflow-y-auto py-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Vaults to keep visible</div>
+              <div className="space-y-1.5">
+                {allVaults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No vaults found.</p>
+                ) : (
+                  allVaults.map(v => (
+                    <label
+                      key={v.id}
+                      className="flex items-center gap-3 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={selectedIds.has(v.id)}
+                        onCheckedChange={() => toggleId(v.id)}
+                        data-testid={`travel-vault-${v.id}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{v.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {v.id === activeVault?.id ? 'Currently active' : 'Other vault'}
+                        </div>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Sections to hide</div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Picked sections vanish from the sidebar, bottom tabs, and menu until Travel Mode is disabled.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SENSITIVE_SECTIONS.map(s => (
+                  <label
+                    key={s.id}
+                    className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted/50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={hiddenSectionIds.has(s.id)}
+                      onCheckedChange={() => toggleSection(s.id)}
+                      data-testid={`travel-section-${s.id}`}
+                    />
+                    <span className="text-sm truncate">{s.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowEnableDialog(false)}>
@@ -212,7 +284,7 @@ export default function TravelModeCard() {
               disabled={selectedIds.size === 0}
               data-testid="confirm-enable-travel-mode"
             >
-              Enable — Hide {Math.max(0, allVaults.length - selectedIds.size)} vault{allVaults.length - selectedIds.size === 1 ? '' : 's'}
+              Enable Travel Mode
             </Button>
           </DialogFooter>
         </DialogContent>

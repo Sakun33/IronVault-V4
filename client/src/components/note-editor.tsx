@@ -220,6 +220,10 @@ export function NoteEditor({
   const [notebookMenuOpen, setNotebookMenuOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  // Mobile-only: the notebook + tag footer is collapsed by default so the
+  // text area dominates the screen. Tap "Details" to expand the full
+  // metadata row. Desktop always shows the full row regardless.
+  const [mobileMetaOpen, setMobileMetaOpen] = useState(false);
   // Tick state to force re-render when TipTap selection/transaction fires
   // so toolbar active-state highlights update in real time.
   const [, setStateTick] = useState(0);
@@ -856,12 +860,12 @@ export function NoteEditor({
 
       {accentHex && <div className="h-px w-full" style={{ background: accentHex }} aria-hidden />}
 
-      {/* Formatting toolbar — wraps to multi-row on narrow viewports so
-          block-level tools (H1/H2/H3, lists, code, quote, indent) stay
-          visible. Previously used overflow-x-auto, which scrolled block
-          tools off-screen on existing notes (BUG-16). */}
+      {/* Formatting toolbar — single horizontally-scrollable row on mobile so
+          the text area dominates; wraps to multi-row at md+ where vertical
+          space is plentiful. Mobile users swipe sideways to reach the
+          less-frequent block tools. */}
       <div className="flex-shrink-0 bg-background">
-        <div className="px-2 py-1 flex flex-wrap items-center gap-0.5">
+        <div className="px-2 py-1 flex flex-nowrap overflow-x-auto scrollbar-hide items-center gap-0.5 md:flex-wrap md:overflow-visible">
           <ToolbarBtn label="Undo (⌘Z)" onClick={tUndo}><RotateCcw className="w-3.5 h-3.5" /></ToolbarBtn>
           <ToolbarBtn label="Redo (⌘⇧Z)" onClick={tRedo}><RotateCw className="w-3.5 h-3.5" /></ToolbarBtn>
           <span className="w-px h-4 bg-border/60 mx-1 flex-shrink-0" aria-hidden />
@@ -1014,7 +1018,35 @@ export function NoteEditor({
         }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          <div className="px-3 pt-1.5 pb-1 flex items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground">
+          {/* Mobile-only collapsed bar — single short row that doesn't eat
+              the editor's vertical space. Tap to expand the full metadata
+              row (notebook chooser + tag editor). Hidden at md+. */}
+          <div className="md:hidden px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setMobileMetaOpen(v => !v)}
+              className="flex items-center gap-1.5 min-w-0 hover:text-foreground transition-colors"
+              aria-expanded={mobileMetaOpen}
+              aria-label="Note details"
+              data-testid="note-mobile-meta-toggle"
+            >
+              <BookOpen className="w-3 h-3 opacity-60 flex-shrink-0" />
+              <span className="truncate capitalize">{notebook || 'Notebook'}</span>
+              {tags.length > 0 && (
+                <>
+                  <span className="opacity-40">·</span>
+                  <TagIcon className="w-2.5 h-2.5 opacity-60 flex-shrink-0" />
+                  <span className="flex-shrink-0">{tags.length}</span>
+                </>
+              )}
+              <ChevronDown className={`w-3 h-3 opacity-60 transition-transform flex-shrink-0 ${mobileMetaOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <span className="text-[11px] text-muted-foreground/70 tabular-nums flex-shrink-0">
+              {wordCount} word{wordCount === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <div className={`${mobileMetaOpen ? 'flex' : 'hidden'} md:flex px-3 pt-1.5 pb-1 items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground`}>
             <span className="inline-flex items-center gap-1 flex-shrink-0 relative">
               <BookOpen className="w-3.5 h-3.5 opacity-60" />
               <button
@@ -1140,9 +1172,8 @@ export function NoteEditor({
               )}
             </div>
           </div>
-          {/* Status bar — save status moved into toolbar to avoid
-              duplicate "Unsaved" labels. Word count only. */}
-          <div className="px-3 pb-1.5 flex items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
+          {/* Status bar — desktop only (mobile word count is in the collapsed bar). */}
+          <div className="hidden md:flex px-3 pb-1.5 items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
             <span>{wordCount} word{wordCount === 1 ? '' : 's'}</span>
           </div>
         </div>

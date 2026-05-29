@@ -12,7 +12,7 @@
  * Falls back gracefully when navigator.credentials is unavailable.
  */
 
-import { apiBase } from '@/native/platform';
+import { apiBase, isNativeApp } from '@/native/platform';
 import { getCloudToken } from '@/lib/cloud-vault-sync';
 
 export interface PasskeyAuthResult {
@@ -27,10 +27,23 @@ export type PasskeyOutcome<T> =
   | { ok: false; error: string };
 
 export function isPasskeySupported(): boolean {
+  // Capacitor native apps run in WKWebView on `capacitor://localhost`.
+  // The WebAuthn RP ID must match the page origin, and iOS WKWebView
+  // refuses cross-origin RP IDs even with Associated Domains — registering
+  // a passkey for `ironvault.app` from `capacitor://localhost` fails with
+  // a NotAllowedError. Native passkey support requires the
+  // AuthenticationServices framework via a Capacitor plugin, not the
+  // WebAuthn JS API. Until that lands, surface passkeys as web-only.
+  if (isNativeApp()) return false;
   return typeof window !== 'undefined'
     && !!window.PublicKeyCredential
     && typeof navigator !== 'undefined'
     && !!navigator.credentials;
+}
+
+/** True when running inside the iOS/Android app — used to show a "use a browser" hint. */
+export function isPasskeyBlockedByNativeApp(): boolean {
+  return isNativeApp();
 }
 
 function authHeaders(): HeadersInit {

@@ -14,6 +14,10 @@ interface TravelModeState {
   active: boolean;
   // IDs of vaults that REMAIN VISIBLE while travel mode is active.
   safeVaultIds: string[];
+  // Section IDs to HIDE while travel mode is active (e.g. 'passwords',
+  // 'cards', 'investments'). When empty, no sections are hidden — vault-only
+  // travel mode (original behavior).
+  hiddenSections: string[];
   enabledAt: number;
 }
 
@@ -24,6 +28,11 @@ function readState(): TravelModeState | null {
     const parsed = JSON.parse(raw) as TravelModeState;
     if (!parsed || typeof parsed !== 'object') return null;
     if (!Array.isArray(parsed.safeVaultIds)) return null;
+    // Older state didn't carry hiddenSections — normalize to empty array
+    // so isSectionHidden() doesn't crash on legacy travel-mode payloads.
+    if (!Array.isArray((parsed as any).hiddenSections)) {
+      (parsed as any).hiddenSections = [];
+    }
     return parsed;
   } catch {
     return null;
@@ -44,13 +53,32 @@ function writeState(state: TravelModeState | null): void {
   }
 }
 
-export function enableTravelMode(safeVaultIds: string[]): void {
+export function enableTravelMode(
+  safeVaultIds: string[],
+  hiddenSections: string[] = [],
+): void {
   const ids = Array.from(new Set((safeVaultIds || []).filter(Boolean)));
+  const sections = Array.from(new Set((hiddenSections || []).filter(Boolean)));
   writeState({
     active: true,
     safeVaultIds: ids,
+    hiddenSections: sections,
     enabledAt: Date.now(),
   });
+}
+
+/** Section IDs (sidebar nav item ids) hidden by travel mode. */
+export function getHiddenSections(): string[] {
+  const state = readState();
+  return state && state.active ? [...state.hiddenSections] : [];
+}
+
+/** Is a given sidebar section currently hidden by travel mode? */
+export function isSectionHidden(sectionId: string): boolean {
+  const state = readState();
+  if (!state || !state.active) return false;
+  if (!sectionId) return false;
+  return state.hiddenSections.includes(sectionId);
 }
 
 export interface DisableOpts {

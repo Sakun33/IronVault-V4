@@ -65,8 +65,13 @@ import {
   listPasskeys,
   deletePasskey,
   isPasskeySupported,
+  isPasskeyBlockedByNativeApp,
   type RegisteredPasskey,
 } from '@/lib/passkey-auth';
+import { CloudSyncPill } from '@/components/cloud-sync-pill';
+import { useVaultSelection } from '@/contexts/vault-selection-context';
+import { getCloudToken } from '@/lib/cloud-vault-sync';
+import { isCloudSyncEligible, isLocalOnly, getLastSyncAt as queueLastSyncAt } from '@/lib/cloud-sync-queue';
 
 export default function SettingsPage() {
   const { accountEmail } = useAuth();
@@ -604,9 +609,26 @@ export default function SettingsPage() {
             </>
           )}
 
-          {/* Passkey (FIDO2) — works on any modern browser. The login page
-              shows "Sign in with passkey"; this is where users register a
-              new credential and review/revoke existing ones. */}
+          {/* Passkey (FIDO2) — browser-only. iOS/Android WKWebView can't satisfy
+              the WebAuthn RP-ID origin check from capacitor://localhost, so on
+              native we surface a "open in a browser" note instead of a button
+              that would fail with a confusing NotAllowedError. */}
+          {isPasskeyBlockedByNativeApp() && (
+            <>
+              <Separator />
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  <Key className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <div className="font-medium text-foreground">Passkeys (web only)</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">
+                      Open IronVault in a browser at ironvault.app to add a passkey. The mobile app uses Face ID / Touch ID for vault unlock instead.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
           {isPasskeySupported() && (
             <>
               <Separator />
@@ -691,26 +713,8 @@ export default function SettingsPage() {
             />
           </div>
 
-          {/* Cloud Sync - Coming Soon */}
-          <div className="space-y-3 opacity-50 pointer-events-none">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="sync" className="flex items-center gap-2">
-                  <Cloud className="w-4 h-4" />
-                  Cloud Sync
-                  <Badge variant="outline" className="text-xs">Coming Soon</Badge>
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Encrypted cloud backup will be available in a future update
-                </p>
-              </div>
-              <Switch
-                id="sync"
-                checked={false}
-                disabled={true}
-              />
-            </div>
-          </div>
+          <CloudSyncStatusRow />
+
 
           <Separator />
 
@@ -1128,6 +1132,90 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Cloud Sync status row for the Privacy & Analytics card.
+ *
+ * Cloud sync is fully implemented — `useCloudAutoSync` pushes after every save
+ * and pulls every 5 min while a cloud token is present. This row surfaces the
+ * live state (token present? vault eligible? last successful push?) and a
+ * "Sync Now" button that funnels into the same enqueuePush path everything
+ * else uses.
+ */
+function CloudSyncStatusRow() {
+  const { activeVault } = useVaultSelection();
+  const vaultId = activeVault?.id ?? null;
+  const [hasToken, setHasToken] = useState<boolean>(() => !!getCloudToken());
+  const [lastAt, setLastAt] = useState<number | null>(() => queueLastSyncAt());
+  const localOnly = vaultId ? isLocalOnly(vaultId) : false;
+  const eligible = vaultId ? isCloudSyncEligible(vaultId) : false;
+
+  useEffect(() => {
+    const refresh = () => {
+      setHasToken(!!getCloudToken());
+      setLastAt(queueLastSyncAt());
+    };
+    const id = window.setInterval(refresh, 30_000);
+    window.addEventListener('vault:cloud:push:done', refresh);
+    window.addEventListener('vault:cloud:push:failed', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('vault:cloud:push:done', refresh);
+      window.removeEventListener('vault:cloud:push:failed', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  const triggerSync = () => {
+    window.dispatchEvent(new CustomEvent('vault:force-cloud-push'));
+  };
+
+  const lastSyncLabel = (() => {
+    if (!lastAt) return 'Never synced';
+    const delta = Date.now() - lastAt;
+    if (delta < 60_000) return 'Synced just now';
+    if (delta < 3_600_000) return `Synced ${Math.floor(delta / 60_000)}m ago`;
+    if (delta < 86_400_000) return `Synced ${Math.floor(delta / 3_600_000)}h ago`;
+    return `Synced ${Math.floor(delta / 86_400_000)}d ago`;
+  })();
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Label className="flex items-center gap-2">
+            <Cloud className="w-4 h-4" />
+            Cloud Sync
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            {localOnly
+              ? 'This vault is set to Local only. Sign in on this device to enable sync.'
+              : hasToken && eligible
+                ? 'Encrypted blobs sync after every save and every 5 minutes.'
+                : hasToken
+                  ? 'Cloud sync available — this vault has not been uploaded yet.'
+                  : 'Sign in to enable encrypted cloud backup across your devices.'}
+          </p>
+        </div>
+        <CloudSyncPill vaultId={vaultId} compact />
+      </div>
+      <div className="flex items-center justify-between gap-3 pl-6">
+        <div className="text-xs text-muted-foreground">{lastSyncLabel}</div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={triggerSync}
+          disabled={!hasToken || !vaultId || localOnly}
+          data-testid="cloud-sync-now"
+        >
+          <RefreshCw className="w-3 h-3 mr-1.5" />
+          Sync now
+        </Button>
+      </div>
     </div>
   );
 }
