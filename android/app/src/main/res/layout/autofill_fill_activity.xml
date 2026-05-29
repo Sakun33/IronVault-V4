@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/autofill_bg"
+    android:fitsSystemWindows="true">
+
+    <!-- Header: vault icon + title + subtitle -->
+
+    <FrameLayout
+        android:id="@+id/autofill_icon_wrap"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/autofill_icon_bg"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="22dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_autofill_vault"
+            android:contentDescription="@string/autofill_pick_title" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/autofill_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="20dp"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/iv_text_primary"
+        android:text="@string/autofill_pick_title"
+        app:layout_constraintStart_toEndOf="@id/autofill_icon_wrap"
+        app:layout_constraintTop_toTopOf="@id/autofill_icon_wrap"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/autofill_subtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textSize="13sp"
+        android:textColor="@color/iv_text_secondary"
+        android:text="@string/autofill_pick_subtitle_generic"
+        app:layout_constraintStart_toStartOf="@id/autofill_title"
+        app:layout_constraintEnd_toEndOf="@id/autofill_title"
+        app:layout_constraintTop_toBottomOf="@id/autofill_title" />
+
+    <!-- Search bar -->
+
+    <FrameLayout
+        android:id="@+id/autofill_search_wrap"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/autofill_search_bg"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/autofill_icon_wrap">
+
+        <ImageView
+            android:id="@+id/autofill_search_icon"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginStart="14dp"
+            android:src="@drawable/ic_autofill_search"
+            android:contentDescription="@string/autofill_search_hint" />
+
+        <EditText
+            android:id="@+id/autofill_search"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="42dp"
+            android:paddingEnd="14dp"
+            android:background="@android:color/transparent"
+            android:textColor="@color/iv_text_primary"
+            android:textColorHint="@color/iv_text_dim"
+            android:textCursorDrawable="@null"
+            android:hint="@string/autofill_search_hint"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:singleLine="true"
+            android:textSize="15sp" />
+    </FrameLayout>
+
+    <!-- Credential list -->
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/autofill_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        app:layout_constraintTop_toBottomOf="@id/autofill_search_wrap"
+        app:layout_constraintBottom_toTopOf="@id/autofill_cancel" />
+
+    <TextView
+        android:id="@+id/autofill_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/iv_text_secondary"
+        android:textSize="14sp"
+        android:visibility="gone"
+        android:text="@string/autofill_empty"
+        app:layout_constraintTop_toTopOf="@id/autofill_list"
+        app:layout_constraintBottom_toBottomOf="@id/autofill_list"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Cancel button -->
+
+    <TextView
+        android:id="@+id/autofill_cancel"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:gravity="center"
+        android:background="@drawable/autofill_cancel_bg"
+        android:textColor="@color/iv_text_primary"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:text="@string/autofill_cancel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   IronVault Autofill Service configuration.
-  Declares the settings activity and compatibility mode.
-  See: https://developer.android.com/guide/topics/text/autofill-services
+  - settingsActivity: where the system "Settings" affordance in the
+    Autofill provider chooser lands. Points at MainActivity which routes
+    to the in-app Settings → Autofill screen.
+  - supportsInlineSuggestions: serves chips inline above the keyboard
+    on supported IMEs (Gboard etc) on Android 11+.
 -->
 <autofill-service
     xmlns:android="http://schemas.android.com/apk/res/android"

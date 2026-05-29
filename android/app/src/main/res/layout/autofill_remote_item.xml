@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Compact two-line RemoteViews used inside the system autofill dropdown.
+    Stays minimal — Android renders this in the IME-anchored chip, so
+    width is constrained and only solid colors are reliable.
+-->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:background="#FF0F141F">
+
+    <TextView
+        android:id="@+id/autofill_remote_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="#FFFFFFFF"
+        android:text="IronVault" />
+
+    <TextView
+        android:id="@+id/autofill_remote_sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textSize="12sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="#FF8E9AAE"
+        android:text=""
+        android:visibility="gone" />
+</LinearLayout>

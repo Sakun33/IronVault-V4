@@ -24,6 +24,8 @@ import {
   bridgeSet,
   bridgeRemove,
   bridgeSyncCredentialIdentities,
+  bridgeAndroidPublishCredentials,
+  bridgeAndroidClearCredentials,
 } from '@/native/widget-bridge';
 
 const KEY = 'iv_autofill_credentials_v1';
@@ -68,6 +70,16 @@ function toCredential(p: VaultPasswordLike): AutoFillCredentialPayload | null {
 /**
  * Push the full credential set to the AutoFill extension. Idempotent —
  * each call replaces whatever was there.
+ *
+ * iOS: writes encrypted blob into the App Group UserDefaults, then
+ *      registers the (recordId, url, username) tuple list with
+ *      ASCredentialIdentityStore. Password is only read by the extension
+ *      itself after biometric.
+ *
+ * Android: pushes the full (username, password) tuples into the
+ *      EncryptedSharedPreferences mirror that the
+ *      IronVaultAutofillService and AutofillFillActivity read at fill
+ *      time. The mirror is biometric-gated on every reveal.
  */
 export async function publishAutoFillCredentials(passwords: VaultPasswordLike[]): Promise<void> {
   const creds = passwords.map(toCredential).filter((c): c is AutoFillCredentialPayload => c !== null);
@@ -77,7 +89,7 @@ export async function publishAutoFillCredentials(passwords: VaultPasswordLike[])
       Preferences.set({ key: KEY, value: json }),
       bridgeSet(KEY, json),
     ]);
-    // Identity list — no password fields, just the lookup tuple.
+    // iOS identity list — no password fields, just the lookup tuple.
     await bridgeSyncCredentialIdentities(
       creds.map(c => ({
         recordIdentifier: c.recordIdentifier,
@@ -85,6 +97,8 @@ export async function publishAutoFillCredentials(passwords: VaultPasswordLike[])
         username: c.username,
       })),
     );
+    // Android credential mirror — full tuples, encrypted at rest.
+    await bridgeAndroidPublishCredentials(creds);
   } catch {
     // Failing to update AutoFill must never break the app.
   }
@@ -97,6 +111,7 @@ export async function clearAutoFillCredentials(): Promise<void> {
       Preferences.remove({ key: KEY }).catch(() => undefined),
       bridgeRemove(KEY),
       bridgeSyncCredentialIdentities([]),
+      bridgeAndroidClearCredentials(),
     ]);
   } catch { /* noop */ }
 }

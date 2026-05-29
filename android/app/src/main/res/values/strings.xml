@@ -4,4 +4,14 @@
     <string name="title_activity_main">IronVault</string>
     <string name="package_name">com.ironvault.app</string>
     <string name="custom_url_scheme">com.ironvault.app</string>
+
+    <!-- Autofill picker -->
+    <string name="autofill_pick_title">Choose a credential</string>
+    <string name="autofill_pick_subtitle">Filling for %1$s</string>
+    <string name="autofill_pick_subtitle_generic">Pick a saved login to autofill</string>
+    <string name="autofill_search_hint">Search credentials</string>
+    <string name="autofill_empty">No saved credentials</string>
+    <string name="autofill_suggested">SUGGESTED</string>
+    <string name="autofill_cancel">Cancel</string>
+    <string name="autofill_service_summary">Autofill passwords and 2FA codes from your IronVault</string>
 </resources>

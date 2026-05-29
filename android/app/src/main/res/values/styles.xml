@@ -25,4 +25,22 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+
+    <!--
+        Dialog-style theme for the IronVault native autofill picker.
+        Translucent system bars, dark surface, no action bar — the activity
+        is launched modally from outside our process.
+    -->
+    <style name="Theme.IronVault.Autofill" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@drawable/autofill_bg</item>
+        <item name="android:statusBarColor">@color/iv_bg_top</item>
+        <item name="android:navigationBarColor">@color/iv_bg_bottom</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="colorAccent">@color/iv_accent</item>
+        <item name="android:textColorHighlight">@color/iv_accent_overlay_22</item>
+    </style>
 </resources>

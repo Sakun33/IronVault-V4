@@ -13,7 +13,7 @@
  */
 
 import { registerPlugin } from '@capacitor/core';
-import { isNativeApp, isIOS } from './platform';
+import { isNativeApp, isIOS, isAndroid } from './platform';
 
 export const WIDGET_APP_GROUP = 'group.app.ironvault.shared';
 
@@ -38,10 +38,33 @@ export interface WidgetBridgePlugin {
   }): Promise<void>;
 }
 
+/**
+ * Android counterpart — a separate Capacitor plugin
+ * (`com.ironvault.app.AutofillPlugin`) that pushes the credential mirror
+ * into an EncryptedSharedPreferences blob read by the
+ * IronVaultAutofillService and AutofillFillActivity.
+ *
+ * On Android the autofill service cannot share UserDefaults with the host
+ * app the way the iOS extension does, so we move full (username, password)
+ * tuples in addition to the identity list.
+ */
+export interface AndroidAutofillPlugin {
+  publishCredentials(options: {
+    credentials: Array<{ recordIdentifier: string; url: string; username: string; password: string }>;
+  }): Promise<{ count: number }>;
+  clearCredentials(): Promise<void>;
+  isAutofillEnabled(): Promise<{ enabled: boolean; supported: boolean }>;
+}
+
 const Native = registerPlugin<WidgetBridgePlugin>('WidgetBridge');
+const AndroidAutofill = registerPlugin<AndroidAutofillPlugin>('AutofillPlugin');
 
 function bridgeAvailable(): boolean {
   return isNativeApp() && isIOS();
+}
+
+function androidAutofillAvailable(): boolean {
+  return isNativeApp() && isAndroid();
 }
 
 export async function bridgeSet(key: string, value: string): Promise<void> {
@@ -76,4 +99,37 @@ export async function bridgeSyncCredentialIdentities(
   try {
     await Native.syncCredentialIdentities({ identities });
   } catch { /* noop */ }
+}
+
+/**
+ * Push the full credential payload (including passwords) into the Android
+ * autofill credential store. No-op on iOS / web — there the password
+ * stays in the App Group blob and only the identity tuple is registered
+ * with iOS.
+ */
+export async function bridgeAndroidPublishCredentials(
+  credentials: Array<{ recordIdentifier: string; url: string; username: string; password: string }>,
+): Promise<void> {
+  if (!androidAutofillAvailable()) return;
+  try {
+    await AndroidAutofill.publishCredentials({ credentials });
+  } catch { /* noop — service not installed yet, or vault locked */ }
+}
+
+/** Wipe the Android credential mirror (lock / logout). No-op elsewhere. */
+export async function bridgeAndroidClearCredentials(): Promise<void> {
+  if (!androidAutofillAvailable()) return;
+  try {
+    await AndroidAutofill.clearCredentials();
+  } catch { /* noop */ }
+}
+
+/** Is the IronVault Android autofill service currently the default provider? */
+export async function bridgeAndroidIsAutofillEnabled(): Promise<{ enabled: boolean; supported: boolean }> {
+  if (!androidAutofillAvailable()) return { enabled: false, supported: false };
+  try {
+    return await AndroidAutofill.isAutofillEnabled();
+  } catch {
+    return { enabled: false, supported: false };
+  }
 }

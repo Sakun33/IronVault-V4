@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        IronVault palette — kept in sync with web tokens
+        (client/src/index.css :root variables).
+    -->
+    <color name="iv_bg_top">#0A0E15</color>
+    <color name="iv_bg_bottom">#070A11</color>
+    <color name="iv_surface">#0F141F</color>
+    <color name="iv_surface_raised">#161C2A</color>
+    <color name="iv_border">#1F2738</color>
+    <color name="iv_accent">#35C7D9</color>
+    <color name="iv_accent_soft">#7FEEFB</color>
+    <color name="iv_accent_overlay_18">#2E35C7D9</color>
+    <color name="iv_accent_overlay_22">#3835C7D9</color>
+    <color name="iv_text_primary">#FFFFFF</color>
+    <color name="iv_text_secondary">#8E9AAE</color>
+    <color name="iv_text_dim">#5D6679</color>
+</resources>

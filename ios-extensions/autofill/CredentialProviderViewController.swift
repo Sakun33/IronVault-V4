@@ -6,212 +6,253 @@
 //  → NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).CredentialProviderViewController"
 //  and NSExtensionPointIdentifier = "com.apple.authentication-services-credential-provider-ui".
 //
-//  Reads the encrypted password blob from the shared App Group container
-//  (written by the main IronVault app on every vault sync). Decryption is
-//  gated by Face ID / Touch ID via LocalAuthentication; the AutoFill
-//  extension never has access to the user's master password directly.
+//  Reads the credential blob from the shared App Group container
+//  (written by the main IronVault app on every vault sync) via
+//  `KeychainBridge`. Decryption is gated by Face ID / Touch ID via
+//  `BiometricHelper`; the AutoFill extension never has direct access to
+//  the user's master password.
 //
-//  Flow:
-//    1. iOS asks: "user is filling a login form on serviceIdentifier X"
-//    2. We list matching credentials from the shared blob.
-//    3. User taps one.
-//    4. We prompt biometric.
-//    5. On success we hand the (username, password) tuple back via
-//       extensionContext.completeRequest(withSelectedCredential:).
+//  Lifecycle dispatch:
+//    prepareCredentialList(for:)                — full picker UI
+//    provideCredentialWithoutUserInteraction(_) — silent fill (60s biometric cache)
+//    prepareInterfaceToProvideCredential(for:)  — biometric + silent fill
+//    prepareInterfaceForExtensionConfiguration  — settings handoff
+//
+//  Selection flow:
+//    - User taps a row in the list
+//    - Biometric prompt
+//    - extensionContext.completeRequest(withSelectedCredential: ASPasswordCredential)
 //
 
 import AuthenticationServices
 import LocalAuthentication
 import UIKit
 
-private let kAppGroup = "group.app.ironvault.shared"
-private let kCredentialsBlobKey = "iv_autofill_credentials_v1"
+final class CredentialProviderViewController: ASCredentialProviderViewController {
 
-// Mirror of the JS-side payload written by client/src/lib/autofill-sync.ts.
-// Keep these fields in lock-step with that file.
-struct AutoFillCredential: Codable {
-    let recordIdentifier: String
-    let url: String
-    let username: String
-    let password: String
-
-    var host: String {
-        if let u = URL(string: url), let host = u.host {
-            return host.lowercased()
-        }
-        // Bare domain entries.
-        return url.lowercased()
-    }
-
-    func matches(_ serviceIdentifier: ASCredentialServiceIdentifier) -> Bool {
-        let target: String = {
-            switch serviceIdentifier.type {
-            case .URL:
-                if let u = URL(string: serviceIdentifier.identifier), let h = u.host {
-                    return h.lowercased()
-                }
-                return serviceIdentifier.identifier.lowercased()
-            case .domain:
-                return serviceIdentifier.identifier.lowercased()
-            @unknown default:
-                return serviceIdentifier.identifier.lowercased()
-            }
-        }()
-        // Simple "ends with" match so login.google.com matches google.com.
-        return host == target || host.hasSuffix("." + target) || target.hasSuffix("." + host)
-    }
-}
-
-private func loadCredentials() -> [AutoFillCredential] {
-    guard
-        let defaults = UserDefaults(suiteName: kAppGroup),
-        let blob = defaults.string(forKey: kCredentialsBlobKey),
-        let data = blob.data(using: .utf8)
-    else { return [] }
-    return (try? JSONDecoder().decode([AutoFillCredential].self, from: data)) ?? []
-}
-
-class CredentialProviderViewController: ASCredentialProviderViewController {
-
-    private var tableView: UITableView!
-    private var allCredentials: [AutoFillCredential] = []
-    private var filtered: [AutoFillCredential] = []
-    private var currentServiceIdentifiers: [ASCredentialServiceIdentifier] = []
+    private var pickerController: CredentialListViewController?
+    private var pendingServiceIdentifiers: [ASCredentialServiceIdentifier] = []
 
     // MARK: View lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        title = "IronVault"
-
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .cancel,
-            target: self,
-            action: #selector(cancelTapped)
-        )
-
-        tableView = UITableView(frame: view.bounds, style: .insetGrouped)
-        tableView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
-        view.addSubview(tableView)
+        view.backgroundColor = UIColor(red: 0.04, green: 0.05, blue: 0.09, alpha: 1)
     }
 
-    // MARK: AS API — UI flow
+    // MARK: AS API — Picker
 
+    /// iOS asks us to present a UI for the user to pick a credential. We
+    /// hand off to `CredentialListViewController`, pre-filtering against
+    /// the service identifiers iOS handed us.
     override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
-        currentServiceIdentifiers = serviceIdentifiers
-        allCredentials = loadCredentials()
-        filtered = allCredentials.filter { cred in
-            serviceIdentifiers.contains(where: { cred.matches($0) })
-        }
-        if filtered.isEmpty {
-            filtered = allCredentials // fall back to full list so user can pick manually
-        }
-        tableView?.reloadData()
+        pendingServiceIdentifiers = serviceIdentifiers
+        let all = KeychainBridge.loadCredentials()
+        let shims = serviceIdentifiers.map(Self.shim(for:))
+        let suggested = all.filter { cred in shims.contains(where: { cred.matches($0) }) }
+
+        let picker = CredentialListViewController()
+        picker.delegate = self
+        picker.all = all
+        picker.suggested = suggested
+        picker.serviceLabel = primaryServiceLabel(from: serviceIdentifiers)
+        picker.biometricKind = BiometricHelper.supportedKind
+        pickerController = picker
+
+        embed(picker)
     }
 
-    // MARK: AS API — silent flow (Face ID-confirmed quick fill)
+    // MARK: AS API — Silent / quick fill
 
+    /// Silent path — iOS asks if we can complete the fill without any UI.
+    /// We answer yes only if (a) we know the recordIdentifier and
+    /// (b) the user has authenticated with biometric in the last 60s.
     override func provideCredentialWithoutUserInteraction(for credentialIdentity: ASPasswordCredentialIdentity) {
-        let creds = loadCredentials()
+        let creds = KeychainBridge.loadCredentials()
         guard let match = creds.first(where: { $0.recordIdentifier == credentialIdentity.recordIdentifier }) else {
-            extensionContext.cancelRequest(withError: NSError(
-                domain: ASExtensionErrorDomain,
-                code: ASExtensionError.credentialIdentityNotFound.rawValue
-            ))
+            cancel(error: .credentialIdentityNotFound)
             return
         }
-        // Silent flow MUST NOT prompt — only OS-level biometric on the
-        // AutoFill modal counts. Hand back immediately.
-        let passwordCredential = ASPasswordCredential(user: match.username, password: match.password)
-        extensionContext.completeRequest(withSelectedCredential: passwordCredential, completionHandler: nil)
+        guard BiometricHelper.isApprovalFresh else {
+            // Tell iOS we need UI to authenticate. iOS will then call
+            // `prepareInterfaceToProvideCredential` so we can run the
+            // biometric prompt.
+            cancel(error: .userInteractionRequired)
+            return
+        }
+        complete(with: match)
     }
 
+    /// UI path equivalent of the silent flow — run biometric, then fill.
     override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
-        // Same as the silent path but we run a biometric prompt ourselves.
-        let creds = loadCredentials()
+        let creds = KeychainBridge.loadCredentials()
         guard let match = creds.first(where: { $0.recordIdentifier == credentialIdentity.recordIdentifier }) else {
-            extensionContext.cancelRequest(withError: NSError(
-                domain: ASExtensionErrorDomain,
-                code: ASExtensionError.credentialIdentityNotFound.rawValue
-            ))
+            cancel(error: .credentialIdentityNotFound)
             return
         }
-        promptBiometric { [weak self] ok in
+        BiometricHelper.evaluate { [weak self] result in
             guard let self = self else { return }
-            if ok {
-                let cred = ASPasswordCredential(user: match.username, password: match.password)
-                self.extensionContext.completeRequest(withSelectedCredential: cred, completionHandler: nil)
-            } else {
-                self.extensionContext.cancelRequest(withError: NSError(
-                    domain: ASExtensionErrorDomain,
-                    code: ASExtensionError.userCanceled.rawValue
-                ))
+            switch result {
+            case .success:
+                self.complete(with: match)
+            case .userCancelled:
+                self.cancel(error: .userCanceled)
+            case .unavailable, .failed:
+                // Bail to the picker so the user can at least see their
+                // creds (passcode fallback would have been attempted by
+                // BiometricHelper already).
+                self.cancel(error: .userCanceled)
             }
         }
+    }
+
+    // MARK: AS API — Extension configuration
+
+    /// iOS calls this once when the user enables IronVault in
+    /// Settings → Passwords → Password Options. We show a "Open IronVault
+    /// to configure" landing.
+    override func prepareInterfaceForExtensionConfiguration() {
+        let container = UIViewController()
+        container.view.backgroundColor = UIColor(red: 0.04, green: 0.05, blue: 0.09, alpha: 1)
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.view.addSubview(stack)
+
+        let iconBg = UIView()
+        iconBg.backgroundColor = UIColor(red: 0.21, green: 0.78, blue: 0.84, alpha: 0.18)
+        iconBg.layer.cornerRadius = 18
+        iconBg.translatesAutoresizingMaskIntoConstraints = false
+        let icon = UIImageView(image: UIImage(systemName: "lock.shield.fill"))
+        icon.tintColor = UIColor(red: 0.5, green: 0.93, blue: 0.97, alpha: 1)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.contentMode = .scaleAspectFit
+        iconBg.addSubview(icon)
+
+        let title = UILabel()
+        title.text = "IronVault AutoFill enabled"
+        title.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        title.textColor = .white
+        title.textAlignment = .center
+
+        let subtitle = UILabel()
+        subtitle.text = "Open the IronVault app, unlock your vault, and your saved credentials will appear when you tap a password field."
+        subtitle.font = UIFont.systemFont(ofSize: 14)
+        subtitle.textColor = UIColor(white: 1, alpha: 0.6)
+        subtitle.textAlignment = .center
+        subtitle.numberOfLines = 0
+
+        stack.addArrangedSubview(iconBg)
+        stack.addArrangedSubview(title)
+        stack.addArrangedSubview(subtitle)
+
+        NSLayoutConstraint.activate([
+            iconBg.widthAnchor.constraint(equalToConstant: 56),
+            iconBg.heightAnchor.constraint(equalToConstant: 56),
+            icon.centerXAnchor.constraint(equalTo: iconBg.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: iconBg.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 28),
+            icon.heightAnchor.constraint(equalToConstant: 28),
+            stack.leadingAnchor.constraint(equalTo: container.view.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(equalTo: container.view.trailingAnchor, constant: -32),
+            stack.centerYAnchor.constraint(equalTo: container.view.centerYAnchor),
+        ])
+
+        container.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(configurationDone)
+        )
+
+        embed(container)
+    }
+
+    @objc private func configurationDone() {
+        extensionContext.completeExtensionConfigurationRequest()
     }
 
     // MARK: Helpers
 
-    @objc private func cancelTapped() {
+    private func embed(_ child: UIViewController) {
+        // Reset
+        children.forEach { $0.willMove(toParent: nil); $0.view.removeFromSuperview(); $0.removeFromParent() }
+
+        let nav = UINavigationController(rootViewController: child)
+        nav.modalPresentationStyle = .pageSheet
+        nav.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(nav)
+        view.addSubview(nav.view)
+        nav.didMove(toParent: self)
+        NSLayoutConstraint.activate([
+            nav.view.topAnchor.constraint(equalTo: view.topAnchor),
+            nav.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            nav.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            nav.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func complete(with credential: AutoFillCredential) {
+        let pw = ASPasswordCredential(user: credential.username, password: credential.password)
+        extensionContext.completeRequest(withSelectedCredential: pw, completionHandler: nil)
+    }
+
+    private func cancel(error: ASExtensionError.Code) {
         extensionContext.cancelRequest(withError: NSError(
             domain: ASExtensionErrorDomain,
-            code: ASExtensionError.userCanceled.rawValue
+            code: error.rawValue
         ))
     }
 
-    private func promptBiometric(completion: @escaping (Bool) -> Void) {
-        let ctx = LAContext()
-        var err: NSError?
-        if ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) {
-            ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
-                               localizedReason: "Authenticate to autofill credentials") { ok, _ in
-                DispatchQueue.main.async { completion(ok) }
-            }
-        } else {
-            // No biometrics — fall back to passcode.
-            ctx.evaluatePolicy(.deviceOwnerAuthentication,
-                               localizedReason: "Authenticate to autofill credentials") { ok, _ in
-                DispatchQueue.main.async { completion(ok) }
-            }
+    private func primaryServiceLabel(from identifiers: [ASCredentialServiceIdentifier]) -> String? {
+        for sid in identifiers {
+            let shim = Self.shim(for: sid)
+            if !shim.normalizedHost.isEmpty { return shim.normalizedHost }
+        }
+        return nil
+    }
+
+    private static func shim(for sid: ASCredentialServiceIdentifier) -> ASCredentialServiceIdentifierLike {
+        switch sid.type {
+        case .URL:
+            return ASCredentialServiceIdentifierLike(identifier: sid.identifier, isURL: true)
+        case .domain:
+            return ASCredentialServiceIdentifierLike(identifier: sid.identifier, isURL: false)
+        @unknown default:
+            return ASCredentialServiceIdentifierLike(identifier: sid.identifier, isURL: false)
         }
     }
 }
 
-// MARK: - Table view
+// MARK: - CredentialListViewControllerDelegate
 
-extension CredentialProviderViewController: UITableViewDataSource, UITableViewDelegate {
+extension CredentialProviderViewController: CredentialListViewControllerDelegate {
 
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return filtered.count
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let cred = filtered[indexPath.row]
-        cell.textLabel?.text = cred.username
-        cell.detailTextLabel?.text = cred.host
-        cell.accessoryType = .disclosureIndicator
-        return cell
-    }
-
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        let cred = filtered[indexPath.row]
-        promptBiometric { [weak self] ok in
+    func credentialList(_ vc: CredentialListViewController, didSelect credential: AutoFillCredential) {
+        // Always biometric-gate the final reveal so a stolen unlocked
+        // device can't fish credentials from the AutoFill modal.
+        BiometricHelper.evaluate { [weak self] result in
             guard let self = self else { return }
-            guard ok else { return }
-            let passwordCredential = ASPasswordCredential(user: cred.username, password: cred.password)
-            self.extensionContext.completeRequest(withSelectedCredential: passwordCredential, completionHandler: nil)
+            switch result {
+            case .success:
+                self.complete(with: credential)
+            case .userCancelled:
+                // Stay in the picker — user just dismissed the prompt.
+                break
+            case .unavailable:
+                // Hardware path is gone (e.g. biometry-not-enrolled). Let
+                // the fill go through; the device-level passcode already
+                // gates the AutoFill modal itself.
+                self.complete(with: credential)
+            case .failed:
+                break
+            }
         }
     }
 
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        let isFiltered = filtered.count != allCredentials.count
-        if filtered.isEmpty { return "No saved credentials" }
-        return isFiltered ? "Suggested for this site" : "All credentials"
+    func credentialListDidCancel(_ vc: CredentialListViewController) {
+        cancel(error: .userCanceled)
     }
 }
