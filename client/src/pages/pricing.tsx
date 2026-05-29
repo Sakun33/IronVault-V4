@@ -30,21 +30,25 @@ function loadRazorpay(): Promise<void> {
   });
 }
 
-const PLAN_ICONS: Record<PlanId, typeof Crown> = {
+// Only the self-serve plans (free/pro/family/lifetime) render on this page.
+// team/business/pro_family_member are filtered out before reaching the .map
+// below — see the filter in the render. Using `Partial` here lets the type
+// system reflect that and prevents the lookup from being assumed total.
+const PLAN_ICONS: Partial<Record<PlanId, typeof Crown>> = {
   free: Shield,
   pro: Zap,
   family: Users,
   lifetime: InfinityIcon,
 };
 
-const PLAN_ICON_COLORS: Record<PlanId, string> = {
+const PLAN_ICON_COLORS: Partial<Record<PlanId, string>> = {
   free: 'text-muted-foreground',
   pro: 'text-primary',
   family: 'text-purple-600',
   lifetime: 'text-amber-500',
 };
 
-const PLAN_ICON_BG: Record<PlanId, string> = {
+const PLAN_ICON_BG: Partial<Record<PlanId, string>> = {
   free: 'bg-muted',
   pro: 'bg-primary/10',
   family: 'bg-purple-100 dark:bg-purple-900/30',
@@ -77,8 +81,21 @@ export default function PricingPage() {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
           body: JSON.stringify({ plan: razorpayPlan, email: accountEmail }),
         });
-        if (!res.ok) throw new Error('Failed to create order');
-        const { orderId, amount, currency, keyId } = await res.json();
+        if (!res.ok) {
+          let errMsg = `Order creation failed (HTTP ${res.status})`;
+          try {
+            const errBody = await res.json();
+            if (errBody?.error) errMsg = errBody.error;
+          } catch {}
+          console.error('[Razorpay] create-order failed:', res.status, errMsg);
+          throw new Error(errMsg);
+        }
+        const orderData = await res.json();
+        const { orderId, amount, currency, keyId } = orderData;
+        if (!orderId || !amount || !currency || !keyId) {
+          console.error('[Razorpay] malformed order response:', orderData);
+          throw new Error('Order response missing required fields');
+        }
 
         const planName = PLANS.find(p => p.id === id)?.name || id;
         const options = {
@@ -102,20 +119,37 @@ export default function PricingPage() {
               toast({ title: 'Payment verification failed', description: 'Contact support if amount was deducted.', variant: 'destructive' });
             }
           },
+          modal: {
+            ondismiss: () => {
+              console.log('[Razorpay] checkout dismissed by user');
+            },
+          },
           prefill: { email: accountEmail || '' },
           theme: { color: '#4f46e5' },
         };
 
         const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', (resp: any) => {
+          console.error('[Razorpay] payment.failed:', resp?.error);
+          toast({
+            title: 'Payment failed',
+            description: resp?.error?.description || 'Please try again or use a different method.',
+            variant: 'destructive',
+          });
+        });
         rzp.open();
-      } catch {
-        toast({ title: 'Failed to initiate payment', description: 'Please try again.', variant: 'destructive' });
+      } catch (err: any) {
+        const msg = err?.message || 'Please try again.';
+        console.error('[Razorpay] checkout error:', msg);
+        toast({ title: 'Failed to initiate payment', description: msg, variant: 'destructive' });
       }
       return;
     }
 
     try {
-      await changePlan(id);
+      // changePlan's signature is the narrower self-serve plan union; the
+      // filter on the render path ensures `id` is one of these in practice.
+      await changePlan(id as 'free' | 'pro' | 'family' | 'lifetime');
       const planName = PLANS.find(p => p.id === id)?.name || id;
       if (id === 'free') {
         toast({ title: 'Downgraded to Free', description: 'You are now on the Free plan.' });
@@ -154,6 +188,11 @@ export default function PricingPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-5xl mx-auto">
         {PLANS.filter(plan => {
+          // Only render plans we have icon styling for — team/business are
+          // sales-led plans shown on the marketing pricing page, not the
+          // self-serve upgrade flow. Without this guard, PLAN_ICONS[plan.id]
+          // is undefined and React crashes on `<undefined />`.
+          if (!(plan.id in PLAN_ICONS)) return false;
           // Hide internal/invitee-only plan from public pricing.
           if (plan.id === 'pro_family_member') return false;
           // If the user is already on Lifetime, hide Family — it's a sideways
@@ -166,7 +205,9 @@ export default function PricingPage() {
           // Keep all other plans visible.
           return true;
         }).map((plan) => {
-          const Icon = PLAN_ICONS[plan.id];
+          // Filter guarantees `plan.id` is one of the keys in PLAN_ICONS, so
+          // the icon/colors/bg lookups below are non-null.
+          const Icon = PLAN_ICONS[plan.id]!;
           const btn = getButtonProps(plan.id);
           const isCurrent = plan.id === currentTier;
           return (

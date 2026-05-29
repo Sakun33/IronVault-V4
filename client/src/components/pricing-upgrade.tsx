@@ -59,13 +59,31 @@ function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
     setLoading(planId);
     try {
       await loadRazorpay();
+      // create-order requires Bearer auth — without it the server 401s and
+      // the user sees a generic "Failed to initiate payment" toast.
+      const cloudToken = localStorage.getItem('iv_cloud_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (cloudToken) headers['Authorization'] = `Bearer ${cloudToken}`;
       const res = await fetch(`${apiBase()}/api/payments/create-order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ plan: planId, email }),
       });
-      if (!res.ok) throw new Error('Failed to create order');
-      const { orderId, amount, currency, keyId } = await res.json();
+      if (!res.ok) {
+        let errMsg = `Order creation failed (HTTP ${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {}
+        console.error('[Razorpay] create-order failed:', res.status, errMsg);
+        throw new Error(errMsg);
+      }
+      const orderData = await res.json();
+      const { orderId, amount, currency, keyId } = orderData;
+      if (!orderId || !amount || !currency || !keyId) {
+        console.error('[Razorpay] malformed order response:', orderData);
+        throw new Error('Order response missing required fields');
+      }
 
       const options = {
         key: keyId,
@@ -75,9 +93,11 @@ function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
         description: `IronVault ${label} Plan`,
         order_id: orderId,
         handler: async (response: any) => {
+          const verifyHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (cloudToken) verifyHeaders['Authorization'] = `Bearer ${cloudToken}`;
           const verifyRes = await fetch(`${apiBase()}/api/payments/verify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: verifyHeaders,
             body: JSON.stringify({ ...response, plan: planId, email }),
           });
           const result = await verifyRes.json();
@@ -87,13 +107,28 @@ function WebRazorpayPlans({ email, onSuccess }: WebRazorpayPlansProps) {
             toast({ title: 'Payment verification failed', description: 'Contact support if amount was deducted.', variant: 'destructive' });
           }
         },
+        modal: {
+          ondismiss: () => {
+            console.log('[Razorpay] checkout dismissed by user');
+          },
+        },
         prefill: { email: email || '' },
         theme: { color: '#4f46e5' },
       };
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (resp: any) => {
+        console.error('[Razorpay] payment.failed:', resp?.error);
+        toast({
+          title: 'Payment failed',
+          description: resp?.error?.description || 'Please try again or use a different method.',
+          variant: 'destructive',
+        });
+      });
       rzp.open();
-    } catch {
-      toast({ title: 'Failed to initiate payment', description: 'Please try again.', variant: 'destructive' });
+    } catch (err: any) {
+      const msg = err?.message || 'Please try again.';
+      console.error('[Razorpay] checkout error:', msg);
+      toast({ title: 'Failed to initiate payment', description: msg, variant: 'destructive' });
     } finally {
       setLoading(null);
     }

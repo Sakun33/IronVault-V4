@@ -382,10 +382,16 @@
 
     <!-- tawk.to Live Chat — bubble hidden by default; opened via in-app UI -->
     <style>
-      /* Defense-in-depth: keep the default bubble hidden even before the
-         widget script loads, so it can't flash in. The chat window itself
-         (#tawk-tooltip-container, the maximized chat iframe) is unaffected. */
+      /* Defense-in-depth: keep the default bubble + minimized greeting card
+         hidden even before the widget script loads, so they can't flash in.
+         The chat window itself (#tawk-tooltip-container, the maximized chat
+         iframe) is unaffected. */
       #tawk-bubble-container,
+      .tawk-min-container,
+      #tawk-bubble-container .tawk-text-container,
+      .tawk-text-container,
+      [class*="tawk-min"],
+      .tawk-bubble-container,
       iframe[title*="chat widget" i]:not([style*="display: block"]) {
         display: none !important;
       }
@@ -396,6 +402,12 @@
     // pages, floating Help pill on auth pages) calls Tawk_API.maximize() to
     // open the chat window directly. Avoids the oversized always-on bubble.
     Tawk_API.onLoad = function() {
+      try { if (typeof Tawk_API.hideWidget === 'function') Tawk_API.hideWidget(); } catch (e) {}
+    };
+    // When the user minimizes the chat panel, fully hide the widget — the
+    // default minimized bubble shows the "We Are Here!" cartoon greeting,
+    // which we never want on screen. Users re-open via our own Help button.
+    Tawk_API.onChatMinimized = function() {
       try { if (typeof Tawk_API.hideWidget === 'function') Tawk_API.hideWidget(); } catch (e) {}
     };
     (function(){

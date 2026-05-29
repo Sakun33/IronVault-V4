@@ -219,8 +219,8 @@ export function CustomerInfoDialog({ open, onSubmit, isFirstVault = true }: Cust
               Your Plan
             </Label>
             <div className="grid grid-cols-1 gap-2">
-              {PLANS.map((plan) => {
-                const style = PLAN_STYLE[plan.id];
+              {PLANS.filter(p => p.id in PLAN_STYLE).map((plan) => {
+                const style = PLAN_STYLE[plan.id as keyof typeof PLAN_STYLE];
                 const Icon = style.icon;
                 const isSelected = selectedPlan === plan.id;
                 return (
