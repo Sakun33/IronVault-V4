@@ -447,7 +447,7 @@ export default function SignupPage() {
                 Choose your plan <span className="text-destructive">*</span>
               </Label>
               <div className="grid grid-cols-2 gap-2">
-                {PLANS.filter(p => p.id !== 'pro_family_member').map(plan => {
+                {PLANS.filter(p => p.id in PLAN_CARD_STYLE).map(plan => {
                   const style = PLAN_CARD_STYLE[plan.id as keyof typeof PLAN_CARD_STYLE];
                   const Icon = style.icon;
                   const selected = selectedPlan === plan.id;
