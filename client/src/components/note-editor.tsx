@@ -220,10 +220,6 @@ export function NoteEditor({
   const [notebookMenuOpen, setNotebookMenuOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  // Mobile-only: the notebook + tag footer is collapsed by default so the
-  // text area dominates the screen. Tap "Details" to expand the full
-  // metadata row. Desktop always shows the full row regardless.
-  const [mobileMetaOpen, setMobileMetaOpen] = useState(false);
   // Tick state to force re-render when TipTap selection/transaction fires
   // so toolbar active-state highlights update in real time.
   const [, setStateTick] = useState(0);
@@ -1018,35 +1014,11 @@ export function NoteEditor({
         }}
       >
         <div className="max-w-3xl mx-auto w-full">
-          {/* Mobile-only collapsed bar — single short row that doesn't eat
-              the editor's vertical space. Tap to expand the full metadata
-              row (notebook chooser + tag editor). Hidden at md+. */}
-          <div className="md:hidden px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
-            <button
-              type="button"
-              onClick={() => setMobileMetaOpen(v => !v)}
-              className="flex items-center gap-1.5 min-w-0 hover:text-foreground transition-colors"
-              aria-expanded={mobileMetaOpen}
-              aria-label="Note details"
-              data-testid="note-mobile-meta-toggle"
-            >
-              <BookOpen className="w-3 h-3 opacity-60 flex-shrink-0" />
-              <span className="truncate capitalize">{notebook || 'Notebook'}</span>
-              {tags.length > 0 && (
-                <>
-                  <span className="opacity-40">·</span>
-                  <TagIcon className="w-2.5 h-2.5 opacity-60 flex-shrink-0" />
-                  <span className="flex-shrink-0">{tags.length}</span>
-                </>
-              )}
-              <ChevronDown className={`w-3 h-3 opacity-60 transition-transform flex-shrink-0 ${mobileMetaOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <span className="text-[11px] text-muted-foreground/70 tabular-nums flex-shrink-0">
-              {wordCount} word{wordCount === 1 ? '' : 's'}
-            </span>
-          </div>
-
-          <div className={`${mobileMetaOpen ? 'flex' : 'hidden'} md:flex px-3 pt-1.5 pb-1 items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] text-muted-foreground`}>
+          {/* Single compact row on both mobile and desktop. Horizontally
+              scrollable so long tag lists don't blow up the footer height.
+              Word count sits inline on the right; the separate status row
+              below is desktop-only. */}
+          <div className="flex px-3 py-1 md:pt-1.5 md:pb-1 items-center gap-2 overflow-x-auto scrollbar-hide text-[12px] md:text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1 flex-shrink-0 relative">
               <BookOpen className="w-3.5 h-3.5 opacity-60" />
               <button
@@ -1166,13 +1138,17 @@ export function NoteEditor({
                   )}
                 </div>
               ) : (
-                <button type="button" onClick={() => setTagInputOpen(true)} className="text-[13px] text-emerald-400/90 hover:text-emerald-300 transition-colors inline-flex items-center gap-0.5 flex-shrink-0">
+                <button type="button" onClick={() => setTagInputOpen(true)} className="text-[12px] md:text-[13px] text-emerald-400/90 hover:text-emerald-300 transition-colors inline-flex items-center gap-0.5 flex-shrink-0">
                   <Plus className="w-3 h-3" /> {tags.length === 0 ? 'Add tag' : 'Tag'}
                 </button>
               )}
             </div>
+            {/* Inline word count — mobile only; desktop has the status row below. */}
+            <span className="md:hidden flex-shrink-0 text-[11px] text-muted-foreground/70 tabular-nums whitespace-nowrap pl-1">
+              {wordCount}w
+            </span>
           </div>
-          {/* Status bar — desktop only (mobile word count is in the collapsed bar). */}
+          {/* Status bar — desktop only. */}
           <div className="hidden md:flex px-3 pb-1.5 items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
             <span>{wordCount} word{wordCount === 1 ? '' : 's'}</span>
           </div>

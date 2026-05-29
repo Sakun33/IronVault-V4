@@ -587,14 +587,13 @@ export default function SettingsPage() {
                       </>
                     ) : (
                       <>
-                        Open a vault with your master password and you'll be
-                        offered to enable {bioCaps.biometricLabel} for next
-                        time.
+                        Tap "Enable Now" to set up {bioCaps.biometricLabel}
+                        unlock for the currently open vault.
                       </>
                     )}
                   </p>
                 </div>
-                {bioEnrolledVaultIds.length > 0 && (
+                {bioEnrolledVaultIds.length > 0 ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -603,6 +602,20 @@ export default function SettingsPage() {
                     data-testid="button-disable-all-biometric"
                   >
                     {bioBusy ? 'Disabling…' : 'Disable all'}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        window.dispatchEvent(new CustomEvent('iv-biometric-prompt-now'));
+                      } catch {
+                        /* no-op */
+                      }
+                    }}
+                    data-testid="button-enable-biometric-now"
+                  >
+                    Enable Now
                   </Button>
                 )}
               </div>

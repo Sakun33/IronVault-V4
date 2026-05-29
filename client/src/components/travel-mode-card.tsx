@@ -75,17 +75,24 @@ export default function TravelModeCard() {
   const activeHiddenSections = active ? getHiddenSections() : [];
 
   const openEnable = () => {
-    // Default-include the currently active vault so users don't accidentally
-    // hide the vault they're using and lock themselves out of switching.
-    const initial = new Set<string>();
-    if (activeVault?.id) initial.add(activeVault.id);
-    setSelectedIds(initial);
-    // Sensible defaults for sections to hide at a border — financial + most
-    // sensitive vault sections. User can toggle these before confirming.
-    setHiddenSectionIds(new Set([
-      'passwords', 'cards', 'identities', 'api-keys',
-      'crypto', 'investments', 'bank-statements',
-    ]));
+    if (active) {
+      // Already on — pre-fill with the current selection so the user can
+      // tweak which vaults/sections are hidden without disabling first.
+      setSelectedIds(new Set(getSafeVaultIds()));
+      setHiddenSectionIds(new Set(getHiddenSections()));
+    } else {
+      // Default-include the currently active vault so users don't accidentally
+      // hide the vault they're using and lock themselves out of switching.
+      const initial = new Set<string>();
+      if (activeVault?.id) initial.add(activeVault.id);
+      setSelectedIds(initial);
+      // Sensible defaults for sections to hide at a border — financial + most
+      // sensitive vault sections. User can toggle these before confirming.
+      setHiddenSectionIds(new Set([
+        'passwords', 'cards', 'identities', 'api-keys',
+        'crypto', 'investments', 'bank-statements',
+      ]));
+    }
     setShowEnableDialog(true);
   };
 
@@ -98,11 +105,12 @@ export default function TravelModeCard() {
       });
       return;
     }
+    const wasActive = active;
     enableTravelMode(Array.from(selectedIds), Array.from(hiddenSectionIds));
     setShowEnableDialog(false);
     const sectionsHidden = hiddenSectionIds.size;
     toast({
-      title: 'Travel Mode enabled',
+      title: wasActive ? 'Travel Mode updated' : 'Travel Mode enabled',
       description: `${selectedIds.size} vault${selectedIds.size === 1 ? '' : 's'} visible · ${sectionsHidden} section${sectionsHidden === 1 ? '' : 's'} hidden.`,
     });
   };
@@ -198,30 +206,41 @@ export default function TravelModeCard() {
                   </div>
                 </div>
               </div>
-              <Button
-                variant="destructive"
-                onClick={() => setShowDisableDialog(true)}
-                data-testid="disable-travel-mode"
-              >
-                <Lock className="w-4 h-4 mr-2" />
-                Disable (requires master password)
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={openEnable}
+                  data-testid="update-travel-mode"
+                >
+                  <Plane className="w-4 h-4 mr-2" />
+                  Update settings
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowDisableDialog(true)}
+                  data-testid="disable-travel-mode"
+                >
+                  <Lock className="w-4 h-4 mr-2" />
+                  Disable
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Enable dialog */}
+      {/* Enable / Update dialog */}
       <Dialog open={showEnableDialog} onOpenChange={setShowEnableDialog}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plane className="w-5 h-5 text-primary" />
-              Enable Travel Mode
+              {active ? 'Update Travel Mode' : 'Enable Travel Mode'}
             </DialogTitle>
             <DialogDescription>
-              Choose which vaults remain visible. Everything else is hidden
-              until you disable Travel Mode.
+              {active
+                ? 'Change which vaults remain visible and which sections are hidden.'
+                : 'Choose which vaults remain visible. Everything else is hidden until you disable Travel Mode.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-[440px] overflow-y-auto py-2">
@@ -284,7 +303,7 @@ export default function TravelModeCard() {
               disabled={selectedIds.size === 0}
               data-testid="confirm-enable-travel-mode"
             >
-              Enable Travel Mode
+              {active ? 'Save Changes' : 'Enable Travel Mode'}
             </Button>
           </DialogFooter>
         </DialogContent>

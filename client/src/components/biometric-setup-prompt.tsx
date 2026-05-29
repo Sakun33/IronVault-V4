@@ -48,13 +48,16 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
   useEffect(() => {
     if (!isNativeApp() || !masterPassword || !vaultId) return;
 
-    const sessionKey = `iv_bio_asked_${vaultId}`;
-    if (sessionStorage.getItem(sessionKey)) return;
-
     let cancelled = false;
 
-    const check = async () => {
+    const check = async (force = false) => {
       try {
+        const sessionKey = `iv_bio_asked_${vaultId}`;
+        // Manual trigger (Settings → "Enable Now") bypasses the dismissal
+        // gate so users can pull up the prompt on demand. Auto-prompt path
+        // still respects the per-session "asked already" flag.
+        if (!force && sessionStorage.getItem(sessionKey)) return;
+
         // Device capability + not-already-enrolled check. We DO NOT bail
         // when the cached account password is missing anymore — instead
         // we fall through to the inline-password entry path so OAuth and
@@ -65,12 +68,31 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
         ]);
 
         if (cancelled) return;
-        if (!capabilities.isAvailable || alreadyEnabled) return;
+        if (!capabilities.isAvailable) {
+          if (force) {
+            toast({
+              title: 'Biometric not available',
+              description: 'No fingerprint or Face ID is set up on this device.',
+              variant: 'destructive',
+            });
+          }
+          return;
+        }
+        if (alreadyEnabled && !force) return;
 
         // Need an account email regardless of which path — without it we
         // can't enrol because Stage-1 biometric login needs the email.
         const email = getAccountEmail();
-        if (!email) return;
+        if (!email) {
+          if (force) {
+            toast({
+              title: 'Sign in first',
+              description: 'Sign in to your account before enabling biometric.',
+              variant: 'destructive',
+            });
+          }
+          return;
+        }
 
         setBiometricLabel(capabilities.biometricLabel);
         setIconType(capabilities.biometryType === 'faceId' || capabilities.biometryType === 'face' ? 'face' : 'finger');
@@ -79,16 +101,28 @@ export function BiometricSetupPrompt({ masterPassword, vaultId }: BiometricSetup
         const cachedPassword = sessionStorage.getItem('iv_pending_bio_account_pw');
         setNeedsPasswordEntry(!cachedPassword);
 
-        // Small delay so the UI settles after unlock before showing prompt.
-        setTimeout(() => { if (!cancelled) setShow(true); }, 800);
+        if (force) {
+          setShow(true);
+        } else {
+          // Small delay so the UI settles after unlock before showing prompt.
+          setTimeout(() => { if (!cancelled) setShow(true); }, 800);
+        }
       } catch {
         // silently ignore
       }
     };
 
     check();
-    return () => { cancelled = true; };
-  }, [masterPassword, vaultId]);
+
+    // Manual trigger from Settings → "Enable Now" button.
+    const onManualTrigger = () => { void check(true); };
+    window.addEventListener('iv-biometric-prompt-now', onManualTrigger);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('iv-biometric-prompt-now', onManualTrigger);
+    };
+  }, [masterPassword, vaultId, toast]);
 
   const dismiss = () => {
     if (vaultId) sessionStorage.setItem(`iv_bio_asked_${vaultId}`, '1');
