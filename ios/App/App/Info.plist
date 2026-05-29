@@ -22,7 +22,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.ironvault.app</string>
+			<string>app.ironvault.ios</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>ironvault</string>
@@ -30,7 +30,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.ironvault.app.googlesignin</string>
+			<string>app.ironvault.ios.googlesignin</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.137773717238-1hmuf8hed2mrrmupsefiokvatk0if0l5</string>

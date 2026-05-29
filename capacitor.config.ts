@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const isDev = process.env.CAPACITOR_SERVER_URL !== undefined;
 
 const config: CapacitorConfig = {
-  appId: 'com.ironvault.app',
+  appId: 'app.ironvault.ios',
   appName: 'IronVault',
   webDir: 'dist/public',
   ios: {
