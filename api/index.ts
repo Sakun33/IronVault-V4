@@ -550,31 +550,42 @@ const _RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const _RATE_LIMIT_MAX = 5;
 const _loginFailures = new Map<string, number[]>();
 
-function _pruneFailures(ip: string, now: number) {
-  const arr = _loginFailures.get(ip);
+// F-016 (audit): bucket key is `${scope}|${ip}` so a flood on one endpoint
+// (e.g. forgot-password) doesn't lock a legitimate user out of unrelated
+// endpoints (e.g. /api/auth/token). Default scope is 'login' to preserve
+// existing behavior — callers that pass a scope opt into per-endpoint
+// isolation.
+function _bucketKey(ip: string, scope: string): string {
+  return `${scope}|${ip}`;
+}
+
+function _pruneFailures(ip: string, now: number, scope = 'login') {
+  const key = _bucketKey(ip, scope);
+  const arr = _loginFailures.get(key);
   if (!arr) return;
   const cutoff = now - _RATE_LIMIT_WINDOW_MS;
   const fresh = arr.filter(t => t > cutoff);
-  if (fresh.length === 0) _loginFailures.delete(ip);
-  else _loginFailures.set(ip, fresh);
+  if (fresh.length === 0) _loginFailures.delete(key);
+  else _loginFailures.set(key, fresh);
 }
 
-function isRateLimited(ip: string): boolean {
+function isRateLimited(ip: string, scope = 'login'): boolean {
   const now = Date.now();
-  _pruneFailures(ip, now);
-  return (_loginFailures.get(ip)?.length ?? 0) >= _RATE_LIMIT_MAX;
+  _pruneFailures(ip, now, scope);
+  return (_loginFailures.get(_bucketKey(ip, scope))?.length ?? 0) >= _RATE_LIMIT_MAX;
 }
 
-function recordLoginFailure(ip: string) {
+function recordLoginFailure(ip: string, scope = 'login') {
   const now = Date.now();
-  _pruneFailures(ip, now);
-  const arr = _loginFailures.get(ip) ?? [];
+  _pruneFailures(ip, now, scope);
+  const key = _bucketKey(ip, scope);
+  const arr = _loginFailures.get(key) ?? [];
   arr.push(now);
-  _loginFailures.set(ip, arr);
+  _loginFailures.set(key, arr);
 }
 
-function clearLoginFailures(ip: string) {
-  _loginFailures.delete(ip);
+function clearLoginFailures(ip: string, scope = 'login') {
+  _loginFailures.delete(_bucketKey(ip, scope));
 }
 
 // ── Generic per-IP + per-action rate limiter ─────────────────────────────────
