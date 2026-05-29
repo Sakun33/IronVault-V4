@@ -380,14 +380,24 @@
       </div>
     </noscript>
 
-    <!-- tawk.to Live Chat — 100% free, unlimited agents & chats -->
+    <!-- tawk.to Live Chat — bubble hidden by default; opened via in-app UI -->
     <style>
-      /* Position tawk.to widget above mobile bottom nav bar */
-      #tawk-bubble-container { bottom: 80px !important; }
-      @media (min-width: 768px) { #tawk-bubble-container { bottom: 24px !important; } }
+      /* Defense-in-depth: keep the default bubble hidden even before the
+         widget script loads, so it can't flash in. The chat window itself
+         (#tawk-tooltip-container, the maximized chat iframe) is unaffected. */
+      #tawk-bubble-container,
+      iframe[title*="chat widget" i]:not([style*="display: block"]) {
+        display: none !important;
+      }
     </style>
     <script type="text/javascript">
     var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+    // Hide the floating bubble globally — our own UI (header icon on vault
+    // pages, floating Help pill on auth pages) calls Tawk_API.maximize() to
+    // open the chat window directly. Avoids the oversized always-on bubble.
+    Tawk_API.onLoad = function() {
+      try { if (typeof Tawk_API.hideWidget === 'function') Tawk_API.hideWidget(); } catch (e) {}
+    };
     (function(){
     var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
     s1.async=true;

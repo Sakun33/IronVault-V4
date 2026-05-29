@@ -166,6 +166,7 @@ const CommandPalette = React.lazy(() => import("@/components/command-palette").t
 const BiometricSetupPrompt = React.lazy(() => import("@/components/biometric-setup-prompt").then(m => ({ default: m.BiometricSetupPrompt })));
 import { PWAOfflineIndicator } from "@/components/pwa-offline-indicator";
 import { SimpleThemeToggle, ThemeToggle } from "@/components/theme-toggle";
+import { ChatSupportHeaderButton, FloatingHelpButton } from "@/components/chat-support-button";
 import { NotificationCenter } from "@/components/notification-center";
 import { NotificationService } from "@/lib/notifications";
 import { useNotificationEvents } from "@/hooks/use-notification-events";
@@ -624,6 +625,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               <TooltipContent>Quick Add</TooltipContent>
             </Tooltip>
             <NotificationCenter userId={notificationUserId} />
+            <ChatSupportHeaderButton size="mobile" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -791,6 +793,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
               </TooltipTrigger>
               <TooltipContent>Notifications</TooltipContent>
             </Tooltip>
+            <ChatSupportHeaderButton size="desktop" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <span title="Toggle Theme"><ThemeToggle /></span>
@@ -1395,7 +1398,12 @@ function PublicPageWrapper({ children }: { children: React.ReactNode }) {
       els.forEach(el => { if (el) el.style.overflowY = ''; });
     };
   }, []);
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <FloatingHelpButton />
+    </>
+  );
 }
 
 // Shared public info routes (used in multiple tiers)
