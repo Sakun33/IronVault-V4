@@ -1,0 +1,24 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TQ6YZ5BJ6R.app.ironvault.ios"],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "Match all paths"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TQ6YZ5BJ6R.app.ironvault.ios",
+      "TQ6YZ5BJ6R.app.ironvault.ios.AutoFillProvider"
+    ]
+  },
+  "appclips": {
+    "apps": []
+  }
+}
