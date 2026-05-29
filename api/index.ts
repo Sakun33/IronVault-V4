@@ -1985,10 +1985,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === '/api/auth/register' && req.method === 'POST') {
     // QA-2026-05 SEC: per-IP signup rate limit. Without this an attacker can
     // flood Zoho CRM (createCrmContact is fire-and-forget on every signup),
-    // exhaust verification-email quota, and spam the customers table. 3 / hour
-    // is enough for legitimate household / device-switch signups.
+    // exhaust verification-email quota, and spam the customers table. Raised
+    // from 3/hr to 20/hr — 3/hr was tripping legitimate users on shared IPs
+    // (offices, NATs, mobile carriers) and blocking QA. 20/hr still caps
+    // automated abuse while leaving plenty of headroom for real signups.
     const _ip = getClientIp(req);
-    if (checkAndRecordAction('register', _ip, 3, 60 * 60 * 1000)) {
+    if (checkAndRecordAction('register', _ip, 20, 60 * 60 * 1000)) {
       return res.status(429).json({ error: 'Too many signup attempts. Please try again in an hour.' });
     }
     const { email, accountPasswordHash, fullName, country, phone, company, planType, marketingConsent, address, city, state, postalCode } = req.body || {};
