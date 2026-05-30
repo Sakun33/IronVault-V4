@@ -270,6 +270,28 @@ html.kb-open body {
   transition: padding-bottom 180ms ease-out;
 }
 
+/* Global keyboard-overlap fix: when the keyboard is open, reserve
+   bottom space in every top-level scroll container so the user can
+   always scroll the focused field / caret above the keyboard. Pair this
+   with `scroll-padding-bottom` so native `scrollIntoView` calls land
+   the target above the keyboard rather than under it.
+
+   Applies to:
+   - <main>: the primary page scroll container in App.tsx
+   - [data-scroll-container]: opt-in marker for nested scroll regions
+     (notes editor body, long dialog bodies, etc.) */
+html.kb-open main,
+html.kb-open [data-scroll-container] {
+  padding-bottom: calc(var(--safe-bottom) + var(--keyboard-height, 0px));
+  transition: padding-bottom 180ms ease-out;
+}
+
+html.kb-open,
+html.kb-open main,
+html.kb-open [data-scroll-container] {
+  scroll-padding-bottom: calc(var(--keyboard-height, 0px) + 32px);
+}
+
 /* When the keyboard is open, Radix dialogs/sheets shrink to fit so the
    inner scroll region (DialogBody) takes the slack. Both the centered
    Dialog and the bottom-anchored Sheet/Drawer need this max-height cap

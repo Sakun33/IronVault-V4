@@ -936,7 +936,10 @@ export function NoteEditor({
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto smooth-scrollbar"
+        data-scroll-container
+      >
         <div className="px-4 sm:px-8 pt-4 pb-3 max-w-3xl mx-auto w-full relative flex flex-col min-h-full" ref={editorWrapperRef}>
           <input
             ref={titleRef}
@@ -957,7 +960,7 @@ export function NoteEditor({
           <div
             className={`note-content flex-1 min-h-0 ${viewerMode ? 'cursor-text' : ''}`}
             onClick={viewerMode ? handleViewerClick : undefined}
-            style={{ paddingBottom: `calc(24px + ${bottomGutterPx}px)` }}
+            style={{ paddingBottom: `calc(24px + ${bottomGutterPx}px + ${keyboardOffset}px)` }}
           >
             <EditorContent editor={editor} />
           </div>
