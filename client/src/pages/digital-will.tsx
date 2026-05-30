@@ -157,7 +157,7 @@ export default function DigitalWillPage() {
     }
     try {
       setAddBusy(true);
-      await addBeneficiary({
+      const r = await addBeneficiary({
         name: addForm.name.trim(),
         email: addForm.email.trim().toLowerCase(),
         relationship: addForm.relationship.trim() || undefined,
@@ -166,12 +166,21 @@ export default function DigitalWillPage() {
       });
       await refresh();
       setAddOpen(false);
+      const targetEmail = addForm.email;
       setAddForm(EMPTY_FORM);
-      toast({
-        title: 'Beneficiary added',
-        description: `Verification email sent to ${addForm.email}. They must accept the role before the will can activate.`,
-        variant: 'success',
-      });
+      if (r.emailSent === false) {
+        toast({
+          title: 'Beneficiary added, email failed',
+          description: r.emailError || `Could not send verification email to ${targetEmail}. The beneficiary is saved — please ask them to verify another way, or remove and re-add to retry.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Beneficiary added',
+          description: `Verification email sent to ${targetEmail}. They must accept the role before the will can activate.`,
+          variant: 'success',
+        });
+      }
     } catch (e: any) {
       toast({ title: 'Failed to add', description: e?.message, variant: 'destructive' });
     } finally {
@@ -251,8 +260,16 @@ export default function DigitalWillPage() {
           cta={{
             label: 'Set up',
             onClick: async () => {
-              await configureWill({ isActive: false, inactivityPeriodDays: 30, personalMessage: '' });
-              await refresh();
+              try {
+                setSaving(true);
+                await configureWill({ isActive: false, inactivityPeriodDays: 30, personalMessage: '' });
+                await refresh();
+                toast({ title: 'Digital Will ready', description: 'Add your first beneficiary to enable the dead-man\'s switch.', variant: 'success' });
+              } catch (e: any) {
+                toast({ title: 'Setup failed', description: e?.message || 'Unable to initialize Digital Will. Make sure you\'re signed in to cloud sync.', variant: 'destructive' });
+              } finally {
+                setSaving(false);
+              }
             },
             icon: Plus,
           }}

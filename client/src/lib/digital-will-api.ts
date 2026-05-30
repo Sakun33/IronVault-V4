@@ -65,7 +65,7 @@ export function addBeneficiary(input: {
   relationship?: string;
   phone?: string;
   accessLevel?: string;
-}): Promise<{ success: boolean; beneficiary: WillBeneficiary }> {
+}): Promise<{ success: boolean; beneficiary: WillBeneficiary; emailSent?: boolean; emailError?: string | null }> {
   return call('/api/digital-will/beneficiaries', {
     method: 'POST',
     body: JSON.stringify(input),

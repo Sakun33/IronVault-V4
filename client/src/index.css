@@ -497,6 +497,125 @@ input:-webkit-autofill:active {
   background: linear-gradient(135deg, hsl(220, 14%, 96%) 0%, hsl(230, 25%, 93%) 50%, hsl(240, 20%, 95%) 100%);
 }
 
+/* =============================================
+   LIGHT-MODE RESCUE LAYER
+   ---------------------------------------------
+   Many components in this app were originally designed dark-only.
+   They hard-code colors like `text-white/70`, `bg-white/5`,
+   `text-emerald-300`, `border-white/10` etc. — those are invisible
+   or unreadable on a white background.
+
+   Instead of touching every page, redirect those utility classes
+   to foreground/border tokens whenever the root is NOT `.dark`.
+   This keeps dark mode untouched while making the app legible in
+   light mode globally.
+   ============================================= */
+
+/* Translucent white text → translucent foreground text */
+html:not(.dark) .text-white\/40,
+html:not(.dark) .text-white\/45 { color: hsl(var(--foreground) / 0.55); }
+html:not(.dark) .text-white\/50,
+html:not(.dark) .text-white\/55 { color: hsl(var(--foreground) / 0.6); }
+html:not(.dark) .text-white\/60 { color: hsl(var(--foreground) / 0.65); }
+html:not(.dark) .text-white\/65,
+html:not(.dark) .text-white\/70 { color: hsl(var(--foreground) / 0.72); }
+html:not(.dark) .text-white\/75,
+html:not(.dark) .text-white\/80,
+html:not(.dark) .text-white\/85,
+html:not(.dark) .text-white\/90 { color: hsl(var(--foreground) / 0.85); }
+
+/* Glass-card translucent backgrounds → translucent foreground tint */
+html:not(.dark) .bg-white\/\[0\.03\],
+html:not(.dark) .bg-white\/\[0\.04\],
+html:not(.dark) .bg-white\/\[0\.05\],
+html:not(.dark) .bg-white\/5 { background-color: hsl(var(--foreground) / 0.035); }
+html:not(.dark) .bg-white\/\[0\.06\],
+html:not(.dark) .bg-white\/\[0\.07\],
+html:not(.dark) .bg-white\/\[0\.08\],
+html:not(.dark) .bg-white\/10 { background-color: hsl(var(--foreground) / 0.06); }
+html:not(.dark) .bg-white\/15,
+html:not(.dark) .bg-white\/20 { background-color: hsl(var(--foreground) / 0.08); }
+
+/* Translucent white borders → translucent foreground borders */
+html:not(.dark) .border-white\/\[0\.06\],
+html:not(.dark) .border-white\/\[0\.08\],
+html:not(.dark) .border-white\/10 { border-color: hsl(var(--foreground) / 0.1); }
+html:not(.dark) .border-white\/15,
+html:not(.dark) .border-white\/20,
+html:not(.dark) .border-white\/25 { border-color: hsl(var(--foreground) / 0.14); }
+
+/* Hover surfaces */
+html:not(.dark) .hover\:bg-white\/5:hover { background-color: hsl(var(--foreground) / 0.04); }
+html:not(.dark) .hover\:bg-white\/10:hover { background-color: hsl(var(--foreground) / 0.06); }
+html:not(.dark) .hover\:bg-white\/\[0\.07\]:hover { background-color: hsl(var(--foreground) / 0.05); }
+
+/* Light-tinted accent text (designed for dark bg) → readable on white */
+html:not(.dark) .text-emerald-200,
+html:not(.dark) .text-emerald-300,
+html:not(.dark) .text-emerald-400 { color: hsl(160 84% 28%); }
+html:not(.dark) .text-rose-200,
+html:not(.dark) .text-rose-300,
+html:not(.dark) .text-rose-400 { color: hsl(346 78% 45%); }
+html:not(.dark) .text-amber-200,
+html:not(.dark) .text-amber-300,
+html:not(.dark) .text-amber-400 { color: hsl(33 92% 40%); }
+html:not(.dark) .text-yellow-200,
+html:not(.dark) .text-yellow-300,
+html:not(.dark) .text-yellow-400 { color: hsl(40 92% 35%); }
+html:not(.dark) .text-sky-200,
+html:not(.dark) .text-sky-300,
+html:not(.dark) .text-sky-400 { color: hsl(203 88% 38%); }
+html:not(.dark) .text-cyan-200,
+html:not(.dark) .text-cyan-300,
+html:not(.dark) .text-cyan-400 { color: hsl(192 90% 32%); }
+html:not(.dark) .text-violet-200,
+html:not(.dark) .text-violet-300,
+html:not(.dark) .text-violet-400 { color: hsl(263 70% 50%); }
+html:not(.dark) .text-purple-200,
+html:not(.dark) .text-purple-300,
+html:not(.dark) .text-purple-400 { color: hsl(270 70% 50%); }
+html:not(.dark) .text-fuchsia-200,
+html:not(.dark) .text-fuchsia-300,
+html:not(.dark) .text-fuchsia-400 { color: hsl(290 70% 45%); }
+html:not(.dark) .text-pink-200,
+html:not(.dark) .text-pink-300,
+html:not(.dark) .text-pink-400 { color: hsl(330 75% 45%); }
+html:not(.dark) .text-indigo-200,
+html:not(.dark) .text-indigo-300,
+html:not(.dark) .text-indigo-400 { color: hsl(238 70% 55%); }
+html:not(.dark) .text-blue-200,
+html:not(.dark) .text-blue-300,
+html:not(.dark) .text-blue-400 { color: hsl(217 80% 50%); }
+html:not(.dark) .text-orange-200,
+html:not(.dark) .text-orange-300,
+html:not(.dark) .text-orange-400 { color: hsl(24 88% 45%); }
+html:not(.dark) .text-red-200,
+html:not(.dark) .text-red-300,
+html:not(.dark) .text-red-400 { color: hsl(0 75% 50%); }
+html:not(.dark) .text-teal-200,
+html:not(.dark) .text-teal-300,
+html:not(.dark) .text-teal-400 { color: hsl(173 70% 33%); }
+html:not(.dark) .text-lime-200,
+html:not(.dark) .text-lime-300,
+html:not(.dark) .text-lime-400 { color: hsl(80 70% 30%); }
+
+/* text-gray-400/500 — generic muted text. Push into stronger contrast on white. */
+html:not(.dark) .text-gray-300,
+html:not(.dark) .text-gray-400 { color: hsl(var(--foreground) / 0.55); }
+html:not(.dark) .text-gray-500 { color: hsl(var(--foreground) / 0.7); }
+
+/* Black/X surfaces inside cards (e.g. inset secret rows) — on a light card these
+   already read fine; tighten the tint so they don't go almost-white. */
+html:not(.dark) .bg-black\/20 { background-color: hsl(var(--foreground) / 0.06); }
+html:not(.dark) .bg-black\/30,
+html:not(.dark) .bg-black\/40 { background-color: hsl(var(--foreground) / 0.08); }
+
+/* The active bottom-tab uses text-emerald-300 with a glowing drop-shadow that
+   doesn't read on white. Override the drop-shadow inside light mode. */
+html:not(.dark) [data-bottom-tabs] .drop-shadow-\[0_0_6px_rgba\(16\,185\,129\,0\.6\)\] {
+  filter: drop-shadow(0 0 6px hsl(160 84% 35% / 0.45));
+}
+
 .dark .gradient-bg {
   background: linear-gradient(135deg, hsl(224, 71%, 4%) 0%, hsl(230, 50%, 8%) 50%, hsl(240, 40%, 6%) 100%);
 }

@@ -5409,13 +5409,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [cloudUser.userId, name.trim().slice(0, 120), email.toLowerCase(), relationship?.trim().slice(0, 80) || null, phone?.trim().slice(0, 40) || null, level, verificationToken]
       );
       const b = rows[0];
+      let emailSent = false;
+      let emailError: string | null = null;
       if (b.status === 'pending' && b.verification_token) {
         const verifyLink = `${_APP_URL}/digital-will/verify?token=${encodeURIComponent(b.verification_token)}`;
         const tmpl = _willVerifyEmail(cloudUser.email, b.name, verifyLink);
-        sendEmail({ to: b.email, ...tmpl }).catch(() => {});
+        // Await the email so we can surface failures in the response. The
+        // sendEmail helper itself swallows the error and returns boolean —
+        // we treat false as a soft warning (the beneficiary row is saved
+        // either way; the owner can re-add to retry the email).
+        try {
+          emailSent = await sendEmail({ to: b.email, ...tmpl });
+          if (!emailSent) emailError = 'Verification email could not be sent — check Zoho SMTP credentials.';
+        } catch (e: any) {
+          emailError = e?.message || 'Email send failed';
+          console.error('[digital-will/beneficiaries] email send threw', e?.message);
+        }
+      } else if (b.status === 'verified') {
+        emailSent = true;
       }
       return res.json({
         success: true,
+        emailSent,
+        emailError,
         beneficiary: {
           id: b.id,
           name: b.name,
