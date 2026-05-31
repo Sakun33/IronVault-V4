@@ -1,418 +1,390 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useQuery } from "@tanstack/react-query";
 import {
-  RefreshCw, Users, DollarSign, TrendingUp, UserPlus, AlertTriangle,
-  Activity, ArrowUp, ArrowDown, MessageSquare, Mail, Bell, Tag, BarChart3,
-  Send, Clock, ArrowRight, Plus
-} from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { format } from 'date-fns';
+  Users,
+  TrendingUp,
+  DollarSign,
+  Database,
+  ArrowUpRight,
+  UserPlus,
+  Activity as ActivityIcon,
+  LifeBuoy,
+} from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+import { Link } from "react-router-dom";
+import { api } from "@/lib/api";
 
-interface KPIData {
-  totalCustomers: number;
-  activeCustomers: number;
-  totalRevenue: number;
-  newSignups: number;
-  churnRate: number;
-  mrr: number;
+interface Analytics {
+  users: {
+    total: number;
+    newToday: number;
+    newThisWeek: number;
+    newThisMonth: number;
+    active24h: number;
+    active7d: number;
+    active30d: number;
+    withVault: number;
+    suspended: number;
+  };
+  plans: Record<string, number>;
+  revenue: {
+    mrr: number;
+    lifetimeRevenue: number;
+    totalEstimated: number;
+    paidUsers: number;
+  };
+  vaults: {
+    totalCloudVaults: number;
+    activeVaultUsers7d: number;
+    usersWithCloudVault: number;
+  };
+  tickets: { total: number; open: number; resolved: number; closed: number };
+  signupTrend: { day: string; signups: number }[];
+  recentSignups: {
+    id: string;
+    email: string;
+    name: string;
+    country: string;
+    platform: string;
+    created_at: string;
+  }[];
 }
 
-const COLORS = {
-  primary: '#3b82f6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  info: '#06b6d4',
-  purple: '#8b5cf6'
+const PLAN_COLORS: Record<string, string> = {
+  free: "#64748b",
+  pro: "#3b82f6",
+  family: "#a855f7",
+  lifetime: "#f59e0b",
 };
 
-const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-
-function RecentActivityFeed() {
-  const { data: activities = [] } = useQuery({
-    queryKey: ['dashboard-activity'],
-    queryFn: async () => {
-      const response = await fetch('/api/activity-feed?limit=8', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
-      });
-      if (!response.ok) return [];
-      return response.json();
-    },
-    refetchInterval: 30000,
-  });
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'customer_signup': return <UserPlus className="h-4 w-4 text-green-500" />;
-      case 'ticket_created': return <MessageSquare className="h-4 w-4 text-orange-500" />;
-      case 'email_sent': return <Mail className="h-4 w-4 text-blue-500" />;
-      case 'notification': return <Bell className="h-4 w-4 text-purple-500" />;
-      default: return <Activity className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const formatTimeAgo = (dateString: string) => {
-    const diffMs = Date.now() - new Date(dateString).getTime();
-    const mins = Math.floor(diffMs / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
-
-  if (activities.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Activity className="h-8 w-8 mx-auto mb-2 opacity-20" />
-        <p className="text-sm">No recent activity</p>
-      </div>
-    );
-  }
-
+function StatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+}) {
   return (
-    <div className="space-y-1">
-      {activities.map((a: any, i: number) => (
-        <div key={`${a.type}-${a.resource_id}-${i}`} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
-          <div className="mt-0.5 flex-shrink-0">{getIcon(a.type)}</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{a.title}</p>
-            <p className="text-xs text-muted-foreground truncate">{a.description}</p>
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
           </div>
-          <span className="text-xs text-muted-foreground flex-shrink-0 flex items-center gap-1">
-            <Clock className="h-3 w-3" />{formatTimeAgo(a.timestamp)}
-          </span>
+          <div className="mt-2 text-2xl font-semibold tabular-nums">{value}</div>
+          {hint && (
+            <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+          )}
         </div>
-      ))}
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accent}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-
-  const { data: kpis, isLoading, refetch } = useQuery<KPIData>({
-    queryKey: ['dashboard-kpis'],
-    queryFn: async () => {
-      const response = await fetch('/api/dashboard/kpis', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch KPIs');
-      return response.json();
-    },
-    refetchInterval: 300000,
+  const { data, isLoading, error } = useQuery<Analytics>({
+    queryKey: ["admin-analytics"],
+    queryFn: () => api<Analytics>("/api/admin/analytics"),
+    refetchInterval: 60_000,
   });
-
-  const { data: analytics } = useQuery({
-    queryKey: ['dashboard-analytics'],
-    queryFn: async () => {
-      const response = await fetch('/api/dashboard/analytics', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch analytics');
-      return response.json();
-    },
-  });
-
-  // Calculate plan distribution from real data - MUST be before early return
-  const planDistribution = React.useMemo(() => {
-    if (!analytics?.planStats) return [];
-    
-    const planStats = analytics.planStats;
-    const total: number = Object.values(planStats).reduce((sum: number, count: any) => sum + (Number(count) || 0), 0) as number;
-    
-    if (total === 0) return [];
-    
-    return Object.entries(planStats).map(([name, value]: [string, any]) => {
-      const numValue = Number(value) || 0;
-      return {
-        name,
-        value: numValue,
-        percentage: total > 0 ? Math.round((numValue / total) * 100) : 0
-      };
-    });
-  }, [analytics]);
-
-  const handleRefresh = () => {
-    refetch();
-  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-lg font-medium text-foreground">Loading dashboard...</p>
+      <div className="space-y-4">
+        <div className="h-9 w-48 animate-pulse rounded bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+          ))}
         </div>
       </div>
     );
   }
 
-  const kpiCards = [
-    {
-      title: 'Total Customers',
-      value: (kpis?.totalCustomers || 0).toLocaleString(),
-      icon: Users,
-      color: COLORS.primary,
-      bgColor: 'bg-blue-50 dark:bg-blue-950/20',
-    },
-    {
-      title: 'Active Customers',
-      value: (kpis?.activeCustomers || 0).toLocaleString(),
-      icon: Activity,
-      color: COLORS.success,
-      bgColor: 'bg-green-50 dark:bg-green-950/20',
-    },
-    {
-      title: 'Monthly Revenue (MRR)',
-      value: `$${(kpis?.mrr || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      icon: DollarSign,
-      color: COLORS.purple,
-      bgColor: 'bg-purple-50 dark:bg-purple-950/20',
-    },
-    {
-      title: 'New Signups (24h)',
-      value: (kpis?.newSignups || 0).toLocaleString(),
-      icon: UserPlus,
-      color: COLORS.warning,
-      bgColor: 'bg-orange-50 dark:bg-orange-950/20',
-    },
-    {
-      title: 'Churn Rate',
-      value: `${(kpis?.churnRate || 0).toFixed(1)}%`,
-      icon: AlertTriangle,
-      color: COLORS.danger,
-      bgColor: 'bg-red-50 dark:bg-red-950/20',
-    },
-    {
-      title: 'Total Revenue',
-      value: `$${(kpis?.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      icon: TrendingUp,
-      color: COLORS.info,
-      bgColor: 'bg-cyan-50 dark:bg-cyan-950/20',
-    },
-  ];
+  if (error || !data) {
+    return (
+      <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive">
+        Failed to load analytics: {(error as Error)?.message || "Unknown error"}
+      </div>
+    );
+  }
 
-  // Use real analytics data or empty arrays if no data
-  const dailyActiveUsers = analytics?.dailyActivity || [];
+  const planData = Object.entries(data.plans)
+    .filter(([, c]) => c > 0)
+    .map(([name, value]) => ({ name, value }));
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1.5">Welcome back! Here's your business overview.</p>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Live view of IronVault users, plans, and activity.
+          </p>
         </div>
-        <Button onClick={handleRefresh} variant="outline" size="default" className="shadow-sm hover:shadow-md transition-all">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh Data
-        </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-        {kpiCards.map((card, index) => (
-          <Card key={index} className="border shadow-sm hover:shadow-md transition-all duration-200">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">
-                    {card.title}
-                  </p>
-                  <h3 className="text-2xl font-bold text-foreground">
-                    {card.value}
-                  </h3>
-                </div>
-                <div className={`p-3 rounded-xl ${card.bgColor}`}>
-                  <card.icon className="h-6 w-6" style={{ color: card.color }} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total Users"
+          value={data.users.total.toLocaleString()}
+          hint={`+${data.users.newToday} today · +${data.users.newThisWeek} this week`}
+          icon={Users}
+          accent="bg-blue-500/15 text-blue-400"
+        />
+        <StatCard
+          label="Active (30d)"
+          value={data.users.active30d.toLocaleString()}
+          hint={`${data.users.active7d} in last 7 days`}
+          icon={TrendingUp}
+          accent="bg-emerald-500/15 text-emerald-400"
+        />
+        <StatCard
+          label="Paid Users"
+          value={data.revenue.paidUsers.toLocaleString()}
+          hint={`MRR ~$${data.revenue.mrr.toFixed(2)}`}
+          icon={DollarSign}
+          accent="bg-amber-500/15 text-amber-400"
+        />
+        <StatCard
+          label="Cloud Vaults"
+          value={data.vaults.totalCloudVaults.toLocaleString()}
+          hint={`${data.vaults.activeVaultUsers7d} active in last 7d`}
+          icon={Database}
+          accent="bg-purple-500/15 text-purple-400"
+        />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily Active Users Chart */}
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Daily Active Users</CardTitle>
-            <p className="text-sm text-muted-foreground">User activity over the past week</p>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {dailyActiveUsers && dailyActiveUsers.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyActiveUsers}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis 
-                      dataKey="date" 
-                      className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <YAxis 
-                      className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--popover))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        color: 'hsl(var(--popover-foreground))'
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="users" 
-                      stroke={COLORS.primary}
-                      strokeWidth={3}
-                      dot={{ fill: COLORS.primary, r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  <div className="text-center">
-                    <Activity className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">No activity data yet</p>
-                    <p className="text-xs mt-1">Data will appear as customers use the app</p>
-                  </div>
-                </div>
-              )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Signups — last 30 days</h2>
+              <p className="text-xs text-muted-foreground">
+                {data.users.newThisMonth.toLocaleString()} new accounts this month
+              </p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Plan Distribution Chart */}
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Plan Distribution</CardTitle>
-            <p className="text-sm text-muted-foreground">Customer distribution across plans</p>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px] flex items-center justify-center">
-              {planDistribution && planDistribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={planDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percentage }) => `${name}: ${percentage}%`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {planDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--popover))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        color: 'hsl(var(--popover-foreground))'
-                      }}
-                    />
-                    <Legend 
-                      wrapperStyle={{
-                        paddingTop: '20px',
-                        fontSize: '14px',
-                        color: 'hsl(var(--foreground))'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">No customers yet</p>
-                  <p className="text-xs mt-1">Plan distribution will appear here once customers sign up</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Plan Details Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {planDistribution.map((plan, index) => (
-          <Card key={index} className="border shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold text-foreground">{plan.name}</h4>
-                <div 
-                  className="h-3 w-3 rounded-full" 
-                  style={{ backgroundColor: PIE_COLORS[index] }}
+            <Link
+              to="/analytics"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              Open analytics <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="mt-4 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.signupTrend}>
+                <defs>
+                  <linearGradient id="signupGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={11}
+                  tickFormatter={(v) => v.slice(5)}
                 />
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={11}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="signups"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fill="url(#signupGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-base font-semibold">Plan distribution</h2>
+          <p className="text-xs text-muted-foreground">
+            {data.revenue.paidUsers.toLocaleString()} paid · {(data.plans.free || 0).toLocaleString()} free
+          </p>
+          <div className="mt-4 h-64">
+            {planData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                No data yet
               </div>
-              <p className="text-2xl font-bold text-foreground mb-1">
-                {plan.value.toLocaleString()}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {plan.percentage}% of total
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={planData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  >
+                    {planData.map((entry) => (
+                      <Cell
+                        key={entry.name}
+                        fill={PLAN_COLORS[entry.name] || "#64748b"}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Legend
+                    iconType="circle"
+                    wrapperStyle={{ fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Quick Actions + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Actions */}
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/customers')}>
-              <Users className="h-4 w-4 mr-3 text-blue-500" />View Customers
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/support')}>
-              <MessageSquare className="h-4 w-4 mr-3 text-orange-500" />Manage Tickets
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/analytics')}>
-              <BarChart3 className="h-4 w-4 mr-3 text-purple-500" />View Analytics
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/email-center')}>
-              <Mail className="h-4 w-4 mr-3 text-green-500" />Email Center
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/notifications')}>
-              <Bell className="h-4 w-4 mr-3 text-cyan-500" />Send Broadcast
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/promotions')}>
-              <Tag className="h-4 w-4 mr-3 text-pink-500" />Manage Promos
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold">Recent signups</h2>
+            <Link
+              to="/users"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              View all
+            </Link>
+          </div>
+          <ul className="divide-y divide-border">
+            {data.recentSignups.length === 0 && (
+              <li className="px-5 py-8 text-center text-sm text-muted-foreground">
+                No signups yet
+              </li>
+            )}
+            {data.recentSignups.map((u) => (
+              <li
+                key={u.id}
+                className="flex items-center gap-3 px-5 py-3 hover:bg-accent/40"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                  <UserPlus className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{u.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{u.email}</div>
+                </div>
+                <div className="hidden text-xs text-muted-foreground sm:block">
+                  {u.platform || "web"}
+                </div>
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  {new Date(u.created_at).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
 
-        {/* Recent Activity Feed */}
-        <Card className="border shadow-sm lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/activity')}>
-              View All <ArrowRight className="h-3 w-3 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <RecentActivityFeed />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-base font-semibold">
+              <LifeBuoy className="h-4 w-4 text-amber-400" /> Tickets
+            </div>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Open</dt>
+                <dd className="font-medium">{data.tickets.open}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Resolved</dt>
+                <dd className="font-medium">{data.tickets.resolved}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Closed</dt>
+                <dd className="font-medium">{data.tickets.closed}</dd>
+              </div>
+              <div className="flex items-center justify-between border-t border-border pt-2">
+                <dt className="font-medium">Total</dt>
+                <dd className="font-semibold">{data.tickets.total}</dd>
+              </div>
+            </dl>
+            <Link
+              to="/tickets"
+              className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              Open tickets <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-base font-semibold">
+              <ActivityIcon className="h-4 w-4 text-emerald-400" /> Health
+            </div>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Users w/ vault</dt>
+                <dd className="font-medium">{data.users.withVault.toLocaleString()}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Suspended</dt>
+                <dd className="font-medium">{data.users.suspended.toLocaleString()}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Active vault users (7d)</dt>
+                <dd className="font-medium">
+                  {data.vaults.activeVaultUsers7d.toLocaleString()}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Lifetime revenue</dt>
+                <dd className="font-medium">
+                  ${data.revenue.lifetimeRevenue.toFixed(2)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1253,6 +1253,409 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(501).json({ error: "Not implemented" });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW ADMIN ENDPOINTS (v2) — richer analytics, user management, activity
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── GET /api/admin/analytics ────────────────────────────────────────────────
+  // Returns a single payload powering the revamped Dashboard + Analytics pages:
+  //   totals, plan distribution, signup trends (last 30 days, daily buckets),
+  //   recent signups, active users (24h/7d/30d), revenue, vault stats,
+  //   popular sections (top section types stored in cloud), open tickets.
+  if (path === "/api/admin/analytics" && method === "GET") {
+    try {
+      const [
+        totals,
+        planDist,
+        signupTrend,
+        recentSignups,
+        active,
+        ticketSummary,
+        vaultStats,
+        revenueRows,
+      ] = await Promise.all([
+        db.query(`
+          SELECT
+            COUNT(*)::int AS total_users,
+            COUNT(*) FILTER (WHERE u.created_at >= NOW() - INTERVAL '1 day')::int AS new_today,
+            COUNT(*) FILTER (WHERE u.created_at >= NOW() - INTERVAL '7 days')::int AS new_week,
+            COUNT(*) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days')::int AS new_month,
+            COUNT(*) FILTER (WHERE u.last_active_at >= NOW() - INTERVAL '1 day')::int AS active_24h,
+            COUNT(*) FILTER (WHERE u.last_active_at >= NOW() - INTERVAL '7 days')::int AS active_7d,
+            COUNT(*) FILTER (WHERE u.last_active_at >= NOW() - INTERVAL '30 days')::int AS active_30d,
+            COUNT(*) FILTER (WHERE u.vault_created_at IS NOT NULL)::int AS users_with_vault,
+            COUNT(*) FILTER (WHERE COALESCE(u.account_status,'active') = 'suspended')::int AS suspended
+          FROM crm_users u
+        `),
+        db.query(`
+          SELECT LOWER(COALESCE(e.plan,'free')) AS plan, COUNT(*)::int AS c
+          FROM crm_users u
+          LEFT JOIN entitlements e ON e.user_id = u.id
+          GROUP BY 1
+        `),
+        db.query(`
+          SELECT to_char(date_trunc('day', u.created_at), 'YYYY-MM-DD') AS day,
+                 COUNT(*)::int AS signups
+          FROM crm_users u
+          WHERE u.created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY 1
+          ORDER BY 1 ASC
+        `),
+        db.query(`
+          SELECT id, email, COALESCE(full_name, split_part(email,'@',1)) AS name,
+                 country, platform, created_at
+          FROM crm_users
+          ORDER BY created_at DESC
+          LIMIT 8
+        `),
+        db.query(`
+          SELECT COUNT(DISTINCT user_id)::int AS active_vault_users_7d
+          FROM cloud_vaults
+          WHERE server_updated_at >= NOW() - INTERVAL '7 days'
+        `).catch(() => ({ rows: [{ active_vault_users_7d: 0 }] })),
+        db.query(`
+          SELECT COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE status='open')::int AS open,
+                 COUNT(*) FILTER (WHERE status='resolved')::int AS resolved,
+                 COUNT(*) FILTER (WHERE status='closed')::int AS closed
+          FROM tickets
+        `).catch(() => ({ rows: [{ total: 0, open: 0, resolved: 0, closed: 0 }] })),
+        db.query(`
+          SELECT COUNT(*)::int AS cloud_vault_count,
+                 COUNT(DISTINCT user_id)::int AS users_with_cloud_vault
+          FROM cloud_vaults
+        `).catch(() => ({ rows: [{ cloud_vault_count: 0, users_with_cloud_vault: 0 }] })),
+        db.query(`
+          SELECT LOWER(COALESCE(plan,'free')) AS plan, COUNT(*)::int AS c
+          FROM entitlements
+          GROUP BY 1
+        `).catch(() => ({ rows: [] as any[] })),
+      ]);
+
+      // Plan distribution — merge premium→pro into a single bucket.
+      const planMap: Record<string, number> = { free: 0, pro: 0, family: 0, lifetime: 0 };
+      for (const r of planDist.rows) {
+        const key = r.plan === "premium" ? "pro" : r.plan;
+        planMap[key] = (planMap[key] || 0) + Number(r.c);
+      }
+
+      // Revenue (estimated from entitlements + canonical PLANS prices).
+      const proPrice = PLANS.find(p => p.id === "pro")?.price ?? 0;
+      const familyPrice = PLANS.find(p => p.id === "family")?.price ?? 0;
+      const lifetimePrice = PLANS.find(p => p.id === "lifetime")?.price ?? 0;
+      const revMap: Record<string, number> = {};
+      for (const r of revenueRows.rows) {
+        const key = r.plan === "premium" ? "pro" : r.plan;
+        revMap[key] = (revMap[key] || 0) + Number(r.c);
+      }
+      const mrr = Number((((revMap.pro || 0) * proPrice) + ((revMap.family || 0) * familyPrice)).toFixed(2));
+      const lifetimeRevenue = Number(((revMap.lifetime || 0) * lifetimePrice).toFixed(2));
+      const totalRevenue = Number((mrr * 12 + lifetimeRevenue).toFixed(2));
+
+      // Densify signup trend so the chart always has 30 datapoints (zeros for
+      // days with no signups). Cleaner than a sparse line.
+      const trendByDay: Record<string, number> = {};
+      for (const r of signupTrend.rows) trendByDay[r.day] = Number(r.signups);
+      const trend: { day: string; signups: number }[] = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(); d.setUTCDate(d.getUTCDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        trend.push({ day: key, signups: trendByDay[key] || 0 });
+      }
+
+      const t = totals.rows[0];
+      const tk = ticketSummary.rows[0];
+      const vs = vaultStats.rows[0];
+      return res.json({
+        users: {
+          total: t.total_users,
+          newToday: t.new_today,
+          newThisWeek: t.new_week,
+          newThisMonth: t.new_month,
+          active24h: t.active_24h,
+          active7d: t.active_7d,
+          active30d: t.active_30d,
+          withVault: t.users_with_vault,
+          suspended: t.suspended,
+        },
+        plans: planMap,
+        revenue: {
+          mrr,
+          lifetimeRevenue,
+          totalEstimated: totalRevenue,
+          paidUsers: (revMap.pro || 0) + (revMap.family || 0) + (revMap.lifetime || 0),
+        },
+        vaults: {
+          totalCloudVaults: Number(vs.cloud_vault_count),
+          activeVaultUsers7d: Number(active.rows[0]?.active_vault_users_7d ?? 0),
+          usersWithCloudVault: Number(vs.users_with_cloud_vault),
+        },
+        tickets: {
+          total: tk.total, open: tk.open, resolved: tk.resolved, closed: tk.closed,
+        },
+        signupTrend: trend,
+        recentSignups: recentSignups.rows,
+      });
+    } catch (err: any) {
+      console.error("[admin/analytics]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/users ────────────────────────────────────────────────────
+  // Paginated user list with search + plan/status filters. Returns vault count
+  // alongside each row so the table can show it without N+1 queries.
+  if (path === "/api/admin/users" && method === "GET") {
+    try {
+      const q = req.query as Record<string, string>;
+      const search = (q.search || "").trim();
+      const planFilter = (q.plan || "").toLowerCase().trim();
+      const statusFilter = (q.status || "").toLowerCase().trim();
+      const page = Math.max(1, parseInt(q.page || "1", 10) || 1);
+      const limit = Math.max(1, Math.min(200, parseInt(q.limit || "25", 10) || 25));
+      const offset = (page - 1) * limit;
+
+      const conds: string[] = [];
+      const vals: any[] = [];
+      if (search) {
+        vals.push(`%${search}%`);
+        conds.push(`(u.email ILIKE $${vals.length} OR u.full_name ILIKE $${vals.length})`);
+      }
+      if (planFilter && planFilter !== "all") {
+        // Map UI 'pro' → DB 'premium' for compat with existing entitlement rows.
+        const dbPlan = planFilter === "pro" ? "premium" : planFilter;
+        vals.push(dbPlan, planFilter);
+        conds.push(`(LOWER(COALESCE(e.plan,'free')) = $${vals.length - 1} OR LOWER(COALESCE(e.plan,'free')) = $${vals.length})`);
+      }
+      if (statusFilter && statusFilter !== "all") {
+        vals.push(statusFilter);
+        conds.push(`LOWER(COALESCE(u.account_status,'active')) = $${vals.length}`);
+      }
+      const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+
+      const dataVals = vals.slice();
+      dataVals.push(limit, offset);
+      const [{ rows }, { rows: totalRows }] = await Promise.all([
+        db.query(
+          `SELECT u.id,
+                  u.email,
+                  COALESCE(u.full_name, split_part(u.email,'@',1)) AS name,
+                  u.country,
+                  u.platform,
+                  COALESCE(u.account_status,'active') AS status,
+                  u.created_at,
+                  u.last_active_at,
+                  u.vault_created_at IS NOT NULL AS has_vault,
+                  CASE
+                    WHEN LOWER(COALESCE(e.plan,'free')) = 'premium' THEN 'pro'
+                    ELSE LOWER(COALESCE(e.plan,'free'))
+                  END AS plan,
+                  COALESCE((SELECT COUNT(*) FROM cloud_vaults cv WHERE cv.user_id = u.id), 0)::int AS vault_count
+           FROM crm_users u
+           LEFT JOIN entitlements e ON e.user_id = u.id
+           ${where}
+           ORDER BY u.created_at DESC
+           LIMIT $${dataVals.length - 1} OFFSET $${dataVals.length}`,
+          dataVals
+        ),
+        db.query(
+          `SELECT COUNT(*)::int AS c
+           FROM crm_users u
+           LEFT JOIN entitlements e ON e.user_id = u.id
+           ${where}`,
+          vals
+        ),
+      ]);
+
+      const total = totalRows[0]?.c ?? 0;
+      return res.json({
+        users: rows,
+        total,
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      });
+    } catch (err: any) {
+      console.error("[admin/users list]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── /api/admin/users/:id (GET / DELETE) ────────────────────────────────────
+  const adminUserMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUserMatch) {
+    const id = adminUserMatch[1];
+
+    if (method === "GET") {
+      try {
+        const { rows } = await db.query(
+          `SELECT u.id, u.email,
+                  COALESCE(u.full_name, split_part(u.email,'@',1)) AS name,
+                  u.phone, u.country, u.platform,
+                  COALESCE(u.account_status,'active') AS status,
+                  u.created_at, u.last_active_at, u.vault_created_at,
+                  CASE
+                    WHEN LOWER(COALESCE(e.plan,'free')) = 'premium' THEN 'pro'
+                    ELSE LOWER(COALESCE(e.plan,'free'))
+                  END AS plan,
+                  COALESCE(e.status, 'inactive') AS plan_status,
+                  COALESCE(e.admin_override, false) AS admin_override,
+                  COALESCE((SELECT COUNT(*) FROM cloud_vaults cv WHERE cv.user_id = u.id), 0)::int AS vault_count
+           FROM crm_users u
+           LEFT JOIN entitlements e ON e.user_id = u.id
+           WHERE u.id = $1`,
+          [id]
+        );
+        if (!rows[0]) return res.status(404).json({ error: "User not found" });
+        return res.json(rows[0]);
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+
+    if (method === "DELETE") {
+      // Hard delete: removes the user row and lets CASCADE clean up entitlements,
+      // family_invites, etc. Tickets/customers mirror gets a best-effort cleanup
+      // so orphan support data doesn't linger.
+      try {
+        await db.query(`DELETE FROM customer_notes WHERE customer_id = $1`, [id]).catch(() => {});
+        await db.query(`DELETE FROM ticket_replies WHERE ticket_id IN (SELECT id FROM tickets WHERE customer_id = $1)`, [id]).catch(() => {});
+        await db.query(`DELETE FROM tickets WHERE customer_id = $1`, [id]).catch(() => {});
+        await db.query(`DELETE FROM cloud_vaults WHERE user_id = $1`, [id]).catch(() => {});
+        await db.query(`DELETE FROM entitlements WHERE user_id = $1`, [id]).catch(() => {});
+        await db.query(`DELETE FROM customers WHERE id = $1`, [id]).catch(() => {});
+        const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [id]);
+        if (!rowCount) return res.status(404).json({ error: "User not found" });
+        return res.json({ success: true });
+      } catch (err: any) { return res.status(500).json({ error: err.message }); }
+    }
+  }
+
+  // ── POST /api/admin/users/:id/block ────────────────────────────────────────
+  // Toggle account_status between 'active' and 'suspended'. Body { action:
+  // 'block' | 'unblock' } makes the intent explicit; without it we toggle.
+  const adminUserBlockMatch = path.match(/^\/api\/admin\/users\/([^/]+)\/block$/);
+  if (adminUserBlockMatch && method === "POST") {
+    const id = adminUserBlockMatch[1];
+    try {
+      const { rows: cur } = await db.query(
+        `SELECT COALESCE(account_status,'active') AS status, email FROM crm_users WHERE id = $1`,
+        [id]
+      );
+      if (!cur[0]) return res.status(404).json({ error: "User not found" });
+      const body = (req.body as { action?: string }) || {};
+      const wantBlock = body.action === "block"
+        ? true
+        : body.action === "unblock"
+          ? false
+          : cur[0].status !== "suspended";
+      const newStatus = wantBlock ? "suspended" : "active";
+      await db.query(
+        `UPDATE crm_users SET account_status = $1, updated_at = NOW() WHERE id = $2`,
+        [newStatus, id]
+      );
+      // Audit log (best-effort).
+      await db.query(
+        `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
+         VALUES ($1, $2, $3, 'admin', $4)`,
+        [cur[0].email, `status:${cur[0].status}`, `status:${newStatus}`, wantBlock ? "blocked by admin" : "unblocked by admin"]
+      ).catch(() => {});
+      return res.json({ success: true, status: newStatus });
+    } catch (err: any) { return res.status(500).json({ error: err.message }); }
+  }
+
+  // ── GET /api/admin/activity ────────────────────────────────────────────────
+  // Unified feed: signups + plan changes + tickets opened. Ordered newest first.
+  if (path === "/api/admin/activity" && method === "GET") {
+    try {
+      const limit = Math.min(100, parseInt((req.query.limit as string) || "50", 10) || 50);
+      const [signups, planChanges, ticketEvents] = await Promise.all([
+        db.query(
+          `SELECT id, email, created_at FROM crm_users
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ),
+        db.query(
+          `SELECT customer_email, old_plan, new_plan, changed_by, reason, created_at
+           FROM plan_audit_log ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] as any[] })),
+        db.query(
+          `SELECT id, subject, status, customer_email, created_at FROM tickets
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] as any[] })),
+      ]);
+      const events: any[] = [];
+      for (const r of signups.rows) {
+        events.push({
+          type: "signup",
+          title: "New user signup",
+          subject: r.email,
+          timestamp: r.created_at,
+        });
+      }
+      for (const r of planChanges.rows) {
+        events.push({
+          type: r.old_plan?.startsWith("status:") ? "status_change" : "plan_change",
+          title: r.old_plan?.startsWith("status:")
+            ? `Account ${r.new_plan?.replace("status:", "")}`
+            : `Plan: ${r.old_plan || "free"} → ${r.new_plan}`,
+          subject: r.customer_email,
+          actor: r.changed_by,
+          reason: r.reason,
+          timestamp: r.created_at,
+        });
+      }
+      for (const r of ticketEvents.rows) {
+        events.push({
+          type: "ticket",
+          title: `Ticket: ${r.subject}`,
+          subject: r.customer_email,
+          status: r.status,
+          timestamp: r.created_at,
+        });
+      }
+      events.sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
+      return res.json({ events: events.slice(0, limit), total: events.length });
+    } catch (err: any) {
+      console.error("[admin/activity]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/tickets ─────────────────────────────────────────────────
+  // Lightweight wrapper around /api/tickets that includes counts and a status
+  // filter — used by the new Tickets page.
+  if (path === "/api/admin/tickets" && method === "GET") {
+    try {
+      const statusFilter = (req.query.status as string || "").toLowerCase().trim();
+      const limit = Math.min(200, parseInt((req.query.limit as string) || "50", 10) || 50);
+      const conds: string[] = [];
+      const vals: any[] = [];
+      if (statusFilter && statusFilter !== "all") {
+        vals.push(statusFilter);
+        conds.push(`t.status = $${vals.length}`);
+      }
+      vals.push(limit);
+      const { rows } = await db.query(
+        `SELECT t.id, t.subject, t.description, t.status, t.priority,
+                t.customer_email, t.created_at, t.updated_at, t.resolved_at,
+                c.full_name AS customer_name
+         FROM tickets t
+         LEFT JOIN customers c ON t.customer_id = c.id
+         ${conds.length ? `WHERE ${conds.join(" AND ")}` : ""}
+         ORDER BY t.created_at DESC
+         LIMIT $${vals.length}`,
+        vals
+      );
+      const { rows: counts } = await db.query(
+        `SELECT status, COUNT(*)::int AS c FROM tickets GROUP BY status`
+      ).catch(() => ({ rows: [] as any[] }));
+      const countMap: Record<string, number> = { open: 0, resolved: 0, closed: 0, pending: 0 };
+      for (const r of counts) countMap[r.status] = Number(r.c);
+      return res.json({ tickets: rows, counts: countMap, total: rows.length });
+    } catch (err: any) {
+      console.error("[admin/tickets]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   return res.status(404).json({ error: "not found", path });
 }
 // deploy trigger 1777630504

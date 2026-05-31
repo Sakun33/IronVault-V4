@@ -1,36 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from '@/components/theme-provider';
-import { Toaster } from '@/components/ui/toaster';
-import LoginPage from './pages/LoginPage';
-import Dashboard from './pages/Dashboard';
-import CustomersPage from './pages/CustomersPage';
-import CustomerDetailPage from './pages/CustomerDetailPage';
-import PlansPage from './pages/PlansPage';
-import SupportTicketsPage from './pages/SupportTicketsPage';
-import NotificationsPage from './pages/NotificationsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import EmailCenterPage from './pages/EmailCenterPage';
-import PromotionsPage from './pages/PromotionsPage';
-import ActivityLogPage from './pages/ActivityLogPage';
-import SettingsPage from './pages/SettingsPage';
-import Layout from './components/Layout';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import './App.css';
+import { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
+import LoginPage from "./pages/LoginPage";
+import Dashboard from "./pages/Dashboard";
+import UsersPage from "./pages/UsersPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import TicketsPage from "./pages/TicketsPage";
+import ActivityPage from "./pages/ActivityPage";
+import SettingsPage from "./pages/SettingsPage";
+import Layout from "./components/Layout";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import "./App.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 30000,
+      staleTime: 30_000,
     },
   },
 });
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginPage />;
@@ -40,15 +43,10 @@ function AppRoutes() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/customers/:id" element={<CustomerDetailPage />} />
-        <Route path="/plans" element={<PlansPage />} />
-        <Route path="/support" element={<SupportTicketsPage />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/email-center" element={<EmailCenterPage />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/promotions" element={<PromotionsPage />} />
-        <Route path="/activity" element={<ActivityLogPage />} />
+        <Route path="/tickets" element={<TicketsPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -56,10 +54,18 @@ function AppRoutes() {
   );
 }
 
+function ForceDarkMode() {
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+  }, []);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="admin-ui-theme">
+      <ThemeProvider defaultTheme="dark" storageKey="admin-ui-theme">
+        <ForceDarkMode />
         <AuthProvider>
           <Router>
             <div className="min-h-screen bg-background">

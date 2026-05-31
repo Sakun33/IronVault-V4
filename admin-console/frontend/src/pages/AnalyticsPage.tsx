@@ -1,423 +1,230 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart3, TrendingUp, Users, Globe, DollarSign, Activity,
-  ArrowUp, ArrowDown, RefreshCw, PieChart as PieChartIcon, Target
-} from 'lucide-react';
-import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area
-} from 'recharts';
-import { format } from 'date-fns';
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+import { Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+interface Analytics {
+  users: {
+    total: number;
+    newToday: number;
+    newThisWeek: number;
+    newThisMonth: number;
+    active24h: number;
+    active7d: number;
+    active30d: number;
+    withVault: number;
+    suspended: number;
+  };
+  plans: Record<string, number>;
+  revenue: { mrr: number; lifetimeRevenue: number; totalEstimated: number; paidUsers: number };
+  vaults: { totalCloudVaults: number; activeVaultUsers7d: number; usersWithCloudVault: number };
+  tickets: { total: number; open: number; resolved: number; closed: number };
+  signupTrend: { day: string; signups: number }[];
+}
 
-const fetchWithAuth = async (url: string) => {
-  const response = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
-  });
-  if (!response.ok) throw new Error('Failed to fetch');
-  return response.json();
+const PLAN_COLORS: Record<string, string> = {
+  free: "#64748b",
+  pro: "#3b82f6",
+  family: "#a855f7",
+  lifetime: "#f59e0b",
 };
 
+const tooltipStyle = {
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: 8,
+  fontSize: 12,
+};
+
+function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1.5 text-xl font-semibold tabular-nums">{value}</div>
+      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
-  const [period, setPeriod] = useState('30');
-
-  const { data: revenue, isLoading: revLoading } = useQuery({
-    queryKey: ['analytics-revenue', period],
-    queryFn: () => fetchWithAuth(`/api/analytics/revenue?period=${period}`),
+  const { data, isLoading, error } = useQuery<Analytics>({
+    queryKey: ["admin-analytics"],
+    queryFn: () => api<Analytics>("/api/admin/analytics"),
+    refetchInterval: 60_000,
   });
-
-  const { data: users, isLoading: usersLoading } = useQuery({
-    queryKey: ['analytics-users'],
-    queryFn: () => fetchWithAuth('/api/analytics/users'),
-  });
-
-  const { data: geo } = useQuery({
-    queryKey: ['analytics-geo'],
-    queryFn: () => fetchWithAuth('/api/analytics/geo'),
-  });
-
-  const { data: engagement } = useQuery({
-    queryKey: ['analytics-engagement'],
-    queryFn: () => fetchWithAuth('/api/analytics/engagement'),
-  });
-
-  const isLoading = revLoading || usersLoading;
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-lg font-medium">Loading analytics...</p>
-        </div>
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  const totals = revenue?.totals || {};
-  const actBreakdown = engagement?.activityBreakdown || {};
+  if (error || !data) {
+    return (
+      <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive">
+        Failed to load analytics: {(error as Error)?.message || "Unknown error"}
+      </div>
+    );
+  }
+
+  const planData = Object.entries(data.plans)
+    .filter(([, c]) => c > 0)
+    .map(([name, value]) => ({ name, value }));
+
+  const weeks: { week: string; signups: number }[] = [];
+  for (let i = 0; i < 4; i++) {
+    const slice = data.signupTrend.slice(i * 7, i * 7 + 7);
+    if (!slice.length) continue;
+    weeks.push({
+      week: `W${i + 1}`,
+      signups: slice.reduce((s, r) => s + r.signups, 0),
+    });
+  }
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics & Reports</h1>
-          <p className="text-muted-foreground mt-1">Deep insights into your business performance</p>
-        </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Analytics</h1>
+        <p className="text-sm text-muted-foreground">
+          Growth, retention, plan mix, and revenue.
+        </p>
       </div>
 
-      <Tabs defaultValue="revenue" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="revenue" className="flex items-center gap-2"><DollarSign className="h-4 w-4" />Revenue</TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center gap-2"><Users className="h-4 w-4" />Users</TabsTrigger>
-          <TabsTrigger value="geo" className="flex items-center gap-2"><Globe className="h-4 w-4" />Geography</TabsTrigger>
-          <TabsTrigger value="engagement" className="flex items-center gap-2"><Activity className="h-4 w-4" />Engagement</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <Tile label="Total" value={data.users.total.toLocaleString()} />
+        <Tile label="New today" value={data.users.newToday.toLocaleString()} />
+        <Tile label="New this week" value={data.users.newThisWeek.toLocaleString()} />
+        <Tile label="New this month" value={data.users.newThisMonth.toLocaleString()} />
+        <Tile label="Active 7d" value={data.users.active7d.toLocaleString()} />
+        <Tile label="Active 30d" value={data.users.active30d.toLocaleString()} />
+      </div>
 
-        {/* REVENUE TAB */}
-        <TabsContent value="revenue" className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">MRR</p>
-                    <p className="text-2xl font-bold">${parseFloat(totals.mrr || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/20">
-                    <DollarSign className="h-5 w-5 text-blue-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">ARR</p>
-                    <p className="text-2xl font-bold">${parseFloat(totals.arr || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-green-50 dark:bg-green-950/20">
-                    <TrendingUp className="h-5 w-5 text-green-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">ARPU</p>
-                    <p className="text-2xl font-bold">${totals.arpu || '0.00'}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/20">
-                    <Target className="h-5 w-5 text-purple-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Paying Customers</p>
-                    <p className="text-2xl font-bold">{totals.paying_customers || 0}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20">
-                    <Users className="h-5 w-5 text-orange-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
+          <h2 className="text-base font-semibold">Daily signups (30d)</h2>
+          <div className="mt-4 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.signupTrend}>
+                <defs>
+                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={11}
+                  tickFormatter={(v) => v.slice(5)}
+                />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area type="monotone" dataKey="signups" stroke="#3b82f6" strokeWidth={2} fill="url(#g1)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Revenue Trend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {revenue?.revenueTrend?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={revenue.revenueTrend.map((r: any) => ({ ...r, date: format(new Date(r.date), 'MMM d'), revenue: parseFloat(r.revenue) }))}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--popover-foreground))' }} />
-                        <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="#3b82f680" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground">
-                      <p className="text-sm">No revenue data for this period</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">MRR by Plan</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {revenue?.mrrByPlan?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={revenue.mrrByPlan.map((r: any) => ({ ...r, mrr: parseFloat(r.mrr), subscribers: parseInt(r.subscribers) }))}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--popover-foreground))' }} />
-                        <Bar dataKey="mrr" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground">
-                      <p className="text-sm">No plan data available</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* USERS TAB */}
-        <TabsContent value="users" className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Total Users</p>
-                <p className="text-2xl font-bold">{users?.totalUsers || 0}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Active Users</p>
-                <p className="text-2xl font-bold text-green-600">{users?.activeUsers || 0}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Retention Rate</p>
-                <p className="text-2xl font-bold">{users?.retentionRate || 0}%</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Churn Rate</p>
-                <p className="text-2xl font-bold text-red-600">{(100 - (users?.retentionRate || 0)).toFixed(1)}%</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Signup Trend (30 days)</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {users?.signupTrend?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={users.signupTrend.map((r: any) => ({ ...r, date: format(new Date(r.date), 'MMM d'), count: parseInt(r.count) }))}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--popover-foreground))' }} />
-                        <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground"><p className="text-sm">No signup data</p></div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Plan Distribution</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {users?.planDistribution?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={users.planDistribution.map((r: any) => ({ ...r, value: parseInt(r.count) }))} cx="50%" cy="50%" labelLine={false} label={({ name, value }) => `${name}: ${value}`} outerRadius={100} dataKey="value">
-                          {users.planDistribution.map((_: any, index: number) => (
-                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground"><p className="text-sm">No data</p></div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Status Breakdown</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {users?.statusBreakdown?.map((s: any) => (
-                  <div key={s.status} className="p-4 rounded-lg border text-center">
-                    <p className="text-2xl font-bold">{parseInt(s.count)}</p>
-                    <Badge variant="outline" className="mt-1 capitalize">{s.status}</Badge>
-                  </div>
-                ))}
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="text-base font-semibold">Plan mix</h2>
+          <div className="mt-4 h-72">
+            {planData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                No data yet
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* GEO TAB */}
-        <TabsContent value="geo" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Customers by Region</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[350px]">
-                  {geo?.geoDistribution?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={geo.geoDistribution.map((r: any) => ({ ...r, count: parseInt(r.count), active_count: parseInt(r.active_count) }))} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <YAxis dataKey="region" type="category" width={60} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--popover-foreground))' }} />
-                        <Bar dataKey="count" fill="#3b82f6" name="Total" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="active_count" fill="#10b981" name="Active" radius={[0, 4, 4, 0]} />
-                        <Legend />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground"><p className="text-sm">No geographic data</p></div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Revenue by Region</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {geo?.geoRevenue?.map((r: any, i: number) => (
-                    <div key={r.region} className="flex items-center justify-between p-3 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                        <div>
-                          <p className="font-medium">{r.region || 'Unknown'}</p>
-                          <p className="text-sm text-muted-foreground">{parseInt(r.customers)} customers</p>
-                        </div>
-                      </div>
-                      <p className="font-bold">${parseFloat(r.revenue).toFixed(2)}</p>
-                    </div>
-                  ))}
-                  {(!geo?.geoRevenue || geo.geoRevenue.length === 0) && (
-                    <p className="text-center text-muted-foreground py-8">No revenue data by region</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={planData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={90}
+                    paddingAngle={2}
+                  >
+                    {planData.map((e) => (
+                      <Cell key={e.name} fill={PLAN_COLORS[e.name] || "#64748b"} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* ENGAGEMENT TAB */}
-        <TabsContent value="engagement" className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Active Today</p>
-                <p className="text-2xl font-bold text-green-600">{parseInt(actBreakdown.active_today || 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Active This Week</p>
-                <p className="text-2xl font-bold text-blue-600">{parseInt(actBreakdown.active_week || 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Active This Month</p>
-                <p className="text-2xl font-bold">{parseInt(actBreakdown.active_month || 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">Avg Resolution Time</p>
-                <p className="text-2xl font-bold">{engagement?.avgResolutionHours || '0'}h</p>
-              </CardContent>
-            </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="text-base font-semibold">Weekly signups</h2>
+          <div className="mt-4 h-60">
+            {weeks.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Not enough data
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeks}>
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="week" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="signups" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Ticket Volume (30 days)</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {engagement?.ticketTrend?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={engagement.ticketTrend.map((r: any) => ({ ...r, date: format(new Date(r.date), 'MMM d'), count: parseInt(r.count) }))}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--popover-foreground))' }} />
-                        <Line type="monotone" dataKey="count" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground"><p className="text-sm">No ticket data</p></div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-lg">Ticket Status Distribution</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {engagement?.ticketStatus?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={engagement.ticketStatus.map((r: any) => ({ name: r.status, value: parseInt(r.count) }))} cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, value }) => `${name}: ${value}`} dataKey="value">
-                          {engagement.ticketStatus.map((_: any, index: number) => (
-                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground"><p className="text-sm">No ticket data</p></div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="text-base font-semibold">Revenue snapshot</h2>
+          <p className="text-xs text-muted-foreground">
+            Estimated from active entitlements × canonical plan prices.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Tile label="MRR" value={`$${data.revenue.mrr.toFixed(2)}`} hint="Pro + Family monthly" />
+            <Tile label="Lifetime revenue" value={`$${data.revenue.lifetimeRevenue.toFixed(2)}`} hint="One-time" />
+            <Tile label="Paid users" value={data.revenue.paidUsers.toLocaleString()} hint="Pro + Family + Lifetime" />
+            <Tile label="Total est." value={`$${data.revenue.totalEstimated.toFixed(2)}`} hint="MRR×12 + lifetime" />
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Tile
+          label="Cloud vaults"
+          value={data.vaults.totalCloudVaults.toLocaleString()}
+          hint={`${data.vaults.usersWithCloudVault.toLocaleString()} users syncing`}
+        />
+        <Tile
+          label="Active vault users (7d)"
+          value={data.vaults.activeVaultUsers7d.toLocaleString()}
+        />
+        <Tile label="Suspended accounts" value={data.users.suspended.toLocaleString()} />
+      </div>
     </div>
   );
 }
