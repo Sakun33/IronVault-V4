@@ -10,6 +10,9 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import TicketsPage from "./pages/TicketsPage";
 import ActivityPage from "./pages/ActivityPage";
 import SettingsPage from "./pages/SettingsPage";
+import SystemPage from "./pages/SystemPage";
+import AuditLogPage from "./pages/AuditLogPage";
+import BroadcastPage from "./pages/BroadcastPage";
 import Layout from "./components/Layout";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import "./App.css";
@@ -47,6 +50,9 @@ function AppRoutes() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/tickets" element={<TicketsPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/system" element={<SystemPage />} />
+        <Route path="/audit-log" element={<AuditLogPage />} />
+        <Route path="/broadcast" element={<BroadcastPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

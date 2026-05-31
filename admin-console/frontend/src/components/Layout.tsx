@@ -11,6 +11,9 @@ import {
   Menu,
   X,
   Shield,
+  Server,
+  ScrollText,
+  Megaphone,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,9 @@ const NAV = [
   { name: "Users", href: "/users", icon: Users },
   { name: "Analytics", href: "/analytics", icon: TrendingUp },
   { name: "Tickets", href: "/tickets", icon: LifeBuoy },
+  { name: "Broadcast", href: "/broadcast", icon: Megaphone },
+  { name: "System", href: "/system", icon: Server },
+  { name: "Audit log", href: "/audit-log", icon: ScrollText },
   { name: "Activity", href: "/activity", icon: Activity },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

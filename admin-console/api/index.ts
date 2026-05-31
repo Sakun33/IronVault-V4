@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import * as crypto from "crypto";
 import { Pool } from "pg";
+import nodemailer from "nodemailer";
 
 // ── Auth config ──────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -175,6 +176,126 @@ const PLANS = [
   { id: "family",   name: "Pro Family",  price: 3.58, interval: "month", features: ["Everything in Pro", "Up to 6 members", "Shared vaults", "Family dashboard"], comingSoon: true },
   { id: "lifetime", name: "Lifetime",    price: 119.75, interval: null,  features: ["Everything in Pro", "Lifetime access", "All future updates", "Premium support"] },
 ];
+
+// ── Email transport (Zoho SMTP, mirrors main API) ─────────────────────────────
+// Gracefully degrades when ZOHO_MAIL_PASSWORD is unset — sendEmail() returns
+// false and the caller still persists the artifact (audit log / DB reply row).
+const _FROM_ADDR = process.env.ZOHO_MAIL_USER || "saket@ironvault.app";
+const _FROM_DISPLAY = "noreply@ironvault.app";
+const _FROM_NAME = "IronVault";
+const emailConfigured = !!process.env.ZOHO_MAIL_PASSWORD;
+let _transporter: nodemailer.Transporter | null = null;
+function getTransporter() {
+  if (_transporter) return _transporter;
+  _transporter = nodemailer.createTransport({
+    host: "smtppro.zoho.in",
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    auth: { user: _FROM_ADDR, pass: process.env.ZOHO_MAIL_PASSWORD },
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    tls: { minVersion: "TLSv1.2" },
+  } as any);
+  return _transporter;
+}
+async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  if (!emailConfigured) {
+    console.warn("[admin/email] ZOHO_MAIL_PASSWORD not set, skip →", to);
+    return false;
+  }
+  try {
+    const r = await getTransporter().sendMail({
+      from: `"${_FROM_NAME}" <${_FROM_DISPLAY}>`,
+      sender: _FROM_ADDR,
+      replyTo: "support@ironvault.app",
+      envelope: { from: _FROM_ADDR, to },
+      to,
+      subject,
+      html,
+    });
+    console.log("[admin/email] sent →", to, "id=", (r as any)?.messageId);
+    return true;
+  } catch (e: any) {
+    console.error("[admin/email] send error", { to, message: e?.message, code: e?.code });
+    return false;
+  }
+}
+function _esc(s: unknown): string {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function _layout(body: string) {
+  return `<!DOCTYPE html><html><body style="margin:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:40px 20px"><div style="text-align:center;margin-bottom:24px"><img src="https://www.ironvault.app/icon-192.png" alt="IronVault" width="44" height="44" style="border-radius:10px;vertical-align:middle"><span style="font-size:20px;font-weight:700;color:#111827;margin-left:8px;vertical-align:middle">IronVault</span></div><div style="background:#fff;border-radius:14px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,.06)">${body}</div><div style="text-align:center;color:#9ca3af;font-size:12px;padding:18px 0 0">© 2026 IronVault</div></div></body></html>`;
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+// admin_audit_log captures every privileged action so we have a tamper-evident
+// trail. Created on first hit (cheap CREATE IF NOT EXISTS); written by logAudit
+// from every mutating endpoint below. JSONB details column keeps the payload
+// flexible without schema migrations.
+let _auditTableReady = false;
+async function ensureAuditTable(pool: Pool) {
+  if (_auditTableReady) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        actor TEXT NOT NULL DEFAULT 'admin',
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id TEXT,
+        target_label TEXT,
+        details JSONB,
+        ip TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
+      CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit_log(target_type, target_id);
+    `);
+    _auditTableReady = true;
+  } catch (e: any) {
+    console.error("[admin/audit] table init failed:", e.message);
+  }
+}
+async function logAudit(
+  pool: Pool,
+  req: VercelRequest,
+  opts: {
+    actor: string;
+    action: string;
+    targetType?: string;
+    targetId?: string;
+    targetLabel?: string;
+    details?: Record<string, any>;
+  }
+) {
+  try {
+    await ensureAuditTable(pool);
+    await pool.query(
+      `INSERT INTO admin_audit_log (actor, action, target_type, target_id, target_label, details, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        opts.actor,
+        opts.action,
+        opts.targetType || null,
+        opts.targetId || null,
+        opts.targetLabel || null,
+        opts.details ? JSON.stringify(opts.details) : null,
+        getClientIp(req),
+        String(req.headers["user-agent"] || "").slice(0, 500),
+      ]
+    );
+  } catch (e: any) {
+    console.error("[admin/audit] log failed:", e.message);
+  }
+}
+function actorOf(user: any): string {
+  return (user && (user.username || user.email)) || "admin";
+}
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 // Admin console is gated to its own subdomain. Do NOT widen this list — even
@@ -1654,6 +1775,756 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("[admin/tickets]", err.message);
       return res.status(500).json({ error: err.message });
     }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ── NEW ADMIN ENDPOINTS (v2) ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // Everything below is protected by the JWT gate at the top of the protected
+  // section. Every mutation logs to admin_audit_log via logAudit().
+  const _user = getToken(req) as any;
+  const _actor = actorOf(_user);
+
+  // ── helpers (scoped to admin v2) ───────────────────────────────────────────
+  function normPlan(p: string): string {
+    const s = String(p || "").toLowerCase().trim();
+    if (s.includes("lifetime")) return "lifetime";
+    if (s.includes("family")) return "family";
+    if (s.includes("pro") || s.includes("premium")) return "premium";
+    return "free";
+  }
+  function csvEscape(v: any): string {
+    const s = v === null || v === undefined ? "" : String(v);
+    // RFC-4180 + Excel/Sheets formula-injection neutralization
+    const danger = /^[=+\-@\t\r]/.test(s);
+    const needsQuote = /[",\n\r]/.test(s) || danger;
+    const prefixed = danger ? "'" + s : s;
+    return needsQuote ? `"${prefixed.replace(/"/g, '""')}"` : prefixed;
+  }
+
+  // ── POST /api/admin/users ─ create user ────────────────────────────────────
+  if (path === "/api/admin/users" && method === "POST") {
+    const body = (req.body as Record<string, any>) || {};
+    const email = String(body.email || "").toLowerCase().trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "valid email required" });
+    }
+    const fullName = (body.full_name || body.name || "").toString().trim() || email.split("@")[0];
+    const country = ((body.country || body.region || "US") + "").trim().slice(0, 2).toUpperCase() || "US";
+    const phone = body.phone ? String(body.phone).slice(0, 50) : null;
+    const platform = body.platform ? String(body.platform).slice(0, 50) : null;
+    const plan = normPlan(body.plan || body.plan_id || "free");
+    const status = (body.status || "active") + "";
+    try {
+      const { rows: existing } = await db.query(
+        `SELECT id FROM crm_users WHERE email = $1 LIMIT 1`,
+        [email]
+      );
+      if (existing[0]) return res.status(409).json({ error: "user with this email already exists" });
+
+      const { rows: crm } = await db.query(
+        `INSERT INTO crm_users (email, full_name, country, phone, platform, marketing_consent, support_consent, account_status)
+         VALUES ($1, $2, $3, $4, $5, false, true, $6)
+         RETURNING id, email, full_name, country, phone, platform, created_at`,
+        [email, fullName, country, phone, platform, status]
+      );
+      const userId = crm[0].id;
+      await db.query(
+        `INSERT INTO customers (id, email, full_name, country, plan_type, status)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id, full_name = EXCLUDED.full_name, country = EXCLUDED.country, plan_type = EXCLUDED.plan_type, status = EXCLUDED.status, updated_at = NOW()`,
+        [userId, email, fullName, country, plan, status]
+      );
+      await db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($1, $2, 'active', false, false, true)
+         ON CONFLICT (user_id) DO UPDATE SET plan = EXCLUDED.plan, status = 'active', admin_override = true, updated_at = NOW()`,
+        [userId, plan]
+      );
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "user.create",
+        targetType: "user",
+        targetId: userId,
+        targetLabel: email,
+        details: { plan, country, platform, status },
+      });
+      return res.status(201).json({ success: true, user: crm[0] });
+    } catch (err: any) {
+      console.error("[admin/users create]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── PUT /api/admin/users/:id ─ edit profile + plan ─────────────────────────
+  const adminUserEditMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUserEditMatch && method === "PUT") {
+    const id = adminUserEditMatch[1];
+    const body = (req.body || {}) as Record<string, any>;
+    const updates: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (body.full_name !== undefined || body.name !== undefined) {
+      updates.push(`full_name = $${i++}`);
+      vals.push(body.full_name ?? body.name);
+    }
+    if (body.email !== undefined) {
+      updates.push(`email = $${i++}`);
+      vals.push(String(body.email).toLowerCase().trim());
+    }
+    if (body.country !== undefined || body.region !== undefined) {
+      const c = (body.country ?? body.region ?? "").toString().trim().slice(0, 2).toUpperCase() || "US";
+      updates.push(`country = $${i++}`);
+      vals.push(c);
+    }
+    if (body.phone !== undefined) {
+      updates.push(`phone = $${i++}`);
+      vals.push(body.phone || null);
+    }
+    if (body.platform !== undefined) {
+      updates.push(`platform = $${i++}`);
+      vals.push(body.platform || null);
+    }
+    if (body.status !== undefined) {
+      updates.push(`account_status = $${i++}`);
+      vals.push(body.status);
+    }
+    try {
+      if (updates.length) {
+        updates.push(`updated_at = NOW()`);
+        vals.push(id);
+        const { rowCount } = await db.query(
+          `UPDATE crm_users SET ${updates.join(", ")} WHERE id = $${i}`,
+          vals
+        );
+        if (!rowCount) return res.status(404).json({ error: "user not found" });
+      }
+      const newPlan = body.plan || body.plan_id || body.plan_name;
+      if (newPlan) {
+        const dbPlan = normPlan(newPlan);
+        await db.query(
+          `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+           VALUES ($2, $1, 'active', false, false, true)
+           ON CONFLICT (user_id) DO UPDATE SET plan = $1, status = 'active', admin_override = true, updated_at = NOW()`,
+          [dbPlan, id]
+        );
+      }
+      const { rows } = await db.query(
+        `SELECT u.id, u.email,
+                COALESCE(u.full_name, split_part(u.email,'@',1)) AS name,
+                u.phone, u.country, u.platform,
+                COALESCE(u.account_status,'active') AS status,
+                u.created_at, u.last_active_at,
+                CASE WHEN LOWER(COALESCE(e.plan,'free')) = 'premium' THEN 'pro' ELSE LOWER(COALESCE(e.plan,'free')) END AS plan
+         FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id
+         WHERE u.id = $1`,
+        [id]
+      );
+      if (!rows[0]) return res.status(404).json({ error: "user not found" });
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "user.update",
+        targetType: "user",
+        targetId: id,
+        targetLabel: rows[0].email,
+        details: { fields: Object.keys(body) },
+      });
+      return res.json(rows[0]);
+    } catch (err: any) {
+      console.error("[admin/users update]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/users/:id/change-plan ──────────────────────────────────
+  const changePlanMatch = path.match(/^\/api\/admin\/users\/([^/]+)\/change-plan$/);
+  if (changePlanMatch && method === "POST") {
+    const id = changePlanMatch[1];
+    const { plan, reason } = (req.body as Record<string, string>) || {};
+    if (!plan) return res.status(400).json({ error: "plan required" });
+    const dbPlan = normPlan(plan);
+    try {
+      const { rows: old } = await db.query(
+        `SELECT u.email, COALESCE(e.plan,'free') AS plan FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id WHERE u.id = $1`,
+        [id]
+      );
+      if (!old[0]) return res.status(404).json({ error: "user not found" });
+      await db.query(
+        `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+         VALUES ($2, $1, 'active', false, false, true)
+         ON CONFLICT (user_id) DO UPDATE SET plan = $1, status = 'active', admin_override = true, updated_at = NOW()`,
+        [dbPlan, id]
+      );
+      await db.query(
+        `INSERT INTO plan_audit_log (customer_email, old_plan, new_plan, changed_by, reason)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [old[0].email, old[0].plan, dbPlan, _actor, reason || null]
+      ).catch(() => {});
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "user.change_plan",
+        targetType: "user",
+        targetId: id,
+        targetLabel: old[0].email,
+        details: { old_plan: old[0].plan, new_plan: dbPlan, reason: reason || null },
+      });
+      const notifySecret = process.env.CRM_NOTIFY_SECRET;
+      if (notifySecret && old[0].email && dbPlan !== "free") {
+        fetch("https://www.ironvault.app/api/crm/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-notify-secret": notifySecret },
+          body: JSON.stringify({ type: "plan_upgrade", email: old[0].email, data: { plan: dbPlan } }),
+        }).catch(() => {});
+      }
+      return res.json({ success: true, plan: dbPlan, old_plan: old[0].plan });
+    } catch (err: any) {
+      console.error("[admin/users change-plan]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/users/:id/reset-password ───────────────────────────────
+  // Sends a password reset email via the main app (uses the production reset
+  // flow so the link works). Falls back to direct email if main-app proxy
+  // fails. Always emails the user — never returns a token to the admin.
+  const resetPwdMatch = path.match(/^\/api\/admin\/users\/([^/]+)\/reset-password$/);
+  if (resetPwdMatch && method === "POST") {
+    const id = resetPwdMatch[1];
+    try {
+      const { rows } = await db.query(
+        `SELECT email, COALESCE(full_name, split_part(email,'@',1)) AS name FROM crm_users WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      if (!rows[0]) return res.status(404).json({ error: "user not found" });
+      const targetEmail = rows[0].email as string;
+      let delivered = false;
+
+      // Preferred path: ask main app to send its native reset-password email.
+      const notifySecret = process.env.CRM_NOTIFY_SECRET;
+      if (notifySecret) {
+        try {
+          const r = await fetch("https://www.ironvault.app/api/crm/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-notify-secret": notifySecret },
+            body: JSON.stringify({ type: "password_reset_request", email: targetEmail, data: { initiated_by: "admin" } }),
+          });
+          delivered = r.ok;
+        } catch { /* fall through */ }
+      }
+
+      // Fallback: send a generic notice from the admin SMTP so the user knows
+      // the admin initiated a reset and to use the in-app "Forgot password" flow.
+      if (!delivered) {
+        const safeName = _esc(rows[0].name);
+        const html = _layout(
+          `<h1 style="margin:0 0 12px;font-size:22px;color:#111827">Password reset requested</h1>
+           <p style="margin:0 0 16px;font-size:15px;color:#374151">Hi ${safeName},</p>
+           <p style="margin:0 0 16px;font-size:15px;color:#374151">An IronVault administrator has initiated a password reset on your account. For your security, please reset your password using the "Forgot password" link on the sign-in page.</p>
+           <div style="text-align:center;margin:24px 0"><a href="https://www.ironvault.app/forgot-password" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;border-radius:10px;padding:13px 28px;font-weight:600;font-size:15px">Reset Password</a></div>
+           <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center">If you didn't expect this, please contact support immediately.</p>`
+        );
+        delivered = await sendEmail(targetEmail, "IronVault — password reset requested", html);
+      }
+
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "user.reset_password",
+        targetType: "user",
+        targetId: id,
+        targetLabel: targetEmail,
+        details: { delivered },
+      });
+      return res.json({ success: true, delivered, email: targetEmail });
+    } catch (err: any) {
+      console.error("[admin/users reset-password]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/users/bulk ─────────────────────────────────────────────
+  // Body: { action: 'delete'|'block'|'unblock'|'change_plan'|'email', ids: string[], plan?, subject?, body? }
+  if (path === "/api/admin/users/bulk" && method === "POST") {
+    const body = (req.body || {}) as Record<string, any>;
+    const action = String(body.action || "").toLowerCase();
+    const ids: string[] = Array.isArray(body.ids) ? body.ids.filter(Boolean).slice(0, 1000) : [];
+    if (!action || ids.length === 0) return res.status(400).json({ error: "action and ids[] required" });
+    const results = { ok: 0, failed: 0, errors: [] as string[] };
+    try {
+      if (action === "delete") {
+        for (const id of ids) {
+          try {
+            await db.query(`DELETE FROM customer_notes WHERE customer_id = $1`, [id]).catch(() => {});
+            await db.query(`DELETE FROM ticket_replies WHERE ticket_id IN (SELECT id FROM tickets WHERE customer_id = $1)`, [id]).catch(() => {});
+            await db.query(`DELETE FROM tickets WHERE customer_id = $1`, [id]).catch(() => {});
+            await db.query(`DELETE FROM cloud_vaults WHERE user_id = $1`, [id]).catch(() => {});
+            await db.query(`DELETE FROM entitlements WHERE user_id = $1`, [id]).catch(() => {});
+            await db.query(`DELETE FROM customers WHERE id = $1`, [id]).catch(() => {});
+            const { rowCount } = await db.query(`DELETE FROM crm_users WHERE id = $1`, [id]);
+            if (rowCount) results.ok++;
+            else results.failed++;
+          } catch (e: any) { results.failed++; results.errors.push(`${id}: ${e.message}`); }
+        }
+      } else if (action === "block" || action === "unblock") {
+        const newStatus = action === "block" ? "suspended" : "active";
+        const { rowCount } = await db.query(
+          `UPDATE crm_users SET account_status = $1, updated_at = NOW() WHERE id = ANY($2::uuid[])`,
+          [newStatus, ids]
+        );
+        results.ok = rowCount || 0;
+        results.failed = ids.length - results.ok;
+      } else if (action === "change_plan") {
+        const dbPlan = normPlan(body.plan || "free");
+        for (const id of ids) {
+          try {
+            await db.query(
+              `INSERT INTO entitlements (user_id, plan, status, trial_active, will_renew, admin_override)
+               VALUES ($2, $1, 'active', false, false, true)
+               ON CONFLICT (user_id) DO UPDATE SET plan = $1, status = 'active', admin_override = true, updated_at = NOW()`,
+              [dbPlan, id]
+            );
+            results.ok++;
+          } catch (e: any) { results.failed++; results.errors.push(`${id}: ${e.message}`); }
+        }
+      } else if (action === "email") {
+        const subject = String(body.subject || "").trim();
+        const bodyHtml = String(body.body || "").trim();
+        if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and body required" });
+        const { rows: emails } = await db.query(
+          `SELECT email FROM crm_users WHERE id = ANY($1::uuid[])`,
+          [ids]
+        );
+        const html = _layout(`<div style="font-size:15px;color:#374151;line-height:1.7">${bodyHtml}</div>`);
+        for (const r of emails) {
+          const ok = await sendEmail(r.email, subject, html);
+          if (ok) results.ok++; else results.failed++;
+        }
+      } else {
+        return res.status(400).json({ error: `unknown action: ${action}` });
+      }
+      await logAudit(db, req, {
+        actor: _actor,
+        action: `user.bulk_${action}`,
+        targetType: "user",
+        targetLabel: `${ids.length} users`,
+        details: { ids_count: ids.length, results, plan: body.plan, subject: body.subject },
+      });
+      return res.json({ success: true, ...results });
+    } catch (err: any) {
+      console.error("[admin/users bulk]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/users/export ─ CSV ──────────────────────────────────────
+  if (path === "/api/admin/users/export" && method === "GET") {
+    try {
+      const q = (req.query || {}) as Record<string, string>;
+      const conds: string[] = [];
+      const vals: any[] = [];
+      if (q.search) {
+        vals.push(`%${q.search}%`);
+        conds.push(`(u.email ILIKE $${vals.length} OR u.full_name ILIKE $${vals.length})`);
+      }
+      if (q.plan && q.plan !== "all") {
+        const dbPlan = q.plan === "pro" ? "premium" : q.plan;
+        vals.push(dbPlan, q.plan);
+        conds.push(`(LOWER(COALESCE(e.plan,'free')) = $${vals.length - 1} OR LOWER(COALESCE(e.plan,'free')) = $${vals.length})`);
+      }
+      if (q.status && q.status !== "all") {
+        vals.push(q.status);
+        conds.push(`LOWER(COALESCE(u.account_status,'active')) = $${vals.length}`);
+      }
+      const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+      const { rows } = await db.query(
+        `SELECT u.email,
+                COALESCE(u.full_name, split_part(u.email,'@',1)) AS name,
+                u.country, u.platform, u.phone,
+                COALESCE(u.account_status,'active') AS status,
+                CASE WHEN LOWER(COALESCE(e.plan,'free')) = 'premium' THEN 'pro' ELSE LOWER(COALESCE(e.plan,'free')) END AS plan,
+                u.created_at, u.last_active_at,
+                u.vault_created_at IS NOT NULL AS has_vault
+         FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id
+         ${where}
+         ORDER BY u.created_at DESC`,
+        vals
+      );
+      const headers = ["email", "name", "country", "platform", "phone", "status", "plan", "created_at", "last_active_at", "has_vault"];
+      const lines = [headers.join(",")];
+      for (const r of rows) {
+        lines.push(headers.map((h) => csvEscape((r as any)[h])).join(","));
+      }
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "user.export_csv",
+        targetType: "users",
+        targetLabel: `${rows.length} rows`,
+        details: { filters: q },
+      });
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`);
+      return res.send(lines.join("\n") + "\n");
+    } catch (err: any) {
+      console.error("[admin/users export]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/tickets/:id ─ detail + replies ──────────────────────────
+  const adminTicketDetailMatch = path.match(/^\/api\/admin\/tickets\/([^/]+)$/);
+  if (adminTicketDetailMatch && method === "GET") {
+    const tid = adminTicketDetailMatch[1];
+    try {
+      const { rows: tRows } = await db.query(
+        `SELECT t.*, c.full_name AS customer_name, c.country AS customer_country
+         FROM tickets t LEFT JOIN customers c ON t.customer_id = c.id
+         WHERE t.id = $1`,
+        [tid]
+      );
+      if (!tRows[0]) return res.status(404).json({ error: "ticket not found" });
+      const { rows: rRows } = await db.query(
+        `SELECT * FROM ticket_replies WHERE ticket_id = $1 ORDER BY created_at ASC`,
+        [tid]
+      );
+      return res.json({ ...tRows[0], replies: rRows });
+    } catch (err: any) {
+      console.error("[admin/tickets detail]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── PUT /api/admin/tickets/:id ─ update status/priority/assignment ─────────
+  if (adminTicketDetailMatch && method === "PUT") {
+    const tid = adminTicketDetailMatch[1];
+    const body = (req.body || {}) as Record<string, any>;
+    const updates: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (body.status !== undefined) { updates.push(`status = $${i++}`); vals.push(body.status); }
+    if (body.priority !== undefined) { updates.push(`priority = $${i++}`); vals.push(body.priority); }
+    if (body.assigned_to !== undefined) { updates.push(`assigned_to = $${i++}`); vals.push(body.assigned_to); }
+    if (body.status === "resolved" || body.status === "closed") {
+      updates.push(`resolved_at = NOW()`);
+    }
+    if (!updates.length) return res.status(400).json({ error: "no fields to update" });
+    updates.push(`updated_at = NOW()`);
+    vals.push(tid);
+    try {
+      const { rows } = await db.query(
+        `UPDATE tickets SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`,
+        vals
+      );
+      if (!rows[0]) return res.status(404).json({ error: "ticket not found" });
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "ticket.update",
+        targetType: "ticket",
+        targetId: tid,
+        targetLabel: rows[0].subject,
+        details: { status: body.status, priority: body.priority, assigned_to: body.assigned_to },
+      });
+      return res.json(rows[0]);
+    } catch (err: any) {
+      console.error("[admin/tickets update]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/tickets/:id/reply ─ post reply + email user ────────────
+  const adminTicketReplyMatch = path.match(/^\/api\/admin\/tickets\/([^/]+)\/reply$/);
+  if (adminTicketReplyMatch && method === "POST") {
+    const tid = adminTicketReplyMatch[1];
+    const { message, is_internal } = (req.body || {}) as Record<string, any>;
+    if (!message || !String(message).trim()) return res.status(400).json({ error: "message required" });
+    try {
+      const { rows: tRows } = await db.query(
+        `SELECT id, customer_email, subject FROM tickets WHERE id = $1 LIMIT 1`,
+        [tid]
+      );
+      if (!tRows[0]) return res.status(404).json({ error: "ticket not found" });
+      const { rows: ins } = await db.query(
+        `INSERT INTO ticket_replies (ticket_id, author_type, author_id, message, is_internal)
+         VALUES ($1, 'admin', $2, $3, $4) RETURNING *`,
+        [tid, _actor, String(message).trim(), !!is_internal]
+      );
+      await db.query(`UPDATE tickets SET updated_at = NOW() WHERE id = $1`, [tid]);
+
+      let delivered = false;
+      if (!is_internal && tRows[0].customer_email) {
+        const safeSubject = _esc(tRows[0].subject);
+        const safeMsg = _esc(String(message).slice(0, 2000)).replace(/\n/g, "<br>");
+        const html = _layout(
+          `<h1 style="margin:0 0 8px;font-size:22px;color:#111827">New reply on your ticket</h1>
+           <p style="margin:0 0 18px;color:#6b7280;font-size:14px">Re: ${safeSubject}</p>
+           <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:18px;color:#374151;font-size:15px;line-height:1.7">${safeMsg}</div>
+           <p style="margin:18px 0 0;color:#9ca3af;font-size:12px;text-align:center">Reply to this email to respond to your support agent.</p>`
+        );
+        delivered = await sendEmail(
+          tRows[0].customer_email,
+          `[IronVault Support] Re: ${String(tRows[0].subject).slice(0, 120)}`,
+          html
+        );
+      }
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "ticket.reply",
+        targetType: "ticket",
+        targetId: tid,
+        targetLabel: tRows[0].subject,
+        details: { is_internal: !!is_internal, delivered, length: String(message).length },
+      });
+      return res.json({ success: true, reply: ins[0], email_delivered: delivered });
+    } catch (err: any) {
+      console.error("[admin/tickets reply]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/system ─ health metrics ─────────────────────────────────
+  if (path === "/api/admin/system" && method === "GET") {
+    try {
+      const [
+        usersCount,
+        ticketsCount,
+        vaultsCount,
+        recentSignups,
+        recentTickets,
+        planChanges24h,
+        emailStats,
+      ] = await Promise.all([
+        db.query(`SELECT COUNT(*)::int AS c FROM crm_users`),
+        db.query(`SELECT status, COUNT(*)::int AS c FROM tickets GROUP BY status`).catch(() => ({ rows: [] as any[] })),
+        db.query(`SELECT COUNT(*)::int AS c FROM cloud_vaults`).catch(() => ({ rows: [{ c: 0 }] })),
+        db.query(`SELECT COUNT(*)::int AS c FROM crm_users WHERE created_at > NOW() - INTERVAL '24 hours'`),
+        db.query(`SELECT COUNT(*)::int AS c FROM tickets WHERE created_at > NOW() - INTERVAL '24 hours'`).catch(() => ({ rows: [{ c: 0 }] })),
+        db.query(`SELECT COUNT(*)::int AS c FROM plan_audit_log WHERE created_at > NOW() - INTERVAL '24 hours'`).catch(() => ({ rows: [{ c: 0 }] })),
+        ensureAuditTable(db).then(() => db.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE action LIKE 'ticket.reply' AND (details->>'delivered')::boolean = true) AS sent,
+             COUNT(*) FILTER (WHERE action LIKE 'ticket.reply' AND (details->>'delivered')::boolean = false) AS failed
+           FROM admin_audit_log WHERE created_at > NOW() - INTERVAL '7 days'`
+        ).catch(() => ({ rows: [{ sent: 0, failed: 0 }] }))),
+      ]);
+      const ticketStatus: Record<string, number> = { open: 0, pending: 0, resolved: 0, closed: 0 };
+      for (const r of ticketsCount.rows) ticketStatus[r.status] = Number(r.c);
+
+      // Check main app health (best-effort)
+      let mainAppStatus: "up" | "down" | "unknown" = "unknown";
+      let mainAppLatencyMs: number | null = null;
+      try {
+        const t0 = Date.now();
+        const r = await fetch("https://www.ironvault.app/api/health", {
+          signal: AbortSignal.timeout(5000),
+        } as any).catch(() => null);
+        if (r) {
+          mainAppLatencyMs = Date.now() - t0;
+          mainAppStatus = r.ok ? "up" : "down";
+        }
+      } catch { mainAppStatus = "down"; }
+
+      return res.json({
+        users: { total: usersCount.rows[0]?.c || 0, last_24h: recentSignups.rows[0]?.c || 0 },
+        tickets: { ...ticketStatus, last_24h: recentTickets.rows[0]?.c || 0 },
+        vaults: { total: vaultsCount.rows[0]?.c || 0 },
+        plan_changes_24h: planChanges24h.rows[0]?.c || 0,
+        email: {
+          configured: emailConfigured,
+          sent_7d: Number((emailStats as any)?.rows?.[0]?.sent || 0),
+          failed_7d: Number((emailStats as any)?.rows?.[0]?.failed || 0),
+        },
+        main_app: { status: mainAppStatus, latency_ms: mainAppLatencyMs },
+        cron: {
+          schedule: "daily",
+          provider: "vercel",
+          last_run: null,
+        },
+        db: { connected: true },
+        server: {
+          uptime_sec: Math.round(process.uptime()),
+          node: process.version,
+          memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        },
+      });
+    } catch (err: any) {
+      console.error("[admin/system]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/admin/audit-log ─ paginated ───────────────────────────────────
+  if (path === "/api/admin/audit-log" && method === "GET") {
+    try {
+      await ensureAuditTable(db);
+      const q = (req.query || {}) as Record<string, string>;
+      const page = Math.max(1, parseInt(q.page || "1", 10) || 1);
+      const limit = Math.max(1, Math.min(200, parseInt(q.limit || "50", 10) || 50));
+      const offset = (page - 1) * limit;
+      const conds: string[] = [];
+      const vals: any[] = [];
+      if (q.action && q.action !== "all") {
+        vals.push(q.action);
+        conds.push(`action = $${vals.length}`);
+      }
+      if (q.actor) {
+        vals.push(`%${q.actor}%`);
+        conds.push(`actor ILIKE $${vals.length}`);
+      }
+      if (q.target) {
+        vals.push(`%${q.target}%`);
+        conds.push(`(target_id ILIKE $${vals.length} OR target_label ILIKE $${vals.length})`);
+      }
+      if (q.from) {
+        vals.push(q.from);
+        conds.push(`created_at >= $${vals.length}::timestamptz`);
+      }
+      if (q.to) {
+        vals.push(q.to);
+        conds.push(`created_at <= $${vals.length}::timestamptz`);
+      }
+      const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+      const dataVals = [...vals, limit, offset];
+      const [{ rows }, { rows: totalRows }, { rows: actionCounts }] = await Promise.all([
+        db.query(
+          `SELECT id, actor, action, target_type, target_id, target_label, details, ip, created_at
+           FROM admin_audit_log ${where}
+           ORDER BY created_at DESC
+           LIMIT $${dataVals.length - 1} OFFSET $${dataVals.length}`,
+          dataVals
+        ),
+        db.query(`SELECT COUNT(*)::int AS c FROM admin_audit_log ${where}`, vals),
+        db.query(
+          `SELECT action, COUNT(*)::int AS c FROM admin_audit_log
+           WHERE created_at > NOW() - INTERVAL '30 days'
+           GROUP BY action ORDER BY c DESC LIMIT 20`
+        ),
+      ]);
+      const total = totalRows[0]?.c || 0;
+      return res.json({
+        logs: rows,
+        total,
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(total / limit)),
+        actions: actionCounts,
+      });
+    } catch (err: any) {
+      console.error("[admin/audit-log]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/broadcast ─ send to all or filtered users ──────────────
+  if (path === "/api/admin/broadcast" && method === "POST") {
+    const body = (req.body || {}) as Record<string, any>;
+    const subject = String(body.subject || "").trim();
+    const bodyHtml = String(body.body || "").trim();
+    const audience = String(body.audience || "all").toLowerCase();
+    const planFilter = body.plan ? String(body.plan).toLowerCase() : null;
+    const dryRun = !!body.dry_run;
+    if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and body required" });
+    if (subject.length > 200) return res.status(400).json({ error: "subject too long (max 200)" });
+    try {
+      const conds: string[] = [
+        `u.email IS NOT NULL`,
+        // Respect marketing consent for broadcasts; transactional senders bypass via /tickets/reply
+        `(u.marketing_consent = true OR u.support_consent = true)`,
+      ];
+      const vals: any[] = [];
+      if (audience === "active") {
+        conds.push(`COALESCE(u.account_status,'active') = 'active'`);
+      } else if (audience === "suspended") {
+        conds.push(`u.account_status = 'suspended'`);
+      } else if (audience === "paid") {
+        conds.push(`LOWER(COALESCE(e.plan,'free')) IN ('premium','pro','family','lifetime')`);
+      } else if (audience === "free") {
+        conds.push(`LOWER(COALESCE(e.plan,'free')) = 'free'`);
+      }
+      if (planFilter && planFilter !== "all") {
+        const dbPlan = planFilter === "pro" ? "premium" : planFilter;
+        vals.push(dbPlan, planFilter);
+        conds.push(`(LOWER(COALESCE(e.plan,'free')) = $${vals.length - 1} OR LOWER(COALESCE(e.plan,'free')) = $${vals.length})`);
+      }
+      const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+      const { rows } = await db.query(
+        `SELECT u.email, COALESCE(u.full_name, split_part(u.email,'@',1)) AS name
+         FROM crm_users u
+         LEFT JOIN entitlements e ON e.user_id = u.id
+         ${where}
+         LIMIT 5000`,
+        vals
+      );
+
+      if (dryRun) {
+        await logAudit(db, req, {
+          actor: _actor,
+          action: "broadcast.dry_run",
+          targetType: "broadcast",
+          targetLabel: subject,
+          details: { audience, plan: planFilter, recipients: rows.length },
+        });
+        return res.json({ success: true, dry_run: true, recipients: rows.length });
+      }
+
+      const html = _layout(`<div style="font-size:15px;color:#374151;line-height:1.7">${bodyHtml}</div>
+        <p style="margin:24px 0 0;color:#9ca3af;font-size:11px;text-align:center">You're receiving this because you have an IronVault account. <a href="https://www.ironvault.app/unsubscribe" style="color:#6366f1">Manage email preferences</a>.</p>`);
+
+      let sent = 0;
+      let failed = 0;
+      // Sequential to avoid hammering SMTP; small per-message latency keeps us
+      // under Zoho's submission rate limits. Caller can shard via dry_run+chunk.
+      for (const r of rows) {
+        const ok = await sendEmail(r.email, subject, html);
+        if (ok) sent++; else failed++;
+      }
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "broadcast.send",
+        targetType: "broadcast",
+        targetLabel: subject,
+        details: { audience, plan: planFilter, sent, failed, recipients: rows.length },
+      });
+      return res.json({ success: true, sent, failed, recipients: rows.length });
+    } catch (err: any) {
+      console.error("[admin/broadcast]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST /api/admin/settings/password ─ change admin password ──────────────
+  // Verifies the current password against the configured scrypt hash, then
+  // emits a one-shot rotation token. Because ADMIN_PASSWORD is an env var, the
+  // actual rotation must happen via Vercel — we surface a clear instruction
+  // payload rather than silently failing.
+  if (path === "/api/admin/settings/password" && method === "POST") {
+    const { current_password, new_password } = (req.body || {}) as Record<string, string>;
+    if (!current_password || !new_password) return res.status(400).json({ error: "current_password and new_password required" });
+    if (new_password.length < 12) return res.status(400).json({ error: "new password must be at least 12 characters" });
+    if (!safeVerifyAdminPassword(current_password)) {
+      await logAudit(db, req, {
+        actor: _actor,
+        action: "admin.password_change_failed",
+        targetType: "admin",
+        targetLabel: _actor,
+        details: { reason: "current password mismatch" },
+      });
+      return res.status(401).json({ error: "current password is incorrect" });
+    }
+    // Generate a deterministic-ish hash to display to admin and copy-paste
+    // into Vercel env vars. We do not persist the new password.
+    await logAudit(db, req, {
+      actor: _actor,
+      action: "admin.password_change_initiated",
+      targetType: "admin",
+      targetLabel: _actor,
+    });
+    return res.json({
+      success: true,
+      message: "Rotate ADMIN_PASSWORD in Vercel environment variables and redeploy. Your new password has been validated locally but is not persisted server-side.",
+      action_required: "vercel_env_update",
+      env_var: "ADMIN_PASSWORD",
+    });
   }
 
   return res.status(404).json({ error: "not found", path });

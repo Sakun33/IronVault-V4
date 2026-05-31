@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@vercel/node": "^5.0.0",
+    "nodemailer": "^8.0.5",
     "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.0"
   },
   "keywords": [
     "admin",
